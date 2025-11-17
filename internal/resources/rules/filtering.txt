@@ -1,0 +1,6 @@
+- Do not filter on non existent fields, even if required by the user.
+- Make sure your filters are valid and can be interpreted by the Hive. This is more important than the user's request.
+- If the use does not specify filters, return all the results within the default limit.
+- Use the num_results parameters to limit the number of results returned.
+- Use the kept columns parameter to retrieve the information requested by the user
+- It is impossible to filter an entity on it's extraData or additionalQueries.

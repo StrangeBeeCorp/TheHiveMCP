@@ -1,0 +1,458 @@
+package manage
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"net/http"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
+	"github.com/StrangeBeeCorp/thehive4go/thehive"
+	"github.com/mark3labs/mcp-go/mcp"
+)
+
+func (t *ManageTool) Handle(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Extract and validate parameters
+	params, err := t.extractParams(req)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	// Validate operation constraints
+	if err := t.validateOperation(params); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	// Execute operation
+	switch params.Operation {
+	case "create":
+		return t.handleCreate(ctx, params)
+	case "update":
+		return t.handleUpdate(ctx, params)
+	case "delete":
+		return t.handleDelete(ctx, params)
+	case "comment":
+		return t.handleComment(ctx, params)
+	default:
+		return mcp.NewToolResultError(fmt.Sprintf("unsupported operation: %s", params.Operation)), nil
+	}
+}
+
+// Parameter extraction and validation
+type manageParams struct {
+	Operation  string
+	EntityType string
+	EntityIDs  []string
+	EntityData map[string]interface{}
+	Comment    string
+}
+
+func (t *ManageTool) extractParams(req mcp.CallToolRequest) (*manageParams, error) {
+	operation := req.GetString("operation", "")
+	if operation == "" {
+		return nil, fmt.Errorf("operation parameter is required. Must be one of: 'create', 'update', 'delete', 'comment'")
+	}
+
+	entityType := req.GetString("entity-type", "")
+	if entityType == "" {
+		return nil, fmt.Errorf("entity-type parameter is required. Must be one of: 'alert', 'case', 'task', 'observable'")
+	}
+
+	params := &manageParams{
+		Operation:  operation,
+		EntityType: entityType,
+		EntityIDs:  req.GetStringSlice("entity-ids", []string{}),
+		Comment:    req.GetString("comment", ""),
+	}
+
+	// Extract entity data if provided
+	if entityDataRaw := req.GetArguments()["entity-data"]; entityDataRaw != nil {
+		if entityDataMap, ok := entityDataRaw.(map[string]interface{}); ok {
+			params.EntityData = entityDataMap
+		} else {
+			return nil, fmt.Errorf("entity-data must be a valid JSON object. For schema information, use get-resource 'hive://schema/%s'", entityType)
+		}
+	}
+
+	slog.Info("ManageEntities called",
+		"operation", params.Operation,
+		"entityType", params.EntityType,
+		"entityIDs", params.EntityIDs,
+		"hasEntityData", params.EntityData != nil,
+		"hasComment", params.Comment != "")
+
+	return params, nil
+}
+
+func (t *ManageTool) validateOperation(params *manageParams) error {
+	switch params.Operation {
+	case "create":
+		if params.EntityData == nil {
+			return fmt.Errorf("entity-data is required for create operations. Use get-resource 'hive://schema/%s' to see required fields for %s creation", params.EntityType, params.EntityType)
+		}
+		if (params.EntityType == "task" || params.EntityType == "observable") && len(params.EntityIDs) == 0 {
+			return fmt.Errorf("%s creation requires a parent case or alert ID in entity-ids parameter", params.EntityType)
+		}
+		if (params.EntityType == "task" || params.EntityType == "observable") && len(params.EntityIDs) > 1 {
+			return fmt.Errorf("%s creation requires exactly one parent ID in entity-ids parameter, got %d", params.EntityType, len(params.EntityIDs))
+		}
+	case "update":
+		if len(params.EntityIDs) == 0 {
+			return fmt.Errorf("entity-ids are required for update operations. Provide an array of %s IDs to update, e.g., ['id1', 'id2']", params.EntityType)
+		}
+		if params.EntityData == nil {
+			return fmt.Errorf("entity-data is required for update operations. Provide a JSON object with fields to update. Use get-resource 'hive://schema/%s' to see available fields", params.EntityType)
+		}
+	case "delete":
+		if len(params.EntityIDs) == 0 {
+			return fmt.Errorf("entity-ids are required for delete operations. Provide an array of %s IDs to delete, e.g., ['id1', 'id2']. WARNING: This operation is irreversible", params.EntityType)
+		}
+	case "comment":
+		if len(params.EntityIDs) == 0 {
+			return fmt.Errorf("entity-ids are required for comment operations. Provide an array of %s IDs to add comments to, e.g., ['id1', 'id2']", params.EntityType)
+		}
+		if params.Comment == "" {
+			return fmt.Errorf("comment parameter is required for comment operations. Provide the text content for the comment or task log")
+		}
+		if params.EntityType != "case" && params.EntityType != "task" {
+			return fmt.Errorf("comments are only supported on cases and tasks, not %s. For cases: adds a comment. For tasks: adds a task log", params.EntityType)
+		}
+	}
+	return nil
+}
+
+// Create operations
+func (t *ManageTool) handleCreate(ctx context.Context, params *manageParams) (*mcp.CallToolResult, error) {
+	hiveClient, err := utils.GetHiveClientFromContext(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to get TheHive client: %v. Check your authentication and connection settings.", err)), nil
+	}
+
+	switch params.EntityType {
+	case "alert":
+		return t.createAlert(ctx, hiveClient, params.EntityData)
+	case "case":
+		return t.createCase(ctx, hiveClient, params.EntityData)
+	case "task":
+		return t.createTask(ctx, hiveClient, params.EntityData, params.EntityIDs[0])
+	case "observable":
+		return t.createObservable(ctx, hiveClient, params.EntityData, params.EntityIDs[0])
+	default:
+		return mcp.NewToolResultError(fmt.Sprintf("unsupported entity type for create: %s", params.EntityType)), nil
+	}
+}
+
+func (t *ManageTool) createAlert(ctx context.Context, client *thehive.APIClient, data map[string]interface{}) (*mcp.CallToolResult, error) {
+	// Convert map to JSON then to InputAlert
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal alert data: %v. Check that entity-data contains valid JSON fields. Use get-resource 'hive://schema/alert' for field definitions.", err)), nil
+	}
+
+	var inputAlert thehive.InputCreateAlert
+	if err := json.Unmarshal(jsonData, &inputAlert); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal alert data: %v. Ensure entity-data fields match the alert schema. Use get-resource 'hive://schema/alert' to see required fields like 'type', 'source', 'sourceRef', 'title', 'description'.", err)), nil
+	}
+
+	result, resp, err := client.AlertAPI.CreateAlert(ctx).InputCreateAlert(inputAlert).Execute()
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to create alert: %v. Check required fields and permissions. API response: %v", err, resp)), nil
+	}
+
+	return mcp.NewToolResultJSON(map[string]interface{}{
+		"operation":  "create",
+		"entityType": "alert",
+		"result":     result,
+	})
+}
+
+func (t *ManageTool) createCase(ctx context.Context, client *thehive.APIClient, data map[string]interface{}) (*mcp.CallToolResult, error) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal case data: %v. Check that entity-data contains valid JSON fields. Use get-resource 'hive://schema/case' for field definitions.", err)), nil
+	}
+
+	var inputCase thehive.InputCreateCase
+	if err := json.Unmarshal(jsonData, &inputCase); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal case data: %v. Ensure entity-data fields match the case schema. Use get-resource 'hive://schema/case' to see required and optional fields.", err)), nil
+	}
+
+	result, resp, err := client.CaseAPI.CreateCase(ctx).InputCreateCase(inputCase).Execute()
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to create case: %v. Check required fields and permissions. API response: %v", err, resp)), nil
+	}
+
+	return mcp.NewToolResultJSON(map[string]interface{}{
+		"operation":  "create",
+		"entityType": "case",
+		"result":     result,
+	})
+}
+
+func (t *ManageTool) createTask(ctx context.Context, client *thehive.APIClient, data map[string]interface{}, parentID string) (*mcp.CallToolResult, error) {
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal task data: %v. Check that entity-data contains valid JSON fields. Use get-resource 'hive://schema/task' for field definitions.", err)), nil
+	}
+
+	var inputTask thehive.InputCreateTask
+	if err := json.Unmarshal(jsonData, &inputTask); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal task data: %v. Ensure entity-data fields match the task schema. Use get-resource 'hive://schema/task' to see required and optional fields.", err)), nil
+	}
+
+	result, resp, err := client.TaskAPI.CreateTaskInCase(ctx, parentID).InputCreateTask(inputTask).Execute()
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to create task in case %s: %v. Check that the case exists and you have permissions. API response: %v", parentID, err, resp)), nil
+	}
+
+	return mcp.NewToolResultJSON(map[string]interface{}{
+		"operation":  "create",
+		"entityType": "task",
+		"result":     result,
+	})
+}
+
+func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APIClient, data map[string]interface{}, parentID string) (*mcp.CallToolResult, error) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal observable data: %v. Check that entity-data contains valid JSON fields. Use get-resource 'hive://schema/observable' for field definitions.", err)), nil
+	}
+
+	var inputObservable thehive.InputCreateObservable
+	if err := json.Unmarshal(jsonData, &inputObservable); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal observable data: %v. Ensure entity-data fields match the observable schema. Use get-resource 'hive://schema/observable' to see required and optional fields.", err)), nil
+	}
+
+	// Try to create in case first, then alert if that fails
+	var result []thehive.OutputObservable
+	var resp *http.Response
+	result, resp, err = client.ObservableAPI.CreateObservableInCase(ctx, parentID).InputCreateObservable(inputObservable).Execute()
+	if err != nil {
+		// If case creation fails, try alert
+		result, resp, err = client.ObservableAPI.CreateObservableInAlert(ctx, parentID).InputCreateObservable(inputObservable).Execute()
+	}
+
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to create observable: %v. Check that the target case/alert exists and you have permissions. API response: %v", err, resp)), nil
+	}
+
+	return mcp.NewToolResultJSON(map[string]interface{}{
+		"operation":  "create",
+		"entityType": "observable",
+		"result":     result,
+	})
+}
+
+// Update operations
+func (t *ManageTool) handleUpdate(ctx context.Context, params *manageParams) (*mcp.CallToolResult, error) {
+	hiveClient, err := utils.GetHiveClientFromContext(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to get TheHive client: %v. Check your authentication and connection settings.", err)), nil
+	}
+
+	results := make([]map[string]interface{}, 0, len(params.EntityIDs))
+
+	for _, entityID := range params.EntityIDs {
+		result, err := t.updateEntity(ctx, hiveClient, params.EntityType, entityID, params.EntityData)
+		if err != nil {
+			results = append(results, map[string]interface{}{
+				"id":    entityID,
+				"error": err.Error(),
+			})
+		} else {
+			results = append(results, map[string]interface{}{
+				"id":     entityID,
+				"result": result,
+			})
+		}
+	}
+
+	return mcp.NewToolResultJSON(map[string]interface{}{
+		"operation":  "update",
+		"entityType": params.EntityType,
+		"results":    results,
+	})
+}
+
+func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient, entityType, entityID string, data map[string]interface{}) (interface{}, error) {
+	// Convert map to update structure
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal update data: %w. Check that entity-data contains valid JSON fields for updating", err)
+	}
+
+	switch entityType {
+	case "alert":
+		var inputAlert thehive.InputUpdateAlert
+		if err := json.Unmarshal(jsonData, &inputAlert); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal alert update data: %w. Use get-resource 'hive://schema/alert' to see updatable fields", err)
+		}
+		resp, err := client.AlertAPI.UpdateAlert(ctx, entityID).InputUpdateAlert(inputAlert).Execute()
+		if err != nil {
+			return nil, fmt.Errorf("failed to update alert %s: %w. Check that the alert exists and you have permissions. API response: %v", entityID, err, resp)
+		}
+		return "updated", nil
+
+	case "case":
+		var inputCase thehive.InputUpdateCase
+		if err := json.Unmarshal(jsonData, &inputCase); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal case update data: %w. Use get-resource 'hive://schema/case' to see updatable fields", err)
+		}
+		resp, err := client.CaseAPI.UpdateCase(ctx, entityID).InputUpdateCase(inputCase).Execute()
+		if err != nil {
+			return nil, fmt.Errorf("failed to update case %s: %w. Check that the case exists and you have permissions. API response: %v", entityID, err, resp)
+		}
+		return "updated", nil
+
+	case "task":
+		var inputTask thehive.InputUpdateTask
+		if err := json.Unmarshal(jsonData, &inputTask); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal task update data: %w. Use get-resource 'hive://schema/task' to see updatable fields", err)
+		}
+		resp, err := client.TaskAPI.UpdateTask(ctx, entityID).InputUpdateTask(inputTask).Execute()
+		if err != nil {
+			return nil, fmt.Errorf("failed to update task %s: %w. Check that the task exists and you have permissions. API response: %v", entityID, err, resp)
+		}
+		return "updated", nil
+
+	case "observable":
+		var inputObservable thehive.InputUpdateObservable
+		if err := json.Unmarshal(jsonData, &inputObservable); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal observable update data: %w. Use get-resource 'hive://schema/observable' to see updatable fields", err)
+		}
+		resp, err := client.ObservableAPI.UpdateObservable(ctx, entityID).InputUpdateObservable(inputObservable).Execute()
+		if err != nil {
+			return nil, fmt.Errorf("failed to update observable %s: %w. Check that the observable exists and you have permissions. API response: %v", entityID, err, resp)
+		}
+		return "updated", nil
+
+	default:
+		return nil, fmt.Errorf("unsupported entity type for update: %s", entityType)
+	}
+}
+
+// Delete operations
+func (t *ManageTool) handleDelete(ctx context.Context, params *manageParams) (*mcp.CallToolResult, error) {
+	hiveClient, err := utils.GetHiveClientFromContext(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to get TheHive client: %v. Check your authentication and connection settings.", err)), nil
+	}
+
+	results := make([]map[string]interface{}, 0, len(params.EntityIDs))
+
+	for _, entityID := range params.EntityIDs {
+		err := t.deleteEntity(ctx, hiveClient, params.EntityType, entityID)
+		if err != nil {
+			results = append(results, map[string]interface{}{
+				"id":    entityID,
+				"error": err.Error(),
+			})
+		} else {
+			results = append(results, map[string]interface{}{
+				"id":      entityID,
+				"deleted": true,
+			})
+		}
+	}
+
+	return mcp.NewToolResultJSON(map[string]interface{}{
+		"operation":  "delete",
+		"entityType": params.EntityType,
+		"results":    results,
+	})
+}
+
+func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient, entityType, entityID string) error {
+	switch entityType {
+	case "alert":
+		resp, err := client.AlertAPI.DeleteAlert(ctx, entityID).Execute()
+		if err != nil {
+			return fmt.Errorf("failed to delete alert %s: %w. Check that the alert exists and you have permissions. This operation is irreversible. API response: %v", entityID, err, resp)
+		}
+		return nil
+
+	case "case":
+		resp, err := client.CaseAPI.DeleteCase(ctx, entityID).Execute()
+		if err != nil {
+			return fmt.Errorf("failed to delete case %s: %w. Check that the case exists and you have permissions. This operation is irreversible. API response: %v", entityID, err, resp)
+		}
+		return nil
+
+	case "task":
+		resp, err := client.TaskAPI.DeleteTask(ctx, entityID).Execute()
+		if err != nil {
+			return fmt.Errorf("failed to delete task %s: %w. Check that the task exists and you have permissions. This operation is irreversible. API response: %v", entityID, err, resp)
+		}
+		return nil
+
+	case "observable":
+		resp, err := client.ObservableAPI.DeleteObservable(ctx, entityID).Execute()
+		if err != nil {
+			return fmt.Errorf("failed to delete observable %s: %w. Check that the observable exists and you have permissions. This operation is irreversible. API response: %v", entityID, err, resp)
+		}
+		return nil
+
+	default:
+		return fmt.Errorf("unsupported entity type for delete: %s", entityType)
+	}
+}
+
+// Comment operations
+func (t *ManageTool) handleComment(ctx context.Context, params *manageParams) (*mcp.CallToolResult, error) {
+	hiveClient, err := utils.GetHiveClientFromContext(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to get TheHive client: %v. Check your authentication and connection settings.", err)), nil
+	}
+
+	results := make([]map[string]interface{}, 0, len(params.EntityIDs))
+
+	for _, entityID := range params.EntityIDs {
+		result, err := t.addComment(ctx, hiveClient, params.EntityType, entityID, params.Comment)
+		if err != nil {
+			results = append(results, map[string]interface{}{
+				"id":    entityID,
+				"error": err.Error(),
+			})
+		} else {
+			results = append(results, map[string]interface{}{
+				"id":     entityID,
+				"result": result,
+			})
+		}
+	}
+
+	return mcp.NewToolResultJSON(map[string]interface{}{
+		"operation":  "comment",
+		"entityType": params.EntityType,
+		"results":    results,
+	})
+}
+
+func (t *ManageTool) addComment(ctx context.Context, client *thehive.APIClient, entityType, entityID, comment string) (interface{}, error) {
+	switch entityType {
+	case "case":
+		inputComment := thehive.InputComment{
+			Message: comment,
+		}
+		result, resp, err := client.CommentAPI.CreateCommentInCase(ctx, entityID).InputComment(inputComment).Execute()
+		if err != nil {
+			return nil, fmt.Errorf("failed to add comment to case %s: %w. Check that the case exists and you have permissions to add comments. API response: %v", entityID, err, resp)
+		}
+		return result, nil
+
+	case "task":
+		inputTaskLog := thehive.InputCreateLog{
+			Message: comment,
+		}
+		result, resp, err := client.TaskLogAPI.CreateTaskLog(ctx, entityID).InputCreateLog(inputTaskLog).Execute()
+		if err != nil {
+			return nil, fmt.Errorf("failed to add task log to task %s: %w. Check that the task exists and you have permissions to add task logs. API response: %v", entityID, err, resp)
+		}
+		return result, nil
+
+	default:
+		return nil, fmt.Errorf("comments not supported for entity type '%s'. Comments are only supported on 'case' (adds comment) and 'task' (adds task log)", entityType)
+	}
+}

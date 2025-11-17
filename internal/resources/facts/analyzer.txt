@@ -1,0 +1,10 @@
+An analyzer is a program that takes an observable and configuration information as raw input, analyze the observable and produces a result as raw output. It is made of at least 2 types of files:
+
+The program itself
+One or several service interaction files or flavors
+A Python requirements file, which is only necessary if the analyzer is written in Python.
+
+## The Program
+The first type of files an analyzer is made of is the core program that performs actions. It can be written in any programming language that is supported by Linux.
+
+While many analyzers are written in Python (*.py files), you can write yours in Ruby, Perl or even Scala. However, the very handy Cortexutils library described below is in Python. It greatly facilitates analyzer development and it also provides some methods to quickly format the output to make it compliant with the JSON schema expected by TheHive.

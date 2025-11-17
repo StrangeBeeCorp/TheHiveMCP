@@ -1,0 +1,148 @@
+{
+  "required": [
+    "_id",
+    "_type",
+    "_createdBy",
+    "_createdAt",
+    "title",
+    "group",
+    "status",
+    "flag",
+    "order",
+    "mandatory",
+    "extraData"
+  ],
+  "type": "object",
+  "properties": {
+    "_id": {
+      "type": "string",
+      "description": "Unique identifier for the task. Generated automatically by TheHive using the format '~<number>'."
+    },
+    "_type": {
+      "type": "string",
+      "description": "Entity type identifier. Always 'Task' for task objects."
+    },
+    "_createdBy": {
+      "type": "string",
+      "description": "Email or username of the user who created this task."
+    },
+    "_updatedBy": {
+      "type": "string",
+      "description": "Email or username of the user who last updated this task."
+    },
+    "_createdAt": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds since Unix epoch) when the task was created."
+    },
+    "_updatedAt": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds since Unix epoch) when the task was last updated."
+    },
+    "title": {
+      "type": "string",
+      "description": "The task title or name. Brief description of what action needs to be performed."
+    },
+    "group": {
+      "type": "string",
+      "description": "Task group name used to organize tasks within a case. Tasks with the same group are displayed together. Default group is 'default'."
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of the task, including instructions, context, or requirements for completion."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["Waiting", "InProgress", "Completed", "Cancel"],
+      "description": "Current status of the task. Hard-coded statuses that cannot be modified or extended. 'Waiting' = not started, 'InProgress' = actively worked on, 'Completed' = finished (mandatory tasks require at least one task log), 'Cancel' = cancelled/abandoned."
+    },
+    "flag": {
+      "type": "boolean",
+      "description": "Whether this task is flagged for attention. Flagged tasks are highlighted in the task list for visibility across the organization."
+    },
+    "startDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when work on this task began. Can be set manually or automatically when status changes to 'InProgress'."
+    },
+    "endDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the task was completed or cancelled. Set when status changes to 'Completed' or 'Cancel'."
+    },
+    "assignee": {
+      "type": "string",
+      "description": "Email or username of the user assigned to work on this task. Tasks can be assigned to users within the organization."
+    },
+    "order": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Sort order of the task within its group. Lower numbers appear first. Used to control display order in task lists."
+    },
+    "dueDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the task is due to be completed. Used for deadline tracking and task prioritization."
+    },
+    "mandatory": {
+      "type": "boolean",
+      "description": "Whether this task must be completed before the case can be closed. Mandatory tasks require at least one task log to be marked as 'Completed'."
+    },
+    "extraData": {
+      "type": "object",
+      "description": "Optional fields that can be requested via the 'extraData' query parameter. These fields are not returned by default due to performance overhead. Request specific fields by adding 'extraData: [\"fieldName\"]' to the page operation in your query.",
+      "properties": {
+        "case": {
+          "type": "object",
+          "description": "The parent case object containing this task. Includes all case fields like title, description, status, severity, etc. Useful for accessing case context without a separate query."
+        },
+        "caseId": {
+          "type": "integer",
+          "description": "The numeric case ID of the parent case."
+        },
+        "caseTemplate": {
+          "type": "object",
+          "description": "The case template object that was used to create the parent case (if any). Includes template name, tasks, and configuration."
+        },
+        "caseTemplateId": {
+          "type": "string",
+          "description": "The unique identifier of the case template used to create the parent case. Returns null if the case was not created from a template."
+        },
+        "isOwner": {
+          "type": "boolean",
+          "description": "Whether the current user is the owner of this task. Used to control UI elements and determine edit/delete permissions."
+        },
+        "shareCount": {
+          "type": "integer",
+          "description": "Total number of organizations this task has been shared with. Used for quick visibility in task lists without fetching full share details."
+        },
+        "actionRequired": {
+          "type": "boolean",
+          "description": "Whether an action is required from the current user's organization on this task. Introduced in TheHive 4.0.3 for collaborative workflows. When true, the task displays a 'Require Action' indicator."
+        },
+        "actionRequiredMap": {
+          "type": "object",
+          "description": "Map of organization IDs to boolean values indicating whether an action is required from each shared organization. Provides detailed view of which organizations need to take action on this task."
+        }
+      },
+      "additionalProperties": false
+    },
+    "additionalQueries": {
+      "type": "object",
+      "description": "Holds results of additional queries requested via the 'additionalQueries' parameter in the search API. Each key corresponds to a named query and contains its result set.",
+      "properties": {
+        "task-logs": {
+          "type": "array",
+          "description": "Array of task log objects associated with this task. Each log contains details like log message, author, timestamp, etc."
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,9 @@
+.env
+**/*.env
+Dockerfile
+docker-compose.yml
+bin/
+tmp/.env
+**/*.env
+bin/
+tmp/

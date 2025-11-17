@@ -1,0 +1,7 @@
+Response Formatting Rules:
+
+JSON Responses
+- Use proper JSON syntax
+- Include all required fields
+- Use correct data types
+- Follow field naming conventions

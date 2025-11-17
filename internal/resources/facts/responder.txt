@@ -1,0 +1,10 @@
+A responder is a program that takes JSON input and do an action and produces a basic result of that action. Responders are very similar to analyzers though they have different purposes. Responders are made of at least 2 types of files:
+
+The program itself
+One or several service interaction files or flavors
+A Python requirements file, which is only necessary if the responder is written in Python.
+
+# The Program
+The first type of files a responder is made of is the core program that performs actions. It can be written in any programming language that is supported by Linux.
+
+you can write your responders in Python, Ruby, Perl or even Scala. However, the very handy Cortexutils library described below is in Python. It greatly facilitates responder development and it also provides some methods to quickly format the output to make it compliant with the JSON schema expected by TheHive.

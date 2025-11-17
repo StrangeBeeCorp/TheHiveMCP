@@ -1,0 +1,325 @@
+{
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "_and": {
+          "type": "array",
+          "items": {
+            "oneOf": "<circular reference>"
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "_any"
+      ],
+      "type": "object",
+      "properties": {
+        "_any": {}
+      }
+    },
+    {
+      "required": [
+        "_between"
+      ],
+      "type": "object",
+      "properties": {
+        "_between": {
+          "required": [
+            "_field",
+            "_from",
+            "_to"
+          ],
+          "type": "object",
+          "properties": {
+            "_field": {
+              "type": "string"
+            },
+            "_from": {},
+            "_to": {}
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "_contains"
+      ],
+      "type": "object",
+      "properties": {
+        "_contains": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "required": [
+        "_endsWith"
+      ],
+      "type": "object",
+      "properties": {
+        "_endsWith": {
+          "required": [
+            "_field",
+            "_value"
+          ],
+          "type": "object",
+          "properties": {
+            "_field": {
+              "type": "string"
+            },
+            "_value": {}
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "_eq"
+      ],
+      "type": "object",
+      "properties": {
+        "_eq": {
+          "required": [
+            "_field",
+            "_value"
+          ],
+          "type": "object",
+          "properties": {
+            "_field": {
+              "type": "string"
+            },
+            "_value": {}
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "_gt"
+      ],
+      "type": "object",
+      "properties": {
+        "_gt": {
+          "required": [
+            "_field",
+            "_value"
+          ],
+          "type": "object",
+          "properties": {
+            "_field": {
+              "type": "string"
+            },
+            "_value": {}
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "_gte"
+      ],
+      "type": "object",
+      "properties": {
+        "_gte": {
+          "required": [
+            "_field",
+            "_value"
+          ],
+          "type": "object",
+          "properties": {
+            "_field": {
+              "type": "string"
+            },
+            "_value": {}
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "_id"
+      ],
+      "type": "object",
+      "properties": {
+        "_id": {
+          "type": "string",
+          "example": "~354"
+        }
+      }
+    },
+    {
+      "required": [
+        "_in"
+      ],
+      "type": "object",
+      "properties": {
+        "_in": {
+          "required": [
+            "_field"
+          ],
+          "type": "object",
+          "properties": {
+            "_field": {
+              "type": "string"
+            },
+            "_values": {
+              "type": "array",
+              "items": {}
+            }
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "_like"
+      ],
+      "type": "object",
+      "properties": {
+        "_like": {
+          "required": [
+            "_field",
+            "_value"
+          ],
+          "type": "object",
+          "properties": {
+            "_field": {
+              "type": "string"
+            },
+            "_value": {}
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "_lt"
+      ],
+      "type": "object",
+      "properties": {
+        "_lt": {
+          "required": [
+            "_field",
+            "_value"
+          ],
+          "type": "object",
+          "properties": {
+            "_field": {
+              "type": "string"
+            },
+            "_value": {}
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "_lte"
+      ],
+      "type": "object",
+      "properties": {
+        "_lte": {
+          "required": [
+            "_field",
+            "_value"
+          ],
+          "type": "object",
+          "properties": {
+            "_field": {
+              "type": "string"
+            },
+            "_value": {}
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "_match"
+      ],
+      "type": "object",
+      "properties": {
+        "_match": {
+          "required": [
+            "_field",
+            "_value"
+          ],
+          "type": "object",
+          "properties": {
+            "_field": {
+              "type": "string"
+            },
+            "_value": {}
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "_ne"
+      ],
+      "type": "object",
+      "properties": {
+        "_ne": {
+          "required": [
+            "_field",
+            "_value"
+          ],
+          "type": "object",
+          "properties": {
+            "_field": {
+              "type": "string"
+            },
+            "_value": {}
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "_not"
+      ],
+      "type": "object",
+      "properties": {
+        "_not": {
+          "oneOf": "<circular reference>"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "_or": {
+          "type": "array",
+          "items": {
+            "oneOf": "<circular reference>"
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "_startsWith"
+      ],
+      "type": "object",
+      "properties": {
+        "_startsWith": {
+          "required": [
+            "_field",
+            "_value"
+          ],
+          "type": "object",
+          "properties": {
+            "_field": {
+              "type": "string"
+            },
+            "_value": {}
+          }
+        }
+      }
+    }
+  ]
+}

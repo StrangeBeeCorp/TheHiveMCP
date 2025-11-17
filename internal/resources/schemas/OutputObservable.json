@@ -1,0 +1,218 @@
+{
+  "required": [
+    "_id",
+    "_type",
+    "_createdBy",
+    "_createdAt",
+    "dataType",
+    "startDate",
+    "tlp",
+    "tlpLabel",
+    "pap",
+    "papLabel",
+    "ioc",
+    "sighted",
+    "reports",
+    "extraData",
+    "ignoreSimilarity"
+  ],
+  "type": "object",
+  "properties": {
+    "_id": {
+      "type": "string",
+      "description": "Unique identifier for the observable"
+    },
+    "_type": {
+      "type": "string",
+      "description": "Type discriminator for the entity (e.g., 'Observable', 'case_artifact')"
+    },
+    "_createdBy": {
+      "type": "string",
+      "description": "User login who created the observable"
+    },
+    "_updatedBy": {
+      "type": "string",
+      "description": "User login who last updated the observable"
+    },
+    "_createdAt": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Creation timestamp in milliseconds since epoch"
+    },
+    "_updatedAt": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Last update timestamp in milliseconds since epoch"
+    },
+    "dataType": {
+      "type": "string",
+      "description": "Type of observable data (e.g., 'ip', 'domain', 'hash', 'url', 'mail', 'file', 'hostname', 'other'). Cannot be changed after creation."
+    },
+    "data": {
+      "type": "string",
+      "description": "The actual observable value (e.g., IP address, domain name, file hash). Cannot be changed after creation."
+    },
+    "startDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp when the observable was first observed or became relevant"
+    },
+    "attachment": {
+      "required": [
+        "_id",
+        "_type",
+        "_createdBy",
+        "_createdAt",
+        "name",
+        "size",
+        "contentType",
+        "id"
+      ],
+      "type": "object",
+      "description": "File attachment metadata (only present for observables with dataType 'file')",
+      "properties": {
+        "_id": {
+          "type": "string",
+          "description": "Unique identifier for the attachment"
+        },
+        "_type": {
+          "type": "string",
+          "description": "Type discriminator (e.g., 'Attachment')"
+        },
+        "_createdBy": {
+          "type": "string",
+          "description": "User who uploaded the attachment"
+        },
+        "_updatedBy": {
+          "type": "string",
+          "description": "User who last updated the attachment"
+        },
+        "_createdAt": {
+          "type": "integer",
+          "format": "datetime_ms",
+          "example": 1640000000000,
+          "description": "Upload timestamp in milliseconds"
+        },
+        "_updatedAt": {
+          "type": "integer",
+          "format": "datetime_ms",
+          "example": 1640000000000,
+          "description": "Last update timestamp in milliseconds"
+        },
+        "name": {
+          "type": "string",
+          "description": "Original filename of the attachment"
+        },
+        "hashes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "File hashes in different algorithms (SHA256, SHA1, MD5)"
+        },
+        "size": {
+          "type": "integer",
+          "format": "int64",
+          "description": "File size in bytes"
+        },
+        "contentType": {
+          "type": "string",
+          "description": "MIME type of the file (e.g., 'application/pdf', 'application/octet-stream')"
+        },
+        "id": {
+          "type": "string",
+          "description": "Storage identifier for retrieving the file content"
+        }
+      }
+    },
+    "tlp": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Traffic Light Protocol level: 0 (WHITE - unlimited disclosure), 1 (GREEN - community), 2 (AMBER - limited), 3 (RED - personal for named recipients only)"
+    },
+    "tlpLabel": {
+      "type": "string",
+      "description": "Human-readable TLP label ('WHITE', 'GREEN', 'AMBER', 'RED')"
+    },
+    "pap": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Permissible Actions Protocol level: 0 (WHITE - any action), 1 (GREEN - passive actions), 2 (AMBER - active actions with notification), 3 (RED - no action without approval)"
+    },
+    "papLabel": {
+      "type": "string",
+      "description": "Human-readable PAP label ('WHITE', 'GREEN', 'AMBER', 'RED')"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of tags for categorization and filtering (e.g., 'malicious', 'phishing', 'apt28')"
+    },
+    "ioc": {
+      "type": "boolean",
+      "description": "Indicator of Compromise flag - marks if this observable represents malicious or suspicious activity. Used for threat intelligence and correlation."
+    },
+    "sighted": {
+      "type": "boolean",
+      "description": "Marks if this observable has been seen/confirmed in the wild or in other incidents"
+    },
+    "sightedAt": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp when the observable was sighted"
+    },
+    "reports": {
+      "type": "object",
+      "description": "Analysis reports from Cortex analyzers. Contains results from automated analysis jobs (e.g., VirusTotal, MISP, threat intelligence feeds). Structure varies by analyzer."
+    },
+    "message": {
+      "type": "string",
+      "description": "Free-text description or context about the observable in relation to the case/alert"
+    },
+    "extraData": {
+      "type": "object",
+      "description": "Optional fields that can be requested via the 'extraData' query parameter. These fields are not returned by default due to performance overhead. Request specific fields by adding 'extraData: [\"fieldName\"]' to the page operation in your query.",
+      "properties": {
+        "seenSummary": {
+          "type": "object",
+          "description": "Summary of where this observable has been seen across cases and alerts. More efficient than 'seen' for observables appearing in many places. Structure: {caseCount: number, alertCount: number, cases: [{id, title}], alerts: [{id, title}]}"
+        },
+        "shares": {
+          "type": "array",
+          "description": "List of organizations this observable has been shared with, including share permissions and profiles"
+        },
+        "links": {
+          "type": "array",
+          "description": "Organizational links related to this observable, such as linked cases, alerts, or other entities. This is the field you want to use if you need to find the cases or alerts in which this observable is used."
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of permissions the current user has on this observable (e.g., 'manageObservable/update', 'manageObservable/delete')"
+        },
+        "isOwner": {
+          "type": "boolean",
+          "description": "Whether the current user is the owner of this observable"
+        },
+        "shareCount": {
+          "type": "integer",
+          "description": "Total number of organizations this observable has been shared with"
+        }
+      },
+      "additionalProperties": false
+    },
+    "additionalQueries": {},
+    "ignoreSimilarity": {
+      "type": "boolean",
+      "description": "When true, excludes this observable from similarity calculations between cases and alerts. Useful for common indicators that shouldn't trigger false correlations (e.g., google.com, 127.0.0.1)"
+    }
+  }
+}

@@ -1,0 +1,108 @@
+package bootstrap
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"time"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
+	"github.com/mark3labs/mcp-go/server"
+)
+
+func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx context.Context, r *http.Request) context.Context {
+	return func(ctx context.Context, r *http.Request) context.Context {
+		// Map header keys to context keys and environment variables
+		type keyMap struct {
+			header string
+			ctxKey types.CtxKey
+			deflt  string
+		}
+		keys := []keyMap{
+			{"Authorization", types.HiveAPIKeyCtxKey, options.TheHiveAPIKey},
+			{string(types.HeaderKeyTheHiveAPIKey), types.HiveAPIKeyCtxKey, options.TheHiveAPIKey},
+			{string(types.HeaderKeyTheHiveOrganisation), types.HiveOrgCtxKey, options.TheHiveOrganisation},
+		}
+
+		// Extract string values into context
+		for _, km := range keys {
+			val := r.Header.Get(km.header)
+			if val == "" {
+				val = km.deflt
+			}
+			if val != "" {
+				// Special handling for Authorization header
+				if km.header == "Authorization" {
+					val = ExtractBearerToken(val)
+				}
+				ctx = context.WithValue(ctx, km.ctxKey, val)
+			}
+		}
+
+		// Add Hive client to context using extracted credentials
+		hiveAPIKey, _ := ctx.Value(types.HiveAPIKeyCtxKey).(string)
+		hiveOrganisation, _ := ctx.Value(types.HiveOrgCtxKey).(string)
+		hiveURL := SafeGetEnv(string(types.EnvKeyTheHiveURL), "")
+
+		if hiveURL != "" {
+			creds := &TheHiveCredentials{
+				URL:          hiveURL,
+				APIKey:       hiveAPIKey,
+				Username:     options.TheHiveUsername,
+				Password:     options.TheHivePassword,
+				Organisation: hiveOrganisation,
+			}
+
+			if newCtx, err := AddTheHiveClientToContextWithCreds(ctx, creds); err != nil {
+				slog.Warn("Failed to add TheHive client to context", "error", err)
+			} else {
+				ctx = newCtx
+			}
+		}
+
+		return ctx
+	}
+}
+
+// StartHTTPServer starts the HTTP server with production-ready configuration
+func StartHTTPServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOptions) error {
+	if s == nil {
+		return fmt.Errorf("MCP server cannot be nil")
+	}
+
+	if options.BindAddr == "" {
+		return fmt.Errorf("bind address cannot be empty")
+	}
+
+	var httpOptions []server.StreamableHTTPOption
+	httpOptions = append(httpOptions, server.WithEndpointPath(options.MCPServerEndpointPath))
+	httpOptions = append(httpOptions, server.WithStateLess(true))
+	httpOptions = append(httpOptions, server.WithHTTPContextFunc(GetHTTPAuthContextFunc(options)))
+
+	// Configure heartbeat interval if specified
+	if options.MCPHeartbeatInterval != "" {
+		if duration, err := time.ParseDuration(options.MCPHeartbeatInterval); err != nil {
+			slog.Warn("Invalid heartbeat interval format, using default",
+				"error", err,
+				"interval", options.MCPHeartbeatInterval)
+		} else {
+			httpOptions = append(httpOptions, server.WithHeartbeatInterval(duration))
+			slog.Info("Configured custom heartbeat interval", "interval", duration)
+		}
+	}
+
+	httpServer := server.NewStreamableHTTPServer(s, httpOptions...)
+	slog.Info("Starting HTTP server",
+		"bind_addr", options.BindAddr,
+		"endpoint", options.MCPServerEndpointPath)
+
+	if err := httpServer.Start(options.BindAddr); err != nil {
+		slog.Error("Failed to start HTTP server",
+			"error", err,
+			"bind_addr", options.BindAddr)
+		return fmt.Errorf("failed to start HTTP server on %s: %w", options.BindAddr, err)
+	}
+
+	return nil
+}

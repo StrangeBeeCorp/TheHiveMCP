@@ -1,0 +1,370 @@
+{
+  "required": [
+    "_id",
+    "_type",
+    "_createdBy",
+    "_createdAt",
+    "number",
+    "title",
+    "description",
+    "severity",
+    "severityLabel",
+    "startDate",
+    "flag",
+    "tlp",
+    "tlpLabel",
+    "pap",
+    "papLabel",
+    "status",
+    "stage",
+    "extraData",
+    "newDate",
+    "timeToDetect"
+  ],
+  "type": "object",
+  "properties": {
+    "_id": {
+      "type": "string",
+      "description": "Unique identifier for the case. Generated automatically by TheHive using the format '~<number>'."
+    },
+    "_type": {
+      "type": "string",
+      "description": "Entity type identifier. Always 'Case' for case objects."
+    },
+    "_createdBy": {
+      "type": "string",
+      "description": "Email or username of the user who created this case."
+    },
+    "_updatedBy": {
+      "type": "string",
+      "description": "Email or username of the user who last updated this case."
+    },
+    "_createdAt": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds since Unix epoch) when the case was created."
+    },
+    "_updatedAt": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds since Unix epoch) when the case was last updated."
+    },
+    "number": {
+      "type": "integer",
+      "description": "Human-readable incremental case number used for referencing the case. This field can be used in APIs in place of the _id for easier identification (e.g., 'case #42'). Users and AIs often confuse this with the _id field.",
+      "format": "int32"
+    },
+    "title": {
+      "type": "string",
+      "description": "The case title or name. Brief summary of the security incident or investigation."
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of the case, including background information, context, and initial findings about the security incident."
+    },
+    "severity": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Numeric severity level of the case. Higher numbers indicate more severe incidents. The range and meaning of values are configurable per organization."
+    },
+    "severityLabel": {
+      "type": "string",
+      "description": "Human-readable label corresponding to the severity value (e.g., 'Low', 'Medium', 'High', 'Critical'). Defined in organization configuration."
+    },
+    "startDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the incident began or when investigation started. Used for timeline tracking and metrics calculation."
+    },
+    "endDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the case was closed or the incident was resolved. Set automatically when case moves to 'Closed' stage."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of tags for categorization and filtering. Tags help organize cases by threat type, attack vector, affected systems, or custom categories."
+    },
+    "flag": {
+      "type": "boolean",
+      "description": "Whether this case is flagged for attention. Flagged cases are highlighted in case lists for visibility and priority handling."
+    },
+    "tlp": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Traffic Light Protocol level (0-4) indicating information sharing restrictions. 0=TLP:CLEAR (unlimited), 1=TLP:GREEN (community), 2=TLP:AMBER (limited), 3=TLP:AMBER+STRICT (organization only), 4=TLP:RED (personal/recipient only)."
+    },
+    "tlpLabel": {
+      "type": "string",
+      "description": "Human-readable TLP label corresponding to the tlp value (e.g., 'TLP:CLEAR', 'TLP:AMBER', 'TLP:RED')."
+    },
+    "pap": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Permissible Actions Protocol level (0-3) indicating allowed actions on case data. 0=PAP:CLEAR (unlimited actions), 1=PAP:GREEN (passive only), 2=PAP:AMBER (active with approval), 3=PAP:RED (no actions)."
+    },
+    "papLabel": {
+      "type": "string",
+      "description": "Human-readable PAP label corresponding to the pap value (e.g., 'PAP:CLEAR', 'PAP:AMBER', 'PAP:RED')."
+    },
+    "status": {
+      "type": "string",
+      "description": "Current status of the case within its stage. Status values are configurable per organization and vary by stage (e.g., 'New', 'InProgress', 'Resolved', 'Rejected')."
+    },
+    "stage": {
+      "type": "string",
+      "description": "High-level stage of the case lifecycle. Must be one of 'New' (newly created), 'InProgress' (active investigation), or 'Closed' (resolved/completed). Stage transitions are tracked for metrics."
+    },
+    "summary": {
+      "type": "string",
+      "description": "Executive summary of the case. Concise overview of the incident, findings, and resolution for stakeholders and reporting."
+    },
+    "impactStatus": {
+      "type": "string",
+      "description": "Impact assessment status or category. Describes the actual or potential business/operational impact of the security incident."
+    },
+    "assignee": {
+      "type": "string",
+      "description": "Email or username of the primary analyst assigned to investigate and resolve this case."
+    },
+    "customFields": {
+      "type": "array",
+      "items": {
+        "required": [
+          "_id",
+          "name",
+          "type",
+          "value",
+          "order"
+        ],
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "description": "Unique identifier for the custom field definition."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the custom field."
+          },
+          "type": {
+            "type": "string",
+            "description": "Data type of the custom field (e.g., 'string', 'integer', 'boolean', 'date')."
+          },
+          "value": {
+            "description": "Value of the custom field. Type varies based on the field type."
+          },
+          "order": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Display order of the custom field in the UI."
+          }
+        }
+      },
+      "description": "Organization-specific custom fields that extend the default case schema. Allows recording additional structured information relevant to the organization's workflows."
+    },
+    "userPermissions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of permissions the current user has on this case (e.g., 'manageCase/update', 'manageCase/delete', 'manageShare'). Depends on the user's profile and case sharing configuration."
+    },
+    "extraData": {
+      "type": "object",
+      "description": "Optional fields that can be requested via the 'extraData' query parameter. These fields are not returned by default due to performance overhead. Request specific fields by adding 'extraData: [\"fieldName\"]' to the page operation in your query.",
+      "properties": {
+        "observableStats": {
+          "type": "object",
+          "description": "Statistics about observables in this case, including counts by IOC status, sighting status, and data type. Useful for case metrics and dashboards."
+        },
+        "taskStats": {
+          "type": "object",
+          "description": "Statistics about tasks in this case, including counts by status (Waiting, InProgress, Completed, Cancel) and mandatory status. Provides quick overview of investigation progress."
+        },
+        "alerts": {
+          "type": "array",
+          "description": "Array of alert objects that were merged into this case. Contains full alert details including observables, tags, and source information."
+        },
+        "alertCount": {
+          "type": "integer",
+          "description": "Total number of alerts that have been merged into this case. Used for quick visibility without fetching full alert objects."
+        },
+        "isOwner": {
+          "type": "boolean",
+          "description": "Whether the current user is the owner of this case. Determines UI elements and permissions for case management."
+        },
+        "shareCount": {
+          "type": "integer",
+          "description": "Total number of organizations this case has been shared with. Used for quick visibility in case lists without fetching full share details."
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of permissions available on this case. Similar to userPermissions but may include additional permission details for shared access scenarios."
+        },
+        "actionRequired": {
+          "type": "boolean",
+          "description": "Whether an action is required from the current user's organization on this case. Used for collaborative workflows and task delegation between organizations."
+        },
+        "procedureCount": {
+          "type": "integer",
+          "description": "Total number of procedures (TTPs/tactics) associated with this case. Tracks MITRE ATT&CK techniques used in the incident."
+        },
+        "attachmentCount": {
+          "type": "integer",
+          "description": "Total number of files attached to this case. Includes documents, screenshots, evidence files, and other supporting materials."
+        },
+        "similarAlerts": {
+          "type": "array",
+          "description": "[DEPRECATED] Array of similar alerts based on observable matching. Decommissioned in favor of dedicated 'similarAlerts' query operation which is more efficient when there are many similar observables. Use the query API instead of requesting this extraData field."
+        },
+        "contributors": {
+          "type": "array",
+          "description": "List of users who have contributed to this case through updates, task completion, observable addition, or comments. Tracks collaboration and participation."
+        },
+        "computed.handlingDuration": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Total handling duration in milliseconds. Calculated from various stage timestamps (newDate, inProgressDate, closedDate) to measure case lifecycle."
+        },
+        "computed.handlingDurationInSeconds": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Total handling duration converted to seconds. Convenience field for human-readable time calculations."
+        },
+        "computed.handlingDurationInMinutes": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Total handling duration converted to minutes. Convenience field for human-readable time calculations."
+        },
+        "computed.handlingDurationInHours": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Total handling duration converted to hours. Convenience field for human-readable time calculations and SLA tracking."
+        },
+        "computed.handlingDurationInDays": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Total handling duration converted to days. Convenience field for human-readable time calculations and long-term metrics."
+        },
+        "status": {
+          "type": "string",
+          "description": "Duplicate of the main status field. May be included in extraData for consistency in some query contexts."
+        },
+        "links": {
+          "type": "array",
+          "description": "Array of links to related cases (internal TheHive links) or external resources. Includes link type/category for relationship classification. Enhances traceability and investigation context."
+        }
+      },
+      "additionalProperties": false
+    },
+    "additionalQueries": {
+      "type": "object",
+      "description": "Holds results of additional queries requested via the 'additionalQueries' parameter in the search API. Each key corresponds to a named query and contains its result set.",
+      "properties": {
+        "attachments": {
+          "type": "array",
+          "description": "Array of attachment objects associated with the case. Each attachment includes metadata such as filename, content type, size, and a download URL."
+        },
+        "comments": {
+          "type": "array",
+          "description": "Array of comment objects added to the case during triage. Each comment includes author, timestamp, and content."
+        },
+        "observables": {
+          "type": "array",
+          "description": "Array of observable objects linked to the case. Each observable represents an IOC or artifact related to the security event."
+        },
+        "pages": {
+          "type": "object",
+          "description": "Pages are documentation/notes added to the case."
+        },
+        "tasks": {
+          "type": "array",
+          "description": "Array of task objects created for the case investigation. Each task includes assignee, status, due date, and description."
+        }
+      }
+    },
+    "newDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the case entered 'New' stage. Used for metrics calculation and tracking time spent in each stage."
+    },
+    "inProgressDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the case entered 'InProgress' stage. Marks the start of active investigation."
+    },
+    "closedDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the case was closed. Used to calculate total case handling duration."
+    },
+    "alertDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) of the earliest alert merged into this case. Used for tracking the initial detection time of the incident."
+    },
+    "alertNewDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the first merged alert entered 'New' status. Used for alert-to-case workflow metrics."
+    },
+    "alertInProgressDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the first merged alert entered 'InProgress' status. Tracks alert triage timeline."
+    },
+    "alertImportedDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when an alert was imported/merged into this case. Measures time from alert creation to case creation."
+    },
+    "timeToDetect": {
+      "type": "integer",
+      "format": "int64",
+      "description": "Time in milliseconds from incident occurrence (startDate) to detection (alertDate or case creation). Key security metric for measuring detection capability."
+    },
+    "timeToTriage": {
+      "type": "integer",
+      "format": "int64",
+      "description": "Time in milliseconds from detection to triage completion (when alert moves to InProgress). Measures alert response efficiency."
+    },
+    "timeToQualify": {
+      "type": "integer",
+      "format": "int64",
+      "description": "Time in milliseconds from detection to qualification (when case is created from alert). Measures decision-making speed on whether incidents require investigation."
+    },
+    "timeToAcknowledge": {
+      "type": "integer",
+      "format": "int64",
+      "description": "Time in milliseconds from case creation to acknowledgment (when case enters InProgress). Tracks initial response time."
+    },
+    "timeToResolve": {
+      "type": "integer",
+      "format": "int64",
+      "description": "Time in milliseconds from case creation to resolution (when case is closed). Key metric for measuring incident response efficiency."
+    },
+    "handlingDuration": {
+      "type": "integer",
+      "format": "int64",
+      "description": "Total handling duration in milliseconds. Calculated from stage timestamps (newDate, inProgressDate, closedDate). Represents actual time spent working on the case, excluding time in 'New' or waiting states."
+    }
+  }
+}

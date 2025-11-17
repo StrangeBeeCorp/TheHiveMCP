@@ -1,0 +1,302 @@
+{
+  "required": [
+    "_id",
+    "_type",
+    "_createdBy",
+    "_createdAt",
+    "type",
+    "source",
+    "sourceRef",
+    "title",
+    "description",
+    "severity",
+    "severityLabel",
+    "date",
+    "tlp",
+    "tlpLabel",
+    "pap",
+    "papLabel",
+    "follow",
+    "observableCount",
+    "status",
+    "stage",
+    "extraData",
+    "newDate",
+    "timeToDetect"
+  ],
+  "type": "object",
+  "properties": {
+    "_id": {
+      "type": "string",
+      "description": "Unique identifier for the alert. Generated automatically by TheHive using the format '~<number>'."
+    },
+    "_type": {
+      "type": "string",
+      "description": "Entity type identifier. Always 'Alert' for alert objects."
+    },
+    "_createdBy": {
+      "type": "string",
+      "description": "Email, username, or system identifier that created this alert. Often represents the alert feeder or integration that imported the alert."
+    },
+    "_updatedBy": {
+      "type": "string",
+      "description": "Email or username of the user who last updated this alert. Tracks manual modifications during triage."
+    },
+    "_createdAt": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds since Unix epoch) when the alert was created in TheHive."
+    },
+    "_updatedAt": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds since Unix epoch) when the alert was last updated."
+    },
+    "type": {
+      "type": "string",
+      "description": "Alert type or category indicating the kind of security event (e.g., 'malware', 'phishing', 'intrusion_detection', 'data_exfiltration'). Used for classification and routing."
+    },
+    "source": {
+      "type": "string",
+      "description": "Name of the external system or security tool that generated this alert (e.g., 'SIEM', 'EDR', 'IDS', 'Email Gateway'). Identifies the origin of the security event."
+    },
+    "sourceRef": {
+      "type": "string",
+      "description": "Unique reference or identifier from the source system. Allows correlation back to the original alert in the external tool for additional context."
+    },
+    "externalLink": {
+      "type": "string",
+      "description": "URL linking to the alert in the source system. Provides direct access to the original event for detailed investigation."
+    },
+    "title": {
+      "type": "string",
+      "description": "Brief title or summary of the security alert. Describes the detected threat or anomaly."
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of the alert, including context, detection logic, and relevant details from the source system."
+    },
+    "severity": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Numeric severity level of the alert. Higher numbers indicate more severe threats. The range and meaning of values are configurable per organization."
+    },
+    "severityLabel": {
+      "type": "string",
+      "description": "Human-readable label corresponding to the severity value (e.g., 'Low', 'Medium', 'High', 'Critical'). Defined in organization configuration."
+    },
+    "date": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the security event occurred in the source system. Represents the actual incident time, not the alert creation time in TheHive."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of tags for categorization and filtering. Tags can be inherited from the source system or added during triage. Help organize alerts by threat type, campaign, or custom categories."
+    },
+    "tlp": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Traffic Light Protocol level (0-4) indicating information sharing restrictions. 0=TLP:CLEAR (unlimited), 1=TLP:GREEN (community), 2=TLP:AMBER (limited), 3=TLP:AMBER+STRICT (organization only), 4=TLP:RED (personal/recipient only)."
+    },
+    "tlpLabel": {
+      "type": "string",
+      "description": "Human-readable TLP label corresponding to the tlp value (e.g., 'TLP:CLEAR', 'TLP:AMBER', 'TLP:RED')."
+    },
+    "pap": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Permissible Actions Protocol level (0-3) indicating allowed actions on alert data. 0=PAP:CLEAR (unlimited actions), 1=PAP:GREEN (passive only), 2=PAP:AMBER (active with approval), 3=PAP:RED (no actions)."
+    },
+    "papLabel": {
+      "type": "string",
+      "description": "Human-readable PAP label corresponding to the pap value (e.g., 'PAP:CLEAR', 'PAP:AMBER', 'PAP:RED')."
+    },
+    "follow": {
+      "type": "boolean",
+      "description": "Whether this alert is followed by the current user. Followed alerts generate notifications on updates and appear in personal watchlists."
+    },
+    "customFields": {
+      "type": "array",
+      "items": {
+        "required": ["_id", "name", "type", "value", "order"],
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "description": "Unique identifier for the custom field definition."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the custom field."
+          },
+          "type": {
+            "type": "string",
+            "description": "Data type of the custom field (e.g., 'string', 'integer', 'boolean', 'date')."
+          },
+          "value": {
+            "description": "Value of the custom field. Type varies based on the field type."
+          },
+          "order": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Display order of the custom field in the UI."
+          }
+        }
+      },
+      "description": "Organization-specific custom fields that extend the default alert schema. Allows capturing additional structured information from source systems or added during triage."
+    },
+    "caseTemplate": {
+      "type": "string",
+      "description": "Name or identifier of the case template to apply when this alert is promoted to a case. Automates case creation with predefined tasks and structure."
+    },
+    "observableCount": {
+      "type": "integer",
+      "format": "int64",
+      "description": "Total number of observables (IOCs, artifacts) associated with this alert. Includes IP addresses, domains, file hashes, and other security indicators."
+    },
+    "caseId": {
+      "type": "string",
+      "description": "The unique identifier (_id) of the case this alert was merged into. Present only after the alert has been imported/promoted to a case. Used to track alert-to-case relationships."
+    },
+    "status": {
+      "type": "string",
+      "description": "Current status of the alert within its stage. Status values are configurable per organization and vary by stage (e.g., 'New', 'Updated', 'Ignored', 'Imported')."
+    },
+    "stage": {
+      "type": "string",
+      "description": "High-level stage of the alert lifecycle. Must be one of 'New' (awaiting triage), 'InProgress' (under review), or 'Closed' (dismissed or imported). Stage transitions are tracked for metrics."
+    },
+    "assignee": {
+      "type": "string",
+      "description": "Email or username of the analyst assigned to triage this alert. Helps distribute alert workload across the team."
+    },
+    "summary": {
+      "type": "string",
+      "description": "Summary notes from alert triage. Records analyst findings, triage decisions, and rationale for dismissal or escalation."
+    },
+    "extraData": {
+      "type": "object",
+      "description": "Optional fields that can be requested via the 'extraData' query parameter. These fields are not returned by default due to performance overhead. Request specific fields by adding 'extraData: [\"fieldName\"]' to the page operation in your query.",
+      "properties": {
+        "similarCases": {
+          "type": "array",
+          "description": "[DEPRECATED] Array of similar cases based on observable matching. Decommissioned in favor of dedicated 'similarCases' query operation which is more efficient when there are many similar observables. Use the query API instead of requesting this extraData field."
+        },
+        "similarAlerts": {
+          "type": "array",
+          "description": "[DEPRECATED] Array of similar alerts based on observable matching. Decommissioned in favor of dedicated 'similarAlerts' query operation which is more efficient when there are many similar observables. Use the query API instead of requesting this extraData field."
+        },
+        "importDate": {
+          "type": "integer",
+          "format": "datetime_ms",
+          "description": "Timestamp (in milliseconds) when this alert was imported/merged into a case. Measures the time from alert creation to case promotion. Present only for alerts that have been converted to cases."
+        },
+        "caseNumber": {
+          "type": "integer",
+          "description": "[DEPRECATED] The human-readable case number that this alert was merged into. Deprecated in favor of 'relatedCase.number' which provides more comprehensive case relationship information."
+        },
+        "relatedCase": {
+          "type": "object",
+          "description": "Information about the case this alert is related to (if imported). Provides case access context and visibility information.",
+          "properties": {
+            "number": {
+              "type": "integer",
+              "description": "Human-readable case number that this alert was merged into. Replaces the deprecated 'caseNumber' field."
+            },
+            "accessKind": {
+              "type": "string",
+              "enum": ["OrganisationAccessKind", "UserAccessKind"],
+              "description": "Type of access the current user has to the related case. 'OrganisationAccessKind' indicates organization-level access (case is shared with user's org), 'UserAccessKind' indicates direct user-level access (user created or was granted access)."
+            },
+            "isVisible": {
+              "type": "boolean",
+              "description": "Whether the current user can view the related case. False if the case exists but the user lacks permissions to access it (e.g., case is in another organization without sharing)."
+            }
+          }
+        },
+        "status": {
+          "type": "string",
+          "description": "Duplicate of the main status field. May be included in extraData for consistency in some query contexts."
+        },
+        "procedureCount": {
+          "type": "integer",
+          "description": "Total number of procedures (TTPs/tactics) associated with this alert. Tracks MITRE ATT&CK techniques identified in the security event."
+        }
+      },
+      "additionalProperties": false
+    },
+    "additionalQueries": {
+      "type": "object",
+      "description": "Holds results of additional queries requested via the 'additionalQueries' parameter in the search API. Each key corresponds to a named query and contains its result set.",
+      "properties": {
+        "attachments": {
+          "type": "array",
+          "description": "Array of attachment objects associated with the alert. Each attachment includes metadata such as filename, content type, size, and a download URL."
+        },
+        "comments": {
+          "type": "array",
+          "description": "Array of comment objects added to the alert during triage. Each comment includes author, timestamp, and content."
+        },
+        "observables": {
+          "type": "array",
+          "description": "Array of observable objects linked to the alert. Each observable represents an IOC or artifact related to the security event."
+        },
+        "pages": {
+          "type": "object",
+          "description": "Pages are documentation/notes added to the alert."
+        }
+      }
+    },
+    "newDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the alert entered 'New' stage. Used for metrics calculation and tracking time spent in each stage."
+    },
+    "inProgressDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the alert entered 'InProgress' stage. Marks the start of active triage."
+    },
+    "closedDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the alert was closed (dismissed or imported). Used to calculate total alert handling duration."
+    },
+    "importedDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the alert was imported/merged into a case. Same value as extraData.importDate but available at the root level."
+    },
+    "timeToDetect": {
+      "type": "integer",
+      "format": "int64",
+      "description": "Time in milliseconds from the actual security event (date field) to when the alert was created in TheHive (_createdAt). Measures the detection latency of the source system."
+    },
+    "timeToTriage": {
+      "type": "integer",
+      "format": "int64",
+      "description": "Time in milliseconds from alert creation to triage completion (when alert moves to InProgress). Measures initial response time to incoming alerts."
+    },
+    "timeToQualify": {
+      "type": "integer",
+      "format": "int64",
+      "description": "Time in milliseconds from alert creation to qualification decision (when alert is imported to case or dismissed). Measures how quickly alerts are processed through triage."
+    },
+    "timeToAcknowledge": {
+      "type": "integer",
+      "format": "int64",
+      "description": "Time in milliseconds from alert creation to acknowledgment (when an analyst assigns themselves or changes status). Tracks initial engagement time with alerts."
+    }
+  }
+}

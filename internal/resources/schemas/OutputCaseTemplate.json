@@ -1,0 +1,200 @@
+{
+  "required": [
+    "_id",
+    "_type",
+    "_createdBy",
+    "_createdAt",
+    "name",
+    "displayName",
+    "flag",
+    "extraData"
+  ],
+  "type": "object",
+  "properties": {
+    "_id": {
+      "type": "string"
+    },
+    "_type": {
+      "type": "string"
+    },
+    "_createdBy": {
+      "type": "string"
+    },
+    "_updatedBy": {
+      "type": "string"
+    },
+    "_createdAt": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000
+    },
+    "_updatedAt": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000
+    },
+    "name": {
+      "type": "string"
+    },
+    "displayName": {
+      "type": "string"
+    },
+    "titlePrefix": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "integer",
+      "format": "int32"
+    },
+    "severityLabel": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "flag": {
+      "type": "boolean"
+    },
+    "tlp": {
+      "type": "integer",
+      "format": "int32"
+    },
+    "tlpLabel": {
+      "type": "string"
+    },
+    "pap": {
+      "type": "integer",
+      "format": "int32"
+    },
+    "papLabel": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "customFields": {
+      "type": "array",
+      "items": {
+        "required": [
+          "_id",
+          "name",
+          "type",
+          "value",
+          "order"
+        ],
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "value": {},
+          "order": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "required": [
+          "_id",
+          "_type",
+          "_createdBy",
+          "_createdAt",
+          "title",
+          "group",
+          "status",
+          "flag",
+          "order",
+          "mandatory",
+          "extraData"
+        ],
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "_type": {
+            "type": "string"
+          },
+          "_createdBy": {
+            "type": "string"
+          },
+          "_updatedBy": {
+            "type": "string"
+          },
+          "_createdAt": {
+            "type": "integer",
+            "format": "datetime_ms",
+            "example": 1640000000000
+          },
+          "_updatedAt": {
+            "type": "integer",
+            "format": "datetime_ms",
+            "example": 1640000000000
+          },
+          "title": {
+            "type": "string"
+          },
+          "group": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "flag": {
+            "type": "boolean"
+          },
+          "startDate": {
+            "type": "integer",
+            "format": "datetime_ms",
+            "example": 1640000000000
+          },
+          "endDate": {
+            "type": "integer",
+            "format": "datetime_ms",
+            "example": 1640000000000
+          },
+          "assignee": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dueDate": {
+            "type": "integer",
+            "format": "datetime_ms",
+            "example": 1640000000000
+          },
+          "mandatory": {
+            "type": "boolean"
+          },
+          "extraData": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "extraData": {
+      "type": "object"
+    }
+  }
+}

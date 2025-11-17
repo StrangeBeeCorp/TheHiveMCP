@@ -1,0 +1,25 @@
+TheHive is an open-source security incident response platform designed to make life easier for SOCs, CSIRTs, and CERTs.
+
+1. Cases
+- Main entity for security incident investigations
+- Can be linked to alerts, tasks, and observables
+- Used to centralize investigation information
+- Track progress from creation to resolution
+
+2. Alerts
+- Security events that trigger investigations
+- Can be promoted to cases if needed
+- Source of initial incident information
+- Used for early incident detection
+
+3. Tasks
+- Units of work within cases
+- Track specific investigation actions
+- Can be assigned to team members
+- Help organize investigation workflow
+
+4. Observables
+- Data artifacts linked to security incidents
+- Types include: IP addresses, email addresses, domain names, file hashes, URLs
+- Used for investigation enrichment
+- Primary inputs for automated analysis

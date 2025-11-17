@@ -1,0 +1,3 @@
+Observables are data artifacts linked to security incidents, such as IP addresses, email addresses, domain names, file hashes, or URLs.
+They are the primary inputs for automated analysis and are used to enrich investigations in TheHive.
+To find the alerts, cases and other entities in which a specific observable can be found, you need to query for the observable's extraData links.
