@@ -214,7 +214,7 @@ mcpb-ci: pre-dist build-all mcpb-build-image ## Generate MCPB packages for all a
 			thehivemcp-mcpb:latest; \
 		cp /tmp/mcpb-workspace-$$target/thehivemcp-$(VERSION)-$$target.mcpb $(DISTDIR)/; \
 		shasum -a 256 $(DISTDIR)/thehivemcp-$(VERSION)-$$target.mcpb > $(DISTDIR)/thehivemcp-$(VERSION)-$$target.mcpb.sha256; \
-		rm -rf /tmp/mcpb-workspace-$$target; \
+		docker run --rm -v /tmp/mcpb-workspace-$$target:/workspace alpine:latest rm -rf /workspace/* || rm -rf /tmp/mcpb-workspace-$$target || true; \
 	done
 	@echo "All MCPB packages created in $(DISTDIR)/"
 
