@@ -82,20 +82,6 @@ docker-build: ## Build Docker image
 	export DOCKER_BUILDKIT=1; \
 	docker build -t ${BINARY_NAME}:latest -f deployment/Dockerfile .
 
-.PHONY: docker-push
-docker-push: docker-build ## Push Docker image to registry (requires DOCKER_REGISTRY env var)
-	@echo $(BGreen)------------------------------$(Color_Off)
-	@echo $(BGreen)-- Pushing Docker Image    --$(Color_Off)
-	@echo $(BGreen)------------------------------$(Color_Off)
-	@if [ -z "$(DOCKER_REGISTRY)" ]; then \
-		echo "Error: DOCKER_REGISTRY environment variable not set"; \
-		exit 1; \
-	fi
-	docker tag ${BINARY_NAME}:latest $(DOCKER_REGISTRY)/${BINARY_NAME}:$(VERSION)
-	docker tag ${BINARY_NAME}:latest $(DOCKER_REGISTRY)/${BINARY_NAME}:latest
-	docker push $(DOCKER_REGISTRY)/${BINARY_NAME}:$(VERSION)
-	docker push $(DOCKER_REGISTRY)/${BINARY_NAME}:latest
-
 .PHONY: docker-run
 docker-run: docker-build ## Run production Docker container
 	@echo $(BGreen)--------------------------------$(Color_Off)
