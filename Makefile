@@ -41,7 +41,7 @@ clean: ## Remove build artifacts and coverage files
 	@echo $(BGreen)-------------------$(Color_Off)
 	@rm -rf $(BUILDDIR)
 	@rm -rf $(DISTDIR)
-	@rm -f coverage.out RELEASE_NOTES.md
+	@rm -f coverage.out
 
 .PHONY: pre
 pre: ## Create build directory
@@ -75,12 +75,26 @@ test: pre ## Run tests with coverage
 	docker run -i --rm -v $(CURDIR):/app -w /app $(GO_IMAGE) go tool cover -func=coverage.out
 
 .PHONY: docker
-docker-build: ## Build Docker image (requires SSH agent with loaded keys)
+docker-build: ## Build Docker image
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Building Docker Image --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
 	export DOCKER_BUILDKIT=1; \
-	docker build --ssh default=$$SSH_AUTH_SOCK -t ${BINARY_NAME}:latest -f deployment/Dockerfile .
+	docker build -t ${BINARY_NAME}:latest -f deployment/Dockerfile .
+
+.PHONY: docker-push
+docker-push: docker-build ## Push Docker image to registry (requires DOCKER_REGISTRY env var)
+	@echo $(BGreen)------------------------------$(Color_Off)
+	@echo $(BGreen)-- Pushing Docker Image    --$(Color_Off)
+	@echo $(BGreen)------------------------------$(Color_Off)
+	@if [ -z "$(DOCKER_REGISTRY)" ]; then \
+		echo "Error: DOCKER_REGISTRY environment variable not set"; \
+		exit 1; \
+	fi
+	docker tag ${BINARY_NAME}:latest $(DOCKER_REGISTRY)/${BINARY_NAME}:$(VERSION)
+	docker tag ${BINARY_NAME}:latest $(DOCKER_REGISTRY)/${BINARY_NAME}:latest
+	docker push $(DOCKER_REGISTRY)/${BINARY_NAME}:$(VERSION)
+	docker push $(DOCKER_REGISTRY)/${BINARY_NAME}:latest
 
 .PHONY: docker-run
 docker-run: docker-build ## Run production Docker container
@@ -131,7 +145,7 @@ vetlint: ## Run linter checks
 	@echo $(BGreen)-- Linter Checks --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	docker run -v $(CURDIR):/app -w /app -i --rm golangci/golangci-lint:latest golangci-lint run -v
-
+	docker build -t ${BINARY_NAME}:latest -f deployment/Dockerfile .
 .PHONY: updatedep
 updatedep: ## Update dependencies
 	@echo $(BGreen)-----------------------$(Color_Off)
@@ -217,20 +231,3 @@ mcpb-ci: pre-dist build-all mcpb-build-image ## Generate MCPB packages for all a
 		docker run --rm -v /tmp/mcpb-workspace-$$target:/workspace alpine:latest rm -rf /workspace/* || rm -rf /tmp/mcpb-workspace-$$target || true; \
 	done
 	@echo "All MCPB packages created in $(DISTDIR)/"
-
-.PHONY: release-notes
-release-notes: ## Generate release notes
-	@echo "# Release $(VERSION)" > RELEASE_NOTES.md
-	@echo "" >> RELEASE_NOTES.md
-	@if [ -f "docs/CHANGELOG.md" ]; then \
-		echo "## Changes" >> RELEASE_NOTES.md; \
-		echo "" >> RELEASE_NOTES.md; \
-		sed -n "/^## $(VERSION)/,/^## /{ /^## $(VERSION)/p; /^## /q; /^## /!p; }" docs/CHANGELOG.md | head -n -1 >> RELEASE_NOTES.md 2>/dev/null || echo "See git log for changes since last release." >> RELEASE_NOTES.md; \
-	else \
-		echo "## Changes" >> RELEASE_NOTES.md; \
-		echo "" >> RELEASE_NOTES.md; \
-		echo "See git log for changes since last release." >> RELEASE_NOTES.md; \
-	fi
-	@echo "" >> RELEASE_NOTES.md
-	@echo "Built on: $(BUILD_DATE)" >> RELEASE_NOTES.md
-	@echo "Commit: $(GIT_COMMIT)" >> RELEASE_NOTES.md

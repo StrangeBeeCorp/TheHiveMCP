@@ -23,7 +23,7 @@ cd extension
 if [ "$CI_MODE" = "true" ]; then
     cp /usr/local/share/icon.png icon.png
 else
-    cp ../docs/images/thehivemcp-logo.png icon.png
+    cp ../docs/images/theHivelogo.png icon.png
 fi
 
 # Handle binary selection - in CI we'll build for all platforms
@@ -56,7 +56,7 @@ if [ "$CI_MODE" = "true" ]; then
     VERSION_FULL=${VERSION:-$(echo "$BINARY_NAME" | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "v0.0.0")}
     VERSION=$(echo "$VERSION_FULL" | sed 's/^v//')
 else
-    VERSION_FULL=$((cd .. && make version))
+    VERSION_FULL=$(cd .. && make version)
     VERSION=$(echo "$VERSION_FULL" | sed 's/^v//')
 fi
 
