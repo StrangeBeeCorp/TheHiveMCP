@@ -13,7 +13,7 @@ WORKDIR /app
 
 # Copy and download dependencies first for better cache utilization
 COPY go.mod go.sum ./
-RUN --mount=type=ssh go mod download
+RUN go mod download
 
 # Copy source code and build
 COPY . .

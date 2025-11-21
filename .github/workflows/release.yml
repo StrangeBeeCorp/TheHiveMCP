@@ -46,8 +46,6 @@ jobs:
     needs: [build]
     steps:
       - uses: actions/checkout@v4
-      - name: Extract release notes via Makefile
-        run: make release-notes
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -60,7 +58,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
-          body_path: RELEASE_NOTES.md
+          generate_release_notes: true
           files: |
             dist/*.tar.gz
             dist/*.mcpb

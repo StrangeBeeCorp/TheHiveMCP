@@ -8,7 +8,7 @@ RUN apk add --no-cache bash git
 RUN npm install -g @anthropic-ai/mcpb
 
 # Copy logo and scripts to /usr/local/bin
-COPY docs/images/thehivemcp-logo.png /usr/local/share/icon.png
+COPY docs/images/theHivelogo.png /usr/local/share/icon.png
 COPY scripts/generate-mcpb.sh /usr/local/bin/generate-mcpb.sh
 
 # Make script executable
