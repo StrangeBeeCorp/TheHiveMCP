@@ -23,6 +23,8 @@ The `manage-entities` tool provides comprehensive Create, Read, Update, Delete, 
 Create new entities with complete schema data.
 
 #### Creating Alerts
+
+**Minimal Example (Required Fields Only):**
 ```json
 {
   "operation": "create",
@@ -30,10 +32,47 @@ Create new entities with complete schema data.
   "entity-data": {
     "type": "external",
     "source": "SIEM",
+    "sourceRef": "SIEM-2024-001234",
+    "title": "Suspicious Network Activity",
+    "description": "Detected unusual traffic patterns"
+  }
+}
+```
+
+**Recommended Example (With Common Fields):**
+```json
+{
+  "operation": "create",
+  "entity-type": "alert",
+  "entity-data": {
+    "type": "external",
+    "source": "SIEM",
+    "sourceRef": "SIEM-2024-001234",
     "title": "Suspicious Network Activity",
     "description": "Detected unusual traffic patterns",
     "severity": 3,
     "tags": ["network", "suspicious"]
+  }
+}
+```
+
+**Complete Example with Optional Fields:**
+```json
+{
+  "operation": "create",
+  "entity-type": "alert",
+  "entity-data": {
+    "type": "external",
+    "source": "SIEM",
+    "sourceRef": "SIEM-2024-001234",
+    "title": "Suspicious Network Activity",
+    "description": "Detected unusual traffic patterns from internal network segment",
+    "severity": 3,
+    "tlp": 2,
+    "pap": 2,
+    "tags": ["network", "suspicious", "internal"],
+    "assignee": "analyst@example.com",
+    "externalLink": "https://siem.company.com/alert/001234"
   }
 }
 ```
@@ -178,6 +217,26 @@ Available schemas:
 1. **Query schemas**: Use `get-resource` to understand required fields
 2. **Check metadata**: Verify valid values for enums and choices
 3. **Validate relationships**: Ensure parent entities exist
+
+### Alert-Specific Requirements
+When creating alerts, the following fields are **required**:
+- `type`: Alert category (e.g., "external", "malware", "phishing")
+- `source`: Source system name (e.g., "SIEM", "EDR", "Email Gateway")
+- `sourceRef`: Unique reference from source system (e.g., "SIEM-2024-001234")
+- `title`: Brief alert summary
+- `description`: Detailed alert description
+
+**Highly recommended fields** (may have system defaults but should be explicitly set):
+- `severity`: Numeric severity level (1-4, where 4 is most critical)
+
+**Optional but commonly used fields**:
+- `tlp`: Traffic Light Protocol (0-4, default varies by organization)
+- `pap`: Permissible Actions Protocol (0-3, default varies by organization)
+- `tags`: Array of classification tags
+- `assignee`: Email/username to assign the alert
+- `externalLink`: URL to view alert in source system
+- `flag`: Boolean to mark the alert for attention
+- `summary`: Brief triage notes or summary
 
 ### Data Integrity
 1. **Required fields**: Always include mandatory schema fields
