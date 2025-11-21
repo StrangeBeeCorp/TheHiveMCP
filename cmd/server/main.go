@@ -14,6 +14,9 @@ import (
 )
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		slog.Warn("No .env file found, proceeding with environment variables")
+	}
 	options, err := types.NewTheHiveMcpDefaultOptions()
 	if err != nil {
 		slog.Error("Failed to get default options", "error", err)
@@ -22,9 +25,6 @@ func main() {
 	logging.InitLogger(options.LogLevel, options.TransportType)
 
 	slog.Info("Starting TheHiveMCP server", "version", version.GitVersion())
-	if err := godotenv.Load(); err != nil {
-		slog.Warn("No .env file found, proceeding with environment variables")
-	}
 
 	// Initialize OpenAI if configured (warnings only, no crash)
 	utils.InitOpenai(options)
