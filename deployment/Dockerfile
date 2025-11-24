@@ -17,7 +17,16 @@ RUN go mod download
 
 # Copy source code and build
 COPY . .
-RUN go build -o /binary ./cmd/${BINARY}/main.go
+
+# Set build variables for version injection
+ARG BUILD_DATE
+ARG GIT_COMMIT
+ARG VERSION
+
+# Build with version information injected via ldflags
+RUN go build \
+    -ldflags="-s -w -X 'github.com/StrangeBeeCorp/TheHiveMCP/version.buildDate=${BUILD_DATE}' -X 'github.com/StrangeBeeCorp/TheHiveMCP/version.gitCommit=${GIT_COMMIT}' -X 'github.com/StrangeBeeCorp/TheHiveMCP/version.gitVersion=${VERSION}'" \
+    -o /binary ./cmd/${BINARY}/main.go
 
 # Stage 2: Runtime image
 FROM gcr.io/distroless/static-debian12

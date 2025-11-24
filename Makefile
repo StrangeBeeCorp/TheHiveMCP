@@ -80,7 +80,12 @@ docker-build: ## Build Docker image
 	@echo $(BGreen)-- Building Docker Image --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
 	export DOCKER_BUILDKIT=1; \
-	docker build -t ${BINARY_NAME}:latest -f deployment/Dockerfile .
+	docker build \
+		--build-arg BUILD_DATE=${BUILD_DATE} \
+		--build-arg GIT_COMMIT=${GIT_COMMIT} \
+		--build-arg VERSION=${VERSION} \
+		-t ${BINARY_NAME}:latest \
+		-f deployment/Dockerfile .
 
 .PHONY: docker-run
 docker-run: docker-build ## Run production Docker container

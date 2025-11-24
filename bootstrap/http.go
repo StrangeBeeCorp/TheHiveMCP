@@ -77,7 +77,7 @@ func StartHTTPServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOption
 
 	var httpOptions []server.StreamableHTTPOption
 	httpOptions = append(httpOptions, server.WithEndpointPath(options.MCPServerEndpointPath))
-	httpOptions = append(httpOptions, server.WithStateLess(true))
+	httpOptions = append(httpOptions, server.WithStateLess(false))
 	httpOptions = append(httpOptions, server.WithHTTPContextFunc(GetHTTPAuthContextFunc(options)))
 
 	// Configure heartbeat interval if specified
@@ -95,7 +95,9 @@ func StartHTTPServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOption
 	httpServer := server.NewStreamableHTTPServer(s, httpOptions...)
 	slog.Info("Starting HTTP server",
 		"bind_addr", options.BindAddr,
-		"endpoint", options.MCPServerEndpointPath)
+		"endpoint", options.MCPServerEndpointPath,
+		"stateless", false,
+	)
 
 	if err := httpServer.Start(options.BindAddr); err != nil {
 		slog.Error("Failed to start HTTP server",
