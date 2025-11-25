@@ -164,7 +164,7 @@ func (t *ManageTool) createAlert(ctx context.Context, client *thehive.APIClient,
 		"operation":  "create",
 		"entityType": "alert",
 		"result":     result,
-	})
+	}), nil
 }
 
 func (t *ManageTool) createCase(ctx context.Context, client *thehive.APIClient, data map[string]interface{}) (*mcp.CallToolResult, error) {
@@ -187,7 +187,7 @@ func (t *ManageTool) createCase(ctx context.Context, client *thehive.APIClient, 
 		"operation":  "create",
 		"entityType": "case",
 		"result":     result,
-	})
+	}), nil
 }
 
 func (t *ManageTool) createTask(ctx context.Context, client *thehive.APIClient, data map[string]interface{}, parentID string) (*mcp.CallToolResult, error) {
@@ -211,7 +211,7 @@ func (t *ManageTool) createTask(ctx context.Context, client *thehive.APIClient, 
 		"operation":  "create",
 		"entityType": "task",
 		"result":     result,
-	})
+	}), nil
 }
 
 func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APIClient, data map[string]interface{}, parentID string) (*mcp.CallToolResult, error) {
@@ -242,7 +242,7 @@ func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APICl
 		"operation":  "create",
 		"entityType": "observable",
 		"result":     result,
-	})
+	}), nil
 }
 
 // Update operations
@@ -273,7 +273,7 @@ func (t *ManageTool) handleUpdate(ctx context.Context, params *manageParams) (*m
 		"operation":  "update",
 		"entityType": params.EntityType,
 		"results":    results,
-	})
+	}), nil
 }
 
 func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient, entityType, entityID string, data map[string]interface{}) (interface{}, error) {
@@ -361,7 +361,7 @@ func (t *ManageTool) handleDelete(ctx context.Context, params *manageParams) (*m
 		"operation":  "delete",
 		"entityType": params.EntityType,
 		"results":    results,
-	})
+	}), nil
 }
 
 func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient, entityType, entityID string) error {
@@ -427,7 +427,7 @@ func (t *ManageTool) handleComment(ctx context.Context, params *manageParams) (*
 		"operation":  "comment",
 		"entityType": params.EntityType,
 		"results":    results,
-	})
+	}), nil
 }
 
 func (t *ManageTool) addComment(ctx context.Context, client *thehive.APIClient, entityType, entityID, comment string) (interface{}, error) {

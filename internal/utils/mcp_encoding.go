@@ -10,7 +10,7 @@ import (
 // NewToolResultJSONUnescaped creates a new MCP tool result with proper UTF-8 encoding
 // without escaping non-ASCII characters. This fixes issues where Unicode characters
 // like emojis and accented characters get escaped (e.g., ✅ becomes \u2705).
-func NewToolResultJSONUnescaped(data interface{}) (*mcp.CallToolResult, error) {
+func NewToolResultJSONUnescaped(data interface{}) *mcp.CallToolResult {
 	buffer := &bytes.Buffer{}
 	encoder := json.NewEncoder(buffer)
 
@@ -18,11 +18,19 @@ func NewToolResultJSONUnescaped(data interface{}) (*mcp.CallToolResult, error) {
 	encoder.SetEscapeHTML(false)
 
 	if err := encoder.Encode(data); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return mcp.NewToolResultError(err.Error())
 	}
 
 	// Remove the trailing newline that encoder.Encode adds
 	jsonBytes := bytes.TrimSuffix(buffer.Bytes(), []byte("\n"))
 
-	return mcp.NewToolResultText(string(jsonBytes)), nil
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: string(jsonBytes),
+			},
+		},
+		StructuredContent: data,
+	}
 }

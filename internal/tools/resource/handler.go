@@ -60,7 +60,7 @@ func (t *ResourceTool) browseCategory(ctx context.Context, category string) (*mc
 		"resources":     resources,
 	}
 
-	return utils.NewToolResultJSONUnescaped(response)
+	return utils.NewToolResultJSONUnescaped(response), nil
 }
 
 // Fetch a specific resource
@@ -114,7 +114,7 @@ func (t *ResourceTool) fetchResource(ctx context.Context, uri string) (*mcp.Call
 			"mimeType": mimeType,
 			"content":  contentText,
 		}
-		return utils.NewToolResultJSONUnescaped(response)
+		return utils.NewToolResultJSONUnescaped(response), nil
 	}
 
 	// Return structured response
@@ -125,5 +125,5 @@ func (t *ResourceTool) fetchResource(ctx context.Context, uri string) (*mcp.Call
 		"data":     data,
 	}
 
-	return utils.NewToolResultJSONUnescaped(response)
+	return utils.NewToolResultJSONUnescaped(response), nil
 }
