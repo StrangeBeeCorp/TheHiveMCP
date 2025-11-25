@@ -99,7 +99,7 @@ Include extra data fields:
 {
   "entity-type": "alert",
   "query": "phishing alerts",
-  "extra-data": ["tags", "artifacts", "customFields"]
+  "extra-data": ["tags", "case", "customFields"]
 }
 ```
 
