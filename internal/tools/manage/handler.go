@@ -160,11 +160,11 @@ func (t *ManageTool) createAlert(ctx context.Context, client *thehive.APIClient,
 		return mcp.NewToolResultError(fmt.Sprintf("failed to create alert: %v. Check required fields and permissions. API response: %v", err, resp)), nil
 	}
 
-	return mcp.NewToolResultJSON(map[string]interface{}{
+	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
 		"operation":  "create",
 		"entityType": "alert",
 		"result":     result,
-	})
+	}), nil
 }
 
 func (t *ManageTool) createCase(ctx context.Context, client *thehive.APIClient, data map[string]interface{}) (*mcp.CallToolResult, error) {
@@ -183,11 +183,11 @@ func (t *ManageTool) createCase(ctx context.Context, client *thehive.APIClient, 
 		return mcp.NewToolResultError(fmt.Sprintf("failed to create case: %v. Check required fields and permissions. API response: %v", err, resp)), nil
 	}
 
-	return mcp.NewToolResultJSON(map[string]interface{}{
+	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
 		"operation":  "create",
 		"entityType": "case",
 		"result":     result,
-	})
+	}), nil
 }
 
 func (t *ManageTool) createTask(ctx context.Context, client *thehive.APIClient, data map[string]interface{}, parentID string) (*mcp.CallToolResult, error) {
@@ -207,11 +207,11 @@ func (t *ManageTool) createTask(ctx context.Context, client *thehive.APIClient, 
 		return mcp.NewToolResultError(fmt.Sprintf("failed to create task in case %s: %v. Check that the case exists and you have permissions. API response: %v", parentID, err, resp)), nil
 	}
 
-	return mcp.NewToolResultJSON(map[string]interface{}{
+	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
 		"operation":  "create",
 		"entityType": "task",
 		"result":     result,
-	})
+	}), nil
 }
 
 func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APIClient, data map[string]interface{}, parentID string) (*mcp.CallToolResult, error) {
@@ -238,11 +238,11 @@ func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APICl
 		return mcp.NewToolResultError(fmt.Sprintf("failed to create observable: %v. Check that the target case/alert exists and you have permissions. API response: %v", err, resp)), nil
 	}
 
-	return mcp.NewToolResultJSON(map[string]interface{}{
+	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
 		"operation":  "create",
 		"entityType": "observable",
 		"result":     result,
-	})
+	}), nil
 }
 
 // Update operations
@@ -269,11 +269,11 @@ func (t *ManageTool) handleUpdate(ctx context.Context, params *manageParams) (*m
 		}
 	}
 
-	return mcp.NewToolResultJSON(map[string]interface{}{
+	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
 		"operation":  "update",
 		"entityType": params.EntityType,
 		"results":    results,
-	})
+	}), nil
 }
 
 func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient, entityType, entityID string, data map[string]interface{}) (interface{}, error) {
@@ -357,11 +357,11 @@ func (t *ManageTool) handleDelete(ctx context.Context, params *manageParams) (*m
 		}
 	}
 
-	return mcp.NewToolResultJSON(map[string]interface{}{
+	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
 		"operation":  "delete",
 		"entityType": params.EntityType,
 		"results":    results,
-	})
+	}), nil
 }
 
 func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient, entityType, entityID string) error {
@@ -423,11 +423,11 @@ func (t *ManageTool) handleComment(ctx context.Context, params *manageParams) (*
 		}
 	}
 
-	return mcp.NewToolResultJSON(map[string]interface{}{
+	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
 		"operation":  "comment",
 		"entityType": params.EntityType,
 		"results":    results,
-	})
+	}), nil
 }
 
 func (t *ManageTool) addComment(ctx context.Context, client *thehive.APIClient, entityType, entityID, comment string) (interface{}, error) {

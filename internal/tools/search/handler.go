@@ -270,7 +270,7 @@ func (t *SearchTool) formatResults(results []map[string]interface{}, params *sea
 		"filters":    filters,
 	}
 
-	return mcp.NewToolResultJSON(response)
+	return utils.NewToolResultJSONUnescaped(response), nil
 }
 
 func (t *SearchTool) convertToMapSlice(results []map[string]interface{}) ([]map[string]interface{}, error) {

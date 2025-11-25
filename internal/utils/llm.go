@@ -77,6 +77,8 @@ func checkSamplingSupport(ctx context.Context) (bool, error) {
 		if clientCapabilities.Sampling != nil {
 			return true, nil
 		}
+	} else {
+		slog.Warn("Client session does not implement SessionWithClientInfo")
 	}
 
 	return false, nil

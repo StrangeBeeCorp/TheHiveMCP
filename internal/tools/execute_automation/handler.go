@@ -143,13 +143,13 @@ func (t *ExecuteAutomationTool) handleRunAnalyzer(ctx context.Context, params *e
 		"analyzerId", params.AnalyzerID,
 		"status", job.GetStatus())
 
-	return mcp.NewToolResultJSON(map[string]interface{}{
+	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
 		"operation":    "run-analyzer",
 		"analyzerId":   params.AnalyzerID,
 		"analyzerName": job.GetAnalyzerName(),
 		"job":          job,
 		"message":      fmt.Sprintf("Analyzer job created successfully. Job ID: %s. Use get-job-status to check progress.", job.GetUnderscoreId()),
-	})
+	}), nil
 }
 
 // Run responder operation
@@ -179,13 +179,13 @@ func (t *ExecuteAutomationTool) handleRunResponder(ctx context.Context, params *
 		"responderId", params.ResponderID,
 		"status", action.GetStatus())
 
-	return mcp.NewToolResultJSON(map[string]interface{}{
+	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
 		"operation":     "run-responder",
 		"responderId":   params.ResponderID,
 		"responderName": action.GetResponderName(),
 		"action":        action,
 		"message":       fmt.Sprintf("Responder action created successfully. Action ID: %s. Status: %s", action.GetUnderscoreId(), action.GetStatus()),
-	})
+	}), nil
 }
 
 // Get job status operation
@@ -227,7 +227,7 @@ func (t *ExecuteAutomationTool) handleGetJobStatus(ctx context.Context, params *
 		result["message"] = fmt.Sprintf("Job status: %s. No report available yet.", job.GetStatus())
 	}
 
-	return mcp.NewToolResultJSON(result)
+	return utils.NewToolResultJSONUnescaped(result), nil
 }
 
 // Get action status operation (Note: TheHive API may have limited support for this)

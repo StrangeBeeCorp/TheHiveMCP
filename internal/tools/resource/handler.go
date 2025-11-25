@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -59,7 +60,7 @@ func (t *ResourceTool) browseCategory(ctx context.Context, category string) (*mc
 		"resources":     resources,
 	}
 
-	return mcp.NewToolResultJSON(response)
+	return utils.NewToolResultJSONUnescaped(response), nil
 }
 
 // Fetch a specific resource
@@ -113,7 +114,7 @@ func (t *ResourceTool) fetchResource(ctx context.Context, uri string) (*mcp.Call
 			"mimeType": mimeType,
 			"content":  contentText,
 		}
-		return mcp.NewToolResultJSON(response)
+		return utils.NewToolResultJSONUnescaped(response), nil
 	}
 
 	// Return structured response
@@ -124,5 +125,5 @@ func (t *ResourceTool) fetchResource(ctx context.Context, uri string) (*mcp.Call
 		"data":     data,
 	}
 
-	return mcp.NewToolResultJSON(response)
+	return utils.NewToolResultJSONUnescaped(response), nil
 }
