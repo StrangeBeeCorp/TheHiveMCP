@@ -1,0 +1,116 @@
+{
+  "type": "object",
+  "required": ["title", "description"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "description": "The case title or name. Brief summary of the security incident or investigation."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1048576,
+      "description": "Detailed description of the case, including background information, context, and initial findings about the security incident. Supports markdown formatting."
+    },
+    "severity": {
+      "type": "integer",
+      "format": "int32",
+      "enum": [1, 2, 3, 4],
+      "default": 2,
+      "description": "Numeric severity level of the case. Higher numbers indicate more severe incidents. The range and meaning of values are configurable per organization. Defaults to 2 if not specified."
+    },
+    "startDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "default": "now()",
+      "description": "Timestamp (in milliseconds) when the incident began or when investigation started. Used for timeline tracking and metrics calculation. Defaults to current time if not specified."
+    },
+    "endDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the case was closed or the incident was resolved. Set automatically when case moves to 'Closed' stage."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "description": "List of tags for categorization and filtering. Tags help organize cases by threat type, attack vector, affected systems, or custom categories."
+    },
+    "flag": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this case is flagged for attention. Flagged cases are highlighted in case lists for visibility and priority handling. Defaults to false."
+    },
+    "tlp": {
+      "type": "integer",
+      "format": "int32",
+      "enum": [0, 1, 2, 3, 4],
+      "default": 2,
+      "description": "Traffic Light Protocol level (0-4) indicating information sharing restrictions. 0=TLP:CLEAR (unlimited), 1=TLP:GREEN (community), 2=TLP:AMBER (limited), 3=TLP:AMBER+STRICT (organization only), 4=TLP:RED (personal/recipient only). Defaults to 2 (TLP:AMBER)."
+    },
+    "pap": {
+      "type": "integer",
+      "format": "int32",
+      "enum": [0, 1, 2, 3],
+      "default": 2,
+      "description": "Permissible Actions Protocol level (0-3) indicating allowed actions on case data. 0=PAP:CLEAR (unlimited actions), 1=PAP:GREEN (passive only), 2=PAP:AMBER (active with approval), 3=PAP:RED (no actions). Defaults to 2 (PAP:AMBER)."
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "default": "New",
+      "description": "Current status of the case within its stage. Status values are configurable per organization and vary by stage (e.g., 'New', 'InProgress', 'Resolved', 'Rejected'). Defaults to 'New'."
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 1048576,
+      "description": "Executive summary of the case. Concise overview of the incident, findings, and resolution for stakeholders and reporting."
+    },
+    "assignee": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Email or username of the primary analyst assigned to investigate and resolve this case."
+    },
+    "customFields": {
+      "description": "Organization-specific custom fields that extend the default case schema. Can be provided as an object (customFieldsAsObject) or as an array of custom field values."
+    },
+    "caseTemplate": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Name or id of the Case Template to use. Templates provide predefined tasks and custom fields for standardized case workflows."
+    },
+    "tasks": {
+      "type": "array",
+      "description": "Array of tasks to create with this case. If null and a caseTemplate is specified, tasks from the template will be used."
+    },
+    "pages": {
+      "type": "array",
+      "description": "Array of documentation pages to create with this case. Pages are used for structured notes and investigation documentation."
+    },
+    "shares": {
+      "type": "array",
+      "description": "Array of organizations to share this case with upon creation. Enables cross-organizational collaboration from the start."
+    },
+    "taskRule": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Rule identifier for task management and automation within this case."
+    },
+    "observableRule": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Rule identifier for observable management and automation within this case."
+    }
+  }
+}

@@ -91,10 +91,10 @@ func TestGetResourceBrowseSchemaCategory(t *testing.T) {
 	}
 
 	// Verify expected schemas are present
-	require.Contains(t, resourceNames, "Alert Schema")
-	require.Contains(t, resourceNames, "Case Schema")
-	require.Contains(t, resourceNames, "Task Schema")
-	require.Contains(t, resourceNames, "Observable Schema")
+	require.Contains(t, resourceNames, "Alert Output Schema")
+	require.Contains(t, resourceNames, "Case Output Schema")
+	require.Contains(t, resourceNames, "Task Output Schema")
+	require.Contains(t, resourceNames, "Observable Output Schema")
 }
 
 // TestGetResourceFetchAlertSchema tests fetching a specific static resource
@@ -120,7 +120,7 @@ func TestGetResourceFetchAlertSchema(t *testing.T) {
 
 	// Verify resource response structure
 	require.Equal(t, "hive://schema/alert", structuredData["uri"])
-	require.Equal(t, "Alert Schema", structuredData["name"])
+	require.Equal(t, "Alert Output Schema", structuredData["name"])
 	require.Equal(t, "application/json", structuredData["mimeType"])
 
 	// Verify data contains schema information

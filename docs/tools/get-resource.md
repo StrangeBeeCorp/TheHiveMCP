@@ -51,9 +51,28 @@ get-resource(uri="hive://metadata/automation/analyzers")
 
 - **List all categories**: `get-resource()`
 - **List schemas**: `get-resource(category="schema")`
-- **Get alert schema**: `get-resource(uri="hive://schema/alert")`
+- **Get alert output schema**: `get-resource(uri="hive://schema/alert")`
+- **Get alert create schema**: `get-resource(uri="hive://schema/alert/create")`
+- **Get alert update schema**: `get-resource(uri="hive://schema/alert/update")`
 - **Get case documentation**: `get-resource(uri="hive://docs/entities/case")`
 - **Get available analyzers**: `get-resource(uri="hive://metadata/automation/analyzers")`
+
+## Schema Organization
+
+Entity schemas are now organized into three variants:
+
+- **Output schemas** (`hive://schema/{entity}`): Fields returned from TheHive API when querying entities
+- **Create schemas** (`hive://schema/{entity}/create`): Required and optional fields for creating new entities
+- **Update schemas** (`hive://schema/{entity}/update`): Partial fields available for updating existing entities
+
+Available entities: `alert`, `case`, `task`, `observable`
+
+Example:
+- `hive://schema/task` - Output schema for tasks (what you get from queries)
+- `hive://schema/task/create` - Input schema for creating tasks
+- `hive://schema/task/update` - Partial input schema for updating tasks
+
+This organization makes it clear which fields are required for creation vs available for updates.
 
 ## Best Practices
 

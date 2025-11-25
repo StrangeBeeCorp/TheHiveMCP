@@ -116,10 +116,23 @@ Enrich results with related information:
 ## Best Practices
 
 1. **Be specific**: More specific queries yield better results
-2. **Check schemas**: Use `get-resource` to understand available fields
+2. **Check schemas**: Use `get-resource` with output schemas (e.g., `hive://schema/alert`) to understand available fields for searching
 3. **Review filters**: The tool returns the generated filters for transparency
 4. **Iterate**: Refine your query based on results and filter feedback
 5. **Limit results**: Use appropriate limits for performance
+
+## Understanding Schema Types
+
+When using search-entities, you'll work with output schemas to understand what fields are available for searching and what data will be returned:
+
+- Use `hive://schema/alert` to see all fields available in alert search results
+- Use `hive://schema/case` to see all fields available in case search results
+- Use `hive://schema/task` to see all fields available in task search results
+- Use `hive://schema/observable` to see all fields available in observable search results
+
+For creating or updating entities found through search, use the create/update schema variants:
+- `hive://schema/{entity}/create` for creating new entities
+- `hive://schema/{entity}/update` for updating existing entities
 
 ## Query Understanding
 

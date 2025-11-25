@@ -1,0 +1,116 @@
+{
+  "type": "object",
+  "description": "All fields are optional for updates. Only provide fields you want to change. Use null to clear nullable fields.",
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "description": "The case title or name. Brief summary of the security incident or investigation."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1048576,
+      "description": "Detailed description of the case, including background information, context, and initial findings about the security incident."
+    },
+    "severity": {
+      "type": "integer",
+      "format": "int32",
+      "enum": [1, 2, 3, 4],
+      "description": "Numeric severity level of the case. Higher numbers indicate more severe incidents. The range and meaning of values are configurable per organization."
+    },
+    "startDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the incident began or when investigation started. Used for timeline tracking and metrics calculation."
+    },
+    "endDate": {
+      "type": ["integer", "null"],
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the case was closed or the incident was resolved. Set automatically when case moves to 'Closed' stage. Set to null to clear."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "description": "List of tags for categorization and filtering. This replaces all existing tags. Use addTags/removeTags for incremental changes."
+    },
+    "flag": {
+      "type": "boolean",
+      "description": "Whether this case is flagged for attention. Flagged cases are highlighted in case lists for visibility and priority handling."
+    },
+    "tlp": {
+      "type": "integer",
+      "format": "int32",
+      "enum": [0, 1, 2, 3, 4],
+      "description": "Traffic Light Protocol level (0-4) indicating information sharing restrictions. 0=TLP:CLEAR (unlimited), 1=TLP:GREEN (community), 2=TLP:AMBER (limited), 3=TLP:AMBER+STRICT (organization only), 4=TLP:RED (personal/recipient only)."
+    },
+    "pap": {
+      "type": "integer",
+      "format": "int32",
+      "enum": [0, 1, 2, 3],
+      "description": "Permissible Actions Protocol level (0-3) indicating allowed actions on case data. 0=PAP:CLEAR (unlimited actions), 1=PAP:GREEN (passive only), 2=PAP:AMBER (active with approval), 3=PAP:RED (no actions)."
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Current status of the case within its stage. Status values are configurable per organization and vary by stage (e.g., 'New', 'InProgress', 'Resolved', 'Rejected')."
+    },
+    "summary": {
+      "type": ["string", "null"],
+      "maxLength": 1048576,
+      "description": "Executive summary of the case. Concise overview of the incident, findings, and resolution for stakeholders and reporting. Set to null to clear."
+    },
+    "assignee": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Email or username of the primary analyst assigned to investigate and resolve this case. Set to null to unassign."
+    },
+    "impactStatus": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Impact assessment status or category. Describes the actual or potential business/operational impact of the security incident. Set to null to clear."
+    },
+    "customFields": {
+      "description": "Organization-specific custom fields that extend the default case schema. Can be provided as an object (customFieldsAsObject - adds values to existing list) or as an array of custom field values (replaces whole list)."
+    },
+    "taskRule": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Rule identifier for task management and automation within this case."
+    },
+    "observableRule": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Rule identifier for observable management and automation within this case."
+    },
+    "addTags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "description": "Tags to add to the current case. These tags will be added to existing tags without replacing them."
+    },
+    "removeTags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "description": "Tags to remove from the current case. Only matching tags will be removed, other tags remain unchanged."
+    }
+  }
+}

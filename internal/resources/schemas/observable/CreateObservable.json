@@ -1,0 +1,83 @@
+{
+  "type": "object",
+  "required": ["dataType"],
+  "properties": {
+    "dataType": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Type of observable data (e.g., 'ip', 'domain', 'hash', 'url', 'mail', 'file', 'hostname', 'other'). Cannot be changed after creation."
+    },
+    "data": {
+      "description": "The actual observable value (e.g., IP address, domain name, file hash). Can be a single string or an array of strings for bulk creation. Cannot be changed after creation."
+    },
+    "message": {
+      "type": "string",
+      "maxLength": 1048576,
+      "description": "Free-text description or context about the observable in relation to the case/alert"
+    },
+    "startDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "DEPRECATED: This field is mapped to _createdDate and should not be used. The creation timestamp is set automatically."
+    },
+    "attachment": {
+      "description": "File attachment for observables with dataType 'file'. Must be set if the observable dataType has isAttachment=true. Can be a single attachment object, an array of attachment objects, an array of strings (file paths), or a string (file path)."
+    },
+    "tlp": {
+      "type": "integer",
+      "format": "int32",
+      "enum": [0, 1, 2, 3, 4],
+      "default": 2,
+      "description": "Traffic Light Protocol level: 0 (WHITE - unlimited disclosure), 1 (GREEN - community), 2 (AMBER - limited), 3 (AMBER+STRICT - organization only), 4 (RED - personal for named recipients only). Defaults to 2 (AMBER)."
+    },
+    "pap": {
+      "type": "integer",
+      "format": "int32",
+      "enum": [0, 1, 2, 3],
+      "default": 2,
+      "description": "Permissible Actions Protocol level: 0 (WHITE - any action), 1 (GREEN - passive actions), 2 (AMBER - active actions with notification), 3 (RED - no action without approval). Defaults to 2 (AMBER)."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "description": "List of tags for categorization and filtering (e.g., 'malicious', 'phishing', 'apt28')"
+    },
+    "ioc": {
+      "type": "boolean",
+      "default": false,
+      "description": "Indicator of Compromise flag - marks if this observable represents malicious or suspicious activity. Used for threat intelligence and correlation. Defaults to false."
+    },
+    "sighted": {
+      "type": "boolean",
+      "default": false,
+      "description": "Marks if this observable has been seen/confirmed in the wild or in other incidents. Defaults to false."
+    },
+    "sightedAt": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp when the observable was sighted"
+    },
+    "ignoreSimilarity": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, excludes this observable from similarity calculations between cases and alerts. Useful for common indicators that shouldn't trigger false correlations (e.g., google.com, 127.0.0.1). Defaults to false."
+    },
+    "isZip": {
+      "type": "boolean",
+      "description": "If set to true, the file is unzipped using the zipPassword and each file in the zip is treated as a separate observable"
+    },
+    "zipPassword": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "description": "Password to decrypt the zip file when isZip is true"
+    }
+  }
+}

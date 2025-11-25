@@ -1,4 +1,5 @@
 {
+  "type": "object",
   "required": [
     "_id",
     "_type",
@@ -16,7 +17,6 @@
     "extraData",
     "ignoreSimilarity"
   ],
-  "type": "object",
   "properties": {
     "_id": {
       "type": "string",
@@ -61,17 +61,8 @@
       "description": "Timestamp when the observable was first observed or became relevant"
     },
     "attachment": {
-      "required": [
-        "_id",
-        "_type",
-        "_createdBy",
-        "_createdAt",
-        "name",
-        "size",
-        "contentType",
-        "id"
-      ],
       "type": "object",
+      "required": ["_id", "_type", "_createdBy", "_createdAt", "name", "size", "contentType", "id"],
       "description": "File attachment metadata (only present for observables with dataType 'file')",
       "properties": {
         "_id": {
@@ -177,6 +168,7 @@
     },
     "extraData": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Optional fields that can be requested via the 'extraData' query parameter. These fields are not returned by default due to performance overhead. Request specific fields by adding 'extraData: [\"fieldName\"]' to the page operation in your query.",
       "properties": {
         "seenSummary": {
@@ -206,10 +198,12 @@
           "type": "integer",
           "description": "Total number of organizations this observable has been shared with"
         }
-      },
-      "additionalProperties": false
+      }
     },
-    "additionalQueries": {},
+    "additionalQueries": {
+      "type": "object",
+      "description": "Holds results of additional queries requested via the 'additionalQueries' parameter in the search API. Each key corresponds to a named query and contains its result set."
+    },
     "ignoreSimilarity": {
       "type": "boolean",
       "description": "When true, excludes this observable from similarity calculations between cases and alerts. Useful for common indicators that shouldn't trigger false correlations (e.g., google.com, 127.0.0.1)"

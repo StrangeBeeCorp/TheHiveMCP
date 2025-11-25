@@ -71,7 +71,7 @@ func (t *ManageTool) extractParams(req mcp.CallToolRequest) (*manageParams, erro
 		if entityDataMap, ok := entityDataRaw.(map[string]interface{}); ok {
 			params.EntityData = entityDataMap
 		} else {
-			return nil, fmt.Errorf("entity-data must be a valid JSON object. For schema information, use get-resource 'hive://schema/%s'", entityType)
+			return nil, fmt.Errorf("entity-data must be a valid JSON object. For schema information, use get-resource 'hive://schema/%s/create' or 'hive://schema/%s/update'", entityType, entityType)
 		}
 	}
 
@@ -89,7 +89,7 @@ func (t *ManageTool) validateOperation(params *manageParams) error {
 	switch params.Operation {
 	case "create":
 		if params.EntityData == nil {
-			return fmt.Errorf("entity-data is required for create operations. Use get-resource 'hive://schema/%s' to see required fields for %s creation", params.EntityType, params.EntityType)
+			return fmt.Errorf("entity-data is required for create operations. Use get-resource 'hive://schema/%s/create' to see required fields for %s creation", params.EntityType, params.EntityType)
 		}
 		if (params.EntityType == "task" || params.EntityType == "observable") && len(params.EntityIDs) == 0 {
 			return fmt.Errorf("%s creation requires a parent case or alert ID in entity-ids parameter", params.EntityType)
@@ -102,7 +102,7 @@ func (t *ManageTool) validateOperation(params *manageParams) error {
 			return fmt.Errorf("entity-ids are required for update operations. Provide an array of %s IDs to update, e.g., ['id1', 'id2']", params.EntityType)
 		}
 		if params.EntityData == nil {
-			return fmt.Errorf("entity-data is required for update operations. Provide a JSON object with fields to update. Use get-resource 'hive://schema/%s' to see available fields", params.EntityType)
+			return fmt.Errorf("entity-data is required for update operations. Provide a JSON object with fields to update. Use get-resource 'hive://schema/%s/update' to see available fields", params.EntityType)
 		}
 	case "delete":
 		if len(params.EntityIDs) == 0 {
@@ -147,12 +147,12 @@ func (t *ManageTool) createAlert(ctx context.Context, client *thehive.APIClient,
 	// Convert map to JSON then to InputAlert
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal alert data: %v. Check that entity-data contains valid JSON fields. Use get-resource 'hive://schema/alert' for field definitions.", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal alert data: %v. Check that entity-data contains valid JSON fields. Use get-resource 'hive://schema/alert/create' for field definitions.", err)), nil
 	}
 
 	var inputAlert thehive.InputCreateAlert
 	if err := json.Unmarshal(jsonData, &inputAlert); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal alert data: %v. Ensure entity-data fields match the alert schema. Use get-resource 'hive://schema/alert' to see required fields like 'type', 'source', 'sourceRef', 'title', 'description'.", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal alert data: %v. Ensure entity-data fields match the alert schema. Use get-resource 'hive://schema/alert/create' to see required fields like 'type', 'source', 'sourceRef', 'title', 'description'.", err)), nil
 	}
 
 	result, resp, err := client.AlertAPI.CreateAlert(ctx).InputCreateAlert(inputAlert).Execute()
@@ -170,12 +170,12 @@ func (t *ManageTool) createAlert(ctx context.Context, client *thehive.APIClient,
 func (t *ManageTool) createCase(ctx context.Context, client *thehive.APIClient, data map[string]interface{}) (*mcp.CallToolResult, error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal case data: %v. Check that entity-data contains valid JSON fields. Use get-resource 'hive://schema/case' for field definitions.", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal case data: %v. Check that entity-data contains valid JSON fields. Use get-resource 'hive://schema/case/create' for field definitions.", err)), nil
 	}
 
 	var inputCase thehive.InputCreateCase
 	if err := json.Unmarshal(jsonData, &inputCase); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal case data: %v. Ensure entity-data fields match the case schema. Use get-resource 'hive://schema/case' to see required and optional fields.", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal case data: %v. Ensure entity-data fields match the case schema. Use get-resource 'hive://schema/case/create' to see required and optional fields.", err)), nil
 	}
 
 	result, resp, err := client.CaseAPI.CreateCase(ctx).InputCreateCase(inputCase).Execute()
@@ -194,12 +194,12 @@ func (t *ManageTool) createTask(ctx context.Context, client *thehive.APIClient, 
 
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal task data: %v. Check that entity-data contains valid JSON fields. Use get-resource 'hive://schema/task' for field definitions.", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal task data: %v. Check that entity-data contains valid JSON fields. Use get-resource 'hive://schema/task/create' for field definitions.", err)), nil
 	}
 
 	var inputTask thehive.InputCreateTask
 	if err := json.Unmarshal(jsonData, &inputTask); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal task data: %v. Ensure entity-data fields match the task schema. Use get-resource 'hive://schema/task' to see required and optional fields.", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal task data: %v. Ensure entity-data fields match the task schema. Use get-resource 'hive://schema/task/create' to see required and optional fields.", err)), nil
 	}
 
 	result, resp, err := client.TaskAPI.CreateTaskInCase(ctx, parentID).InputCreateTask(inputTask).Execute()
@@ -217,12 +217,12 @@ func (t *ManageTool) createTask(ctx context.Context, client *thehive.APIClient, 
 func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APIClient, data map[string]interface{}, parentID string) (*mcp.CallToolResult, error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal observable data: %v. Check that entity-data contains valid JSON fields. Use get-resource 'hive://schema/observable' for field definitions.", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal observable data: %v. Check that entity-data contains valid JSON fields. Use get-resource 'hive://schema/observable/create' for field definitions.", err)), nil
 	}
 
 	var inputObservable thehive.InputCreateObservable
 	if err := json.Unmarshal(jsonData, &inputObservable); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal observable data: %v. Ensure entity-data fields match the observable schema. Use get-resource 'hive://schema/observable' to see required and optional fields.", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal observable data: %v. Ensure entity-data fields match the observable schema. Use get-resource 'hive://schema/observable/create' to see required and optional fields.", err)), nil
 	}
 
 	// Try to create in case first, then alert if that fails
@@ -287,7 +287,7 @@ func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient
 	case "alert":
 		var inputAlert thehive.InputUpdateAlert
 		if err := json.Unmarshal(jsonData, &inputAlert); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal alert update data: %w. Use get-resource 'hive://schema/alert' to see updatable fields", err)
+			return nil, fmt.Errorf("failed to unmarshal alert update data: %w. Use get-resource 'hive://schema/alert/update' to see updatable fields", err)
 		}
 		resp, err := client.AlertAPI.UpdateAlert(ctx, entityID).InputUpdateAlert(inputAlert).Execute()
 		if err != nil {
@@ -298,7 +298,7 @@ func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient
 	case "case":
 		var inputCase thehive.InputUpdateCase
 		if err := json.Unmarshal(jsonData, &inputCase); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal case update data: %w. Use get-resource 'hive://schema/case' to see updatable fields", err)
+			return nil, fmt.Errorf("failed to unmarshal case update data: %w. Use get-resource 'hive://schema/case/update' to see updatable fields", err)
 		}
 		resp, err := client.CaseAPI.UpdateCase(ctx, entityID).InputUpdateCase(inputCase).Execute()
 		if err != nil {
@@ -309,7 +309,7 @@ func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient
 	case "task":
 		var inputTask thehive.InputUpdateTask
 		if err := json.Unmarshal(jsonData, &inputTask); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal task update data: %w. Use get-resource 'hive://schema/task' to see updatable fields", err)
+			return nil, fmt.Errorf("failed to unmarshal task update data: %w. Use get-resource 'hive://schema/task/update' to see updatable fields", err)
 		}
 		resp, err := client.TaskAPI.UpdateTask(ctx, entityID).InputUpdateTask(inputTask).Execute()
 		if err != nil {
@@ -320,7 +320,7 @@ func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient
 	case "observable":
 		var inputObservable thehive.InputUpdateObservable
 		if err := json.Unmarshal(jsonData, &inputObservable); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal observable update data: %w. Use get-resource 'hive://schema/observable' to see updatable fields", err)
+			return nil, fmt.Errorf("failed to unmarshal observable update data: %w. Use get-resource 'hive://schema/observable/update' to see updatable fields", err)
 		}
 		resp, err := client.ObservableAPI.UpdateObservable(ctx, entityID).InputUpdateObservable(inputObservable).Execute()
 		if err != nil {

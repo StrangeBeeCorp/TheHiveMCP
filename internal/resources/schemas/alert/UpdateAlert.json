@@ -1,0 +1,122 @@
+{
+  "type": "object",
+  "description": "All fields are optional for updates. Only provide fields you want to change. Use null to clear nullable fields.",
+  "properties": {
+    "type": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32,
+      "description": "Alert type or category indicating the kind of security event (e.g., 'malware', 'phishing', 'intrusion_detection', 'data_exfiltration'). Used for classification and routing."
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32,
+      "description": "Name of the external system or security tool that generated this alert (e.g., 'SIEM', 'EDR', 'IDS', 'Email Gateway'). Identifies the origin of the security event."
+    },
+    "sourceRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Unique reference or identifier from the source system. Allows correlation back to the original alert in the external tool for additional context."
+    },
+    "externalLink": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 512,
+      "description": "URL linking to the alert in the source system. Provides direct access to the original event for detailed investigation. Set to null to clear."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "description": "Brief title or summary of the security alert. Describes the detected threat or anomaly."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1048576,
+      "description": "Detailed description of the alert, including context, detection logic, and relevant details from the source system."
+    },
+    "severity": {
+      "type": "integer",
+      "format": "int32",
+      "enum": [1, 2, 3, 4],
+      "description": "Numeric severity level of the alert. Higher numbers indicate more severe threats. The range and meaning of values are configurable per organization."
+    },
+    "date": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the security event occurred in the source system. Represents the actual incident time, not the alert creation time in TheHive."
+    },
+    "lastSyncDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the alert was last synchronized from the source system."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "description": "List of tags for categorization and filtering. This replaces all existing tags. Use addTags/removeTags for incremental changes."
+    },
+    "tlp": {
+      "type": "integer",
+      "format": "int32",
+      "enum": [0, 1, 2, 3, 4],
+      "description": "Traffic Light Protocol level (0-4) indicating information sharing restrictions. 0=TLP:CLEAR (unlimited), 1=TLP:GREEN (community), 2=TLP:AMBER (limited), 3=TLP:AMBER+STRICT (organization only), 4=TLP:RED (personal/recipient only)."
+    },
+    "pap": {
+      "type": "integer",
+      "format": "int32",
+      "enum": [0, 1, 2, 3],
+      "description": "Permissible Actions Protocol level (0-3) indicating allowed actions on alert data. 0=PAP:CLEAR (unlimited actions), 1=PAP:GREEN (passive only), 2=PAP:AMBER (active with approval), 3=PAP:RED (no actions)."
+    },
+    "follow": {
+      "type": "boolean",
+      "description": "Whether this alert is followed by the current user. Followed alerts generate notifications on updates and appear in personal watchlists."
+    },
+    "customFields": {
+      "description": "Organization-specific custom fields that extend the default alert schema. Can be provided as an object (customFieldsAsObject) or as an array of custom field values."
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Current status of the alert within its stage. Status values are configurable per organization and vary by stage (e.g., 'New', 'Updated', 'Ignored', 'Imported')."
+    },
+    "summary": {
+      "type": ["string", "null"],
+      "maxLength": 1048576,
+      "description": "Summary notes from alert triage. Records analyst findings, triage decisions, and rationale for dismissal or escalation. Set to null to clear."
+    },
+    "assignee": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Email or username of the analyst assigned to triage this alert. Helps distribute alert workload across the team. Set to null to unassign."
+    },
+    "addTags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "description": "Tags to add to the current alert. These tags will be added to existing tags without replacing them."
+    },
+    "removeTags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "description": "Tags to remove from the current alert. Only matching tags will be removed, other tags remain unchanged."
+    }
+  }
+}

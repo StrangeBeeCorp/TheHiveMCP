@@ -12,7 +12,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-//go:embed schemas/*.json
+//go:embed schemas/*.json schemas/*/*.json
 var schemasFS embed.FS
 
 //go:embed rules/*.txt
@@ -77,20 +77,61 @@ func getFactContent(factName string, data interface{}) ([]mcp.ResourceContents, 
 	}, nil
 }
 
+// Alert schema handlers
 func GetAlertSchemaHandler() ([]mcp.ResourceContents, error) {
-	return getSchemaContent("OutputAlert")
+	return getSchemaContent("alert/OutputAlert")
 }
 
+func GetAlertCreateSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("alert/CreateAlert")
+}
+
+func GetAlertUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("alert/UpdateAlert")
+}
+
+// Case schema handlers
 func GetCaseSchemaHandler() ([]mcp.ResourceContents, error) {
-	return getSchemaContent("OutputCase")
+	return getSchemaContent("case/OutputCase")
 }
 
+func GetCaseCreateSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("case/CreateCase")
+}
+
+func GetCaseUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("case/UpdateCase")
+}
+
+// Task schema handlers
 func GetTaskSchemaHandler() ([]mcp.ResourceContents, error) {
-	return getSchemaContent("OutputTask")
+	return getSchemaContent("task/OutputTask")
 }
 
+func GetTaskCreateSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("task/CreateTask")
+}
+
+func GetTaskUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("task/UpdateTask")
+}
+
+// Observable schema handlers
 func GetObservableSchemaHandler() ([]mcp.ResourceContents, error) {
-	return getSchemaContent("OutputObservable")
+	return getSchemaContent("observable/OutputObservable")
+}
+
+func GetObservableCreateSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("observable/CreateObservable")
+}
+
+func GetObservableUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("observable/UpdateObservable")
+}
+
+// Case template schema handler
+func GetCaseTemplateSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("case_template/OutputCaseTemplate")
 }
 
 func GetFilterSchemaHandler() ([]mcp.ResourceContents, error) {
@@ -159,8 +200,8 @@ func GetCatalogData() map[string]interface{} {
 			},
 			{
 				"name":        "schema",
-				"description": "Entity field definitions and data types. Query these to understand what fields are available for each entity type and their constraints.",
-				"resources":   []string{"alert", "case", "task", "observable"},
+				"description": "Entity field definitions and data types. Query these to understand what fields are available for each entity type and their constraints. Each entity has three variants: base (output), /create (input for creation), and /update (partial input for updates).",
+				"resources":   []string{"alert", "alert/create", "alert/update", "case", "case/create", "case/update", "task", "task/create", "task/update", "observable", "observable/create", "observable/update", "case-template", "filter"},
 			},
 			{
 				"name":        "metadata",
@@ -232,49 +273,146 @@ func GetResourceCatalog(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp
 }
 
 func RegisterSchemaResources(registry *ResourceRegistry) {
+	// Alert schemas
 	alertSchema := mcp.NewResource(
 		"hive://schema/alert",
-		"Alert Schema",
-		mcp.WithResourceDescription("Available fields, types, and constraints for alerts"),
+		"Alert Output Schema",
+		mcp.WithResourceDescription("Output fields, types, and constraints for alerts returned from TheHive API"),
+		mcp.WithMIMEType("application/json"),
 	)
 	registry.Register(alertSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetAlertSchemaHandler()
 	})
 
+	alertCreateSchema := mcp.NewResource(
+		"hive://schema/alert/create",
+		"Alert Create Schema",
+		mcp.WithResourceDescription("Input fields and requirements for creating new alerts"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(alertCreateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetAlertCreateSchemaHandler()
+	})
+
+	alertUpdateSchema := mcp.NewResource(
+		"hive://schema/alert/update",
+		"Alert Update Schema",
+		mcp.WithResourceDescription("Partial input fields for updating existing alerts"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(alertUpdateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetAlertUpdateSchemaHandler()
+	})
+
+	// Case schemas
 	caseSchema := mcp.NewResource(
 		"hive://schema/case",
-		"Case Schema",
-		mcp.WithResourceDescription("Available fields, types, and constraints for cases"),
+		"Case Output Schema",
+		mcp.WithResourceDescription("Output fields, types, and constraints for cases returned from TheHive API"),
 		mcp.WithMIMEType("application/json"),
 	)
 	registry.Register(caseSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetCaseSchemaHandler()
 	})
 
+	caseCreateSchema := mcp.NewResource(
+		"hive://schema/case/create",
+		"Case Create Schema",
+		mcp.WithResourceDescription("Input fields and requirements for creating new cases"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(caseCreateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetCaseCreateSchemaHandler()
+	})
+
+	caseUpdateSchema := mcp.NewResource(
+		"hive://schema/case/update",
+		"Case Update Schema",
+		mcp.WithResourceDescription("Partial input fields for updating existing cases"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(caseUpdateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetCaseUpdateSchemaHandler()
+	})
+
+	// Task schemas
 	taskSchema := mcp.NewResource(
 		"hive://schema/task",
-		"Task Schema",
-		mcp.WithResourceDescription("Available fields, types, and constraints for tasks"),
+		"Task Output Schema",
+		mcp.WithResourceDescription("Output fields, types, and constraints for tasks returned from TheHive API"),
 		mcp.WithMIMEType("application/json"),
 	)
 	registry.Register(taskSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetTaskSchemaHandler()
 	})
 
+	taskCreateSchema := mcp.NewResource(
+		"hive://schema/task/create",
+		"Task Create Schema",
+		mcp.WithResourceDescription("Input fields and requirements for creating new tasks"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(taskCreateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetTaskCreateSchemaHandler()
+	})
+
+	taskUpdateSchema := mcp.NewResource(
+		"hive://schema/task/update",
+		"Task Update Schema",
+		mcp.WithResourceDescription("Partial input fields for updating existing tasks"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(taskUpdateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetTaskUpdateSchemaHandler()
+	})
+
+	// Observable schemas
 	observableSchema := mcp.NewResource(
 		"hive://schema/observable",
-		"Observable Schema",
-		mcp.WithResourceDescription("Available fields, types, and constraints for observables"),
+		"Observable Output Schema",
+		mcp.WithResourceDescription("Output fields, types, and constraints for observables returned from TheHive API"),
 		mcp.WithMIMEType("application/json"),
 	)
 	registry.Register(observableSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetObservableSchemaHandler()
 	})
 
+	observableCreateSchema := mcp.NewResource(
+		"hive://schema/observable/create",
+		"Observable Create Schema",
+		mcp.WithResourceDescription("Input fields and requirements for creating new observables"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(observableCreateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetObservableCreateSchemaHandler()
+	})
+
+	observableUpdateSchema := mcp.NewResource(
+		"hive://schema/observable/update",
+		"Observable Update Schema",
+		mcp.WithResourceDescription("Partial input fields for updating existing observables"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(observableUpdateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetObservableUpdateSchemaHandler()
+	})
+
+	// Case template schema
+	caseTemplateSchema := mcp.NewResource(
+		"hive://schema/case-template",
+		"Case Template Schema",
+		mcp.WithResourceDescription("Output fields, types, and constraints for case templates"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(caseTemplateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetCaseTemplateSchemaHandler()
+	})
+
+	// Filter schema
 	filterSchema := mcp.NewResource(
 		"hive://schema/filter",
 		"Filter Schema",
-		mcp.WithResourceDescription("TheHive filter data structure"),
+		mcp.WithResourceDescription("TheHive filter data structure for search queries"),
 		mcp.WithMIMEType("application/json"),
 	)
 	registry.Register(filterSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
