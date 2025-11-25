@@ -264,6 +264,7 @@
     },
     "additionalQueries": {
       "type": "object",
+      "additionalProperties": true,
       "description": "Holds results of additional queries requested via the 'additionalQueries' parameter in the search API. Each key corresponds to a named query and contains its result set.",
       "properties": {
         "attachments": {

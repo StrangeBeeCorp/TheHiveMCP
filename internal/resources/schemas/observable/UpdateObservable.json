@@ -2,12 +2,6 @@
   "type": "object",
   "description": "All fields are optional for updates. Only provide fields you want to change. Use null to clear nullable fields. Note: dataType and data cannot be changed after creation despite being present in the update schema.",
   "properties": {
-    "dataType": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 64,
-      "description": "Type of observable data. WARNING: Despite appearing in the update API, dataType cannot actually be changed after creation according to the output schema documentation."
-    },
     "message": {
       "type": ["string", "null"],
       "maxLength": 1048576,
