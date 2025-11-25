@@ -456,3 +456,70 @@ func TestSearchTasksWithLimit(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, tasksData, 3, "Should return exactly 3 tasks as per limit")
 }
+
+// TestKeptColumnsOverrideExtraColumns tests that kept_columns from handler takes priority over extra-columns from tool call
+func TestKeptColumnsOverrideExtraColumns(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+
+	// Create a test alert
+	createTestAlert(t, hiveClient, "Test alert for column override", 2, []string{"test"})
+
+	// Handler specifies only specific columns in kept_columns
+	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
+		`{
+			"raw_filters": {
+				"_any": ""
+			},
+			"sort_by": "_createdAt",
+			"sort_order": "desc",
+			"num_results": 10,
+			"kept_columns": ["_id", "title"],
+			"extra_data": [],
+			"additional_queries": []
+		}`,
+	)
+
+	mcpClient := testutils.GetMCPTestClient(
+		t,
+		samplingHandler,
+		testutils.DummyElicitationAccept,
+	)
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "search-entities",
+			Arguments: map[string]any{
+				"entity-type": "alert",
+				"query":       "show me alerts",
+				// Request additional columns that should be ignored by handler's kept_columns
+				"extra-columns": []string{"_id", "title", "severity", "tags", "_createdAt"},
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+
+	alertsData, ok := structuredData["results"].([]any)
+	require.True(t, ok)
+	require.GreaterOrEqual(t, len(alertsData), 1)
+
+	// Verify that only the columns from kept_columns are returned
+	alertData := alertsData[0].(map[string]any)
+
+	// These should be present (from kept_columns)
+	require.Contains(t, alertData, "_id")
+	require.Contains(t, alertData, "title")
+
+	// These should NOT be present (not in kept_columns, even though requested in extra-columns)
+	require.NotContains(t, alertData, "severity", "severity should not be present as it's not in kept_columns")
+	require.NotContains(t, alertData, "tags", "tags should not be present as it's not in kept_columns")
+	require.NotContains(t, alertData, "_createdAt", "_createdAt should not be present as it's not in kept_columns")
+
+	// Verify we only have the expected number of columns
+	require.Len(t, alertData, 2, "Should only have 2 columns as specified in kept_columns")
+}
