@@ -161,7 +161,7 @@ func (t *SearchTool) buildHiveQuery(params *searchParams, filters *FilterResult)
 	pageOp := t.buildPagingOperation(filters.NumResults, filters.ExtraData)
 
 	// Exclude unneeded fields
-	excludedFields := t.getExcludedFields(params.EntityType, params.ExtraColumns, filters.ExtraData)
+	excludedFields := t.getExcludedFields(params.EntityType, filters.KeptColumns, filters.ExtraData)
 
 	hiveQuery := thehive.InputQuery{
 		Query: []thehive.InputQueryNamedOperation{
