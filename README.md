@@ -228,7 +228,7 @@ mcpServer := bootstrap.GetInprocessServer(creds)
 - **search-entities**: Search for entities using natural language (e.g., "high severity alerts from last week")
 - **manage-entities**: Create, update, delete entities, add comments
 - **execute-automation**: Run Cortex analyzers and responders, check job status
-- **get-resource**: Access schemas (`hive://schema/*`), docs (`hive://docs/*`), metadata (`hive://metadata/*`)
+- **get-resource**: Access schemas (`hive://schema/{entity}`, `hive://schema/{entity}/create`, `hive://schema/{entity}/update`), docs (`hive://docs/*`), metadata (`hive://metadata/*`)
 
 <details>
 <summary><strong>🔧 Detailed Tool Documentation</strong></summary>
@@ -238,9 +238,14 @@ Access TheHive resources for documentation, schemas, and metadata. The entry poi
 
 **Key Features:**
 - Browse resource catalog and categories
-- Access entity schemas and field definitions
+- Access entity schemas (output, create, and update variants for each entity type)
 - Query metadata for available options
 - Get comprehensive documentation
+
+**Schema Organization:**
+- Output schemas: `hive://schema/{entity}` - Fields returned from queries
+- Create schemas: `hive://schema/{entity}/create` - Required fields for creation
+- Update schemas: `hive://schema/{entity}/update` - Available fields for updates
 
 ### [search-entities](docs/tools/search-entities.md)
 Search for entities in TheHive using natural language queries. Uses AI to translate natural language into TheHive filters.
@@ -273,7 +278,7 @@ Execute Cortex analyzers and responders with comprehensive status monitoring and
 
 ## MCP Resources
 
-Static resources include entity schemas and documentation. Dynamic resources provide live data (users, templates, analyzers, responders, observable types).
+Static resources include entity schemas (with separate output, create, and update variants) and documentation. Dynamic resources provide live data (users, templates, analyzers, responders, observable types).
 
 <details>
 <summary><strong>🔨 Development</strong></summary>

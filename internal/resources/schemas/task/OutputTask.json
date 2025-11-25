@@ -1,18 +1,7 @@
 {
-  "required": [
-    "_id",
-    "_type",
-    "_createdBy",
-    "_createdAt",
-    "title",
-    "group",
-    "status",
-    "flag",
-    "order",
-    "mandatory",
-    "extraData"
-  ],
   "type": "object",
+  "required": ["_id", "_type", "_createdBy", "_createdAt", "title", "group", "status", "flag", "order", "mandatory"],
+  "additionalProperties": false,
   "properties": {
     "_id": {
       "type": "string",
@@ -44,14 +33,19 @@
     },
     "title": {
       "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
       "description": "The task title or name. Brief description of what action needs to be performed."
     },
     "group": {
       "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
       "description": "Task group name used to organize tasks within a case. Tasks with the same group are displayed together. Default group is 'default'."
     },
     "description": {
       "type": "string",
+      "maxLength": 1048576,
       "description": "Detailed description of the task, including instructions, context, or requirements for completion."
     },
     "status": {
@@ -77,6 +71,8 @@
     },
     "assignee": {
       "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
       "description": "Email or username of the user assigned to work on this task. Tasks can be assigned to users within the organization."
     },
     "order": {
@@ -96,6 +92,7 @@
     },
     "extraData": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Optional fields that can be requested via the 'extraData' query parameter. These fields are not returned by default due to performance overhead. Request specific fields by adding 'extraData: [\"fieldName\"]' to the page operation in your query.",
       "properties": {
         "case": {
@@ -130,8 +127,7 @@
           "type": "object",
           "description": "Map of organization IDs to boolean values indicating whether an action is required from each shared organization. Provides detailed view of which organizations need to take action on this task."
         }
-      },
-      "additionalProperties": false
+      }
     },
     "additionalQueries": {
       "type": "object",
@@ -143,6 +139,5 @@
         }
       }
     }
-  },
-  "additionalProperties": false
+  }
 }

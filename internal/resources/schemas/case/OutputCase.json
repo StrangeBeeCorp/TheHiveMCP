@@ -1,4 +1,5 @@
 {
+  "type": "object",
   "required": [
     "_id",
     "_type",
@@ -21,7 +22,6 @@
     "newDate",
     "timeToDetect"
   ],
-  "type": "object",
   "properties": {
     "_id": {
       "type": "string",
@@ -53,8 +53,8 @@
     },
     "number": {
       "type": "integer",
-      "description": "Human-readable incremental case number used for referencing the case. This field can be used in APIs in place of the _id for easier identification (e.g., 'case #42'). Users and AIs often confuse this with the _id field.",
-      "format": "int32"
+      "format": "int32",
+      "description": "Human-readable incremental case number used for referencing the case. This field can be used in APIs in place of the _id for easier identification (e.g., 'case #42'). Users and AIs often confuse this with the _id field."
     },
     "title": {
       "type": "string",
@@ -137,13 +137,7 @@
     "customFields": {
       "type": "array",
       "items": {
-        "required": [
-          "_id",
-          "name",
-          "type",
-          "value",
-          "order"
-        ],
+        "required": ["_id", "name", "type", "value", "order"],
         "type": "object",
         "properties": {
           "_id": {
@@ -179,6 +173,7 @@
     },
     "extraData": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Optional fields that can be requested via the 'extraData' query parameter. These fields are not returned by default due to performance overhead. Request specific fields by adding 'extraData: [\"fieldName\"]' to the page operation in your query.",
       "properties": {
         "observableStats": {
@@ -265,8 +260,7 @@
           "type": "array",
           "description": "Array of links to related cases (internal TheHive links) or external resources. Includes link type/category for relationship classification. Enhances traceability and investigation context."
         }
-      },
-      "additionalProperties": false
+      }
     },
     "additionalQueries": {
       "type": "object",

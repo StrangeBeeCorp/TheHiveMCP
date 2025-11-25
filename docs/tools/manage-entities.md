@@ -196,20 +196,42 @@ Add comments to cases or task logs to tasks.
 
 ## Schema Reference
 
-Before creating or updating entities, always check the schema:
+Before creating or updating entities, always check the appropriate schema:
 
+### For CREATE operations:
 ```json
 {
   "tool": "get-resource",
-  "uri": "hive://schema/alert"
+  "uri": "hive://schema/alert/create"
 }
 ```
 
-Available schemas:
-- `hive://schema/alert`
-- `hive://schema/case`
-- `hive://schema/task`
-- `hive://schema/observable`
+Available create schemas:
+- `hive://schema/alert/create` - Required and optional fields for creating alerts
+- `hive://schema/case/create` - Required and optional fields for creating cases
+- `hive://schema/task/create` - Required and optional fields for creating tasks
+- `hive://schema/observable/create` - Required and optional fields for creating observables
+
+### For UPDATE operations:
+```json
+{
+  "tool": "get-resource",
+  "uri": "hive://schema/alert/update"
+}
+```
+
+Available update schemas:
+- `hive://schema/alert/update` - Fields available for updating alerts
+- `hive://schema/case/update` - Fields available for updating cases
+- `hive://schema/task/update` - Fields available for updating tasks
+- `hive://schema/observable/update` - Fields available for updating observables
+
+### For understanding OUTPUT:
+Available output schemas (for understanding query results):
+- `hive://schema/alert` - Fields returned when querying alerts
+- `hive://schema/case` - Fields returned when querying cases
+- `hive://schema/task` - Fields returned when querying tasks
+- `hive://schema/observable` - Fields returned when querying observables
 
 ## Best Practices
 

@@ -29,10 +29,9 @@ IMPORTANT CONSTRAINTS:
 
 GETTING SCHEMA INFORMATION:
 Use the get-resource tool to query schemas before creating/updating entities:
-- get-resource: hive://schema/alert (for alert field definitions)
-- get-resource: hive://schema/case (for case field definitions)
-- get-resource: hive://schema/task (for task field definitions)
-- get-resource: hive://schema/observable (for observable field definitions)
+- Output schemas: hive://schema/alert, hive://schema/case, hive://schema/task, hive://schema/observable
+- Create schemas: hive://schema/alert/create, hive://schema/case/create, hive://schema/task/create, hive://schema/observable/create
+- Update schemas: hive://schema/alert/update, hive://schema/case/update, hive://schema/task/update, hive://schema/observable/update
 
 EXAMPLES:
 - Create alert: operation="create", entity-type="alert", entity-data={"type":"...", "source":"...", "title":"..."}
@@ -56,7 +55,7 @@ EXAMPLES:
 		),
 		mcp.WithObject(
 			"entity-data",
-			mcp.Description("JSON object containing entity data. For CREATE: complete schema (use get-resource hive://schema/[entity] for required fields). For UPDATE: only fields to change. For task/observable creation: entity-ids should contain the parent case/alert ID."),
+			mcp.Description("JSON object containing entity data. For CREATE: use get-resource hive://schema/[entity]/create for required fields. For UPDATE: use get-resource hive://schema/[entity]/update for available fields (only provide fields to change). For task/observable creation: entity-ids should contain the parent case/alert ID."),
 		),
 		mcp.WithString(
 			"comment",

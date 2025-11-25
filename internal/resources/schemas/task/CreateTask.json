@@ -1,0 +1,70 @@
+{
+  "type": "object",
+  "required": ["title"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "The task title or name. Brief description of what action needs to be performed."
+    },
+    "group": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "default": "default",
+      "description": "Task group name used to organize tasks within a case. Tasks with the same group are displayed together. Default group is 'default'."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1048576,
+      "description": "Detailed description of the task, including instructions, context, or requirements for completion."
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 16,
+      "default": "Waiting",
+      "description": "Current status of the task. If not specified, defaults to 'Waiting'. Valid values: 'Waiting', 'InProgress', 'Completed', 'Cancel'."
+    },
+    "flag": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this task is flagged for attention. Flagged tasks are highlighted in the task list for visibility across the organization. Defaults to false."
+    },
+    "startDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when work on this task began. Can be set manually or automatically when status changes to 'InProgress'."
+    },
+    "endDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the task was completed or cancelled. Set when status changes to 'Completed' or 'Cancel'."
+    },
+    "order": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Sort order of the task within its group. Lower numbers appear first. Used to control display order in task lists."
+    },
+    "dueDate": {
+      "type": "integer",
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp (in milliseconds) when the task is due to be completed. Used for deadline tracking and task prioritization."
+    },
+    "assignee": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Email or username of the user assigned to work on this task. Tasks can be assigned to users within the organization."
+    },
+    "mandatory": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this task must be completed before the case can be closed. Mandatory tasks require at least one task log to be marked as 'Completed'. Defaults to false."
+    }
+  }
+}

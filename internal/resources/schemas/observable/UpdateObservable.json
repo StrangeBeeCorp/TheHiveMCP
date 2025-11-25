@@ -1,0 +1,74 @@
+{
+  "type": "object",
+  "description": "All fields are optional for updates. Only provide fields you want to change. Use null to clear nullable fields. Note: dataType and data cannot be changed after creation despite being present in the update schema.",
+  "properties": {
+    "dataType": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Type of observable data. WARNING: Despite appearing in the update API, dataType cannot actually be changed after creation according to the output schema documentation."
+    },
+    "message": {
+      "type": ["string", "null"],
+      "maxLength": 1048576,
+      "description": "Free-text description or context about the observable in relation to the case/alert. Set to null to clear."
+    },
+    "tlp": {
+      "type": "integer",
+      "format": "int32",
+      "enum": [0, 1, 2, 3, 4],
+      "description": "Traffic Light Protocol level: 0 (WHITE - unlimited disclosure), 1 (GREEN - community), 2 (AMBER - limited), 3 (AMBER+STRICT - organization only), 4 (RED - personal for named recipients only)."
+    },
+    "pap": {
+      "type": "integer",
+      "format": "int32",
+      "enum": [0, 1, 2, 3],
+      "description": "Permissible Actions Protocol level: 0 (WHITE - any action), 1 (GREEN - passive actions), 2 (AMBER - active actions with notification), 3 (RED - no action without approval)."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "description": "List of tags for categorization and filtering. This replaces all existing tags. Use addTags/removeTags for incremental changes."
+    },
+    "ioc": {
+      "type": "boolean",
+      "description": "Indicator of Compromise flag - marks if this observable represents malicious or suspicious activity. Used for threat intelligence and correlation."
+    },
+    "sighted": {
+      "type": "boolean",
+      "description": "Marks if this observable has been seen/confirmed in the wild or in other incidents"
+    },
+    "sightedAt": {
+      "type": ["integer", "null"],
+      "format": "datetime_ms",
+      "example": 1640000000000,
+      "description": "Timestamp when the observable was sighted. Set to null to clear."
+    },
+    "ignoreSimilarity": {
+      "type": "boolean",
+      "description": "When true, excludes this observable from similarity calculations between cases and alerts. Useful for common indicators that shouldn't trigger false correlations (e.g., google.com, 127.0.0.1)"
+    },
+    "addTags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "description": "Tags to add to the current observable. These tags will be added to existing tags without replacing them."
+    },
+    "removeTags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "description": "Tags to remove from the current observable. Only matching tags will be removed, other tags remain unchanged."
+    }
+  }
+}
