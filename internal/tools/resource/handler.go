@@ -13,117 +13,110 @@ import (
 
 func (t *ResourceTool) Handle(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	uri := req.GetString("uri", "")
-	category := req.GetString("category", "")
 
-	// Validate mutual exclusivity
-	if uri != "" && category != "" {
-		return mcp.NewToolResultError("uri and category parameters are mutually exclusive. Provide either 'uri' for a specific resource or 'category' to browse, but not both."), nil
+	// If no URI provided, list catalog
+	if uri == "" {
+		slog.Info("Listing all resource categories")
+		return t.fetchUnified(ctx, "hive://catalog")
 	}
 
-	// Route to appropriate handler
-	if uri != "" {
-		return t.fetchResource(ctx, uri)
-	} else if category != "" {
-		return t.browseCategory(ctx, category)
-	} else {
-		return t.listCategories(ctx)
-	}
-}
-
-// List all categories (catalog)
-func (t *ResourceTool) listCategories(ctx context.Context) (*mcp.CallToolResult, error) {
-	slog.Info("Listing all resource categories")
-
-	// Fetch the catalog resource
-	return t.fetchResource(ctx, "hive://catalog")
-}
-
-// Browse resources in a category
-func (t *ResourceTool) browseCategory(ctx context.Context, category string) (*mcp.CallToolResult, error) {
-	slog.Info("Browsing category", "category", category)
-
-	// Normalize category name
-	category = strings.TrimPrefix(category, "hive://")
-	category = strings.TrimSuffix(category, "/")
-
-	// Get resources and subcategories in this category
-	resources, subcategories := t.resourceRegistry.ListByCategory(category)
-
-	if len(resources) == 0 && len(subcategories) == 0 {
-		return mcp.NewToolResultError(fmt.Sprintf("category '%s' not found or empty. Use get-resource without parameters to see available categories, or try: 'schema', 'metadata', 'docs', 'config'.", category)), nil
-	}
-
-	response := map[string]interface{}{
-		"category":      category,
-		"uri":           fmt.Sprintf("hive://%s/", category),
-		"subcategories": subcategories,
-		"resources":     resources,
-	}
-
-	return utils.NewToolResultJSONUnescaped(response), nil
-}
-
-// Fetch a specific resource
-func (t *ResourceTool) fetchResource(ctx context.Context, uri string) (*mcp.CallToolResult, error) {
+	// Normalize URI: add prefix if needed, remove trailing slash
+	uri = normalizeURI(uri)
 	slog.Info("Fetching resource", "uri", uri)
 
+	return t.fetchUnified(ctx, uri)
+}
+
+// normalizeURI ensures consistent URI format
+func normalizeURI(uri string) string {
+	// Add hive:// prefix if missing
 	if !strings.HasPrefix(uri, "hive://") {
 		uri = "hive://" + uri
 	}
 
-	// Assuming resourceRegistry.Get exists
-	resource, handler, err := t.resourceRegistry.Get(uri)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("resource not found: %s. Use get-resource without parameters to browse available resources, or check that the URI is correct (e.g., 'hive://schema/alert').", uri)), nil
+	// Remove trailing slash for consistency
+	uri = strings.TrimSuffix(uri, "/")
+
+	return uri
+}
+
+// fetchUnified attempts to fetch a resource and/or browse a category at the given URI
+// Returns a unified response with the resource content (if it exists), subcategories, and resources
+func (t *ResourceTool) fetchUnified(ctx context.Context, uri string) (*mcp.CallToolResult, error) {
+	// Extract category path from URI
+	category := strings.TrimPrefix(uri, "hive://")
+
+	// Try to fetch as a specific resource first
+	resource, handler, resourceErr := t.resourceRegistry.Get(uri)
+
+	var resourceData map[string]interface{}
+	if resourceErr == nil {
+		// It's a resource, fetch its content
+		readRequest := mcp.ReadResourceRequest{
+			Params: mcp.ReadResourceParams{
+				URI: uri,
+			},
+		}
+
+		contents, err := handler(ctx, readRequest)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to fetch resource: %v. This may be due to network issues, authentication problems, or the resource being temporarily unavailable.", err)), nil
+		}
+
+		if len(contents) == 0 {
+			return mcp.NewToolResultError("resource returned no content. The resource exists but contains no data. This may be a temporary issue or the resource may be empty."), nil
+		}
+
+		// Assert the type of the first element (contents)
+		textContent, ok := contents[0].(mcp.TextResourceContents)
+		if !ok {
+			return mcp.NewToolResultError(fmt.Sprintf("resource content is not readable text or JSON compatible: %T. The resource may be a binary file or in an unsupported format.", contents)), nil
+		}
+
+		contentText := textContent.Text
+		mimeType := textContent.MIMEType
+
+		// Parse the content
+		var data interface{}
+		if err := json.Unmarshal([]byte(contentText), &data); err != nil {
+			// If not JSON, return as text
+			resourceData = map[string]interface{}{
+				"uri":      uri,
+				"name":     resource.Name,
+				"mimeType": mimeType,
+				"content":  contentText,
+			}
+		} else {
+			// Return structured JSON data
+			resourceData = map[string]interface{}{
+				"uri":      uri,
+				"name":     resource.Name,
+				"mimeType": mimeType,
+				"data":     data,
+			}
+		}
 	}
 
-	// FIX 1: URI belongs in the Params struct
-	readRequest := mcp.ReadResourceRequest{
-		Params: mcp.ReadResourceParams{
-			URI: uri,
-		},
+	// Also check for subcategories and resources at this path
+	resources, subcategories := t.resourceRegistry.ListByCategory(category)
+
+	// If we found a specific resource, return it (no need for subcategories/resources)
+	if resourceData != nil {
+		// For specific resources, we typically don't show subcategories/resources
+		// unless the resource itself is also a category (edge case)
+		return utils.NewToolResultJSONUnescaped(resourceData), nil
 	}
 
-	// Handler returns []mcp.ResourceContents
-	contents, err := handler(ctx, readRequest)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to fetch resource: %v. This may be due to network issues, authentication problems, or the resource being temporarily unavailable.", err)), nil
-	}
-
-	if len(contents) == 0 {
-		return mcp.NewToolResultError("resource returned no content. The resource exists but contains no data. This may be a temporary issue or the resource may be empty."), nil
-	}
-
-	// FIX 2: Assert the type of the first element (contents)
-	// Use mcp.TextResourceContents to access Text and MIMEType
-	textContent, ok := contents[0].(mcp.TextResourceContents)
-	if !ok {
-		return mcp.NewToolResultError(fmt.Sprintf("resource content is not readable text or JSON compatible: %T. The resource may be a binary file or in an unsupported format.", contents)), nil
-	}
-
-	contentText := textContent.Text
-	mimeType := textContent.MIMEType
-
-	// Parse the content
-	var data interface{}
-	if err := json.Unmarshal([]byte(contentText), &data); err != nil {
-		// If not JSON, return as text
+	// If we didn't find a resource, check if we found a category with contents
+	if len(resources) > 0 || len(subcategories) > 0 {
 		response := map[string]interface{}{
-			"uri":      uri,
-			"name":     resource.Name,
-			"mimeType": mimeType,
-			"content":  contentText,
+			"uri":           uri,
+			"subcategories": subcategories,
+			"resources":     resources,
 		}
 		return utils.NewToolResultJSONUnescaped(response), nil
 	}
 
-	// Return structured response
-	response := map[string]interface{}{
-		"uri":      uri,
-		"name":     resource.Name,
-		"mimeType": mimeType,
-		"data":     data,
-	}
-
-	return utils.NewToolResultJSONUnescaped(response), nil
+	// Nothing found
+	return mcp.NewToolResultError(fmt.Sprintf("resource not found: %s. Use get-resource without parameters to browse available resources.", uri)), nil
 }

@@ -62,7 +62,7 @@ func TestGetResourceBrowseSchemaCategory(t *testing.T) {
 		Params: mcp.CallToolParams{
 			Name: "get-resource",
 			Arguments: map[string]any{
-				"category": "schema",
+				"uri": "schema",
 			},
 		},
 	}
@@ -75,8 +75,7 @@ func TestGetResourceBrowseSchemaCategory(t *testing.T) {
 	require.True(t, ok)
 
 	// Verify category response structure
-	require.Equal(t, "schema", structuredData["category"])
-	require.Equal(t, "hive://schema/", structuredData["uri"])
+	require.Equal(t, "hive://schema", structuredData["uri"])
 
 	// Verify resources list
 	resources, ok := structuredData["resources"].([]any)
@@ -227,7 +226,7 @@ func TestGetResourceBrowseMetadataCategory(t *testing.T) {
 		Params: mcp.CallToolParams{
 			Name: "get-resource",
 			Arguments: map[string]any{
-				"category": "metadata",
+				"uri": "metadata",
 			},
 		},
 	}
@@ -240,8 +239,7 @@ func TestGetResourceBrowseMetadataCategory(t *testing.T) {
 	require.True(t, ok)
 
 	// Verify category response structure
-	require.Equal(t, "metadata", structuredData["category"])
-	require.Equal(t, "hive://metadata/", structuredData["uri"])
+	require.Equal(t, "hive://metadata", structuredData["uri"])
 
 	// Verify subcategories exist for metadata
 	subcategories, ok := structuredData["subcategories"].([]any)
@@ -299,4 +297,117 @@ func TestGetResourceFetchCaseStatuses(t *testing.T) {
 
 	require.Contains(t, statusValues, "New")
 	require.Contains(t, statusValues, "InProgress")
+}
+
+// TestGetResourceTrailingSlashEquivalence tests that URIs work with or without trailing slashes
+func TestGetResourceTrailingSlashEquivalence(t *testing.T) {
+	testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+
+	// Get results using URI without trailing slash
+	noSlashRequest := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "get-resource",
+			Arguments: map[string]any{
+				"uri": "metadata/automation",
+			},
+		},
+	}
+
+	noSlashResult, err := mcpClient.CallTool(t.Context(), noSlashRequest)
+	require.NoError(t, err, "URI without trailing slash should work")
+	require.NotNil(t, noSlashResult)
+
+	noSlashData, ok := noSlashResult.StructuredContent.(map[string]any)
+	require.True(t, ok)
+
+	// Get results using URI with trailing slash
+	withSlashRequest := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "get-resource",
+			Arguments: map[string]any{
+				"uri": "hive://metadata/automation/",
+			},
+		},
+	}
+
+	withSlashResult, err := mcpClient.CallTool(t.Context(), withSlashRequest)
+	require.NoError(t, err, "URI with trailing slash should work")
+	require.NotNil(t, withSlashResult)
+
+	withSlashData, ok := withSlashResult.StructuredContent.(map[string]any)
+	require.True(t, ok)
+
+	// Verify both approaches return equivalent results
+	require.Equal(t, "hive://metadata/automation", noSlashData["uri"])
+	require.Equal(t, "hive://metadata/automation", withSlashData["uri"])
+	require.Equal(t, noSlashData["subcategories"], withSlashData["subcategories"])
+
+	// For resources, we need to compare sets as order may vary
+	noSlashResources, ok := noSlashData["resources"].([]any)
+	require.True(t, ok)
+	withSlashResources, ok := withSlashData["resources"].([]any)
+	require.True(t, ok)
+
+	require.Equal(t, len(noSlashResources), len(withSlashResources), "should have same number of resources")
+
+	// Convert to maps for easier comparison
+	noSlashResourcesMap := make(map[string]any)
+	withSlashResourcesMap := make(map[string]any)
+
+	for _, res := range noSlashResources {
+		resMap := res.(map[string]any)
+		noSlashResourcesMap[resMap["name"].(string)] = resMap
+	}
+
+	for _, res := range withSlashResources {
+		resMap := res.(map[string]any)
+		withSlashResourcesMap[resMap["name"].(string)] = resMap
+	}
+
+	require.Equal(t, noSlashResourcesMap, withSlashResourcesMap, "resources should be equivalent regardless of order")
+}
+
+// TestGetResourceResourcesFieldBehavior tests the resources field behavior in category responses
+func TestGetResourceResourcesFieldBehavior(t *testing.T) {
+	testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+
+	// Browse a category that has only subcategories (no direct resources)
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "get-resource",
+			Arguments: map[string]any{
+				"uri": "metadata",
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+
+	// Verify subcategories field behavior
+	subcategories, exists := structuredData["subcategories"]
+	require.True(t, exists, "subcategories field should exist")
+	require.NotNil(t, subcategories, "subcategories should not be null")
+
+	subcategoriesList, ok := subcategories.([]any)
+	require.True(t, ok)
+	require.NotEmpty(t, subcategoriesList, "Should contain automation, entities, organization subcategories")
+
+	// Check resources field behavior when no direct resources exist
+	resources, exists := structuredData["resources"]
+	require.True(t, exists, "resources field should exist")
+
+	if resources == nil {
+		t.Log("resources field is null when no direct resources exist")
+	} else {
+		resourcesList, ok := resources.([]any)
+		require.True(t, ok)
+		require.Empty(t, resourcesList, "Should be empty array when no direct resources")
+	}
 }
