@@ -1,0 +1,23 @@
+# Default Read-Only Permissions
+# This configuration is used when no permissions config file is specified
+# It provides safe, read-only access to TheHive
+
+version: "1.0"
+permissions:
+  tools:
+    search-entities:
+      allowed: true
+    manage-entities:
+      allowed: false
+    execute-automation:
+      allowed: false
+    get-resource:
+      allowed: true
+
+  analyzers:
+    mode: "allow_list"
+    allowed: []
+
+  responders:
+    mode: "allow_list"
+    allowed: []

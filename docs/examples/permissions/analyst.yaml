@@ -1,0 +1,61 @@
+# Analyst Permissions Configuration
+# This configuration provides typical analyst-level access
+# Can search, create, and update entities within certain constraints
+
+version: "1.0"
+permissions:
+  tools:
+    # Allow searching with optional filters
+    search-entities:
+      allowed: true
+      # Example: Filter out deleted entities
+      filters:
+        _field: "status"
+        _operator: "_ne"
+        _value: "Deleted"
+
+    # Allow entity management with some restrictions
+    manage-entities:
+      allowed: true
+      # Note: Filters for manage-entities would require entity lookups
+      # which adds complexity. For simplicity, allow all operations
+      # and rely on TheHive's built-in permissions
+
+    # Allow running specific analyzers and responders
+    execute-automation:
+      allowed: true
+      analyzer_restrictions:
+        mode: "allow_list"
+        allowed:
+          - "VirusTotal_3_0"
+          - "Shodan_Host"
+          - "MISP_2_0"
+          - "AbuseIPDB_1_0"
+          - "OTXQuery_2_0"
+      responder_restrictions:
+        mode: "block_list"
+        # Block destructive responders
+        blocked:
+          - "DeleteCase_1_0"
+          - "PurgeAlert_1_0"
+
+    # Allow resource access
+    get-resource:
+      allowed: true
+
+  # Global analyzer permissions (as fallback)
+  analyzers:
+    mode: "allow_list"
+    allowed:
+      - "VirusTotal_3_0"
+      - "Shodan_Host"
+      - "MISP_2_0"
+      - "AbuseIPDB_1_0"
+      - "OTXQuery_2_0"
+
+  # Global responder permissions (as fallback)
+  responders:
+    mode: "block_list"
+    blocked:
+      - "DeleteCase_1_0"
+      - "PurgeAlert_1_0"

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/permissions"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/prompts"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
@@ -15,26 +16,43 @@ import (
 const maxSearchRetries = 3
 
 func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// 1. Extract and validate parameters
+	// 1. Check permissions
+	perms, err := utils.GetPermissionsFromContext(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to get permissions: %v", err)), nil
+	}
+
+	if !perms.IsToolAllowed("search-entities") {
+		return mcp.NewToolResultError("search-entities tool is not permitted by your permissions configuration"), nil
+	}
+
+	// 2. Extract and validate parameters
 	params, err := t.extractParams(req)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	additionalMessages := []mcp.PromptMessage{}
 	for attempt := 1; attempt <= maxSearchRetries; attempt++ {
-		// 2. Get filters from natural language query
+		// 3. Get filters from natural language query
 		filters, err := t.parseQuery(ctx, params, additionalMessages)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("failed to parse natural language query: %v. Try rephrasing your query or check that the entity type supports the fields you're searching for. Use get-resource 'hive://schema/%s' for available fields.", err, params.EntityType)), nil
 		}
 
-		// 3. Build TheHive query
+		// 4. Apply permission filters
+		permFilters := perms.GetToolFilters("search-entities")
+		if len(permFilters) > 0 {
+			filters.RawFilters, _ = permissions.MergeFilters(filters.RawFilters, permFilters)
+			slog.Info("Applied permission filters to search query", "entityType", params.EntityType)
+		}
+
+		// 5. Build TheHive query
 		hiveQuery, err := t.buildHiveQuery(params, filters)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("failed to build TheHive query: %v. This may be due to unsupported field names or filter combinations. Use get-resource 'hive://schema/%s' to see available fields.", err, params.EntityType)), nil
 		}
 
-		// 4. Execute query
+		// 6. Execute query
 		results, err := t.executeQuery(ctx, hiveQuery, params.EntityType)
 		if err != nil {
 			slog.Warn("Search attempt failed, retrying", "attempt", attempt, "error", err)
@@ -48,7 +66,7 @@ func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("failed to perform additional queries: %v", err)), nil
 		}
-		// 5. Process and format results
+		// 7. Process and format results
 		return t.formatResults(results, params, filters.RawFilters)
 	}
 	return mcp.NewToolResultError("maximum search retries exceeded. The query could not be translated to valid TheHive filters. Try simplifying your search criteria or using more specific field names."), nil

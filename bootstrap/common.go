@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/logging"
-
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/permissions"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
@@ -186,4 +186,36 @@ func SafeGetEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// LoadPermissions loads permissions configuration from file or uses default
+func LoadPermissions(configPath string) (*permissions.Config, error) {
+	if configPath != "" {
+		slog.Info("Loading permissions from file", "path", configPath)
+		config, err := permissions.LoadFromFile(configPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load permissions from file: %w", err)
+		}
+		slog.Info("Permissions loaded from file", "path", configPath, "version", config.Version)
+		return config, nil
+	}
+
+	// Use embedded default permissions
+	slog.Info("Using default read-only permissions")
+	config, err := permissions.LoadDefault()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load default permissions: %w", err)
+	}
+	slog.Info("Default permissions loaded", "version", config.Version)
+	return config, nil
+}
+
+// AddPermissionsToContext loads permissions and adds them to the context
+func AddPermissionsToContext(ctx context.Context, options *types.TheHiveMcpDefaultOptions) (context.Context, error) {
+	config, err := LoadPermissions(options.PermissionsConfigPath)
+	if err != nil {
+		return ctx, fmt.Errorf("failed to load permissions: %w", err)
+	}
+
+	return utils.AddPermissionsToContext(ctx, config), nil
 }

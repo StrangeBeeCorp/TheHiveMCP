@@ -61,6 +61,13 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 			}
 		}
 
+		// Add permissions to context
+		if newCtx, err := AddPermissionsToContext(ctx, options); err != nil {
+			slog.Warn("Failed to add permissions to context", "error", err)
+		} else {
+			ctx = newCtx
+		}
+
 		return ctx
 	}
 }

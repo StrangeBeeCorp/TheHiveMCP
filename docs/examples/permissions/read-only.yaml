@@ -1,0 +1,32 @@
+# Read-Only Permissions Configuration
+# This configuration provides read-only access to TheHive
+# Users can search and view entities but cannot modify anything
+
+version: "1.0"
+permissions:
+  tools:
+    # Allow searching and viewing entities
+    search-entities:
+      allowed: true
+
+    # Deny all write operations
+    manage-entities:
+      allowed: false
+
+    # Deny automation execution
+    execute-automation:
+      allowed: false
+
+    # Allow resource access for documentation and schemas
+    get-resource:
+      allowed: true
+
+  # No analyzers allowed
+  analyzers:
+    mode: "allow_list"
+    allowed: []
+
+  # No responders allowed
+  responders:
+    mode: "allow_list"
+    allowed: []
