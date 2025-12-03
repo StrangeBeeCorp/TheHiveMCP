@@ -20,27 +20,38 @@ Resources are organized hierarchically:
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `uri` | string | No | Full resource URI (e.g., 'hive://schema/alert'). Mutually exclusive with category. |
-| `category` | string | No | Category to browse (e.g., 'schema', 'metadata', 'docs'). Mutually exclusive with uri. |
+| `uri` | string | No | Resource URI to query (e.g., 'hive://schema/alert', 'hive://metadata/automation'). Omit to list all categories. |
 
-## Usage Patterns
+## Usage
 
-### 1. Discovery Mode
+The tool automatically determines whether you're requesting a specific resource or browsing a category based on the URI provided.
+
+**URI Flexibility:**
+- URIs work with or without the `hive://` prefix (e.g., `"schema"` or `"hive://schema"`)
+- Trailing slashes are handled automatically (e.g., `"hive://schema/"` or `"hive://schema"`)
+
+**Behavior:**
+- If the URI points to a specific resource, the resource content is returned
+- If the URI is a path, all resources and subcategories under that path are returned
+- If the URI doesn't exist, an error is returned
+
+### Discovery Mode
 Call without parameters to list all available categories:
 ```
 get-resource()
 ```
 
-### 2. Browse Mode
-Provide a category to list resources within that category:
+### Browse Mode
+Provide a URI to browse resources and subcategories at that path:
 ```
-get-resource(category="schema")
-get-resource(category="metadata")
-get-resource(category="docs")
+get-resource(uri="hive://schema")
+get-resource(uri="hive://metadata")
+get-resource(uri="hive://metadata/automation")
+get-resource(uri="hive://docs/entities")
 ```
 
-### 3. Fetch Mode
-Provide a full URI to get a specific resource:
+### Fetch Mode
+Provide a URI to get a specific resource:
 ```
 get-resource(uri="hive://schema/alert")
 get-resource(uri="hive://docs/entities/case")
@@ -49,8 +60,13 @@ get-resource(uri="hive://metadata/automation/analyzers")
 
 ## Examples
 
+### Discovery and Browsing
 - **List all categories**: `get-resource()`
-- **List schemas**: `get-resource(category="schema")`
+- **List schemas**: `get-resource(uri="hive://schema")`
+- **Browse automation metadata**: `get-resource(uri="hive://metadata/automation")`
+- **Browse entity docs**: `get-resource(uri="hive://docs/entities")`
+
+### Specific Resource Fetching
 - **Get alert output schema**: `get-resource(uri="hive://schema/alert")`
 - **Get alert create schema**: `get-resource(uri="hive://schema/alert/create")`
 - **Get alert update schema**: `get-resource(uri="hive://schema/alert/update")`
@@ -59,7 +75,7 @@ get-resource(uri="hive://metadata/automation/analyzers")
 
 ## Schema Organization
 
-Entity schemas are now organized into three variants:
+Entity schemas are organized into three variants:
 
 - **Output schemas** (`hive://schema/{entity}`): Fields returned from TheHive API when querying entities
 - **Create schemas** (`hive://schema/{entity}/create`): Required and optional fields for creating new entities
@@ -73,6 +89,7 @@ Example:
 - `hive://schema/task/update` - Partial input schema for updating tasks
 
 This organization makes it clear which fields are required for creation vs available for updates.
+
 
 ## Best Practices
 

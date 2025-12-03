@@ -252,10 +252,10 @@ func GetCatalogData() map[string]interface{} {
 // GetResourceCatalog returns the catalog (uses the same GetCatalogData)
 func GetResourceCatalog(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	catalog := GetCatalogData()
-	catalog["usage"] = map[string]string{
+	catalog["usage"] = map[string]interface{}{
 		"discover": "Use get-resource tool without parameters to list all categories",
-		"browse":   "Use get-resource tool with category to list resources in that category",
-		"fetch":    "Use get-resource tool with full URI to fetch specific resource",
+		"browse":   "Use get-resource tool with a URI to browse a category (e.g., uri=\"hive://schema\" or uri=\"hive://metadata/automation\")",
+		"fetch":    "Use get-resource tool with a URI to fetch a specific resource (e.g., uri=\"hive://schema/alert\")",
 	}
 
 	content, err := json.MarshalIndent(catalog, "", "  ")

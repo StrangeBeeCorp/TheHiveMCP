@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.4
 
 # Stage 1: Build the Go binary
-FROM golang:1.24.9-alpine AS builder
+FROM golang:1.24.11-alpine AS builder
 
 # Set necessary environment variables
 ARG BINARY=server

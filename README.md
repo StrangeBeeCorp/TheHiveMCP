@@ -4,7 +4,7 @@
   <img src="docs/images/thehivemcp-logo.png" alt="TheHiveMCP Logo" width="600"/>
 </div>
 
-[![Go Version](https://img.shields.io/badge/go-1.24.9+-blue.svg)](https://golang.org/doc/go1.24)
+[![Go Version](https://img.shields.io/badge/go-1.24.11+-blue.svg)](https://golang.org/doc/go1.24)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
 **Model Context Protocol server for TheHive security platform**
@@ -228,7 +228,7 @@ mcpServer := bootstrap.GetInprocessServer(creds)
 - **search-entities**: Search for entities using natural language (e.g., "high severity alerts from last week")
 - **manage-entities**: Create, update, delete entities, add comments
 - **execute-automation**: Run Cortex analyzers and responders, check job status
-- **get-resource**: Access schemas (`hive://schema/{entity}`, `hive://schema/{entity}/create`, `hive://schema/{entity}/update`), docs (`hive://docs/*`), metadata (`hive://metadata/*`)
+- **get-resource**: Access schemas, docs, and metadata through hierarchical browsing (e.g., `uri="hive://schema"` or `uri="hive://metadata/automation"`)
 
 <details>
 <summary><strong>🔧 Detailed Tool Documentation</strong></summary>
@@ -237,15 +237,20 @@ mcpServer := bootstrap.GetInprocessServer(creds)
 Access TheHive resources for documentation, schemas, and metadata. The entry point for exploring TheHive's capabilities through a hierarchical URI-based resource system.
 
 **Key Features:**
-- Browse resource catalog and categories
+- Browse resource catalog and categories with flexible navigation
 - Access entity schemas (output, create, and update variants for each entity type)
-- Query metadata for available options
-- Get comprehensive documentation
+- Query metadata for available options with subcategory support
+- Get comprehensive documentation through hierarchical paths
 
 **Schema Organization:**
 - Output schemas: `hive://schema/{entity}` - Fields returned from queries
 - Create schemas: `hive://schema/{entity}/create` - Required fields for creation
 - Update schemas: `hive://schema/{entity}/update` - Available fields for updates
+
+**Navigation Examples:**
+- Browse automation metadata: `uri="hive://metadata/automation"`
+- List entity schemas: `uri="hive://schema"`
+- Get specific alert schema: `uri="hive://schema/alert"`
 
 ### [search-entities](docs/tools/search-entities.md)
 Search for entities in TheHive using natural language queries. Uses AI to translate natural language into TheHive filters.
