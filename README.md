@@ -228,7 +228,7 @@ mcpServer := bootstrap.GetInprocessServer(creds)
 - **search-entities**: Search for entities using natural language (e.g., "high severity alerts from last week")
 - **manage-entities**: Create, update, delete entities, add comments
 - **execute-automation**: Run Cortex analyzers and responders, check job status
-- **get-resource**: Access schemas, docs, and metadata through hierarchical browsing (e.g., `uri="schema"` or `uri="metadata/automation"`)
+- **get-resource**: Access schemas, docs, and metadata through hierarchical browsing (e.g., `uri="hive://schema"` or `uri="hive://metadata/automation"`)
 
 <details>
 <summary><strong>🔧 Detailed Tool Documentation</strong></summary>
@@ -248,8 +248,8 @@ Access TheHive resources for documentation, schemas, and metadata. The entry poi
 - Update schemas: `hive://schema/{entity}/update` - Available fields for updates
 
 **Navigation Examples:**
-- Browse automation metadata: `uri="metadata/automation"`
-- List entity schemas: `uri="schema"`
+- Browse automation metadata: `uri="hive://metadata/automation"`
+- List entity schemas: `uri="hive://schema"`
 - Get specific alert schema: `uri="hive://schema/alert"`
 
 ### [search-entities](docs/tools/search-entities.md)

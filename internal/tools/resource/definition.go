@@ -30,7 +30,6 @@ Resources are organized hierarchically:
 Usage:
 - Call without parameters to list all categories
 - Provide a URI to fetch resources, subcategories, and content at that path
-- URIs work with or without trailing slashes (both "hive://schema" and "hive://schema/" work identically)
 
 The tool returns a unified response that includes:
 - The resource content (if the URI points to a specific resource)
@@ -49,7 +48,7 @@ You can then make informed calls to other tools like search, create, or update u
 `),
 		mcp.WithString(
 			"uri",
-			mcp.Description("Resource URI to query (e.g., 'hive://schema/alert', 'hive://metadata/automation', or 'schema'). Works with or without 'hive://' prefix and with or without trailing slash. Omit to list all categories."),
+			mcp.Description("Resource URI to query (e.g., 'hive://schema/alert', 'hive://metadata/automation'). Omit to list all categories."),
 		),
 	)
 }

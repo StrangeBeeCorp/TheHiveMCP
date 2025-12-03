@@ -254,9 +254,8 @@ func GetResourceCatalog(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp
 	catalog := GetCatalogData()
 	catalog["usage"] = map[string]interface{}{
 		"discover": "Use get-resource tool without parameters to list all categories",
-		"browse":   "Use get-resource tool with a URI to browse a category (e.g., uri=\"schema\" or uri=\"metadata/automation\")",
-		"fetch":    "Use get-resource tool with a URI to fetch a specific resource (e.g., uri=\"hive://schema/alert\" or uri=\"schema/alert\")",
-		"note":     "URIs work with or without the 'hive://' prefix and with or without trailing slashes. The tool automatically determines whether you're browsing a category or fetching a specific resource.",
+		"browse":   "Use get-resource tool with a URI to browse a category (e.g., uri=\"hive://schema\" or uri=\"hive://metadata/automation\")",
+		"fetch":    "Use get-resource tool with a URI to fetch a specific resource (e.g., uri=\"hive://schema/alert\")",
 	}
 
 	content, err := json.MarshalIndent(catalog, "", "  ")
