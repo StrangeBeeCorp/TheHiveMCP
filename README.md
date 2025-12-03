@@ -4,7 +4,7 @@
   <img src="docs/images/thehivemcp-logo.png" alt="TheHiveMCP Logo" width="600"/>
 </div>
 
-[![Go Version](https://img.shields.io/badge/go-1.24.9+-blue.svg)](https://golang.org/doc/go1.24)
+[![Go Version](https://img.shields.io/badge/go-1.24.11+-blue.svg)](https://golang.org/doc/go1.24)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
 **Model Context Protocol server for TheHive security platform**
