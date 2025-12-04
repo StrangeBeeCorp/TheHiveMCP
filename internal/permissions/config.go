@@ -41,6 +41,29 @@ func LoadDefault() (*Config, error) {
 	return config, nil
 }
 
+// LoadAdminForTesting returns an admin permissions configuration for testing purposes
+func LoadAdminForTesting() *Config {
+	return &Config{
+		Version: "1.0",
+		Permissions: PermissionsSection{
+			Tools: map[string]ToolPermission{
+				"search-entities":    {Allowed: true},
+				"manage-entities":    {Allowed: true},
+				"execute-automation": {Allowed: true},
+				"get-resource":       {Allowed: true},
+			},
+			Analyzers: AutomationPermissions{
+				Mode:    "allow_list",
+				Allowed: []string{"*"},
+			},
+			Responders: AutomationPermissions{
+				Mode:    "allow_list",
+				Allowed: []string{"*"},
+			},
+		},
+	}
+}
+
 // ParseYAML parses YAML data into a Config struct
 func ParseYAML(data []byte) (*Config, error) {
 	var config Config

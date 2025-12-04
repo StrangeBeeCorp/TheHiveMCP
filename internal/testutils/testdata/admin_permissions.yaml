@@ -1,0 +1,27 @@
+# Test Admin Permissions Configuration
+# This configuration provides full access for testing purposes
+
+version: "1.0"
+permissions:
+  tools:
+    search-entities:
+      allowed: true
+
+    manage-entities:
+      allowed: true
+
+    execute-automation:
+      allowed: true
+
+    get-resource:
+      allowed: true
+
+  analyzers:
+    mode: "allow_list"
+    allowed:
+      - "*"
+
+  responders:
+    mode: "allow_list"
+    allowed:
+      - "*"

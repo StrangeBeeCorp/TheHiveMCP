@@ -83,6 +83,43 @@ tools:
 
 Uses TheHive's native filter syntax.
 
+### Granular Entity Permissions (manage-entities only)
+
+Control specific operations on each entity type:
+
+```yaml
+tools:
+  manage-entities:
+    allowed: true
+    entity_permissions:
+      alert:
+        create: true
+        update: true
+        delete: false  # Deny delete for analysts
+        comment: true
+      case:
+        create: true
+        update: true
+        delete: false
+        comment: true
+      task:
+        create: true
+        update: true
+        delete: false
+        comment: true
+      observable:
+        create: true
+        update: true
+        delete: false
+        comment: true
+```
+
+**Behavior:**
+- If no `entity_permissions` configured: all operations allowed (backward compatibility)
+- If `entity_permissions` configured: only specified entity types/operations allowed
+- Entity types: `alert`, `case`, `task`, `observable`
+- Operations: `create`, `update`, `delete`, `comment`
+
 ## Automation Permissions
 
 ### Allow List Mode

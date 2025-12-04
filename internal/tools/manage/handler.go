@@ -29,12 +29,17 @@ func (t *ManageTool) Handle(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	// 3. Validate operation constraints
+	// 3. Check entity operation permissions
+	if !perms.IsEntityOperationAllowed(params.EntityType, params.Operation) {
+		return mcp.NewToolResultError(fmt.Sprintf("operation '%s' on entity type '%s' is not permitted by your permissions configuration", params.Operation, params.EntityType)), nil
+	}
+
+	// 4. Validate operation constraints
 	if err := t.validateOperation(params); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	// 4. Execute operation
+	// 5. Execute operation
 	switch params.Operation {
 	case "create":
 		return t.handleCreate(ctx, params)

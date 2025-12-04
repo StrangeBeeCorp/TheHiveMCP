@@ -81,7 +81,8 @@ func GetMCPTestClient(
 		Password:     options.TheHivePassword,
 		Organisation: options.TheHiveOrganisation,
 	}
-	mcpServer := bootstrap.GetInprocessServer(creds, "") // Empty string uses default permissions
+	// Use admin permissions for testing to avoid permission denied errors
+	mcpServer := bootstrap.GetInprocessServer(creds, "TESTING_ADMIN")
 	bootstrap.RegisterToolsToMCPServer(mcpServer)
 
 	// Create wrappers that implement server.SamplingHandler and server.ElicitationHandler

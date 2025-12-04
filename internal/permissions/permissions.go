@@ -32,10 +32,19 @@ type PermissionsSection struct {
 
 // ToolPermission defines access and filtering for a specific tool
 type ToolPermission struct {
-	Allowed               bool                    `yaml:"allowed"`
-	Filters               map[string]interface{}  `yaml:"filters,omitempty"`
-	AnalyzerRestrictions  *AutomationRestrictions `yaml:"analyzer_restrictions,omitempty"`
-	ResponderRestrictions *AutomationRestrictions `yaml:"responder_restrictions,omitempty"`
+	Allowed               bool                       `yaml:"allowed"`
+	Filters               map[string]interface{}     `yaml:"filters,omitempty"`
+	AnalyzerRestrictions  *AutomationRestrictions    `yaml:"analyzer_restrictions,omitempty"`
+	ResponderRestrictions *AutomationRestrictions    `yaml:"responder_restrictions,omitempty"`
+	EntityPermissions     map[string]EntityOperation `yaml:"entity_permissions,omitempty"` // For manage-entities tool
+}
+
+// EntityOperation defines which operations are allowed for an entity type
+type EntityOperation struct {
+	Create  bool `yaml:"create"`
+	Update  bool `yaml:"update"`
+	Delete  bool `yaml:"delete"`
+	Comment bool `yaml:"comment"`
 }
 
 // AutomationPermissions defines analyzer or responder access
@@ -62,6 +71,45 @@ func (c *Config) IsToolAllowed(toolName string) bool {
 		return false
 	}
 	return perm.Allowed
+}
+
+// IsEntityOperationAllowed checks if a specific operation on an entity type is permitted
+// If no entity-specific permissions are configured, defaults to the tool's general allowed setting
+func (c *Config) IsEntityOperationAllowed(entityType, operation string) bool {
+	if c == nil || c.Permissions.Tools == nil {
+		return false
+	}
+
+	toolPerm, exists := c.Permissions.Tools["manage-entities"]
+	if !exists || !toolPerm.Allowed {
+		return false
+	}
+
+	// If no entity permissions configured, allow all operations (backward compatibility)
+	if len(toolPerm.EntityPermissions) == 0 {
+		return true
+	}
+
+	// Check entity-specific permissions
+	entityPerm, exists := toolPerm.EntityPermissions[entityType]
+	if !exists {
+		// If entity type not specified, deny by default
+		return false
+	}
+
+	// Check operation permission
+	switch operation {
+	case "create":
+		return entityPerm.Create
+	case "update":
+		return entityPerm.Update
+	case "delete":
+		return entityPerm.Delete
+	case "comment":
+		return entityPerm.Comment
+	default:
+		return false
+	}
 }
 
 // GetToolFilters returns the filters for a specific tool

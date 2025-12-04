@@ -217,3 +217,172 @@ func TestGetAllowedResponders(t *testing.T) {
 		}
 	}
 }
+
+func TestIsEntityOperationAllowed(t *testing.T) {
+	tests := []struct {
+		name       string
+		config     *Config
+		entityType string
+		operation  string
+		want       bool
+	}{
+		{
+			name: "entity operation allowed",
+			config: &Config{
+				Version: "1.0",
+				Permissions: PermissionsSection{
+					Tools: map[string]ToolPermission{
+						"manage-entities": {
+							Allowed: true,
+							EntityPermissions: map[string]EntityOperation{
+								"alert": {
+									Create:  true,
+									Update:  true,
+									Delete:  false,
+									Comment: true,
+								},
+							},
+						},
+					},
+				},
+			},
+			entityType: "alert",
+			operation:  "create",
+			want:       true,
+		},
+		{
+			name: "entity operation denied",
+			config: &Config{
+				Version: "1.0",
+				Permissions: PermissionsSection{
+					Tools: map[string]ToolPermission{
+						"manage-entities": {
+							Allowed: true,
+							EntityPermissions: map[string]EntityOperation{
+								"alert": {
+									Create:  true,
+									Update:  true,
+									Delete:  false,
+									Comment: true,
+								},
+							},
+						},
+					},
+				},
+			},
+			entityType: "alert",
+			operation:  "delete",
+			want:       false,
+		},
+		{
+			name: "entity type not configured - should deny",
+			config: &Config{
+				Version: "1.0",
+				Permissions: PermissionsSection{
+					Tools: map[string]ToolPermission{
+						"manage-entities": {
+							Allowed: true,
+							EntityPermissions: map[string]EntityOperation{
+								"alert": {
+									Create: true,
+								},
+							},
+						},
+					},
+				},
+			},
+			entityType: "case",
+			operation:  "create",
+			want:       false,
+		},
+		{
+			name: "no entity permissions configured - allow all (backward compatibility)",
+			config: &Config{
+				Version: "1.0",
+				Permissions: PermissionsSection{
+					Tools: map[string]ToolPermission{
+						"manage-entities": {
+							Allowed: true,
+						},
+					},
+				},
+			},
+			entityType: "alert",
+			operation:  "create",
+			want:       true,
+		},
+		{
+			name: "tool not allowed",
+			config: &Config{
+				Version: "1.0",
+				Permissions: PermissionsSection{
+					Tools: map[string]ToolPermission{
+						"manage-entities": {
+							Allowed: false,
+						},
+					},
+				},
+			},
+			entityType: "alert",
+			operation:  "create",
+			want:       false,
+		},
+		{
+			name: "comment operation allowed",
+			config: &Config{
+				Version: "1.0",
+				Permissions: PermissionsSection{
+					Tools: map[string]ToolPermission{
+						"manage-entities": {
+							Allowed: true,
+							EntityPermissions: map[string]EntityOperation{
+								"case": {
+									Create:  false,
+									Update:  false,
+									Delete:  false,
+									Comment: true,
+								},
+							},
+						},
+					},
+				},
+			},
+			entityType: "case",
+			operation:  "comment",
+			want:       true,
+		},
+		{
+			name: "invalid operation",
+			config: &Config{
+				Version: "1.0",
+				Permissions: PermissionsSection{
+					Tools: map[string]ToolPermission{
+						"manage-entities": {
+							Allowed: true,
+							EntityPermissions: map[string]EntityOperation{
+								"alert": {
+									Create:  true,
+									Update:  true,
+									Delete:  true,
+									Comment: true,
+								},
+							},
+						},
+					},
+				},
+			},
+			entityType: "alert",
+			operation:  "invalid",
+			want:       false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.config.IsEntityOperationAllowed(tt.entityType, tt.operation)
+			if got != tt.want {
+				t.Errorf("IsEntityOperationAllowed() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

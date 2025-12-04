@@ -14,12 +14,31 @@ permissions:
         _operator: "_ne"
         _value: "Deleted"
 
-    # Allow entity management with some restrictions
+    # Allow entity management with granular permissions per entity type
     manage-entities:
       allowed: true
-      # Note: Filters for manage-entities would require entity lookups
-      # which adds complexity. For simplicity, allow all operations
-      # and rely on TheHive's built-in permissions
+      # Granular permissions per entity type and operation
+      entity_permissions:
+        alert:
+          create: true
+          update: true
+          delete: false  # Analysts cannot delete alerts
+          comment: true
+        case:
+          create: true
+          update: true
+          delete: false  # Analysts cannot delete cases
+          comment: true
+        task:
+          create: true
+          update: true
+          delete: false
+          comment: true
+        observable:
+          create: true
+          update: true
+          delete: false
+          comment: true
 
     # Allow running specific analyzers and responders
     execute-automation:
