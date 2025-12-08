@@ -13,18 +13,33 @@ import (
 )
 
 func (t *ManageTool) Handle(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Extract and validate parameters
+	// 1. Check permissions
+	perms, err := utils.GetPermissionsFromContext(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to get permissions: %v", err)), nil
+	}
+
+	if !perms.IsToolAllowed("manage-entities") {
+		return mcp.NewToolResultError("manage-entities tool is not permitted by your permissions configuration"), nil
+	}
+
+	// 2. Extract and validate parameters
 	params, err := t.extractParams(req)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	// Validate operation constraints
+	// 3. Check entity operation permissions
+	if !perms.IsEntityOperationAllowed(params.EntityType, params.Operation) {
+		return mcp.NewToolResultError(fmt.Sprintf("operation '%s' on entity type '%s' is not permitted by your permissions configuration", params.Operation, params.EntityType)), nil
+	}
+
+	// 4. Validate operation constraints
 	if err := t.validateOperation(params); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	// Execute operation
+	// 5. Execute operation
 	switch params.Operation {
 	case "create":
 		return t.handleCreate(ctx, params)

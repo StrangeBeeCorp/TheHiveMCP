@@ -19,6 +19,8 @@ type TheHiveMcpDefaultOptions struct {
 	TheHivePassword string
 	// TheHiveOrganisation is the organisation for TheHive (optional)
 	TheHiveOrganisation string
+	// PermissionsConfigPath is the path to the permissions configuration file (optional, defaults to embedded read-only config)
+	PermissionsConfigPath string
 	// MCPServerEndpointPath is the endpoint path for the MCP server (default: /mcp)
 	MCPServerEndpointPath string
 	// MCPHeartbeatInterval is the heartbeat interval for the MCP server (default: 30s)
@@ -66,6 +68,7 @@ func NewTheHiveMcpDefaultOptions() (*TheHiveMcpDefaultOptions, error) {
 	var theHiveUsername string
 	var theHivePassword string
 	var theHiveOrganisation string
+	var permissionsConfigPath string
 	var mcpEndpointPath string
 	var mcpHeartbeatInterval string
 	var logLevel string
@@ -81,6 +84,7 @@ func NewTheHiveMcpDefaultOptions() (*TheHiveMcpDefaultOptions, error) {
 	flag.StringVar(&theHiveUsername, string(FlagVarTheHiveUsername), defaultToEnv(EnvKeyTheHiveUsername, ""), "TheHive username for basic auth (overrides env var THEHIVE_USERNAME)")
 	flag.StringVar(&theHivePassword, string(FlagVarTheHivePassword), defaultToEnv(EnvKeyTheHivePassword, ""), "TheHive password for basic auth (overrides env var THEHIVE_PASSWORD)")
 	flag.StringVar(&theHiveOrganisation, string(FlagVarTheHiveOrganisation), defaultToEnv(EnvKeyTheHiveOrganisation, ""), "TheHive organisation (overrides env var THEHIVE_ORGANISATION)")
+	flag.StringVar(&permissionsConfigPath, string(FlagVarPermissionsConfig), defaultToEnv(EnvKeyPermissionsConfig, ""), "Path to permissions config file (overrides env var PERMISSIONS_CONFIG, defaults to read-only)")
 	flag.StringVar(&mcpEndpointPath, string(FlagVarMCPServerEndpointPath), defaultToEnv(EnvKeyMCPServerEndpoint, "/mcp"), "MCP server endpoint path (overrides env var HIVEMIND_MCP_ENDPOINT_PATH)")
 	flag.StringVar(&mcpHeartbeatInterval, string(FlagVarMCPHeartbeatInterval), defaultToEnv(EnvKeyMCPHeartbeatInterval, "30s"), "MCP server heartbeat interval (overrides env var HIVEMIND_MCP_HEARTBEAT_INTERVAL)")
 	flag.StringVar(&logLevel, string(FlagVarLogLevel), defaultToEnv(EnvKeyLogLevel, "info"), "Logging level (overrides env var LOG_LEVEL)")
@@ -111,6 +115,7 @@ func NewTheHiveMcpDefaultOptions() (*TheHiveMcpDefaultOptions, error) {
 		TheHiveUsername:       theHiveUsername,
 		TheHivePassword:       theHivePassword,
 		TheHiveOrganisation:   theHiveOrganisation,
+		PermissionsConfigPath: permissionsConfigPath,
 		MCPServerEndpointPath: mcpEndpointPath,
 		MCPHeartbeatInterval:  mcpHeartbeatInterval,
 		TransportType:         transport,

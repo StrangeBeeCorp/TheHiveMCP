@@ -11,18 +11,40 @@ import (
 )
 
 func (t *ExecuteAutomationTool) Handle(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Extract and validate parameters
+	// 1. Check permissions
+	perms, err := utils.GetPermissionsFromContext(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to get permissions: %v", err)), nil
+	}
+
+	if !perms.IsToolAllowed("execute-automation") {
+		return mcp.NewToolResultError("execute-automation tool is not permitted by your permissions configuration"), nil
+	}
+
+	// 2. Extract and validate parameters
 	params, err := t.extractParams(req)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	// Validate operation constraints
+	// 3. Check analyzer/responder specific permissions
+	switch params.Operation {
+	case "run-analyzer":
+		if !perms.IsAnalyzerAllowed(params.AnalyzerID) {
+			return mcp.NewToolResultError(fmt.Sprintf("analyzer '%s' is not permitted by your permissions configuration", params.AnalyzerID)), nil
+		}
+	case "run-responder":
+		if !perms.IsResponderAllowed(params.ResponderID) {
+			return mcp.NewToolResultError(fmt.Sprintf("responder '%s' is not permitted by your permissions configuration", params.ResponderID)), nil
+		}
+	}
+
+	// 4. Validate operation constraints
 	if err := t.validateOperation(params); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	// Execute operation
+	// 5. Execute operation
 	switch params.Operation {
 	case "run-analyzer":
 		return t.handleRunAnalyzer(ctx, params)

@@ -33,7 +33,7 @@ func main() {
 
 	switch options.TransportType {
 	case "stdio":
-		if err := bootstrap.StartStdioServer(mcpServer); err != nil {
+		if err := bootstrap.StartStdioServer(mcpServer, options); err != nil {
 			slog.Error("Failed to start STDIO server", "error", err)
 			os.Exit(1)
 		}

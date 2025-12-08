@@ -1,0 +1,30 @@
+# Administrator Permissions Configuration
+# This configuration provides full access to all TheHive operations
+
+version: "1.0"
+permissions:
+  tools:
+    # Allow all tools without restrictions
+    search-entities:
+      allowed: true
+
+    manage-entities:
+      allowed: true
+
+    execute-automation:
+      allowed: true
+
+    get-resource:
+      allowed: true
+
+  # Allow all analyzers
+  analyzers:
+    mode: "allow_list"
+    allowed:
+      - "*"  # Wildcard allows all analyzers
+
+  # Allow all responders
+  responders:
+    mode: "allow_list"
+    allowed:
+      - "*"  # Wildcard allows all responders

@@ -15,6 +15,18 @@ export OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 export OPENAI_BASE_URL="${OPENAI_BASE_URL:-https://openrouter.ai/api/v1}"
 export OPENAI_MODEL="${OPENAI_MODEL:-anthropic/claude-haiku-4.5}"
 
+# Set default for permissions config
+export PERMISSIONS_CONFIG="${PERMISSIONS_CONFIG:-}"
+
+# Check if permissions config is a file before changing directories
+PERMISSIONS_IS_FILE=false
+if [ -n "$PERMISSIONS_CONFIG" ] && [ "$PERMISSIONS_CONFIG" != "admin" ] && [ "$PERMISSIONS_CONFIG" != "read_only" ]; then
+    # Check if file exists (handling both absolute and relative paths)
+    if [ -f "$PERMISSIONS_CONFIG" ]; then
+        PERMISSIONS_IS_FILE=true
+    fi
+fi
+
 # Create extension directory structure
 mkdir -p extension/server
 cd extension
@@ -24,6 +36,27 @@ if [ "$CI_MODE" = "true" ]; then
     cp /usr/local/share/icon.png icon.png
 else
     cp ../docs/images/theHivelogo.png icon.png
+fi
+
+# Copy permissions config if it's a file path and bundle it
+PERMISSIONS_DEFAULT=""
+if [ "$PERMISSIONS_IS_FILE" = true ]; then
+    # File exists, copy it to the bundle
+    if [ "$CI_MODE" = "true" ]; then
+        cp "$PERMISSIONS_CONFIG" permissions.yaml
+    else
+        # Try relative path from project root first, then absolute/current path
+        if ! cp ../"$PERMISSIONS_CONFIG" permissions.yaml 2>/dev/null && ! cp "$PERMISSIONS_CONFIG" permissions.yaml 2>/dev/null; then
+            echo "Error: Failed to copy permissions config from '$PERMISSIONS_CONFIG'" >&2
+            echo "Tried paths: ../$PERMISSIONS_CONFIG and $PERMISSIONS_CONFIG" >&2
+            exit 1
+        fi
+    fi
+    PERMISSIONS_DEFAULT="permissions.yaml"
+    echo "Bundled permissions config: $PERMISSIONS_CONFIG -> permissions.yaml"
+elif [ -n "$PERMISSIONS_CONFIG" ]; then
+    # Not a file (empty string, admin, read_only, etc), use as-is
+    PERMISSIONS_DEFAULT="$PERMISSIONS_CONFIG"
 fi
 
 # Handle binary selection - in CI we'll build for all platforms
@@ -85,6 +118,7 @@ cat > manifest.json << EOF
         "THEHIVE_URL": "\${user_config.thehive_url}",
         "THEHIVE_API_KEY": "\${user_config.thehive_api_key}",
         "THEHIVE_ORGANISATION": "\${user_config.organisation}",
+        "PERMISSIONS_CONFIG": "\${user_config.permissions_config}",
         "OPENAI_API_KEY": "\${user_config.openai_api_key}",
         "OPENAI_BASE_URL": "\${user_config.openai_base_url}",
         "OPENAI_MODEL": "\${user_config.openai_model}"
@@ -110,6 +144,13 @@ cat > manifest.json << EOF
       "description": "TheHive organisation name",
       "type": "string",
       "required": true
+    },
+    "permissions_config": {
+      "title": "Permissions Config",
+      "description": "Path to permissions YAML config file (leave empty for read-only default, or use bundled relative path)",
+      "type": "string",
+      "required": false,
+      "default": "$PERMISSIONS_DEFAULT"
     },
     "openai_api_key": {
       "title": "OpenAI API Key",

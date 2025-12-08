@@ -133,6 +133,23 @@ func GetAvailableAnalyzers(ctx context.Context, _ mcp.ReadResourceRequest) ([]mc
 		return nil, fmt.Errorf("failed to find analyzers: %w. Check that Cortex integration is enabled and you have permissions to list analyzers. API response: %v", err, resp)
 	}
 
+	// Filter analyzers based on permissions
+	perms, err := utils.GetPermissionsFromContext(ctx)
+	if err == nil {
+		filteredAnalyzers := []thehive.OutputWorker{}
+		for _, analyzer := range analyzers {
+			// Check both ID and name for permission matching
+			analyzerID := analyzer.GetId()
+			analyzerName := analyzer.GetName()
+
+			// Try ID first, then name
+			if perms.IsAnalyzerAllowed(analyzerID) || perms.IsAnalyzerAllowed(analyzerName) {
+				filteredAnalyzers = append(filteredAnalyzers, analyzer)
+			}
+		}
+		analyzers = filteredAnalyzers
+	}
+
 	analyzersJSON, err := json.MarshalIndent(analyzers, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal analyzers: %w", err)
@@ -171,6 +188,23 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to find responders for %s %s: %w. Check that Cortex integration is enabled and you have permissions to list responders. API response: %v", entityType, entityID, err, resp)
+	}
+
+	// Filter responders based on permissions
+	perms, err := utils.GetPermissionsFromContext(ctx)
+	if err == nil {
+		filteredResponders := []thehive.OutputWorker{}
+		for _, responder := range responders {
+			// Check both ID and name for permission matching
+			responderID := responder.GetId()
+			responderName := responder.GetName()
+
+			// Try ID first, then name
+			if perms.IsResponderAllowed(responderID) || perms.IsResponderAllowed(responderName) {
+				filteredResponders = append(filteredResponders, responder)
+			}
+		}
+		responders = filteredResponders
 	}
 
 	respondersJSON, err := json.MarshalIndent(responders, "", "  ")
@@ -291,6 +325,26 @@ func GetAvailableCustomFields(ctx context.Context, _ mcp.ReadResourceRequest) ([
 	}, nil
 }
 
+func GetCurrentPermissions(ctx context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	permissions, err := utils.GetPermissionsFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get permissions from context: %w", err)
+	}
+
+	permissionsJSON, err := json.MarshalIndent(permissions, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal permissions: %w", err)
+	}
+
+	return []mcp.ResourceContents{
+		mcp.TextResourceContents{
+			URI:      "hive://config/permissions",
+			MIMEType: "application/json",
+			Text:     string(permissionsJSON),
+		},
+	}, nil
+}
+
 func RegisterDynamicResources(registry *ResourceRegistry) {
 	// Register available users
 	availableUsers := mcp.NewResource(
@@ -363,4 +417,13 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 		mcp.WithMIMEType("application/json"),
 	)
 	registry.Register(availableCustomFields, GetAvailableCustomFields)
+
+	// Register current permissions
+	currentPermissions := mcp.NewResource(
+		"hive://config/permissions",
+		"Current Permissions",
+		mcp.WithResourceDescription("Currently active permissions configuration for this session"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(currentPermissions, GetCurrentPermissions)
 }
