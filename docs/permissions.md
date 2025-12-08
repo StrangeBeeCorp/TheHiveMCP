@@ -40,12 +40,6 @@ permissions:
       allowed: false
     execute-automation:
       allowed: true
-      analyzer_restrictions:  # Optional: tool-specific restrictions
-        mode: "allow_list"
-        allowed: ["VirusTotal_3_0", "Shodan_Host"]
-      responder_restrictions:
-        mode: "block_list"
-        blocked: ["DeleteCase_1_0"]
     get-resource:
       allowed: true
 
@@ -140,17 +134,6 @@ responders:
   blocked: ["DeleteCase_1_0"]
 ```
 
-### Tool-Specific Restrictions
-Override global settings per tool:
-
-```yaml
-tools:
-  execute-automation:
-    analyzer_restrictions:
-      mode: "allow_list"
-      allowed: ["VirusTotal_3_0"]  # Overrides global
-```
-
 ## Example Configurations
 
 ### Read-Only (Default)
@@ -219,12 +202,6 @@ permissions:
           comment: true
     execute-automation:
       allowed: true
-      analyzer_restrictions:
-        mode: "allow_list"
-        allowed: ["VirusTotal_3_0", "Shodan_Host", "MISP_2_0"]
-      responder_restrictions:
-        mode: "block_list"
-        blocked: ["DeleteCase_1_0"]
     get-resource:
       allowed: true
   analyzers:
@@ -232,7 +209,7 @@ permissions:
     allowed: ["VirusTotal_3_0", "Shodan_Host", "MISP_2_0"]
   responders:
     mode: "block_list"
-    blocked: ["DeleteCase_1_0"]
+    blocked: ["DeleteCase_1_0", "PurgeAlert_1_0"]
 ```
 
 See: [analyst.yaml](examples/permissions/analyst.yaml)

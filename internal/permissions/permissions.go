@@ -32,11 +32,9 @@ type PermissionsSection struct {
 
 // ToolPermission defines access and filtering for a specific tool
 type ToolPermission struct {
-	Allowed               bool                       `yaml:"allowed"`
-	Filters               map[string]interface{}     `yaml:"filters,omitempty"`
-	AnalyzerRestrictions  *AutomationRestrictions    `yaml:"analyzer_restrictions,omitempty"`
-	ResponderRestrictions *AutomationRestrictions    `yaml:"responder_restrictions,omitempty"`
-	EntityPermissions     map[string]EntityOperation `yaml:"entity_permissions,omitempty"` // For manage-entities tool
+	Allowed           bool                       `yaml:"allowed"`
+	Filters           map[string]interface{}     `yaml:"filters,omitempty"`
+	EntityPermissions map[string]EntityOperation `yaml:"entity_permissions,omitempty"` // For manage-entities tool
 }
 
 // EntityOperation defines which operations are allowed for an entity type
@@ -49,13 +47,6 @@ type EntityOperation struct {
 
 // AutomationPermissions defines analyzer or responder access
 type AutomationPermissions struct {
-	Mode    string   `yaml:"mode"` // "allow_list" or "block_list"
-	Allowed []string `yaml:"allowed"`
-	Blocked []string `yaml:"blocked"`
-}
-
-// AutomationRestrictions defines per-tool automation restrictions
-type AutomationRestrictions struct {
 	Mode    string   `yaml:"mode"` // "allow_list" or "block_list"
 	Allowed []string `yaml:"allowed"`
 	Blocked []string `yaml:"blocked"`
@@ -124,49 +115,31 @@ func (c *Config) GetToolFilters(toolName string) map[string]interface{} {
 	return perm.Filters
 }
 
-// IsAnalyzerAllowed checks if an analyzer is permitted based on global or tool-specific rules
-func (c *Config) IsAnalyzerAllowed(analyzerName string, toolName string) bool {
+// IsAnalyzerAllowed checks if an analyzer is permitted based on global rules
+func (c *Config) IsAnalyzerAllowed(analyzerName string) bool {
 	if c == nil {
 		return false
 	}
-
-	// Check tool-specific restrictions first
-	if toolName != "" && c.Permissions.Tools != nil {
-		if perm, exists := c.Permissions.Tools[toolName]; exists && perm.AnalyzerRestrictions != nil {
-			return isAutomationAllowed(analyzerName, perm.AnalyzerRestrictions.Mode, perm.AnalyzerRestrictions.Allowed, perm.AnalyzerRestrictions.Blocked)
-		}
-	}
-
-	// Fall back to global analyzer permissions
 	return isAutomationAllowed(analyzerName, c.Permissions.Analyzers.Mode, c.Permissions.Analyzers.Allowed, c.Permissions.Analyzers.Blocked)
 }
 
-// IsResponderAllowed checks if a responder is permitted based on global or tool-specific rules
-func (c *Config) IsResponderAllowed(responderName string, toolName string) bool {
+// IsResponderAllowed checks if a responder is permitted based on global rules
+func (c *Config) IsResponderAllowed(responderName string) bool {
 	if c == nil {
 		return false
 	}
-
-	// Check tool-specific restrictions first
-	if toolName != "" && c.Permissions.Tools != nil {
-		if perm, exists := c.Permissions.Tools[toolName]; exists && perm.ResponderRestrictions != nil {
-			return isAutomationAllowed(responderName, perm.ResponderRestrictions.Mode, perm.ResponderRestrictions.Allowed, perm.ResponderRestrictions.Blocked)
-		}
-	}
-
-	// Fall back to global responder permissions
 	return isAutomationAllowed(responderName, c.Permissions.Responders.Mode, c.Permissions.Responders.Allowed, c.Permissions.Responders.Blocked)
 }
 
 // GetAllowedAnalyzers returns list of allowed analyzer names
-func (c *Config) GetAllowedAnalyzers(allAnalyzers []string, toolName string) []string {
+func (c *Config) GetAllowedAnalyzers(allAnalyzers []string) []string {
 	if c == nil {
 		return []string{}
 	}
 
 	var allowed []string
 	for _, analyzer := range allAnalyzers {
-		if c.IsAnalyzerAllowed(analyzer, toolName) {
+		if c.IsAnalyzerAllowed(analyzer) {
 			allowed = append(allowed, analyzer)
 		}
 	}
@@ -174,14 +147,14 @@ func (c *Config) GetAllowedAnalyzers(allAnalyzers []string, toolName string) []s
 }
 
 // GetAllowedResponders returns list of allowed responder names
-func (c *Config) GetAllowedResponders(allResponders []string, toolName string) []string {
+func (c *Config) GetAllowedResponders(allResponders []string) []string {
 	if c == nil {
 		return []string{}
 	}
 
 	var allowed []string
 	for _, responder := range allResponders {
-		if c.IsResponderAllowed(responder, toolName) {
+		if c.IsResponderAllowed(responder) {
 			allowed = append(allowed, responder)
 		}
 	}

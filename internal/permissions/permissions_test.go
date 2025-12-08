@@ -57,7 +57,7 @@ func TestIsAnalyzerAllowed_AllowList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := config.IsAnalyzerAllowed(tt.analyzerName, ""); got != tt.want {
+			if got := config.IsAnalyzerAllowed(tt.analyzerName); got != tt.want {
 				t.Errorf("IsAnalyzerAllowed(%q) = %v, want %v", tt.analyzerName, got, tt.want)
 			}
 		})
@@ -85,7 +85,7 @@ func TestIsAnalyzerAllowed_BlockList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := config.IsAnalyzerAllowed(tt.analyzerName, ""); got != tt.want {
+			if got := config.IsAnalyzerAllowed(tt.analyzerName); got != tt.want {
 				t.Errorf("IsAnalyzerAllowed(%q) = %v, want %v", tt.analyzerName, got, tt.want)
 			}
 		})
@@ -102,42 +102,8 @@ func TestIsAnalyzerAllowed_Wildcard(t *testing.T) {
 		},
 	}
 
-	if !config.IsAnalyzerAllowed("AnyAnalyzer", "") {
+	if !config.IsAnalyzerAllowed("AnyAnalyzer") {
 		t.Error("Wildcard should allow any analyzer")
-	}
-}
-
-func TestIsAnalyzerAllowed_ToolSpecific(t *testing.T) {
-	config := &Config{
-		Permissions: PermissionsSection{
-			Tools: map[string]ToolPermission{
-				"execute-automation": {
-					Allowed: true,
-					AnalyzerRestrictions: &AutomationRestrictions{
-						Mode:    "allow_list",
-						Allowed: []string{"ToolSpecificAnalyzer"},
-					},
-				},
-			},
-			Analyzers: AutomationPermissions{
-				Mode:    "allow_list",
-				Allowed: []string{"GlobalAnalyzer"},
-			},
-		},
-	}
-
-	// Tool-specific should override global
-	if !config.IsAnalyzerAllowed("ToolSpecificAnalyzer", "execute-automation") {
-		t.Error("Tool-specific analyzer should be allowed")
-	}
-
-	if config.IsAnalyzerAllowed("GlobalAnalyzer", "execute-automation") {
-		t.Error("Global analyzer should not be allowed when tool-specific is defined")
-	}
-
-	// Without tool name, use global
-	if !config.IsAnalyzerAllowed("GlobalAnalyzer", "") {
-		t.Error("Global analyzer should be allowed without tool name")
 	}
 }
 
@@ -162,7 +128,7 @@ func TestIsResponderAllowed_AllowList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := config.IsResponderAllowed(tt.responderName, ""); got != tt.want {
+			if got := config.IsResponderAllowed(tt.responderName); got != tt.want {
 				t.Errorf("IsResponderAllowed(%q) = %v, want %v", tt.responderName, got, tt.want)
 			}
 		})
@@ -180,7 +146,7 @@ func TestGetAllowedAnalyzers(t *testing.T) {
 	}
 
 	allAnalyzers := []string{"Analyzer1", "Analyzer2", "Analyzer3", "Analyzer4"}
-	allowed := config.GetAllowedAnalyzers(allAnalyzers, "")
+	allowed := config.GetAllowedAnalyzers(allAnalyzers)
 
 	if len(allowed) != 2 {
 		t.Errorf("Expected 2 allowed analyzers, got %d", len(allowed))
@@ -205,7 +171,7 @@ func TestGetAllowedResponders(t *testing.T) {
 	}
 
 	allResponders := []string{"Responder1", "BadResponder", "Responder2"}
-	allowed := config.GetAllowedResponders(allResponders, "")
+	allowed := config.GetAllowedResponders(allResponders)
 
 	if len(allowed) != 2 {
 		t.Errorf("Expected 2 allowed responders, got %d", len(allowed))

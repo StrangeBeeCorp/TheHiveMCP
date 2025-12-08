@@ -42,8 +42,13 @@ func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		// 4. Apply permission filters
 		permFilters := perms.GetToolFilters("search-entities")
 		if len(permFilters) > 0 {
-			filters.RawFilters, _ = permissions.MergeFilters(filters.RawFilters, permFilters)
-			slog.Info("Applied permission filters to search query", "entityType", params.EntityType)
+			rawFilters, filtersApplied := permissions.MergeFilters(filters.RawFilters, permFilters)
+			if filtersApplied {
+				slog.Info("Merged permission filters into search filters", "entityType", params.EntityType)
+			} else {
+				slog.Info("No permission filters applied to search filters", "entityType", params.EntityType)
+			}
+			filters.RawFilters = rawFilters
 		}
 
 		// 5. Build TheHive query

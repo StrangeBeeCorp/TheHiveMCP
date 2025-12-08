@@ -44,29 +44,16 @@ permissions:
           delete: false
           comment: true
 
-    # Allow running specific analyzers and responders
+    # Allow running analyzers and responders
+    # Specific analyzers/responders are controlled via global settings below
     execute-automation:
       allowed: true
-      analyzer_restrictions:
-        mode: "allow_list"
-        allowed:
-          - "VirusTotal_3_0"
-          - "Shodan_Host"
-          - "MISP_2_0"
-          - "AbuseIPDB_1_0"
-          - "OTXQuery_2_0"
-      responder_restrictions:
-        mode: "block_list"
-        # Block destructive responders
-        blocked:
-          - "DeleteCase_1_0"
-          - "PurgeAlert_1_0"
 
     # Allow resource access
     get-resource:
       allowed: true
 
-  # Global analyzer permissions (as fallback)
+  # Global analyzer permissions
   analyzers:
     mode: "allow_list"
     allowed:
@@ -76,9 +63,10 @@ permissions:
       - "AbuseIPDB_1_0"
       - "OTXQuery_2_0"
 
-  # Global responder permissions (as fallback)
+  # Global responder permissions
   responders:
     mode: "block_list"
+    # Block destructive responders
     blocked:
       - "DeleteCase_1_0"
       - "PurgeAlert_1_0"

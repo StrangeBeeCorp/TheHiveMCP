@@ -45,7 +45,12 @@ if [ "$PERMISSIONS_IS_FILE" = true ]; then
     if [ "$CI_MODE" = "true" ]; then
         cp "$PERMISSIONS_CONFIG" permissions.yaml
     else
-        cp ../"$PERMISSIONS_CONFIG" permissions.yaml 2>/dev/null || cp "$PERMISSIONS_CONFIG" permissions.yaml
+        # Try relative path from project root first, then absolute/current path
+        if ! cp ../"$PERMISSIONS_CONFIG" permissions.yaml 2>/dev/null && ! cp "$PERMISSIONS_CONFIG" permissions.yaml 2>/dev/null; then
+            echo "Error: Failed to copy permissions config from '$PERMISSIONS_CONFIG'" >&2
+            echo "Tried paths: ../$PERMISSIONS_CONFIG and $PERMISSIONS_CONFIG" >&2
+            exit 1
+        fi
     fi
     PERMISSIONS_DEFAULT="permissions.yaml"
     echo "Bundled permissions config: $PERMISSIONS_CONFIG -> permissions.yaml"

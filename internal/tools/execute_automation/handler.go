@@ -30,11 +30,11 @@ func (t *ExecuteAutomationTool) Handle(ctx context.Context, req mcp.CallToolRequ
 	// 3. Check analyzer/responder specific permissions
 	switch params.Operation {
 	case "run-analyzer":
-		if !perms.IsAnalyzerAllowed(params.AnalyzerID, "execute-automation") {
+		if !perms.IsAnalyzerAllowed(params.AnalyzerID) {
 			return mcp.NewToolResultError(fmt.Sprintf("analyzer '%s' is not permitted by your permissions configuration", params.AnalyzerID)), nil
 		}
 	case "run-responder":
-		if !perms.IsResponderAllowed(params.ResponderID, "execute-automation") {
+		if !perms.IsResponderAllowed(params.ResponderID) {
 			return mcp.NewToolResultError(fmt.Sprintf("responder '%s' is not permitted by your permissions configuration", params.ResponderID)), nil
 		}
 	}

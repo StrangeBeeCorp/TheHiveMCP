@@ -143,7 +143,7 @@ func GetAvailableAnalyzers(ctx context.Context, _ mcp.ReadResourceRequest) ([]mc
 			analyzerName := analyzer.GetName()
 
 			// Try ID first, then name
-			if perms.IsAnalyzerAllowed(analyzerID, "") || perms.IsAnalyzerAllowed(analyzerName, "") {
+			if perms.IsAnalyzerAllowed(analyzerID) || perms.IsAnalyzerAllowed(analyzerName) {
 				filteredAnalyzers = append(filteredAnalyzers, analyzer)
 			}
 		}
@@ -200,7 +200,7 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 			responderName := responder.GetName()
 
 			// Try ID first, then name
-			if perms.IsResponderAllowed(responderID, "") || perms.IsResponderAllowed(responderName, "") {
+			if perms.IsResponderAllowed(responderID) || perms.IsResponderAllowed(responderName) {
 				filteredResponders = append(filteredResponders, responder)
 			}
 		}
