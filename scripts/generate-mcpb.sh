@@ -20,7 +20,7 @@ export PERMISSIONS_CONFIG="${PERMISSIONS_CONFIG:-}"
 
 # Check if permissions config is a file before changing directories
 PERMISSIONS_IS_FILE=false
-if [ -n "$PERMISSIONS_CONFIG" ] && [ "$PERMISSIONS_CONFIG" != "TESTING_ADMIN" ]; then
+if [ -n "$PERMISSIONS_CONFIG" ] && [ "$PERMISSIONS_CONFIG" != "admin" ] && [ "$PERMISSIONS_CONFIG" != "read_only" ]; then
     # Check if file exists (handling both absolute and relative paths)
     if [ -f "$PERMISSIONS_CONFIG" ]; then
         PERMISSIONS_IS_FILE=true
@@ -55,7 +55,7 @@ if [ "$PERMISSIONS_IS_FILE" = true ]; then
     PERMISSIONS_DEFAULT="permissions.yaml"
     echo "Bundled permissions config: $PERMISSIONS_CONFIG -> permissions.yaml"
 elif [ -n "$PERMISSIONS_CONFIG" ]; then
-    # Not a file (empty string, TESTING_ADMIN, etc), use as-is
+    # Not a file (empty string, admin, read_only, etc), use as-is
     PERMISSIONS_DEFAULT="$PERMISSIONS_CONFIG"
 fi
 

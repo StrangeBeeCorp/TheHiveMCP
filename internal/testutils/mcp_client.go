@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/bootstrap"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -65,15 +66,15 @@ func GetMCPTestClient(
 	samplingHandlerCreateMessage func(ctx context.Context, request mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error),
 	elicitationHandlerElicit func(ctx context.Context, request mcp.ElicitationRequest) (*mcp.ElicitationResult, error),
 ) *client.Client {
-	return GetMCPTestClientWithPermissions(t, samplingHandlerCreateMessage, elicitationHandlerElicit, "TESTING_ADMIN")
+	return GetMCPTestClientWithPermissions(t, samplingHandlerCreateMessage, elicitationHandlerElicit, string(types.PermissionConfigAdmin))
 }
 
 // GetMCPTestClientWithPermissions creates a test client with specific permissions configuration
 // permissionsConfigPath can be:
-// - "TESTING_ADMIN" for admin permissions
-// - "docs/examples/permissions/analyst.yaml" for analyst permissions
-// - "docs/examples/permissions/read-only.yaml" for read-only permissions
-// - "" for default read-only permissions
+// - types.PermissionConfigAdmin for admin permissions
+// - types.PermissionConfigReadOnly for read-only permissions
+// - "docs/examples/permissions/analyst.yaml" for analyst permissions (file path)
+// - "" for default read-only permissions (empty string)
 func GetMCPTestClientWithPermissions(
 	t *testing.T,
 	samplingHandlerCreateMessage func(ctx context.Context, request mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error),

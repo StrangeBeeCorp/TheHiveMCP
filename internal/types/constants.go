@@ -53,5 +53,10 @@ type HeaderKey string
 const HeaderKeyTheHiveAPIKey HeaderKey = "X-TheHive-Api-Key"
 const HeaderKeyTheHiveOrganisation HeaderKey = "X-TheHive-Org"
 
+type PermissionConfig string
+
+const PermissionConfigReadOnly PermissionConfig = "read_only"
+const PermissionConfigAdmin PermissionConfig = "admin"
+
 const DefaultMaxCompletionTime = time.Duration(60 * 1000 * 1000 * 1000) // 60 seconds
 const DefaultMaxCompletionRetries = 3
