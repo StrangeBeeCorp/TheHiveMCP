@@ -110,53 +110,6 @@ func TestApplyFiltersToQuery(t *testing.T) {
 	}
 }
 
-func TestValidateFilter(t *testing.T) {
-	tests := []struct {
-		name    string
-		filter  map[string]interface{}
-		wantErr bool
-	}{
-		{
-			name:    "nil filter",
-			filter:  nil,
-			wantErr: false,
-		},
-		{
-			name:    "empty filter",
-			filter:  map[string]interface{}{},
-			wantErr: false,
-		},
-		{
-			name: "valid filter",
-			filter: map[string]interface{}{
-				"_field":    "status",
-				"_operator": "_eq",
-				"_value":    "Open",
-			},
-			wantErr: false,
-		},
-		{
-			name: "valid complex filter",
-			filter: map[string]interface{}{
-				"_and": []interface{}{
-					map[string]interface{}{"_field": "status", "_operator": "_eq", "_value": "Open"},
-					map[string]interface{}{"_field": "severity", "_operator": "_gte", "_value": 2},
-				},
-			},
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateFilter(tt.filter)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateFilter() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func TestNewPermissionInfo(t *testing.T) {
 	info := NewPermissionInfo()
 	if info.Applied {

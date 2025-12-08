@@ -8,11 +8,15 @@ permissions:
     # Allow searching with optional filters
     search-entities:
       allowed: true
-      # Example: Filter out deleted entities
+      # Restrict to TLP and PAP equal or below 2 (AMBER)
       filters:
-        _field: "status"
-        _operator: "_ne"
-        _value: "Deleted"
+        _and:
+          - _lte:
+              _field: "tlp"
+              _value: 2
+          - _lte:
+              _field: "pap"
+              _value: 2
 
     # Allow entity management with granular permissions per entity type
     manage-entities:

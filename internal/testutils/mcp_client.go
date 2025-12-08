@@ -65,6 +65,21 @@ func GetMCPTestClient(
 	samplingHandlerCreateMessage func(ctx context.Context, request mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error),
 	elicitationHandlerElicit func(ctx context.Context, request mcp.ElicitationRequest) (*mcp.ElicitationResult, error),
 ) *client.Client {
+	return GetMCPTestClientWithPermissions(t, samplingHandlerCreateMessage, elicitationHandlerElicit, "TESTING_ADMIN")
+}
+
+// GetMCPTestClientWithPermissions creates a test client with specific permissions configuration
+// permissionsConfigPath can be:
+// - "TESTING_ADMIN" for admin permissions
+// - "docs/examples/permissions/analyst.yaml" for analyst permissions
+// - "docs/examples/permissions/read-only.yaml" for read-only permissions
+// - "" for default read-only permissions
+func GetMCPTestClientWithPermissions(
+	t *testing.T,
+	samplingHandlerCreateMessage func(ctx context.Context, request mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error),
+	elicitationHandlerElicit func(ctx context.Context, request mcp.ElicitationRequest) (*mcp.ElicitationResult, error),
+	permissionsConfigPath string,
+) *client.Client {
 	t.Helper()
 
 	// Get the actual container URL to use for MCP server
@@ -81,8 +96,7 @@ func GetMCPTestClient(
 		Password:     options.TheHivePassword,
 		Organisation: options.TheHiveOrganisation,
 	}
-	// Use admin permissions for testing to avoid permission denied errors
-	mcpServer := bootstrap.GetInprocessServer(creds, "TESTING_ADMIN")
+	mcpServer := bootstrap.GetInprocessServer(creds, permissionsConfigPath)
 	bootstrap.RegisterToolsToMCPServer(mcpServer)
 
 	// Create wrappers that implement server.SamplingHandler and server.ElicitationHandler

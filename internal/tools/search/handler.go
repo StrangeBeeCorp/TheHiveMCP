@@ -175,11 +175,33 @@ func (t *SearchTool) buildHiveQuery(params *searchParams, filters *FilterResult)
 	// Build operations
 	listOp := t.buildListOperation(params.EntityType)
 	filterOp := t.buildFilterOperation(filters.RawFilters)
-	sortOp := t.buildSortOperation(filters.SortBy, filters.SortOrder)
-	pageOp := t.buildPagingOperation(filters.NumResults, filters.ExtraData)
+
+	// Use filter sort values if provided, otherwise fall back to params defaults
+	sortBy := filters.SortBy
+	if sortBy == "" {
+		sortBy = params.SortBy
+	}
+	sortOrder := filters.SortOrder
+	if sortOrder == "" {
+		sortOrder = params.SortOrder
+	}
+	sortOp := t.buildSortOperation(sortBy, sortOrder)
+
+	// Use filter num results if provided, otherwise fall back to params limit
+	numResults := filters.NumResults
+	if numResults == 0 {
+		numResults = params.Limit
+	}
+	pageOp := t.buildPagingOperation(numResults, filters.ExtraData)
+
+	// Use filter kept columns if provided, otherwise fall back to params extra columns
+	keptColumns := filters.KeptColumns
+	if len(keptColumns) == 0 {
+		keptColumns = params.ExtraColumns
+	}
 
 	// Exclude unneeded fields
-	excludedFields := t.getExcludedFields(params.EntityType, filters.KeptColumns, filters.ExtraData)
+	excludedFields := t.getExcludedFields(params.EntityType, keptColumns, filters.ExtraData)
 
 	hiveQuery := thehive.InputQuery{
 		Query: []thehive.InputQueryNamedOperation{

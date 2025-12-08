@@ -196,7 +196,7 @@ func GetCatalogData() map[string]interface{} {
 			{
 				"name":        "config",
 				"description": "Current session and system configuration. Includes authenticated user info and server time.",
-				"resources":   []string{"current-user", "server-time"},
+				"resources":   []string{"current-user", "server-time", "permissions"},
 			},
 			{
 				"name":        "schema",

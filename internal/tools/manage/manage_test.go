@@ -403,3 +403,123 @@ func TestManageUpdateMultipleEntities(t *testing.T) {
 		require.Contains(t, updatedCase.Tags, "urgent")
 	}
 }
+
+// TestManageWithAnalystPermissions tests analyst permissions allow create/update/comment but deny delete
+func TestManageWithAnalystPermissions(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "../../../docs/examples/permissions/analyst.yaml")
+
+	// Test 1: Create alert should succeed with analyst permissions
+	alertData := map[string]interface{}{
+		"type":        "test-type",
+		"source":      "test-source",
+		"sourceRef":   "test-analyst-create-001",
+		"title":       "Analyst Test Alert",
+		"description": "Testing analyst permissions",
+		"severity":    2,
+		"tlp":         2,
+		"pap":         2,
+		"tags":        []string{"analyst-test"},
+	}
+
+	createRequest := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "create",
+				"entity-type": "alert",
+				"entity-data": alertData,
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), createRequest)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError, "Create should succeed with analyst permissions")
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	resultsAlert, ok := structuredData["result"].(map[string]any)
+	require.True(t, ok)
+	alertID := resultsAlert["_id"].(string)
+	require.NotEmpty(t, alertID)
+
+	// Test 2: Delete alert should fail with analyst permissions
+	deleteRequest := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "delete",
+				"entity-type": "alert",
+				"entity-ids":  []string{alertID},
+			},
+		},
+	}
+
+	result, err = mcpClient.CallTool(t.Context(), deleteRequest)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.IsError, "Delete should be denied with analyst permissions")
+	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
+
+	// Verify alert still exists
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	fetchedAlert, _, err := hiveClient.AlertAPI.GetAlert(authContext, alertID).Execute()
+	require.NoError(t, err)
+	require.Equal(t, alertID, fetchedAlert.UnderscoreId)
+}
+
+// TestManageWithReadOnlyPermissions tests read-only permissions deny all manage operations
+func TestManageWithReadOnlyPermissions(t *testing.T) {
+	testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "")
+
+	// Test 1: Create alert should fail with read-only permissions
+	alertData := map[string]interface{}{
+		"type":        "test-type",
+		"source":      "test-source",
+		"sourceRef":   "test-readonly-create-001",
+		"title":       "ReadOnly Test Alert",
+		"description": "Testing read-only permissions",
+		"severity":    2,
+		"tlp":         2,
+		"pap":         2,
+	}
+
+	createRequest := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "create",
+				"entity-type": "alert",
+				"entity-data": alertData,
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), createRequest)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.IsError, "Create should be denied with read-only permissions")
+	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
+
+	// Test 2: Comment should also fail with read-only permissions
+	commentRequest := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "comment",
+				"entity-type": "case",
+				"entity-ids":  []string{"~123"},
+				"comment":     "Test comment",
+			},
+		},
+	}
+
+	result, err = mcpClient.CallTool(t.Context(), commentRequest)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.IsError, "Comment should be denied with read-only permissions")
+	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
+}

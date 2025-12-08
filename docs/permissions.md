@@ -289,7 +289,7 @@ mcpServer := bootstrap.GetInprocessServer(creds, "/path/to/permissions.yaml")
 
 - **Default Deny**: All operations denied unless explicitly allowed
 - **No Runtime Changes**: Permissions loaded once at startup
-- **Filter Validation**: Filters validated and merged at query time
+- **Filter Merging**: Permission filters merged with user queries at query time
 - **Logged Operations**: Permission denials logged for auditing
 
 ## TheHive Filter Syntax

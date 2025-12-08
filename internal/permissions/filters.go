@@ -68,33 +68,6 @@ func ApplyFiltersToQuery(query map[string]interface{}, permFilters map[string]in
 	return resultQuery, true, nil
 }
 
-// ValidateFilter performs basic validation on a filter structure
-func ValidateFilter(filter map[string]interface{}) error {
-	if len(filter) == 0 {
-		return nil
-	}
-
-	// Check for valid TheHive filter operators
-	validOperators := map[string]bool{
-		"_and":   true,
-		"_or":    true,
-		"_not":   true,
-		"_field": true,
-	}
-
-	for key := range filter {
-		if key == "_field" || key == "_operator" || key == "_value" {
-			continue
-		}
-		if !validOperators[key] {
-			// Could be a custom field, which is valid
-			continue
-		}
-	}
-
-	return nil
-}
-
 // PermissionInfo describes how permissions affected a response
 type PermissionInfo struct {
 	Applied       bool     `json:"applied"`
