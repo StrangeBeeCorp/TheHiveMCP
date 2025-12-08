@@ -185,12 +185,38 @@ permissions:
   tools:
     search-entities:
       allowed: true
+      # Restrict to TLP and PAP equal or below 2 (AMBER)
       filters:
-        _field: "status"
-        _operator: "_ne"
-        _value: "Deleted"
+        _and:
+          - _lte:
+              _field: "tlp"
+              _value: 2
+          - _lte:
+              _field: "pap"
+              _value: 2
     manage-entities:
       allowed: true
+      entity_permissions:
+        alert:
+          create: true
+          update: true
+          delete: false  # Analysts cannot delete alerts
+          comment: true
+        case:
+          create: true
+          update: true
+          delete: false  # Analysts cannot delete cases
+          comment: true
+        task:
+          create: true
+          update: true
+          delete: false
+          comment: true
+        observable:
+          create: true
+          update: true
+          delete: false
+          comment: true
     execute-automation:
       allowed: true
       analyzer_restrictions:
@@ -261,6 +287,34 @@ Works uniformly across all modes:
 ```go
 mcpServer := bootstrap.GetInprocessServer(creds, "/path/to/permissions.yaml")
 ```
+
+**Docker:**
+```bash
+# Mount permissions config into container
+docker run -d \
+  -v /host/path/analyst.yaml:/app/permissions.yaml \
+  -e PERMISSIONS_CONFIG=/app/permissions.yaml \
+  -e THEHIVE_URL=https://thehive.example.com \
+  -e THEHIVE_API_KEY=your-api-key \
+  strangebee/thehive-mcp:latest
+```
+
+**MCPB (MCP Bundle):**
+
+When generating MCPB packages, permissions configs can be bundled directly:
+
+```bash
+# Bundle a permissions config with the MCPB
+export PERMISSIONS_CONFIG=docs/examples/permissions/analyst.yaml
+./scripts/generate-mcpb.sh
+```
+
+The permissions file will be:
+- Copied into the MCPB as `permissions.yaml`
+- Set as the default value in the user configuration
+- Users can override with their own path after installation
+
+Alternatively, users can specify a permissions path when configuring the MCPB in their MCP client.
 
 ## Best Practices
 

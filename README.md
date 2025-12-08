@@ -92,6 +92,7 @@ When prompted during installation, provide:
 - **TheHive URL**: Your TheHive instance URL (e.g., `https://thehive.company.com`)
 - **API Key**: Your TheHive API key for authentication
 - **Organisation**: Your TheHive organisation name
+- **Permissions Config**: (Optional) Path to permissions YAML file, defaults to read-only
 - **OpenAI API Key**: (Optional) For enhanced natural language processing
 
 #### Step 5: Test Your Setup
@@ -112,6 +113,16 @@ docker run -d \
   -e THEHIVE_API_KEY=your-api-key-here \
   -e MCP_BIND_HOST=0.0.0.0 \
   -e MCP_PORT=8082 \
+  strangebee/thehive-mcp:latest
+
+# With custom permissions:
+docker run -d \
+  --name thehive-mcp \
+  -p 8082:8082 \
+  -v /host/path/analyst.yaml:/app/permissions.yaml \
+  -e PERMISSIONS_CONFIG=/app/permissions.yaml \
+  -e THEHIVE_URL=https://your-thehive-instance.com \
+  -e THEHIVE_API_KEY=your-api-key-here \
   strangebee/thehive-mcp:latest
 ```
 
@@ -153,6 +164,8 @@ TheHiveMCP supports three configuration methods with the following priority (hig
 | Username | `THEHIVE_USERNAME` | `--thehive-username` | - | - | Username for basic auth |
 | Password | `THEHIVE_PASSWORD` | `--thehive-password` | - | - | Password for basic auth |
 | Organisation | `THEHIVE_ORGANISATION` | `--thehive-organisation` | `X-TheHive-Org` | - | TheHive organisation |
+| **Permissions** |
+| Permissions Config | `PERMISSIONS_CONFIG` | `--permissions-config` | - | (read-only) | Path to permissions YAML file |
 | **MCP Server** |
 | Transport Type | - | `--transport` | - | `http` | Transport mode: `http` or `stdio` |
 | Bind Address | `MCP_BIND_HOST` + `MCP_PORT` | `--addr` | - | - | HTTP server bind address (e.g., `0.0.0.0:8082`) |
@@ -173,6 +186,7 @@ TheHiveMCP supports three configuration methods with the following priority (hig
 THEHIVE_URL=https://thehive.example.com
 THEHIVE_API_KEY=your_api_key
 THEHIVE_ORGANISATION=your_organisation
+PERMISSIONS_CONFIG=docs/examples/permissions/analyst.yaml  # Optional, defaults to read-only
 MCP_BIND_HOST=0.0.0.0
 MCP_PORT=8082
 OPENAI_API_KEY=sk-your-key  # Optional, for fallback LLM
@@ -180,6 +194,8 @@ LOG_LEVEL=INFO
 ```
 
 **Multi-tenant:** Override authentication per-request using `Authorization` and `X-TheHive-Org` headers.
+
+**Permissions:** Control tool access and data filtering. See [docs/permissions.md](docs/permissions.md) for detailed configuration.
 
 </details>
 
@@ -214,11 +230,13 @@ import "github.com/StrangeBeeCorp/TheHiveMCP/bootstrap"
 // Use environment credentials
 mcpServer := bootstrap.GetMCPServerAndRegisterTools()
 
-// Or use custom credentials
+// Or use custom credentials with permissions
 creds := &bootstrap.TheHiveCredentials{
     URL: "https://thehive.example.com", APIKey: "key", Organisation: "org",
 }
-mcpServer := bootstrap.GetInprocessServer(creds)
+// Second parameter is permissions config path ("" = read-only default)
+mcpServer := bootstrap.GetInprocessServer(creds, "/path/to/permissions.yaml")
+bootstrap.RegisterToolsToMCPServer(mcpServer)
 ```
 
 **Note:** Only the `bootstrap` package is public API. Internal packages may change without notice.
