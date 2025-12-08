@@ -33,9 +33,9 @@ permissions:
     search-entities:
       allowed: true
       filters:  # Optional: restrict data access
-        _field: "status"
-        _operator: "_ne"
-        _value: "Deleted"
+        _ne:
+          _field: "status"
+          _value: "Deleted"
     manage-entities:
       allowed: false
     execute-automation:
@@ -76,12 +76,12 @@ tools:
   search-entities:
     allowed: true
     filters:
-      _field: "severity"
-      _operator: "_gte"
-      _value: 2
+      _gte:
+        _field: "severity"
+        _value: 2
 ```
 
-Uses TheHive's native filter syntax.
+Uses TheHive's native filter syntax where the operator (e.g., `_gte`, `_lte`, `_eq`) is the key, with `_field` and `_value` as properties.
 
 ### Granular Entity Permissions (manage-entities only)
 
@@ -359,10 +359,10 @@ Example:
 ```yaml
 filters:
   _and:
-    - _field: "severity"
-      _operator: "_gte"
-      _value: 2
-    - _field: "status"
-      _operator: "_in"
-      _value: ["Open", "InProgress"]
+    - _gte:
+        _field: "severity"
+        _value: 2
+    - _in:
+        _field: "status"
+        _value: ["Open", "InProgress"]
 ```

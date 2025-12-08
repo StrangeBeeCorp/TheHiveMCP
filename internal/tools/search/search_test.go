@@ -564,7 +564,19 @@ func TestSearchWithAnalystPermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Use analyst permissions client
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(`{"raw_filters": {"_any": ""}}`)
+	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
+		`{
+			"raw_filters": {
+				"_any": ""
+			},
+			"sort_by": "_createdAt",
+			"sort_order": "desc",
+			"num_results": 10,
+			"kept_columns": ["_id", "title"],
+			"extra_data": [],
+			"additional_queries": []
+		}`,
+	)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, samplingHandler, testutils.DummyElicitationAccept, "../../../docs/examples/permissions/analyst.yaml")
 
 	request := mcp.CallToolRequest{
@@ -614,7 +626,19 @@ func TestSearchWithReadOnlyPermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Use read-only permissions client (default permissions)
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(`{"raw_filters": {"_any": ""}}`)
+	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
+		`{
+			"raw_filters": {
+				"_any": ""
+			},
+			"sort_by": "_createdAt",
+			"sort_order": "desc",
+			"num_results": 10,
+			"kept_columns": ["_id", "title"],
+			"extra_data": [],
+			"additional_queries": []
+		}`,
+	)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, samplingHandler, testutils.DummyElicitationAccept, "")
 
 	// Test: Search should succeed with read-only permissions
