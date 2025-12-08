@@ -189,11 +189,23 @@ func SafeGetEnv(key, defaultValue string) string {
 }
 
 // LoadPermissions loads permissions configuration from file or uses default
+// Special values: "admin" for full permissions, "read_only" for default read-only permissions
+// Empty string defaults to read-only, otherwise loads from the specified file path
 func LoadPermissions(configPath string) (*permissions.Config, error) {
-	// Special handling for testing
-	if configPath == "TESTING_ADMIN" {
+	// Special handling for special config values
+	if configPath == string(types.PermissionConfigAdmin) {
 		slog.Info("Using admin permissions for testing")
 		config := permissions.LoadAdminForTesting()
+		return config, nil
+	}
+
+	if configPath == string(types.PermissionConfigReadOnly) {
+		slog.Info("Using default read-only permissions")
+		config, err := permissions.LoadDefault()
+		if err != nil {
+			return nil, fmt.Errorf("failed to load default permissions: %w", err)
+		}
+		slog.Info("Default permissions loaded", "version", config.Version)
 		return config, nil
 	}
 
@@ -207,7 +219,7 @@ func LoadPermissions(configPath string) (*permissions.Config, error) {
 		return config, nil
 	}
 
-	// Use embedded default permissions
+	// Use embedded default permissions (empty string case)
 	slog.Info("Using default read-only permissions")
 	config, err := permissions.LoadDefault()
 	if err != nil {
