@@ -6,6 +6,7 @@ type CtxKey string
 
 const HiveAPIKeyCtxKey CtxKey = "hive_api_key"
 const HiveOrgCtxKey CtxKey = "hive_org"
+const HiveURLCtxKey CtxKey = "hive_url"
 const HiveClientCtxKey CtxKey = "hive_client"
 const PermissionsCtxKey CtxKey = "permissions"
 const RequestIDCtxKey CtxKey = "request_id"
@@ -52,6 +53,7 @@ type HeaderKey string
 
 const HeaderKeyTheHiveAPIKey HeaderKey = "X-TheHive-Api-Key"
 const HeaderKeyTheHiveOrganisation HeaderKey = "X-TheHive-Org"
+const HeaderKeyTheHiveURL HeaderKey = "X-TheHive-Url"
 
 type PermissionConfig string
 

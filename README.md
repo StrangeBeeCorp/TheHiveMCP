@@ -159,7 +159,7 @@ TheHiveMCP supports three configuration methods with the following priority (hig
 | Parameter | Environment Variable | Command-line Flag | HTTP Header | Default | Description |
 |-----------|---------------------|-------------------|-------------|---------|-------------|
 | **TheHive Connection** |
-| TheHive URL | `THEHIVE_URL` | `--thehive-url` | - | - | TheHive instance URL (required) |
+| TheHive URL | `THEHIVE_URL` | `--thehive-url` | `X-TheHive-Url` | - | TheHive instance URL (required) |
 | API Key | `THEHIVE_API_KEY` | `--thehive-api-key` | `Authorization` or `X-TheHive-Api-Key` | - | TheHive API key |
 | Username | `THEHIVE_USERNAME` | `--thehive-username` | - | - | Username for basic auth |
 | Password | `THEHIVE_PASSWORD` | `--thehive-password` | - | - | Password for basic auth |
@@ -193,7 +193,7 @@ OPENAI_API_KEY=sk-your-key  # Optional, for fallback LLM
 LOG_LEVEL=INFO
 ```
 
-**Multi-tenant:** Override authentication per-request using `Authorization` and `X-TheHive-Org` headers.
+**Multi-tenant:** Override configuration per-request using `Authorization`, `X-TheHive-Org`, and `X-TheHive-Url` headers.
 
 **Permissions:** Control tool access and data filtering. See [docs/permissions.md](docs/permissions.md) for detailed configuration.
 

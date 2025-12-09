@@ -23,6 +23,7 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 			{"Authorization", types.HiveAPIKeyCtxKey, options.TheHiveAPIKey},
 			{string(types.HeaderKeyTheHiveAPIKey), types.HiveAPIKeyCtxKey, options.TheHiveAPIKey},
 			{string(types.HeaderKeyTheHiveOrganisation), types.HiveOrgCtxKey, options.TheHiveOrganisation},
+			{string(types.HeaderKeyTheHiveURL), types.HiveURLCtxKey, options.TheHiveURL},
 		}
 
 		// Extract string values into context
@@ -43,7 +44,7 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 		// Add Hive client to context using extracted credentials
 		hiveAPIKey, _ := ctx.Value(types.HiveAPIKeyCtxKey).(string)
 		hiveOrganisation, _ := ctx.Value(types.HiveOrgCtxKey).(string)
-		hiveURL := SafeGetEnv(string(types.EnvKeyTheHiveURL), "")
+		hiveURL, _ := ctx.Value(types.HiveURLCtxKey).(string)
 
 		if hiveURL != "" {
 			creds := &TheHiveCredentials{
