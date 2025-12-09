@@ -25,7 +25,7 @@ TheHiveMCP is an MCP (Model Context Protocol) server that enables AI agents to i
   - Cortex analyzer and responder execution
   - Dynamic resource catalog with live metadata
 
-## What This Does
+## What this does
 
 **TheHiveMCP is a connector that enables AI assistants to interact with TheHive security platform.**
 
