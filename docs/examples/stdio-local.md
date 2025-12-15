@@ -12,7 +12,7 @@ This example shows how to run TheHiveMCP in stdio mode for integration with loca
 
 ## Setup
 
-### 1. Download Binary
+### 1. Download binary
 
 ```bash
 # Download for your platform from releases
@@ -20,7 +20,7 @@ curl -L -o thehivemcp https://github.com/StrangeBeeCorp/TheHiveMCP/releases/late
 chmod +x thehivemcp
 ```
 
-### 2. Configure Environment
+### 2. Configure environment
 
 Using the [`.env.template`](../../.env.template):
 
@@ -35,7 +35,7 @@ THEHIVE_ORGANISATION=your-org-name
 PERMISSIONS_CONFIG=read_only
 ```
 
-## MCP Host Integration
+## MCP host integration
 
 ### GitHub Copilot
 
@@ -60,16 +60,18 @@ Add to your MCP settings:
 
 ### Claude Desktop
 
+Claude Desktop does not support sampling. So you need to add openAI credentials.
+
 Similar configuration, or use the MCPB package for easier setup.
 
-## What to Expect
+## What to expect
 
 Once configured, your MCP host can:
 - **Search entities**: "Find critical alerts from last week"
 - **Access resources**: Browse TheHive schemas and documentation
 - **Create/modify**: Depends on permissions configuration
 
-## Next Steps
+## Next steps
 
 - For team deployment: [Remote Docker Example](remote-docker.md)
 - For LibreChat integration: [LibreChat Example](librechat.md)

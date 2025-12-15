@@ -1,4 +1,4 @@
-# LibreChat Example - Simple Integration
+# LibreChat example - simple integration
 
 This example shows how to run TheHiveMCP with **LibreChat** using Anthropic models for AI-powered TheHive operations.
 
@@ -20,7 +20,7 @@ This setup provides a web-based chat interface where users can interact with The
 
 ## Setup
 
-### 1. Configure Environment
+### 1. Configure environment
 
 Create `.env` file with only the required variable:
 
@@ -31,7 +31,7 @@ ANTHROPIC_API_KEY=sk-ant-your-anthropic-key-here
 
 The Docker Compose file already includes all other necessary configuration with hardcoded values for development use.
 
-### 2. Start Services
+### 2. Start services
 
 ```bash
 # Start all services
@@ -51,7 +51,7 @@ docker-compose -f docs/examples/docker/docker-compose.librechat.yml ps
    - API Key
    - Organisation name
 
-## How It Works
+## How it works
 
 The [`librechat.yaml`](docker/librechat.yaml) configuration enables per-user TheHive credentials. It defines custom user variables that LibreChat will prompt for and pass as headers to TheHiveMCP.
 
@@ -62,7 +62,7 @@ The [`docker-compose.librechat.yml`](docker/docker-compose.librechat.yml) includ
 - **LibreChat API** with Anthropic endpoint enabled
 - **MongoDB** and **Meilisearch** for LibreChat's backend
 
-## What to Expect
+## What to expect
 
 Once configured, you can:
 
@@ -81,7 +81,7 @@ The stack includes:
 - **MongoDB** (port 27017) - Database
 - **Meilisearch** (port 7700) - Search engine
 
-## Next Steps
+## Next steps
 
 - For simpler deployment: [Remote Docker Example](remote-docker.md)
 - For local development: [stdio Example](stdio-local.md)
