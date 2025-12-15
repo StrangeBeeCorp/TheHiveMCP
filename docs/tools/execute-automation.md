@@ -23,11 +23,11 @@ The `execute-automation` tool provides integration with Cortex for running autom
 
 ## Operations
 
-### Running Analyzers
+### Running analyzers
 
 Analyzers enrich observables by querying external services (threat intel, reputation, etc.).
 
-#### Basic Analyzer Execution
+#### Basic analyzer execution
 ```json
 {
   "operation": "run-analyzer",
@@ -36,7 +36,7 @@ Analyzers enrich observables by querying external services (threat intel, reputa
 }
 ```
 
-#### With Specific Cortex Instance
+#### With specific Cortex instance
 ```json
 {
   "operation": "run-analyzer",
@@ -46,7 +46,7 @@ Analyzers enrich observables by querying external services (threat intel, reputa
 }
 ```
 
-#### With Custom Parameters
+#### With custom parameters
 ```json
 {
   "operation": "run-analyzer",
@@ -59,11 +59,11 @@ Analyzers enrich observables by querying external services (threat intel, reputa
 }
 ```
 
-### Running Responders
+### Running responders
 
 Responders perform active responses on entities (block IP, send email, create ticket, etc.).
 
-#### Case Responder
+#### Case responder
 ```json
 {
   "operation": "run-responder",
@@ -73,7 +73,7 @@ Responders perform active responses on entities (block IP, send email, create ti
 }
 ```
 
-#### Alert Responder
+#### Alert responder
 ```json
 {
   "operation": "run-responder",
@@ -83,7 +83,7 @@ Responders perform active responses on entities (block IP, send email, create ti
 }
 ```
 
-#### Observable Responder
+#### Observable responder
 ```json
 {
   "operation": "run-responder",
@@ -97,9 +97,9 @@ Responders perform active responses on entities (block IP, send email, create ti
 }
 ```
 
-### Checking Status
+### Checking status
 
-#### Get Analyzer Job Status
+#### Get analyzer job status
 ```json
 {
   "operation": "get-job-status",
@@ -107,7 +107,7 @@ Responders perform active responses on entities (block IP, send email, create ti
 }
 ```
 
-#### Get Responder Action Status
+#### Get responder action status
 ```json
 {
   "operation": "get-action-status",
@@ -119,7 +119,7 @@ Responders perform active responses on entities (block IP, send email, create ti
 
 Before using automation, discover available analyzers and responders:
 
-### List Available Analyzers
+### List available analyzers
 ```json
 {
   "tool": "get-resource",
@@ -127,7 +127,7 @@ Before using automation, discover available analyzers and responders:
 }
 ```
 
-### List Available Responders
+### List available responders
 ```json
 {
   "tool": "get-resource",
@@ -135,7 +135,7 @@ Before using automation, discover available analyzers and responders:
 }
 ```
 
-### Get Automation Documentation
+### Get automation documentation
 ```json
 {
   "tool": "get-resource",
@@ -152,30 +152,30 @@ Before using automation, discover available analyzers and responders:
 
 ## Common Analyzers
 
-### Threat Intelligence
+### Threat intelligence
 - **VirusTotal_3_0**: File and URL reputation analysis
 - **Shodan_search**: IP address and domain analysis
 - **Abuse_Finder**: Email abuse contact lookup
 - **DomainTools**: Domain registration and history
 
-### File Analysis
+### File analysis
 - **File_Info**: Basic file metadata extraction
 - **Yara**: YARA rule matching
 - **PE_Info**: Portable Executable analysis
 
-### Network Analysis
+### Network analysis
 - **MaxMind**: IP geolocation lookup
 - **Tor_Blutmagie**: Tor exit node detection
 - **URLVoid**: URL reputation checking
 
 ## Common Responders
 
-### Case Management
+### Case management
 - **Mailer_1_0**: Send email notifications
 - **TheHive_CreateCase_1_0**: Promote alerts to cases
 - **Wazuh**: Integration with Wazuh SIEM
 
-### Threat Intelligence
+### Threat intelligence
 - **MISP_2_1**: Export IOCs to MISP
 - **QRadar_2_0**: Send to IBM QRadar
 
@@ -185,7 +185,7 @@ Before using automation, discover available analyzers and responders:
 
 ## Execution Workflow
 
-### 1. Discovery Phase
+### 1. Discovery phase
 ```json
 // Get available analyzers
 {
@@ -200,7 +200,7 @@ Before using automation, discover available analyzers and responders:
 }
 ```
 
-### 2. Execution Phase
+### 2. Execution phase
 ```json
 // Run analyzer
 {
@@ -210,7 +210,7 @@ Before using automation, discover available analyzers and responders:
 }
 ```
 
-### 3. Monitoring Phase
+### 3. Monitoring phase
 ```json
 // Check job status
 {
@@ -221,19 +221,19 @@ Before using automation, discover available analyzers and responders:
 
 ## Best Practices
 
-### Analyzer Usage
+### Analyzer usage
 1. **Observable selection**: Ensure observables are suitable for analysis
 2. **Rate limiting**: Be mindful of API rate limits for external services
 3. **Parameter configuration**: Use appropriate parameters for each analyzer
 4. **Result monitoring**: Check job status to ensure completion
 
-### Responder Usage
+### Responder usage
 1. **Entity validation**: Verify entity exists and is accessible
 2. **Permission checks**: Ensure responder has required permissions
 3. **Parameter validation**: Provide correct parameters for each responder
 4. **Impact assessment**: Understand what actions responders will perform
 
-### Performance Optimization
+### Performance optimization
 1. **Batch processing**: Group similar operations when possible
 2. **Cortex routing**: Let TheHive auto-route for load balancing
 3. **Status polling**: Don't over-poll job status
@@ -243,39 +243,39 @@ Before using automation, discover available analyzers and responders:
 
 Common errors and solutions:
 
-### Analyzer Errors
+### Analyzer errors
 - **Analyzer not found**: Check available analyzers list
 - **Observable not found**: Verify observable ID exists
 - **Permission denied**: Ensure user can access observable
 - **Rate limit exceeded**: Wait and retry with delays
 
-### Responder Errors
+### Responder errors
 - **Responder not available**: Check responder compatibility with entity type
 - **Entity not found**: Verify entity ID exists and is accessible
 - **Configuration error**: Check responder parameters and configuration
 - **External service error**: Check responder logs and external service status
 
-### Status Check Errors
+### Status check errors
 - **Job not found**: Verify job ID is correct and accessible
 - **Timeout**: Job may still be processing - wait and retry
 
 ## Integration Patterns
 
-### Automated Analysis Pipeline
+### Automated analysis pipeline
 1. Search for new observables
 2. Run appropriate analyzers based on observable type
 3. Monitor job status until completion
 4. Update observables with analysis results
 5. Trigger responders based on analysis outcomes
 
-### Incident Response Workflow
+### Incident response workflow
 1. Create case from alert
 2. Extract observables from case evidence
 3. Run threat intelligence analyzers
 4. Based on results, run appropriate responders
 5. Update case with analysis and response actions
 
-### Bulk Analysis
+### Bulk analysis
 1. Search for unanalyzed observables
 2. Group by type and suitable analyzers
 3. Execute analyzers in batches
