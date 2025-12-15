@@ -16,8 +16,8 @@ The `search-entities` tool allows you to search for TheHive entities (alerts, ca
 | `sort-order` | string | No | Sort order `asc` or `desc` (default: `desc`) |
 | `limit` | number | No | Number of results to return (default: 10) |
 | `extra-columns` | array | No | Additional columns to include in output (default: `['_id', 'title']`) |
-| `extra-data` | array | No | Additional data fields to include in output |
-| `additional-queries` | array | No | Additional queries to enrich results with related data |
+| `extra-data` | array | No | Additional data fields to include in output (see `Extra Data` in the Api docs) |
+| `additional-queries` | array | No | Additional queries to enrich results with related data (see `Queries available` in the Api docs)|
 
 ## Natural Language Query Examples
 
@@ -99,7 +99,7 @@ Include extra data fields:
 {
   "entity-type": "alert",
   "query": "phishing alerts",
-  "extra-data": ["tags", "case", "customFields"]
+  "extra-data": ["status", "procedureCount"]
 }
 ```
 

@@ -5,9 +5,11 @@ FROM golang:1.24.11-alpine AS builder
 
 # Set necessary environment variables
 ARG BINARY=server
+ARG TARGETARCH
+ARG TARGETOS
 ENV CGO_ENABLED=0 \
-    GOOS=linux \
-    GOARCH=amd64
+    GOOS=${TARGETOS} \
+    GOARCH=${TARGETARCH}
 
 WORKDIR /app
 

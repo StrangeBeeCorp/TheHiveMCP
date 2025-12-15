@@ -1,7 +1,7 @@
 # TheHiveMCP
 
 <div align="center">
-  <img src="docs/images/theHivelogo.png" alt="TheHive Logo" width="600"/>
+  <img src="https://strangebee.com/wp-content/uploads/2024/07/Icon4Nav_TheHive.png" alt="TheHive Logo" width="400"/>
 </div>
 
 [![Go Version](https://img.shields.io/badge/go-1.24.11+-blue.svg)](https://golang.org/doc/go1.24)
@@ -9,11 +9,46 @@
 
 **Model Context Protocol server for TheHive security platform**
 
+> **⚠️ BETA WARNING: NOT FOR PRODUCTION USE**
+>
+> **This project is in BETA version and is insufficiently tested. Do NOT use with real production data.**
+>
+> <details>
+> <summary><strong>🚨 Current Limitations and Security Risks</strong></summary>
+>
+> ### Security Risks
+> - **Prompt Injection Vulnerabilities**: AI prompts may be exploited to bypass security controls
+> - **Data Exposure**: Beta-level data filtering may not properly restrict sensitive information
+> - **Authentication Bypass**: Security mechanisms are not fully hardened
+> - **Audit Trail Gaps**: Incomplete logging of security-sensitive operations
+>
+> ### Feature Limitations
+> - **No TTP (Tactics, Techniques, Procedures) Support**: MITRE ATT&CK integration not implemented
+> - **Limited Responder Support**: Cortex responder execution has known issues and limitations
+> - **No Alert Promotion**: Cannot promote alerts to cases automatically
+> - **No Alert Comments**: Alert commenting functionality not implemented
+> - **Incomplete Observable Management**: Limited observable type support and operations
+> - **No Case Templates**: Custom case template support not implemented
+> - **Limited Task Management**: Advanced task workflows not fully supported
+> - **No Dashboard Integration**: No support for TheHive dashboard widgets or custom views
+> - **Basic Permission Model**: Advanced RBAC features incomplete
+>
+> ### Recommended Usage
+> - **Development and Testing Only**: Use with test data and development instances
+> - **Proof of Concept**: Evaluate integration potential with non-sensitive data
+> - **Sandbox Environment**: Deploy in isolated environments with restricted network access
+>
+> Production use requires thorough security review and extensive testing.
+> </details>
+
 ## Overview
 
 TheHiveMCP is an MCP (Model Context Protocol) server that enables AI agents to interact with [TheHive](https://strangebee.com/thehive/) security platform through natural language. Built in Go, it provides a structured interface for security operations, case management, and threat intelligence workflows.
 
-![Demo TheHiveMCP](docs/images/demo-thehivemcp.gif)
+
+<div align="center">
+  <img src="docs/images/demo-thehivemcp.gif" alt="Demo TheHiveMCP"/>
+</div>
 
 ### Key features
 
@@ -67,7 +102,8 @@ This guide helps you connect TheHiveMCP to popular AI assistants through MCP hos
 
 ---
 
-### 🖥️ Claude Desktop (recommended)
+<details>
+<summary><strong>🖥️ Claude Desktop (Recommended - Easiest Setup)</strong></summary>
 
 **Claude Desktop** supports MCPB (Model Context Protocol Binary) files for easy one-click installation of MCP servers like TheHiveMCP.
 
@@ -94,19 +130,27 @@ When prompted during installation, provide:
 - **TheHive URL**: Your TheHive instance URL (for example, `https://thehive.company.com`)
 - **API Key**: Your TheHive API key for authentication
 - **Organization**: Your TheHive organization name
-- **Permissions config**: (Optional) Path to permissions YAML file, defaults to read-only
-- **OpenAI API key**: (Optional) For enhanced natural language processing
+- **Permissions config**: (Optional) Choose from:
+  - `read_only` - Default safe mode (search only, no modifications)
+  - `admin` - Full access (for testing/development only)
+  - Custom path to your permissions YAML file
+- **OpenAI API Key**: (Optional) For natural language processing fallback when MCP client doesn't support sampling
+
 
 #### Step 5: Test your setup
 After installation, restart Claude Desktop and look for the 🔧 tools icon. Try asking: *"Show me recent high-severity alerts from TheHive"* or *"What security cases are currently open?"*
 
----
+</details>
 
-### 🐳 Docker (alternative setup)
-
-If you prefer Docker or need more control over the server configuration:
+<details>
+<summary><strong>🐳 Docker Deployment (Flexible & Scalable)</strong></summary>
 
 #### Step 1: Run TheHiveMCP server
+
+#### Quick Docker setup
+
+For immediate testing and development:
+
 ```bash
 docker run -d \
   --name thehive-mcp \
@@ -116,40 +160,150 @@ docker run -d \
   -e MCP_BIND_HOST=0.0.0.0 \
   -e MCP_PORT=8082 \
   strangebee/thehive-mcp:latest
-
-# With custom permissions:
-docker run -d \
-  --name thehive-mcp \
-  -p 8082:8082 \
-  -v /host/path/analyst.yaml:/app/permissions.yaml \
-  -e PERMISSIONS_CONFIG=/app/permissions.yaml \
-  -e THEHIVE_URL=https://your-thehive-instance.com \
-  -e THEHIVE_API_KEY=your-api-key-here \
-  strangebee/thehive-mcp:latest
 ```
 
-#### Step 2: Configure your MCP client
+
+#### Docker Compose (Recommended for teams)
+
+Create `docker-compose.yml`:
+```yaml
+services:
+  thehive-mcp:
+    image: strangebee/thehive-mcp:latest
+    ports:
+      - "8082:8082"
+    environment:
+      - THEHIVE_URL=${THEHIVE_URL}
+      - THEHIVE_API_KEY=${THEHIVE_API_KEY}
+      - THEHIVE_ORGANISATION=${THEHIVE_ORGANISATION}
+      - MCP_BIND_HOST=0.0.0.0
+      - MCP_PORT=8082
+      - PERMISSIONS_CONFIG=/app/permissions.yaml
+    volumes:
+      - ./config/permissions.yaml:/app/permissions.yaml:ro
+    restart: unless-stopped
+```
+
+```bash
+# Start services
+docker-compose up -d
+```
+
+##### Step 2: Configure your MCP client
+
 Point your MCP client to connect to the HTTP server at `http://localhost:8082/mcp`.
+
+**🐳 For advanced Docker setups:** See [Remote Docker Guide](docs/examples/remote-docker.md) for scalable HTTP deployments with multi-tenant configuration.
+
+</details>
+
+<details>
+<summary><strong>💻 Local Usage (Stdio)</strong></summary>
+
+### Download Pre-built binary
+
+```bash
+# Download for your platform from releases
+curl -L -o thehivemcp https://github.com/StrangeBeeCorp/TheHiveMCP/releases/latest/download/thehivemcp-[platform]-[arch]
+chmod +x thehivemcp
+```
+
+### Run with Stdio transport
+
+In your MCP host MCP config file (like `claude_desktop_settings.json`) add the following configuration:
+
+```bash
+```json
+{
+  "mcpServers": {
+    "thehive": {
+      "command": "/path/to/thehivemcp",
+      "args": ["--transport", "stdio"],
+      "env": {
+        "THEHIVE_URL": "https://your-thehive-instance.com",
+        "THEHIVE_API_KEY": "your-api-key-here",
+        "THEHIVE_ORGANISATION": "your-org-name",
+        "PERMISSIONS_CONFIG": "read_only",
+        "OPENAI_API_KEY": "your-api-key-here",
+        "OPENAI_MODEL": "gpt5"
+      }
+    }
+  }
+}
+```
+
+Most MCP hosts don't support Sampling. Check if yours does [here][https://modelcontextprotocol.io/clients].
+
+If it does, you can remove the OpenAI key and model from the config.
+
+### Run as HTTP server
+
+```bash
+# Run HTTP server for web clients
+./thehivemcp --transport http \
+  --addr "0.0.0.0:8082" \
+  --thehive-url "$THEHIVE_URL" \
+  --thehive-api-key "$THEHIVE_API_KEY" \
+  --thehive-organisation "$THEHIVE_ORGANISATION"
+```
+
+**💻 For local MCP host integration:** See [stdio Local Guide](docs/examples/stdio-local.md) for GitHub Copilot, Claude Desktop, and other local MCP clients.
+
+</details>
+
+<details>
+<summary><strong>🔗 In-Process Integration (Go Applications)</strong></summary>
+
+Embed TheHiveMCP directly into Go applications:
+
+```go
+import "github.com/StrangeBeeCorp/TheHiveMCP/bootstrap"
+
+// Use environment credentials
+mcpServer := bootstrap.GetMCPServerAndRegisterTools()
+
+// Or use custom credentials with permissions
+creds := &bootstrap.TheHiveCredentials{
+    URL: "https://thehive.example.com",
+    APIKey: "key",
+    Organisation: "org",
+}
+mcpServer := bootstrap.GetInprocessServer(creds, "/path/to/permissions.yaml")
+bootstrap.RegisterToolsToMCPServer(mcpServer)
+```
+
+**Note:** Only the `bootstrap` package is public API. Internal packages may change without notice.
+
+</details>
+
+### � Deployment quick reference
+
+| Deployment Type | Use Case | Complexity | Guide |
+|----------------|----------|------------|-------|
+| **Claude Desktop MCPB** | Personal use, quick start | ⭐ Easy | Above ⬆️ |
+| **stdio Local** | Local MCP hosts (GitHub Copilot) | ⭐⭐ Simple | [stdio Guide](docs/examples/stdio-local.md) |
+| **Remote Docker** | Team/cloud deployment | ⭐⭐⭐ Medium | [Remote Guide](docs/examples/remote-docker.md) |
+| **LibreChat** | Complete AI assistant setup | ⭐⭐⭐⭐ Advanced | [LibreChat Guide](docs/examples/librechat.md) |
+
+**All deployment guides include:**
+- ✅ Complete configuration examples
+- ✅ Security best practices
+- ✅ Troubleshooting steps
+- ✅ Ready-to-use files and templates
 
 ---
 
-### 🔧 Other MCP clients
-
-TheHiveMCP works with any MCP-compatible client. Popular options include:
-
-- **[MCP CLI](https://github.com/modelcontextprotocol/mcp-cli)** - Command-line interface
-- **Custom applications** - Using MCP client libraries
-
-For these clients, use either:
-- **Binary**: Download the appropriate binary for your platform from [releases](https://github.com/StrangeBeeCorp/TheHiveMCP/releases) and run with `--transport stdio`
-- **HTTP server**: Point to `http://localhost:8082/mcp` after running the Docker container above
-
 ## Configuration
 
-TheHiveMCP supports three configuration methods with the following priority (highest to lowest):
-1. **HTTP request headers** (for HTTP transport only)
-2. **Command-line flags**
-3. **Environment variables**
+TheHiveMCP supports flexible configuration through multiple methods with hierarchical priority:
+
+### Configuration priority (highest to lowest)
+
+1. **🌐 HTTP Request Headers** (HTTP transport only) - Per-request overrides for multi-tenant scenarios
+2. **⚡ Command-line Flags** - Explicit runtime parameters
+3. **🔧 Environment Variables** - System-level defaults (.env files supported)
+
+This allows you to set defaults via environment variables while overriding specific values per-request via headers or command-line flags.
 
 <details>
 <summary><strong>⚙️ Configuration parameters</strong></summary>
@@ -165,13 +319,13 @@ TheHiveMCP supports three configuration methods with the following priority (hig
 | Password | `THEHIVE_PASSWORD` | `--thehive-password` | - | - | Password for basic auth |
 | Organization | `THEHIVE_ORGANISATION` | `--thehive-organisation` | `X-TheHive-Org` | - | TheHive organization |
 | **Permissions** |
-| Permissions config | `PERMISSIONS_CONFIG` | `--permissions-config` | - | (read-only) | Path to permissions YAML file |
+| Permissions config | `PERMISSIONS_CONFIG` | `--permissions-config` | - | `read_only` | Permissions: `read_only`, `admin`, or YAML file path |
 | **MCP server** |
 | Transport type | - | `--transport` | - | `http` | Transport mode: `http` or `stdio` |
 | Bind address | `MCP_BIND_HOST` + `MCP_PORT` | `--addr` | - | - | HTTP server bind address (for example, `0.0.0.0:8082`) |
 | Endpoint path | `MCP_ENDPOINT_PATH` | `--mcp-endpoint-path` | - | `/mcp` | HTTP endpoint path |
 | Heartbeat interval | `MCP_HEARTBEAT_INTERVAL` | `--mcp-heartbeat-interval` | - | `30s` | Heartbeat interval for HTTP connections |
-| **OpenAI integration** |
+| **OpenAI Integration** |
 | API key | `OPENAI_API_KEY` | `--openai-api-key` | - | - | OpenAI-compatible API key |
 | Base URL | `OPENAI_BASE_URL` | `--openai-base-url` | - | `https://api.openai.com/v1` | OpenAI-compatible API base URL |
 | Model | `OPENAI_MODEL` | `--openai-model` | - | `gpt-5` | Model name |
@@ -182,7 +336,7 @@ TheHiveMCP supports three configuration methods with the following priority (hig
 ### Example configuration
 
 ```bash
-# .env file
+# .env file - Base configuration
 THEHIVE_URL=https://thehive.example.com
 THEHIVE_API_KEY=<thehive_api_key>
 THEHIVE_ORGANISATION=<thehive_organization>
@@ -191,55 +345,88 @@ MCP_BIND_HOST=0.0.0.0
 MCP_PORT=8082
 OPENAI_API_KEY=<openai_api_key>  # Optional, for fallback LLM
 LOG_LEVEL=INFO
+# Permissions options (choose one):
+# PERMISSIONS_CONFIG=read_only                              # Default: safe read-only access
+# PERMISSIONS_CONFIG=admin                                  # Full access (development/testing only)
+# PERMISSIONS_CONFIG=docs/examples/permissions/analyst.yaml # Custom permissions file
+
+# Optional AI features:
+# OPENAI_API_KEY=sk-your-key    # Fallback when client doesn't support sampling
 ```
 
-**Multi-tenant:** Override configuration per-request using `Authorization`, `X-TheHive-Org`, and `X-TheHive-Url` headers.
+### Multi-tenant & Per-Request Configuration
 
-**Permissions:** Control tool access and data filtering. See [docs/permissions.md](docs/permissions.md) for detailed configuration.
+**HTTP Headers** (HTTP transport only):
+```bash
+curl -X POST http://localhost:8082/mcp \
+  -H "Authorization: Bearer different-api-key" \
+  -H "X-TheHive-Org: other-org" \
+  -H "X-TheHive-Url: https://other-thehive.com" \
+  -d '{"method":"initialize",...}'
+```
+
+### Built-in Permission Profiles
+
+- **`read_only`** (default): Search entities, browse resources only
+- **`admin`**: Full access to all operations (development/testing only)
+- **Custom file**: Fine-grained permissions via YAML configuration
+
+See [docs/permissions.md](docs/permissions.md) for detailed permission configuration and examples.
 
 </details>
+
+## 🚀 Advanced features
 
 <details>
-<summary><strong>🚀 Advanced features</strong></summary>
+<summary><strong>🤖 MCP sampling</strong></summary>
 
-## Advanced Features
+### 🤖 MCP Sampling (AI-Powered Natural Language)
 
-### MCP sampling
+TheHiveMCP uses **MCP Sampling** for natural language processing in the `search-entities` tool to convert queries like *"high severity alerts from last week"* into TheHive filters.
 
-Natural language queries in `search-entities` require an LLM. TheHiveMCP uses client-side sampling if available, otherwise falls back to server-side OpenAI. Configure `OPENAI_API_KEY` for fallback support. Without either, natural language search fails (other tools work normally).
+**How it works:**
+1. **Client-side sampling** (preferred): Uses the MCP client's built-in AI model
+2. **Server-side fallback**: Uses OpenAI API when client doesn't support sampling
+3. **Graceful degradation**: Without either, natural language search fails but other tools work normally
 
-### MCP elicitation
+**Current MCP client support:**
+- ✅ **Github Copilot**: Full sampling support
+- ❌ **Most other MCP clients**: Limited or no sampling support (including Claude Desktop)
+- 🔧 **Workaround**: Configure `OPENAI_API_KEY` for server-side processing
 
-Modifying operations (create, update, delete) request user confirmation if the client supports elicitation. Without support, operations proceed automatically.
-
+```bash
+# Enable server-side fallback for clients without sampling
+export OPENAI_API_KEY=sk-your-openai-key
+export OPENAI_BASE_URL=https://api.openai.com/v1  # Or OpenRouter for more models
+```
 </details>
 
-## Deployment Options
+<detail>
+<summary><strong>🛡️ MCP Elicitation</strong></summary>
 
-### Standalone server (HTTP or Stdio)
+### 🛡️ MCP Elicitation (User Confirmation)
 
-Standard deployment runs TheHiveMCP as a standalone server process. See [Installation](#installation) section.
+TheHiveMCP uses **MCP Elicitation** to request user confirmation before executing potentially dangerous operations (create, update, delete entities).
 
-### In-process integration
+**How it works:**
+1. **Supported clients**: Show confirmation dialog before executing modifications
+2. **Unsupported clients**: Operations proceed automatically (logged with warnings)
+3. **Security layer**: Prevents accidental data modification
 
-Embed TheHiveMCP into Go applications using the `bootstrap` package:
+**Current MCP client support:**
+- ✅ **Github Copilot**: Full elicitation support with confirmation dialogs
+- ❌ **Most other MCP clients**: No elicitation support (including Claude Desktop)
+- ⚠️ **Security note**: Use restrictive permissions with clients that don't support elicitation
 
-```go
-import "github.com/StrangeBeeCorp/TheHiveMCP/bootstrap"
+**Example elicitation prompt:**
+```
+Confirm POST request to TheHive API?
 
-// Use environment credentials
-mcpServer := bootstrap.GetMCPServerAndRegisterTools()
-
-// Or use custom credentials with permissions
-creds := &bootstrap.TheHiveCredentials{
-    URL: "https://thehive.example.com", APIKey: "key", Organisation: "org",
-}
-// Second parameter is permissions config path ("" = read-only default)
-mcpServer := bootstrap.GetInprocessServer(creds, "/path/to/permissions.yaml")
-bootstrap.RegisterToolsToMCPServer(mcpServer)
+Operation: Create Alert
+Entity: {"title": "Security Incident", "severity": 3, ...}
 ```
 
-**Note:** Only the `bootstrap` package is public API. Internal packages may change without notice.
+</details>
 
 ## MCP Tools
 

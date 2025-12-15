@@ -1,0 +1,23 @@
+version: 1.2.8
+
+mcpServers:
+  TheHiveMCP:
+    type: streamable-http
+    url: http://thehivemcp:8082/mcp
+    timeout: 60000
+    startup: false
+    customUserVars:
+      THEHIVE_URL:
+        title: "TheHive URL"
+        description: "Your TheHive instance URL (e.g., https://thehive.company.com)"
+      THEHIVE_API_KEY:
+        title: "TheHive API Key"
+        description: "Your TheHive API key"
+      THEHIVE_ORG:
+        title: "TheHive Organisation"
+        description: "Your TheHive organisation name"
+
+    headers:
+      X-TheHive-Api-Key: "{{THEHIVE_API_KEY}}"
+      X-TheHive-Org: "{{THEHIVE_ORG}}"
+      X-TheHive-Url: "{{THEHIVE_URL}}"
