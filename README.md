@@ -252,7 +252,7 @@ If it does, you can remove the OpenAI key and model from the config.
 </details>
 
 <details>
-<summary><strong>🔗 In-Process Integration (Go Applications)</strong></summary>
+<summary><strong>🔗 In-Process integration (Go applications)</strong></summary>
 
 Embed TheHiveMCP directly into Go applications:
 
@@ -284,12 +284,6 @@ bootstrap.RegisterToolsToMCPServer(mcpServer)
 | **stdio Local** | Local MCP hosts (GitHub Copilot) | ⭐⭐ Simple | [stdio Guide](docs/examples/stdio-local.md) |
 | **Remote Docker** | Team/cloud deployment | ⭐⭐⭐ Medium | [Remote Guide](docs/examples/remote-docker.md) |
 | **LibreChat** | Complete AI assistant setup | ⭐⭐⭐⭐ Advanced | [LibreChat Guide](docs/examples/librechat.md) |
-
-**All deployment guides include:**
-- ✅ Complete configuration examples
-- ✅ Security best practices
-- ✅ Troubleshooting steps
-- ✅ Ready-to-use files and templates
 
 ---
 
@@ -401,7 +395,7 @@ export OPENAI_BASE_URL=https://api.openai.com/v1  # Or OpenRouter for more model
 ```
 </details>
 
-<detail>
+<details>
 <summary><strong>🛡️ MCP Elicitation</strong></summary>
 
 ### 🛡️ MCP Elicitation (User Confirmation)

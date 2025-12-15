@@ -18,13 +18,9 @@ services:
 
       # Permissions (choose one)
       - PERMISSIONS_CONFIG=read_only        # Safe default
-      # - PERMISSIONS_CONFIG=admin          # Full access (development only)
 
-      # Optional: AI fallback for non-Claude clients
-      # - OPENAI_API_KEY=${OPENAI_API_KEY}
-
-      # Logging
       - LOG_LEVEL=info
+
     # volumes:  # Not needed with built-in permission profiles
     #   - ./config/permissions.yaml:/app/permissions.yaml:ro
     restart: unless-stopped
