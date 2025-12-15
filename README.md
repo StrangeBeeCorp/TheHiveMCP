@@ -41,7 +41,7 @@
 > Production use requires thorough security review and extensive testing.
 > </details>
 
-## Overview
+## 🌍 Overview
 
 TheHiveMCP is an MCP (Model Context Protocol) server that enables AI agents to interact with [TheHive](https://strangebee.com/thehive/) security platform through natural language. Built in Go, it provides a structured interface for security operations, case management, and threat intelligence workflows.
 
@@ -50,7 +50,7 @@ TheHiveMCP is an MCP (Model Context Protocol) server that enables AI agents to i
   <img src="docs/images/demo-thehivemcp.gif" alt="Demo TheHiveMCP"/>
 </div>
 
-### Key features
+### 🦄 Key features
 
 - **MCP 1.0 compliant** - Full implementation of MCP specification
 - **Multiple transport modes**:
@@ -62,7 +62,7 @@ TheHiveMCP is an MCP (Model Context Protocol) server that enables AI agents to i
   - Cortex analyzer and responder execution
   - Dynamic resource catalog with live metadata
 
-## How It Works
+## 🤔 How It Works
 
 **TheHiveMCP is a connector that enables AI assistants to interact with TheHive security platform.**
 
@@ -79,7 +79,7 @@ When you connect an AI assistant to TheHiveMCP, the AI can:
 
 This enables security teams to **leverage existing AI assistants** for security operations without replacing their current tools or workflows. TheHiveMCP handles the technical complexity of integrating with TheHive, so AI assistants can focus on understanding security context and providing intelligent insights.
 
-## Project Structure
+## 🪜 Project Structure
 
 ```
 TheHiveMCP/
@@ -90,7 +90,7 @@ TheHiveMCP/
 └── Makefile
 ```
 
-## Get Started
+## 🎮 Get Started
 
 This guide helps you connect TheHiveMCP to popular AI assistants through MCP hosts. Choose your preferred AI assistant below for step-by-step setup instructions.
 
@@ -287,7 +287,7 @@ bootstrap.RegisterToolsToMCPServer(mcpServer)
 
 ---
 
-## Configuration
+## ⚙️ Configuration
 
 TheHiveMCP supports flexible configuration through multiple methods with hierarchical priority:
 
@@ -422,7 +422,7 @@ Entity: {"title": "Security Incident", "severity": 3, ...}
 
 </details>
 
-## MCP Tools
+## 🛠️ MCP Tools
 
 - **search-entities**: Search for entities using natural language (for example, "high severity alerts from last week")
 - **manage-entities**: Create, update, delete entities, add comments
@@ -480,7 +480,7 @@ Execute Cortex analyzers and responders with comprehensive status monitoring and
 
 </details>
 
-## MCP Resources
+## 🪵 MCP Resources
 
 Static resources include entity schemas (with separate output, create, and update variants) and documentation. Dynamic resources provide live data (users, templates, analyzers, responders, observable types).
 
@@ -523,16 +523,11 @@ All development operations use Docker containers for consistency and isolation:
 
 </details>
 
-## License
-
-This project is licensed under the AGPL-3.0 License.
-
 ## Related Projects
 
 - [TheHive](https://github.com/TheHive-Project/TheHive) - Security Incident Response Platform
 - [thehive4go](https://github.com/StrangeBeeCorp/thehive4go) - TheHive Go SDK
 - [mcp-go](https://github.com/mark3labs/mcp-go) - Model Context Protocol Go SDK
-- [Hivemind](https://github.com/StrangeBeeCorp/hivemind) - Previous generation MCP server
 
 ---
 
