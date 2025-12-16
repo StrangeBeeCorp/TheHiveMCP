@@ -15,13 +15,13 @@ func getEntitySchema(entityType string) (string, error) {
 	var content []mcp.ResourceContents
 	var err error
 	switch entityType {
-	case string(types.EntityTypeCase):
+	case types.EntityTypeCase:
 		content, err = resources.GetCaseSchemaHandler()
-	case string(types.EntityTypeAlert):
+	case types.EntityTypeAlert:
 		content, err = resources.GetAlertSchemaHandler()
-	case string(types.EntityTypeObservable):
+	case types.EntityTypeObservable:
 		content, err = resources.GetObservableSchemaHandler()
-	case string(types.EntityTypeTask):
+	case types.EntityTypeTask:
 		content, err = resources.GetTaskSchemaHandler()
 	default:
 		return "", fmt.Errorf("unsupported entity type: %s", entityType)
@@ -43,13 +43,13 @@ func getEntityFacts(entityType string) (string, error) {
 	var content []mcp.ResourceContents
 	var err error
 	switch entityType {
-	case string(types.EntityTypeCase):
+	case types.EntityTypeCase:
 		content, err = resources.GetCaseFactHandler()
-	case string(types.EntityTypeAlert):
+	case types.EntityTypeAlert:
 		content, err = resources.GetAlertFactHandler()
-	case string(types.EntityTypeObservable):
+	case types.EntityTypeObservable:
 		content, err = resources.GetObservableFactHandler()
-	case string(types.EntityTypeTask):
+	case types.EntityTypeTask:
 		content, err = resources.GetTaskFactHandler()
 	default:
 		return "", fmt.Errorf("unsupported entity type: %s", entityType)

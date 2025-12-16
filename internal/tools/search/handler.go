@@ -328,13 +328,13 @@ func (t *SearchTool) parseDateFields(entities []map[string]interface{}) ([]map[s
 func (t *SearchTool) getExcludedFields(entityType string, keptColumns []string, extraData []string) []string {
 	var baseModel any
 	switch entityType {
-	case string(types.EntityTypeAlert):
+	case types.EntityTypeAlert:
 		baseModel = thehive.OutputAlert{}
-	case string(types.EntityTypeCase):
+	case types.EntityTypeCase:
 		baseModel = thehive.OutputCase{}
-	case string(types.EntityTypeTask):
+	case types.EntityTypeTask:
 		baseModel = thehive.OutputTask{}
-	case string(types.EntityTypeObservable):
+	case types.EntityTypeObservable:
 		baseModel = thehive.OutputObservable{}
 	default:
 		return []string{}

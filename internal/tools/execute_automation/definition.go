@@ -72,7 +72,7 @@ EXAMPLES:
 		),
 		mcp.WithString(
 			"entity-type",
-			mcp.Enum(string(types.EntityTypeCase), string(types.EntityTypeAlert), string(types.EntityTypeTask), string(types.EntityTypeObservable)),
+			mcp.Enum(types.EntityTypeCase, types.EntityTypeAlert, types.EntityTypeTask, types.EntityTypeObservable),
 			mcp.Description("Entity type for run-responder operations."),
 		),
 		mcp.WithString(

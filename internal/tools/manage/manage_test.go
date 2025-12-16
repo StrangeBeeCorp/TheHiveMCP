@@ -32,7 +32,7 @@ func TestManageCreateAlert(t *testing.T) {
 			Name: "manage-entities",
 			Arguments: map[string]any{
 				"operation":   "create",
-				"entity-type": string(types.EntityTypeAlert),
+				"entity-type": types.EntityTypeAlert,
 				"entity-data": alertData,
 			},
 		},
@@ -45,7 +45,7 @@ func TestManageCreateAlert(t *testing.T) {
 	structuredData, ok := result.StructuredContent.(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "create", structuredData["operation"])
-	require.Equal(t, string(types.EntityTypeAlert), structuredData["entityType"])
+	require.Equal(t, types.EntityTypeAlert, structuredData["entityType"])
 
 	resultsAlert, ok := structuredData["result"].(map[string]any)
 	require.True(t, ok)
@@ -94,7 +94,7 @@ func TestManageUpdateCase(t *testing.T) {
 			Name: "manage-entities",
 			Arguments: map[string]any{
 				"operation":   "update",
-				"entity-type": string(types.EntityTypeCase),
+				"entity-type": types.EntityTypeCase,
 				"entity-ids":  []string{createdCase.UnderscoreId},
 				"entity-data": updateData,
 			},
@@ -142,7 +142,7 @@ func TestManageDeleteAlert(t *testing.T) {
 			Name: "manage-entities",
 			Arguments: map[string]any{
 				"operation":   "delete",
-				"entity-type": string(types.EntityTypeAlert),
+				"entity-type": types.EntityTypeAlert,
 				"entity-ids":  []string{createdAlert.UnderscoreId},
 			},
 		},
@@ -185,7 +185,7 @@ func TestManageAddCommentToCase(t *testing.T) {
 			Name: "manage-entities",
 			Arguments: map[string]any{
 				"operation":   "comment",
-				"entity-type": string(types.EntityTypeCase),
+				"entity-type": types.EntityTypeCase,
 				"entity-ids":  []string{createdCase.UnderscoreId},
 				"comment":     commentText,
 			},
@@ -199,7 +199,7 @@ func TestManageAddCommentToCase(t *testing.T) {
 	structuredData, ok := result.StructuredContent.(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "comment", structuredData["operation"])
-	require.Equal(t, string(types.EntityTypeCase), structuredData["entityType"])
+	require.Equal(t, types.EntityTypeCase, structuredData["entityType"])
 
 	// Verify the comment response contains our comment data
 	resultsArray, ok := structuredData["results"].([]any)
@@ -247,7 +247,7 @@ func TestManageCreateTaskInCase(t *testing.T) {
 			Name: "manage-entities",
 			Arguments: map[string]any{
 				"operation":   "create",
-				"entity-type": string(types.EntityTypeTask),
+				"entity-type": types.EntityTypeTask,
 				"entity-ids":  []string{createdCase.UnderscoreId}, // Parent case ID
 				"entity-data": taskData,
 			},
@@ -261,7 +261,7 @@ func TestManageCreateTaskInCase(t *testing.T) {
 	structuredData, ok := result.StructuredContent.(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "create", structuredData["operation"])
-	require.Equal(t, string(types.EntityTypeTask), structuredData["entityType"])
+	require.Equal(t, types.EntityTypeTask, structuredData["entityType"])
 
 	resultCase, ok := structuredData["result"].(map[string]any)
 	require.True(t, ok)
@@ -310,7 +310,7 @@ func TestManageCreateObservableInCase(t *testing.T) {
 			Name: "manage-entities",
 			Arguments: map[string]any{
 				"operation":   "create",
-				"entity-type": string(types.EntityTypeObservable),
+				"entity-type": types.EntityTypeObservable,
 				"entity-ids":  []string{createdCase.UnderscoreId}, // Parent case ID
 				"entity-data": observableData,
 			},
@@ -324,7 +324,7 @@ func TestManageCreateObservableInCase(t *testing.T) {
 	structuredData, ok := result.StructuredContent.(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "create", structuredData["operation"])
-	require.Equal(t, string(types.EntityTypeObservable), structuredData["entityType"])
+	require.Equal(t, types.EntityTypeObservable, structuredData["entityType"])
 
 	resultArray, ok := structuredData["result"].([]any)
 	require.True(t, ok)
@@ -380,7 +380,7 @@ func TestManageUpdateMultipleEntities(t *testing.T) {
 			Name: "manage-entities",
 			Arguments: map[string]any{
 				"operation":   "update",
-				"entity-type": string(types.EntityTypeCase),
+				"entity-type": types.EntityTypeCase,
 				"entity-ids":  caseIDs,
 				"entity-data": updateData,
 			},
@@ -428,7 +428,7 @@ func TestManageWithAnalystPermissions(t *testing.T) {
 			Name: "manage-entities",
 			Arguments: map[string]any{
 				"operation":   "create",
-				"entity-type": string(types.EntityTypeAlert),
+				"entity-type": types.EntityTypeAlert,
 				"entity-data": alertData,
 			},
 		},
@@ -452,7 +452,7 @@ func TestManageWithAnalystPermissions(t *testing.T) {
 			Name: "manage-entities",
 			Arguments: map[string]any{
 				"operation":   "delete",
-				"entity-type": string(types.EntityTypeAlert),
+				"entity-type": types.EntityTypeAlert,
 				"entity-ids":  []string{alertID},
 			},
 		},
@@ -493,7 +493,7 @@ func TestManageWithReadOnlyPermissions(t *testing.T) {
 			Name: "manage-entities",
 			Arguments: map[string]any{
 				"operation":   "create",
-				"entity-type": string(types.EntityTypeAlert),
+				"entity-type": types.EntityTypeAlert,
 				"entity-data": alertData,
 			},
 		},
@@ -511,7 +511,7 @@ func TestManageWithReadOnlyPermissions(t *testing.T) {
 			Name: "manage-entities",
 			Arguments: map[string]any{
 				"operation":   "comment",
-				"entity-type": string(types.EntityTypeCase),
+				"entity-type": types.EntityTypeCase,
 				"entity-ids":  []string{"~123"},
 				"comment":     "Test comment",
 			},

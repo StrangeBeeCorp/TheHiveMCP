@@ -167,19 +167,19 @@ func GetHiveFactHandler() ([]mcp.ResourceContents, error) {
 }
 
 func GetTaskFactHandler() ([]mcp.ResourceContents, error) {
-	return getFactContent(string(types.EntityTypeTask), nil)
+	return getFactContent(types.EntityTypeTask, nil)
 }
 
 func GetObservableFactHandler() ([]mcp.ResourceContents, error) {
-	return getFactContent(string(types.EntityTypeObservable), nil)
+	return getFactContent(types.EntityTypeObservable, nil)
 }
 
 func GetAlertFactHandler() ([]mcp.ResourceContents, error) {
-	return getFactContent(string(types.EntityTypeAlert), nil)
+	return getFactContent(types.EntityTypeAlert, nil)
 }
 
 func GetCaseFactHandler() ([]mcp.ResourceContents, error) {
-	return getFactContent(string(types.EntityTypeCase), nil)
+	return getFactContent(types.EntityTypeCase, nil)
 }
 
 func GetResponderFactHandler() ([]mcp.ResourceContents, error) {
@@ -202,7 +202,7 @@ func GetCatalogData() map[string]interface{} {
 			{
 				"name":        "schema",
 				"description": "Entity field definitions and data types. Query these to understand what fields are available for each entity type and their constraints. Each entity has three variants: base (output), /create (input for creation), and /update (partial input for updates).",
-				"resources":   []string{string(types.EntityTypeAlert), string(types.EntityTypeAlert) + "/create", string(types.EntityTypeAlert) + "/update", string(types.EntityTypeCase), string(types.EntityTypeCase) + "/create", string(types.EntityTypeCase) + "/update", string(types.EntityTypeTask), string(types.EntityTypeTask) + "/create", string(types.EntityTypeTask) + "/update", string(types.EntityTypeObservable), string(types.EntityTypeObservable) + "/create", string(types.EntityTypeObservable) + "/update", "case-template", "filter"},
+				"resources":   []string{types.EntityTypeAlert, types.EntityTypeAlert + "/create", types.EntityTypeAlert + "/update", types.EntityTypeCase, types.EntityTypeCase + "/create", types.EntityTypeCase + "/update", types.EntityTypeTask, types.EntityTypeTask + "/create", types.EntityTypeTask + "/update", types.EntityTypeObservable, types.EntityTypeObservable + "/create", types.EntityTypeObservable + "/update", "case-template", "filter"},
 			},
 			{
 				"name":        "metadata",
@@ -237,7 +237,7 @@ func GetCatalogData() map[string]interface{} {
 					{
 						"name":        "entities",
 						"description": "Entity-specific guides and best practices",
-						"resources":   []string{string(types.EntityTypeAlert), string(types.EntityTypeCase), string(types.EntityTypeTask), string(types.EntityTypeObservable)},
+						"resources":   []string{types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable},
 					},
 					{
 						"name":        "automation",

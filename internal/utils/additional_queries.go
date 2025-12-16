@@ -16,23 +16,23 @@ type EntityQueryConfig map[string]QueryFunc
 
 // queryRegistry maps entity types to their available queries
 var queryRegistry = map[string]EntityQueryConfig{
-	string(types.EntityTypeCase): {
+	types.EntityTypeCase: {
 		"tasks":       GetTasksFromCaseID,
 		"observables": GetObservablesFromCaseID,
 		"comments":    GetCommentsFromCaseID,
 		"pages":       GetPagesFromCaseID,
 		"attachments": GetAttachmentsFromCaseID,
 	},
-	string(types.EntityTypeAlert): {
+	types.EntityTypeAlert: {
 		"observables": GetObservablesFromAlertID,
 		"comments":    GetCommentsFromAlertID,
 		"pages":       GetPagesFromAlertID,
 		"attachments": GetAttachmentsFromAlertID,
 	},
-	string(types.EntityTypeTask): {
+	types.EntityTypeTask: {
 		"task-logs": GetTaskLogsFromTaskID,
 	},
-	string(types.EntityTypeObservable): {
+	types.EntityTypeObservable: {
 		// No additional queries supported yet
 	},
 }

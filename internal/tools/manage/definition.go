@@ -47,7 +47,7 @@ EXAMPLES:
 		mcp.WithString(
 			"entity-type",
 			mcp.Required(),
-			mcp.Enum(string(types.EntityTypeAlert), string(types.EntityTypeCase), string(types.EntityTypeTask), string(types.EntityTypeObservable)),
+			mcp.Enum(types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable),
 			mcp.Description("Type of entity to manage."),
 		),
 		mcp.WithArray(
