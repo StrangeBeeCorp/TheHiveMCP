@@ -62,3 +62,11 @@ const PermissionConfigAdmin PermissionConfig = "admin"
 
 const DefaultMaxCompletionTime = 60 * time.Second
 const DefaultMaxCompletionRetries = 3
+
+// Entity type constants for TheHive entities
+const (
+	EntityTypeAlert      = "alert"
+	EntityTypeCase       = "case"
+	EntityTypeTask       = "task"
+	EntityTypeObservable = "observable"
+)

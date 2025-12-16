@@ -1,6 +1,7 @@
 package execute_automation
 
 import (
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -71,7 +72,7 @@ EXAMPLES:
 		),
 		mcp.WithString(
 			"entity-type",
-			mcp.Enum("case", "alert", "task", "observable"),
+			mcp.Enum(types.EntityTypeCase, types.EntityTypeAlert, types.EntityTypeTask, types.EntityTypeObservable),
 			mcp.Description("Entity type for run-responder operations."),
 		),
 		mcp.WithString(

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
@@ -103,7 +104,7 @@ func TestSearchCasesBySeverityAndStatus(t *testing.T) {
 		Params: mcp.CallToolParams{
 			Name: "search-entities",
 			Arguments: map[string]any{
-				"entity-type":   "case",
+				"entity-type":   types.EntityTypeCase,
 				"query":         "high severity cases with status New",
 				"extra-columns": []string{"_id", "title", "severity", "status"},
 			},
@@ -168,7 +169,7 @@ func TestSearchAlertsWithDateRange(t *testing.T) {
 		Params: mcp.CallToolParams{
 			Name: "search-entities",
 			Arguments: map[string]any{
-				"entity-type":   "alert",
+				"entity-type":   types.EntityTypeAlert,
 				"query":         "alerts from the last hour",
 				"extra-columns": []string{"_id", "title", "_createdAt"},
 			},
@@ -227,7 +228,7 @@ func TestSearchAlertsWithMultipleTags(t *testing.T) {
 		Params: mcp.CallToolParams{
 			Name: "search-entities",
 			Arguments: map[string]any{
-				"entity-type":   "alert",
+				"entity-type":   types.EntityTypeAlert,
 				"query":         "alerts tagged with phishing or malware",
 				"extra-columns": []string{"_id", "title", "tags", "severity"},
 				"sort-by":       "severity",
@@ -294,7 +295,7 @@ func TestSearchCasesWithAssigneeAndSorting(t *testing.T) {
 		Params: mcp.CallToolParams{
 			Name: "search-entities",
 			Arguments: map[string]any{
-				"entity-type":   "case",
+				"entity-type":   types.EntityTypeCase,
 				"query":         "in progress cases assigned to admin@thehive.local",
 				"extra-columns": []string{"_id", "title", "assignee", "_createdAt"},
 				"sort-order":    "asc",
@@ -367,7 +368,7 @@ func TestSearchAlertsWithComplexOrConditions(t *testing.T) {
 		Params: mcp.CallToolParams{
 			Name: "search-entities",
 			Arguments: map[string]any{
-				"entity-type":   "alert",
+				"entity-type":   types.EntityTypeAlert,
 				"query":         "critical or high severity alerts",
 				"extra-columns": []string{"_id", "title", "severity"},
 				"sort-by":       "severity",
@@ -438,7 +439,7 @@ func TestSearchTasksWithLimit(t *testing.T) {
 		Params: mcp.CallToolParams{
 			Name: "search-entities",
 			Arguments: map[string]any{
-				"entity-type": "task",
+				"entity-type": types.EntityTypeTask,
 				"query":       "show me the latest tasks",
 				"limit":       3,
 			},
@@ -489,7 +490,7 @@ func TestKeptColumnsOverrideExtraColumns(t *testing.T) {
 		Params: mcp.CallToolParams{
 			Name: "search-entities",
 			Arguments: map[string]any{
-				"entity-type": "alert",
+				"entity-type": types.EntityTypeAlert,
 				"query":       "show me alerts",
 				// Request additional columns that should be ignored by handler's kept_columns
 				"extra-columns": []string{"_id", "title", "severity", "tags", "_createdAt"},
@@ -583,7 +584,7 @@ func TestSearchWithAnalystPermissions(t *testing.T) {
 		Params: mcp.CallToolParams{
 			Name: "search-entities",
 			Arguments: map[string]any{
-				"entity-type": "alert",
+				"entity-type": types.EntityTypeAlert,
 				"query":       "show me all alerts",
 			},
 		},
@@ -646,7 +647,7 @@ func TestSearchWithReadOnlyPermissions(t *testing.T) {
 		Params: mcp.CallToolParams{
 			Name: "search-entities",
 			Arguments: map[string]any{
-				"entity-type": "alert",
+				"entity-type": types.EntityTypeAlert,
 				"query":       "show me alerts",
 			},
 		},

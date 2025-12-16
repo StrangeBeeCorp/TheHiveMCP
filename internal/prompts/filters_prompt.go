@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/resources"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -14,13 +15,13 @@ func getEntitySchema(entityType string) (string, error) {
 	var content []mcp.ResourceContents
 	var err error
 	switch entityType {
-	case "case":
+	case types.EntityTypeCase:
 		content, err = resources.GetCaseSchemaHandler()
-	case "alert":
+	case types.EntityTypeAlert:
 		content, err = resources.GetAlertSchemaHandler()
-	case "observable":
+	case types.EntityTypeObservable:
 		content, err = resources.GetObservableSchemaHandler()
-	case "task":
+	case types.EntityTypeTask:
 		content, err = resources.GetTaskSchemaHandler()
 	default:
 		return "", fmt.Errorf("unsupported entity type: %s", entityType)
@@ -42,13 +43,13 @@ func getEntityFacts(entityType string) (string, error) {
 	var content []mcp.ResourceContents
 	var err error
 	switch entityType {
-	case "case":
+	case types.EntityTypeCase:
 		content, err = resources.GetCaseFactHandler()
-	case "alert":
+	case types.EntityTypeAlert:
 		content, err = resources.GetAlertFactHandler()
-	case "observable":
+	case types.EntityTypeObservable:
 		content, err = resources.GetObservableFactHandler()
-	case "task":
+	case types.EntityTypeTask:
 		content, err = resources.GetTaskFactHandler()
 	default:
 		return "", fmt.Errorf("unsupported entity type: %s", entityType)

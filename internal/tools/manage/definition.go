@@ -1,6 +1,7 @@
 package manage
 
 import (
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -46,7 +47,7 @@ EXAMPLES:
 		mcp.WithString(
 			"entity-type",
 			mcp.Required(),
-			mcp.Enum("alert", "case", "task", "observable"),
+			mcp.Enum(types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable),
 			mcp.Description("Type of entity to manage."),
 		),
 		mcp.WithArray(
