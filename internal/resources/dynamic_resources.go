@@ -83,7 +83,7 @@ func GetAvailableUsers(ctx context.Context, _ mcp.ReadResourceRequest) ([]mcp.Re
 	}
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
-			URI:      "hive://metadata/organization/users",
+			URI:      "hive://metadata/organisation/users",
 			MIMEType: "application/json",
 			Text:     string(usersJSON),
 		},
@@ -348,9 +348,9 @@ func GetCurrentPermissions(ctx context.Context, _ mcp.ReadResourceRequest) ([]mc
 func RegisterDynamicResources(registry *ResourceRegistry) {
 	// Register available users
 	availableUsers := mcp.NewResource(
-		"hive://metadata/organization/users",
+		"hive://metadata/organisation/users",
 		"Users",
-		mcp.WithResourceDescription("List of users in the organization for assignment"),
+		mcp.WithResourceDescription("List of users in the organisation for assignment"),
 		mcp.WithMIMEType("application/json"),
 	)
 	registry.Register(availableUsers, GetAvailableUsers)
@@ -413,7 +413,7 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 	availableCustomFields := mcp.NewResource(
 		"hive://metadata/entities/custom-fields",
 		"Custom Fields",
-		mcp.WithResourceDescription("Organization-defined custom fields across all entities"),
+		mcp.WithResourceDescription("Organisation-defined custom fields across all entities"),
 		mcp.WithMIMEType("application/json"),
 	)
 	registry.Register(availableCustomFields, GetAvailableCustomFields)

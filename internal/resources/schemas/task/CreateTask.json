@@ -30,7 +30,7 @@
     "flag": {
       "type": "boolean",
       "default": false,
-      "description": "Whether this task is flagged for attention. Flagged tasks are highlighted in the task list for visibility across the organization. Defaults to false."
+      "description": "Whether this task is flagged for attention. Flagged tasks are highlighted in the task list for visibility across the organisation. Defaults to false."
     },
     "startDate": {
       "type": "integer",
@@ -59,7 +59,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 128,
-      "description": "Email or username of the user assigned to work on this task. Tasks can be assigned to users within the organization."
+      "description": "Email or username of the user assigned to work on this task. Tasks can be assigned to users within the organisation."
     },
     "mandatory": {
       "type": "boolean",

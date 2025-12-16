@@ -252,8 +252,8 @@ When creating alerts, the following fields are **required**:
 - `severity`: Numeric severity level (1-4, where 4 is most critical)
 
 **Optional but commonly used fields**:
-- `tlp`: Traffic Light Protocol (0-4, default varies by organization)
-- `pap`: Permissible Actions Protocol (0-3, default varies by organization)
+- `tlp`: Traffic Light Protocol (0-4, default varies by organisation)
+- `pap`: Permissible Actions Protocol (0-3, default varies by organisation)
 - `tags`: Array of classification tags
 - `assignee`: Email/username to assign the alert
 - `externalLink`: URL to view alert in source system

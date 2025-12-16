@@ -73,7 +73,7 @@ get-resource(uri="hive://metadata/automation/analyzers")
 - **Get case documentation**: `get-resource(uri="hive://docs/entities/case")`
 - **Get available analyzers**: `get-resource(uri="hive://metadata/automation/analyzers")`
 
-## Schema Organization
+## Schema Organisation
 
 Entity schemas are organized into three variants:
 
@@ -88,7 +88,7 @@ Example:
 - `hive://schema/task/create` - Input schema for creating tasks
 - `hive://schema/task/update` - Partial input schema for updating tasks
 
-This organization makes it clear which fields are required for creation vs available for updates.
+This organisation makes it clear which fields are required for creation vs available for updates.
 
 ## Best Practices
 

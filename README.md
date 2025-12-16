@@ -129,7 +129,7 @@ Double-click the downloaded `.mcpb` file. Claude Desktop automatically:
 When prompted during installation, provide:
 - **TheHive URL**: Your TheHive instance URL (for example, `https://thehive.company.com`)
 - **API Key**: Your TheHive API key for authentication
-- **Organization**: Your TheHive organization name
+- **Organisation**: Your TheHive organisation name
 - **Permissions config**: (Optional) Choose from:
   - `read_only` - Default safe mode (search only, no modifications)
   - `admin` - Full access (for testing/development only)
@@ -311,7 +311,7 @@ This allows you to set defaults via environment variables while overriding speci
 | API key | `THEHIVE_API_KEY` | `--thehive-api-key` | `Authorization` or `X-TheHive-Api-Key` | - | TheHive API key |
 | Username | `THEHIVE_USERNAME` | `--thehive-username` | - | - | Username for basic auth |
 | Password | `THEHIVE_PASSWORD` | `--thehive-password` | - | - | Password for basic auth |
-| Organization | `THEHIVE_ORGANISATION` | `--thehive-organisation` | `X-TheHive-Org` | - | TheHive organization |
+| Organisation | `THEHIVE_ORGANISATION` | `--thehive-organisation` | `X-TheHive-Org` | - | TheHive organisation |
 | **Permissions** |
 | Permissions config | `PERMISSIONS_CONFIG` | `--permissions-config` | - | `read_only` | Permissions: `read_only`, `admin`, or YAML file path |
 | **MCP server** |
@@ -333,7 +333,7 @@ This allows you to set defaults via environment variables while overriding speci
 # .env file - Base configuration
 THEHIVE_URL=https://thehive.example.com
 THEHIVE_API_KEY=<thehive_api_key>
-THEHIVE_ORGANISATION=<thehive_organization>
+THEHIVE_ORGANISATION=<thehive_organisation>
 PERMISSIONS_CONFIG=docs/examples/permissions/analyst.yaml  # Optional, defaults to read-only
 MCP_BIND_HOST=0.0.0.0
 MCP_PORT=8082
@@ -441,7 +441,7 @@ Access TheHive resources for documentation, schemas, and metadata. The entry poi
 - Query metadata for available options with subcategory support
 - Get comprehensive documentation through hierarchical paths
 
-**Schema organization:**
+**Schema organisation:**
 - Output schemas: `hive://schema/{entity}` - Fields returned from queries
 - Create schemas: `hive://schema/{entity}/create` - Required fields for creation
 - Update schemas: `hive://schema/{entity}/update` - Available fields for updates

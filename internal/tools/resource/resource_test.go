@@ -255,7 +255,7 @@ func TestGetResourceBrowseMetadataCategory(t *testing.T) {
 
 	require.Contains(t, subcategoryNames, "entities")
 	require.Contains(t, subcategoryNames, "automation")
-	require.Contains(t, subcategoryNames, "organization")
+	require.Contains(t, subcategoryNames, "organisation")
 }
 
 // TestGetResourceFetchCaseStatuses tests fetching case statuses metadata
@@ -397,7 +397,7 @@ func TestGetResourceResourcesFieldBehavior(t *testing.T) {
 
 	subcategoriesList, ok := subcategories.([]any)
 	require.True(t, ok)
-	require.NotEmpty(t, subcategoriesList, "Should contain automation, entities, organization subcategories")
+	require.NotEmpty(t, subcategoriesList, "Should contain automation, entities, organisation subcategories")
 
 	// Check resources field behavior when no direct resources exist
 	resources, exists := structuredData["resources"]

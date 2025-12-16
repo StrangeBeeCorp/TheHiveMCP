@@ -218,8 +218,8 @@ func GetCatalogData() map[string]interface{} {
 						"resources":   []string{"analyzers", "responders"},
 					},
 					{
-						"name":        "organization",
-						"description": "Organization settings and user management",
+						"name":        "organisation",
+						"description": "Organisation settings and user management",
 						"resources":   []string{"users"},
 					},
 				},

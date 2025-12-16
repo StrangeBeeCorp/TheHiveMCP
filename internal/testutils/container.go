@@ -65,7 +65,7 @@ func StartTheHiveContainer(t *testing.T) (string, error) {
 	return url, nil
 }
 
-// CreateOrgClient creates a client configured for a specific organization
+// CreateOrgClient creates a client configured for a specific organisation
 func CreateOrgClient(t *testing.T, cfg *Config) *thehive.APIClient {
 	if t != nil {
 		t.Helper()
@@ -91,12 +91,12 @@ func CreateAuthContext(username, password string) context.Context {
 	return context.WithValue(context.Background(), thehive.ContextBasicAuth, auth)
 }
 
-// ResetHiveInstance clears all data from the test organizations
+// ResetHiveInstance clears all data from the test organisations
 func ResetHiveInstance(t *testing.T, hiveUrl string, testConfig *HiveTestConfig) error {
 	t.Helper()
 
 	for _, org := range []string{testConfig.MainOrg, testConfig.AdminOrg} {
-		if err := resetOrganization(t, hiveUrl, org); err != nil {
+		if err := resetOrganisation(t, hiveUrl, org); err != nil {
 			return err
 		}
 	}
@@ -115,7 +115,7 @@ func initHiveInstance(t *testing.T, url string) error {
 	client, ctx := createClientAndContext(t, adminConfig)
 	testConfig := NewHiveTestConfig()
 
-	ensureTestOrganization(t, client, ctx, testConfig.MainOrg)
+	ensureTestOrganisation(t, client, ctx, testConfig.MainOrg)
 	setupUserPermissions(t, client, ctx, testConfig.MainOrg)
 
 	return nil
@@ -141,7 +141,7 @@ func createClientAndContext(t *testing.T, cfg *Config) (*thehive.APIClient, cont
 	return client, context.WithValue(baseCtx, thehive.ContextBasicAuth, auth)
 }
 
-func ensureTestOrganization(t *testing.T, client *thehive.APIClient, ctx context.Context, orgName string) string {
+func ensureTestOrganisation(t *testing.T, client *thehive.APIClient, ctx context.Context, orgName string) string {
 	t.Helper()
 
 	// Check if org exists
@@ -166,7 +166,7 @@ func ensureTestOrganization(t *testing.T, client *thehive.APIClient, ctx context
 	}
 
 	// Create if doesn't exist
-	createOrgInput := thehive.NewInputCreateOrganisation(orgName, "Integration test organization")
+	createOrgInput := thehive.NewInputCreateOrganisation(orgName, "Integration test organisation")
 	createResp, httpResp, err := client.OrganisationAPI.CreateOrganisation(ctx).
 		InputCreateOrganisation(*createOrgInput).Execute()
 
@@ -200,11 +200,11 @@ func setupUserPermissions(t *testing.T, client *thehive.APIClient, ctx context.C
 		InputSetUserOrganisations(*updateInput).Execute()
 
 	if err != nil || httpResp.StatusCode != http.StatusOK {
-		t.Fatalf("Failed to set user organizations: %v, status: %d", err, httpResp.StatusCode)
+		t.Fatalf("Failed to set user organisations: %v, status: %d", err, httpResp.StatusCode)
 	}
 }
 
-func resetOrganization(t *testing.T, hiveUrl string, org string) error {
+func resetOrganisation(t *testing.T, hiveUrl string, org string) error {
 	t.Helper()
 
 	cfg := &Config{

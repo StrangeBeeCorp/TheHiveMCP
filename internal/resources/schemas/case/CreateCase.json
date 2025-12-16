@@ -18,7 +18,7 @@
       "format": "int32",
       "enum": [1, 2, 3, 4],
       "default": 2,
-      "description": "Numeric severity level of the case. Higher numbers indicate more severe incidents. The range and meaning of values are configurable per organization. Defaults to 2 if not specified."
+      "description": "Numeric severity level of the case. Higher numbers indicate more severe incidents. The range and meaning of values are configurable per organisation. Defaults to 2 if not specified."
     },
     "startDate": {
       "type": "integer",
@@ -52,7 +52,7 @@
       "format": "int32",
       "enum": [0, 1, 2, 3, 4],
       "default": 2,
-      "description": "Traffic Light Protocol level (0-4) indicating information sharing restrictions. 0=TLP:CLEAR (unlimited), 1=TLP:GREEN (community), 2=TLP:AMBER (limited), 3=TLP:AMBER+STRICT (organization only), 4=TLP:RED (personal/recipient only). Defaults to 2 (TLP:AMBER)."
+      "description": "Traffic Light Protocol level (0-4) indicating information sharing restrictions. 0=TLP:CLEAR (unlimited), 1=TLP:GREEN (community), 2=TLP:AMBER (limited), 3=TLP:AMBER+STRICT (organisation only), 4=TLP:RED (personal/recipient only). Defaults to 2 (TLP:AMBER)."
     },
     "pap": {
       "type": "integer",
@@ -66,7 +66,7 @@
       "minLength": 1,
       "maxLength": 64,
       "default": "New",
-      "description": "Current status of the case within its stage. Status values are configurable per organization and vary by stage (e.g., 'New', 'InProgress', 'Resolved', 'Rejected'). Defaults to 'New'."
+      "description": "Current status of the case within its stage. Status values are configurable per organisation and vary by stage (e.g., 'New', 'InProgress', 'Resolved', 'Rejected'). Defaults to 'New'."
     },
     "summary": {
       "type": "string",
@@ -80,7 +80,7 @@
       "description": "Email or username of the primary analyst assigned to investigate and resolve this case."
     },
     "customFields": {
-      "description": "Organization-specific custom fields that extend the default case schema. Can be provided as an object (customFieldsAsObject) or as an array of custom field values."
+      "description": "Organisation-specific custom fields that extend the default case schema. Can be provided as an object (customFieldsAsObject) or as an array of custom field values."
     },
     "caseTemplate": {
       "type": "string",
@@ -98,7 +98,7 @@
     },
     "shares": {
       "type": "array",
-      "description": "Array of organizations to share this case with upon creation. Enables cross-organizational collaboration from the start."
+      "description": "Array of organisations to share this case with upon creation. Enables cross-organisational collaboration from the start."
     },
     "taskRule": {
       "type": "string",
