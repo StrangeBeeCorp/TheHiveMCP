@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"slices"
+	"unicode"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/permissions"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/prompts"
@@ -204,7 +206,8 @@ func (t *SearchTool) buildHiveQuery(params *searchParams, filters *FilterResult)
 }
 
 func (t *SearchTool) buildListOperation(entityType string) *thehive.InputQueryGenericOperation {
-	operationName := fmt.Sprintf("list%s", capitalize(entityType))
+	catpitalizedEntityType := string(unicode.ToUpper(rune(entityType[0]))) + entityType[1:]
+	operationName := fmt.Sprintf("list%s", catpitalizedEntityType)
 	return thehive.NewInputQueryGenericOperation(operationName)
 }
 
@@ -271,14 +274,9 @@ func (t *SearchTool) executeQuery(ctx context.Context, hiveQuery thehive.InputQu
 
 // Result processing
 func (t *SearchTool) formatResults(results []map[string]interface{}, params *searchParams, filters map[string]interface{}) (*mcp.CallToolResult, error) {
-	// Convert to map slice
-	resultsMap, err := t.convertToMapSlice(results)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert results: %w", err)
-	}
 
 	// Serialize entities (format dates, etc.)
-	parsedResults, err := t.parseDateFields(resultsMap)
+	parsedResults, err := t.parseDateFields(results)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse entities: %w", err)
 	}
@@ -293,20 +291,6 @@ func (t *SearchTool) formatResults(results []map[string]interface{}, params *sea
 	}
 
 	return utils.NewToolResultJSONUnescaped(response), nil
-}
-
-func (t *SearchTool) convertToMapSlice(results []map[string]interface{}) ([]map[string]interface{}, error) {
-	resultBytes, err := json.Marshal(results)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal results: %w", err)
-	}
-
-	var resultsMap []map[string]interface{}
-	if err := json.Unmarshal(resultBytes, &resultsMap); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal results: %w", err)
-	}
-
-	return resultsMap, nil
 }
 
 func (t *SearchTool) parseDateFields(entities []map[string]interface{}) ([]map[string]interface{}, error) {
@@ -343,7 +327,7 @@ func (t *SearchTool) getExcludedFields(entityType string, keptColumns []string, 
 	excludeFields := make([]string, 0)
 
 	for _, field := range allFields {
-		if !contains(keptColumns, field) {
+		if !slices.Contains(keptColumns, field) {
 			if field == "extraData" && len(extraData) > 0 {
 				continue
 			}
@@ -351,20 +335,4 @@ func (t *SearchTool) getExcludedFields(entityType string, keptColumns []string, 
 		}
 	}
 	return excludeFields
-}
-
-func capitalize(s string) string {
-	if len(s) == 0 {
-		return s
-	}
-	return string(s[0]-32) + s[1:]
-}
-
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }
