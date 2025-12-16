@@ -178,7 +178,7 @@ func (t *ManageTool) createAlert(ctx context.Context, client *thehive.APIClient,
 
 	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
 		"operation":  "create",
-		"entityType": string(types.EntityTypeAlert),
+		"entityType": types.EntityTypeAlert,
 		"result":     result,
 	}), nil
 }
