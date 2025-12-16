@@ -14,6 +14,12 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+const (
+	// regexCaptureGroupIndex represents the index of the first capture group in regex match results.
+	// In Go's regexp package: index 0 = full match, index 1 = first capture group, etc.
+	regexCaptureGroupIndex = 1
+)
+
 // Robust function to extract and unmarshal JSON from a string, even if it's wrapped in markdown code blocks or other text.
 func extractAndUnmarshalJSON(content string, target interface{}) error {
 	//
@@ -22,9 +28,9 @@ func extractAndUnmarshalJSON(content string, target interface{}) error {
 		re := regexp.MustCompile("```(?:json)?\\s*\n((?s).*?)```")
 		matches := re.FindStringSubmatch(content)
 
-		const matchIndexWithCaptureGroup = 2 // Full match at [0] + first capture group at [1]
-		if len(matches) >= matchIndexWithCaptureGroup {
-			content = matches[1] // We only want the content between the first two ``` markers
+		// We need at least 2 elements: full match (index 0) and first capture group (index 1)
+		if len(matches) > regexCaptureGroupIndex {
+			content = matches[regexCaptureGroupIndex] // Extract content between the ``` markers
 		}
 	}
 
