@@ -60,5 +60,5 @@ type PermissionConfig string
 const PermissionConfigReadOnly PermissionConfig = "read_only"
 const PermissionConfigAdmin PermissionConfig = "admin"
 
-const DefaultMaxCompletionTime = time.Duration(60 * 1000 * 1000 * 1000) // 60 seconds
+const DefaultMaxCompletionTime = 60 * time.Second
 const DefaultMaxCompletionRetries = 3
