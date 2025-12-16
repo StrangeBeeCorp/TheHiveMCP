@@ -274,14 +274,9 @@ func (t *SearchTool) executeQuery(ctx context.Context, hiveQuery thehive.InputQu
 
 // Result processing
 func (t *SearchTool) formatResults(results []map[string]interface{}, params *searchParams, filters map[string]interface{}) (*mcp.CallToolResult, error) {
-	// Convert to map slice
-	resultsMap, err := t.convertToMapSlice(results)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert results: %w", err)
-	}
 
 	// Serialize entities (format dates, etc.)
-	parsedResults, err := t.parseDateFields(resultsMap)
+	parsedResults, err := t.parseDateFields(results)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse entities: %w", err)
 	}
@@ -296,20 +291,6 @@ func (t *SearchTool) formatResults(results []map[string]interface{}, params *sea
 	}
 
 	return utils.NewToolResultJSONUnescaped(response), nil
-}
-
-func (t *SearchTool) convertToMapSlice(results []map[string]interface{}) ([]map[string]interface{}, error) {
-	resultBytes, err := json.Marshal(results)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal results: %w", err)
-	}
-
-	var resultsMap []map[string]interface{}
-	if err := json.Unmarshal(resultBytes, &resultsMap); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal results: %w", err)
-	}
-
-	return resultsMap, nil
 }
 
 func (t *SearchTool) parseDateFields(entities []map[string]interface{}) ([]map[string]interface{}, error) {
