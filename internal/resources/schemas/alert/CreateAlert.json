@@ -41,7 +41,7 @@
       "type": "integer",
       "format": "int32",
       "enum": [1, 2, 3, 4],
-      "description": "Numeric severity level of the alert. Higher numbers indicate more severe threats. The range and meaning of values are configurable per organization."
+      "description": "Numeric severity level of the alert. Higher numbers indicate more severe threats. The range and meaning of values are configurable per organisation."
     },
     "date": {
       "type": "integer",
@@ -67,7 +67,7 @@
       "type": "integer",
       "format": "int32",
       "enum": [0, 1, 2, 3, 4],
-      "description": "Traffic Light Protocol level (0-4) indicating information sharing restrictions. 0=TLP:CLEAR (unlimited), 1=TLP:GREEN (community), 2=TLP:AMBER (limited), 3=TLP:AMBER+STRICT (organization only), 4=TLP:RED (personal/recipient only)."
+      "description": "Traffic Light Protocol level (0-4) indicating information sharing restrictions. 0=TLP:CLEAR (unlimited), 1=TLP:GREEN (community), 2=TLP:AMBER (limited), 3=TLP:AMBER+STRICT (organisation only), 4=TLP:RED (personal/recipient only)."
     },
     "pap": {
       "type": "integer",
@@ -76,7 +76,7 @@
       "description": "Permissible Actions Protocol level (0-3) indicating allowed actions on alert data. 0=PAP:CLEAR (unlimited actions), 1=PAP:GREEN (passive only), 2=PAP:AMBER (active with approval), 3=PAP:RED (no actions)."
     },
     "customFields": {
-      "description": "Organization-specific custom fields that extend the default alert schema. Can be provided as an object (customFieldsAsObject) or as an array of custom field values."
+      "description": "Organisation-specific custom fields that extend the default alert schema. Can be provided as an object (customFieldsAsObject) or as an array of custom field values."
     },
     "summary": {
       "type": "string",
@@ -87,7 +87,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 64,
-      "description": "Current status of the alert within its stage. Status values are configurable per organization and vary by stage (e.g., 'New', 'Updated', 'Ignored', 'Imported')."
+      "description": "Current status of the alert within its stage. Status values are configurable per organisation and vary by stage (e.g., 'New', 'Updated', 'Ignored', 'Imported')."
     },
     "assignee": {
       "type": "string",
@@ -107,7 +107,7 @@
     },
     "procedures": {
       "type": "array",
-      "description": "List of procedures (TTPs) to link the alert to. References MITRE ATT&CK techniques or custom procedures defined in the organization."
+      "description": "List of procedures (TTPs) to link the alert to. References MITRE ATT&CK techniques or custom procedures defined in the organisation."
     }
   }
 }

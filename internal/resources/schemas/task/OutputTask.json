@@ -55,7 +55,7 @@
     },
     "flag": {
       "type": "boolean",
-      "description": "Whether this task is flagged for attention. Flagged tasks are highlighted in the task list for visibility across the organization."
+      "description": "Whether this task is flagged for attention. Flagged tasks are highlighted in the task list for visibility across the organisation."
     },
     "startDate": {
       "type": "integer",
@@ -73,7 +73,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 128,
-      "description": "Email or username of the user assigned to work on this task. Tasks can be assigned to users within the organization."
+      "description": "Email or username of the user assigned to work on this task. Tasks can be assigned to users within the organisation."
     },
     "order": {
       "type": "integer",
@@ -117,15 +117,15 @@
         },
         "shareCount": {
           "type": "integer",
-          "description": "Total number of organizations this task has been shared with. Used for quick visibility in task lists without fetching full share details."
+          "description": "Total number of organisations this task has been shared with. Used for quick visibility in task lists without fetching full share details."
         },
         "actionRequired": {
           "type": "boolean",
-          "description": "Whether an action is required from the current user's organization on this task. Introduced in TheHive 4.0.3 for collaborative workflows. When true, the task displays a 'Require Action' indicator."
+          "description": "Whether an action is required from the current user's organisation on this task. Introduced in TheHive 4.0.3 for collaborative workflows. When true, the task displays a 'Require Action' indicator."
         },
         "actionRequiredMap": {
           "type": "object",
-          "description": "Map of organization IDs to boolean values indicating whether an action is required from each shared organization. Provides detailed view of which organizations need to take action on this task."
+          "description": "Map of organisation IDs to boolean values indicating whether an action is required from each shared organisation. Provides detailed view of which organisations need to take action on this task."
         }
       }
     },

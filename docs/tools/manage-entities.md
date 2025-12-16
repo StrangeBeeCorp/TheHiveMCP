@@ -18,13 +18,13 @@ The `manage-entities` tool provides comprehensive Create, Read, Update, Delete, 
 
 ## Operations
 
-### Create Operations
+### Create operations
 
 Create new entities with complete schema data.
 
-#### Creating Alerts
+#### Creating alerts
 
-**Minimal Example (Required Fields Only):**
+**Minimal example (required fields only):**
 ```json
 {
   "operation": "create",
@@ -39,7 +39,7 @@ Create new entities with complete schema data.
 }
 ```
 
-**Recommended Example (With Common Fields):**
+**Recommended example (with common fields):**
 ```json
 {
   "operation": "create",
@@ -56,7 +56,7 @@ Create new entities with complete schema data.
 }
 ```
 
-**Complete Example with Optional Fields:**
+**Complete example with optional fields:**
 ```json
 {
   "operation": "create",
@@ -77,7 +77,7 @@ Create new entities with complete schema data.
 }
 ```
 
-#### Creating Cases
+#### Creating cases
 ```json
 {
   "operation": "create",
@@ -92,7 +92,7 @@ Create new entities with complete schema data.
 }
 ```
 
-#### Creating Tasks (requires parent case)
+#### Creating tasks (requires parent case)
 ```json
 {
   "operation": "create",
@@ -106,7 +106,7 @@ Create new entities with complete schema data.
 }
 ```
 
-#### Creating Observables (requires parent case/alert)
+#### Creating observables (requires parent case/alert)
 ```json
 {
   "operation": "create",
@@ -121,7 +121,7 @@ Create new entities with complete schema data.
 }
 ```
 
-### Update Operations
+### Update operations
 
 Update existing entities with partial field changes.
 
@@ -138,7 +138,7 @@ Update existing entities with partial field changes.
 }
 ```
 
-### Delete Operations
+### Delete operations
 
 **⚠️ Warning**: Delete operations are irreversible!
 
@@ -150,11 +150,11 @@ Update existing entities with partial field changes.
 }
 ```
 
-### Comment Operations
+### Comment operations
 
 Add comments to cases or task logs to tasks.
 
-#### Adding Case Comments
+#### Adding case comments
 ```json
 {
   "operation": "comment",
@@ -164,7 +164,7 @@ Add comments to cases or task logs to tasks.
 }
 ```
 
-#### Adding Task Logs
+#### Adding task logs
 ```json
 {
   "operation": "comment",
@@ -176,19 +176,19 @@ Add comments to cases or task logs to tasks.
 
 ## Entity Relationships and Constraints
 
-### Hierarchical Structure
+### Hierarchical structure
 - **Cases** are top-level entities
 - **Tasks** belong to cases
 - **Observables** can belong to cases OR alerts
 - **Alerts** are independent but can be promoted to cases
 
-### Creation Constraints
+### Creation constraints
 - **Tasks**: Must specify parent case ID in `entity-ids`
 - **Observables**: Must specify parent case or alert ID in `entity-ids`
 - **Alerts**: Can be created independently
 - **Cases**: Can be created independently
 
-### Comment Constraints
+### Comment constraints
 - **Cases**: Support standard comments
 - **Tasks**: Use "task logs" instead of comments
 - **Alerts**: Not supported for comments
@@ -235,16 +235,16 @@ Available output schemas (for understanding query results):
 
 ## Best Practices
 
-### Before Creating Entities
+### Before creating entities
 1. **Query schemas**: Use `get-resource` to understand required fields
 2. **Check metadata**: Verify valid values for enums and choices
 3. **Validate relationships**: Ensure parent entities exist
 
-### Alert-Specific Requirements
+### Alert-specific requirements
 When creating alerts, the following fields are **required**:
-- `type`: Alert category (e.g., "external", "malware", "phishing")
-- `source`: Source system name (e.g., "SIEM", "EDR", "Email Gateway")
-- `sourceRef`: Unique reference from source system (e.g., "SIEM-2024-001234")
+- `type`: Alert category (for example, "external", "malware", "phishing")
+- `source`: Source system name (for example, "SIEM", "EDR", "Email Gateway")
+- `sourceRef`: Unique reference from source system (for example, "SIEM-2024-001234")
 - `title`: Brief alert summary
 - `description`: Detailed alert description
 
@@ -252,46 +252,46 @@ When creating alerts, the following fields are **required**:
 - `severity`: Numeric severity level (1-4, where 4 is most critical)
 
 **Optional but commonly used fields**:
-- `tlp`: Traffic Light Protocol (0-4, default varies by organization)
-- `pap`: Permissible Actions Protocol (0-3, default varies by organization)
+- `tlp`: Traffic Light Protocol (0-4, default varies by organisation)
+- `pap`: Permissible Actions Protocol (0-3, default varies by organisation)
 - `tags`: Array of classification tags
 - `assignee`: Email/username to assign the alert
 - `externalLink`: URL to view alert in source system
 - `flag`: Boolean to mark the alert for attention
 - `summary`: Brief triage notes or summary
 
-### Data Integrity
+### Data integrity
 1. **Required fields**: Always include mandatory schema fields
 2. **Data types**: Match expected types (string, number, array, etc.)
 3. **Enum values**: Use valid enumeration values
 4. **Relationships**: Maintain proper parent-child relationships
 
-### Update Operations
+### Update operations
 1. **Partial updates**: Only include fields that need to change
 2. **Field validation**: Ensure new values meet schema constraints
 3. **State transitions**: Follow valid status/stage transitions
 
-### Security Considerations
+### Security considerations
 1. **Permissions**: Ensure user has appropriate permissions
 2. **Data sensitivity**: Handle sensitive data appropriately
 3. **Audit trail**: All operations are logged in TheHive
 
 ## Common Patterns
 
-### Investigation Workflow
+### Investigation workflow
 1. Create case for investigation
 2. Create tasks for specific activities
 3. Create observables as evidence is collected
 4. Update case status as investigation progresses
 5. Add comments to document findings
 
-### Alert Processing
+### Alert processing
 1. Create alert from external source
 2. Analyze alert content and create observables
 3. Promote to case if investigation needed
 4. Create tasks for investigation activities
 
-### Batch Operations
+### Batch operations
 Use multiple `entity-ids` for bulk operations:
 ```json
 {

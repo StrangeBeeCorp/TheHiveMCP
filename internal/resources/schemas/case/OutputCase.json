@@ -67,11 +67,11 @@
     "severity": {
       "type": "integer",
       "format": "int32",
-      "description": "Numeric severity level of the case. Higher numbers indicate more severe incidents. The range and meaning of values are configurable per organization."
+      "description": "Numeric severity level of the case. Higher numbers indicate more severe incidents. The range and meaning of values are configurable per organisation."
     },
     "severityLabel": {
       "type": "string",
-      "description": "Human-readable label corresponding to the severity value (e.g., 'Low', 'Medium', 'High', 'Critical'). Defined in organization configuration."
+      "description": "Human-readable label corresponding to the severity value (e.g., 'Low', 'Medium', 'High', 'Critical'). Defined in organisation configuration."
     },
     "startDate": {
       "type": "integer",
@@ -99,7 +99,7 @@
     "tlp": {
       "type": "integer",
       "format": "int32",
-      "description": "Traffic Light Protocol level (0-4) indicating information sharing restrictions. 0=TLP:CLEAR (unlimited), 1=TLP:GREEN (community), 2=TLP:AMBER (limited), 3=TLP:AMBER+STRICT (organization only), 4=TLP:RED (personal/recipient only)."
+      "description": "Traffic Light Protocol level (0-4) indicating information sharing restrictions. 0=TLP:CLEAR (unlimited), 1=TLP:GREEN (community), 2=TLP:AMBER (limited), 3=TLP:AMBER+STRICT (organisation only), 4=TLP:RED (personal/recipient only)."
     },
     "tlpLabel": {
       "type": "string",
@@ -116,7 +116,7 @@
     },
     "status": {
       "type": "string",
-      "description": "Current status of the case within its stage. Status values are configurable per organization and vary by stage (e.g., 'New', 'InProgress', 'Resolved', 'Rejected')."
+      "description": "Current status of the case within its stage. Status values are configurable per organisation and vary by stage (e.g., 'New', 'InProgress', 'Resolved', 'Rejected')."
     },
     "stage": {
       "type": "string",
@@ -162,7 +162,7 @@
           }
         }
       },
-      "description": "Organization-specific custom fields that extend the default case schema. Allows recording additional structured information relevant to the organization's workflows."
+      "description": "Organisation-specific custom fields that extend the default case schema. Allows recording additional structured information relevant to the organisation's workflows."
     },
     "userPermissions": {
       "type": "array",
@@ -198,7 +198,7 @@
         },
         "shareCount": {
           "type": "integer",
-          "description": "Total number of organizations this case has been shared with. Used for quick visibility in case lists without fetching full share details."
+          "description": "Total number of organisations this case has been shared with. Used for quick visibility in case lists without fetching full share details."
         },
         "permissions": {
           "type": "array",
@@ -209,7 +209,7 @@
         },
         "actionRequired": {
           "type": "boolean",
-          "description": "Whether an action is required from the current user's organization on this case. Used for collaborative workflows and task delegation between organizations."
+          "description": "Whether an action is required from the current user's organisation on this case. Used for collaborative workflows and task delegation between organisations."
         },
         "procedureCount": {
           "type": "integer",

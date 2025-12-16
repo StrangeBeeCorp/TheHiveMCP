@@ -23,30 +23,30 @@ The `search-entities` tool allows you to search for TheHive entities (alerts, ca
 
 The search tool understands various natural language patterns:
 
-### Severity and Priority
+### Severity and priority
 - "high severity alerts from last week"
 - "critical cases opened today"
 - "medium priority alerts"
 
-### Time-based Queries
+### Time-based queries
 - "alerts from the last month"
 - "cases created yesterday"
 - "tasks updated this week"
 - "observables added in the last 24 hours"
 
-### Status and Assignment
+### Status and assignment
 - "open cases assigned to john@example.com"
 - "closed alerts"
 - "waiting tasks"
 - "in-progress cases"
 
-### Content and Tags
+### Content and tags
 - "observables containing malware"
 - "phishing alerts"
 - "cases tagged with APT"
 - "tasks with keyword 'investigation'"
 
-### Complex Queries
+### Complex queries
 - "latest phishing alerts with severity greater than 2"
 - "open cases with unassigned tasks"
 - "malware observables from compromised systems"
@@ -83,7 +83,7 @@ Search for artifacts and IOCs with filters on:
 
 ## Advanced Usage
 
-### Custom Columns
+### Custom columns
 Specify which fields to return in the results:
 ```json
 {
@@ -93,7 +93,7 @@ Specify which fields to return in the results:
 }
 ```
 
-### Additional Data
+### Additional data
 Include extra data fields:
 ```json
 {
@@ -103,7 +103,7 @@ Include extra data fields:
 }
 ```
 
-### Related Data Queries
+### Related data queries
 Enrich results with related information:
 ```json
 {
@@ -116,7 +116,7 @@ Enrich results with related information:
 ## Best Practices
 
 1. **Be specific**: More specific queries yield better results
-2. **Check schemas**: Use `get-resource` with output schemas (e.g., `hive://schema/alert`) to understand available fields for searching
+2. **Check schemas**: Use `get-resource` with output schemas (for example, `hive://schema/alert`) to understand available fields for searching
 3. **Review filters**: The tool returns the generated filters for transparency
 4. **Iterate**: Refine your query based on results and filter feedback
 5. **Limit results**: Use appropriate limits for performance

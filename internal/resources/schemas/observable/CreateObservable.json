@@ -30,7 +30,7 @@
       "format": "int32",
       "enum": [0, 1, 2, 3, 4],
       "default": 2,
-      "description": "Traffic Light Protocol level: 0 (WHITE - unlimited disclosure), 1 (GREEN - community), 2 (AMBER - limited), 3 (AMBER+STRICT - organization only), 4 (RED - personal for named recipients only). Defaults to 2 (AMBER)."
+      "description": "Traffic Light Protocol level: 0 (WHITE - unlimited disclosure), 1 (GREEN - community), 2 (AMBER - limited), 3 (AMBER+STRICT - organisation only), 4 (RED - personal for named recipients only). Defaults to 2 (AMBER)."
     },
     "pap": {
       "type": "integer",

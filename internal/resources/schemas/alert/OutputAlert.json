@@ -81,11 +81,11 @@
     "severity": {
       "type": "integer",
       "format": "int32",
-      "description": "Numeric severity level of the alert. Higher numbers indicate more severe threats. The range and meaning of values are configurable per organization."
+      "description": "Numeric severity level of the alert. Higher numbers indicate more severe threats. The range and meaning of values are configurable per organisation."
     },
     "severityLabel": {
       "type": "string",
-      "description": "Human-readable label corresponding to the severity value (e.g., 'Low', 'Medium', 'High', 'Critical'). Defined in organization configuration."
+      "description": "Human-readable label corresponding to the severity value (e.g., 'Low', 'Medium', 'High', 'Critical'). Defined in organisation configuration."
     },
     "date": {
       "type": "integer",
@@ -103,7 +103,7 @@
     "tlp": {
       "type": "integer",
       "format": "int32",
-      "description": "Traffic Light Protocol level (0-4) indicating information sharing restrictions. 0=TLP:CLEAR (unlimited), 1=TLP:GREEN (community), 2=TLP:AMBER (limited), 3=TLP:AMBER+STRICT (organization only), 4=TLP:RED (personal/recipient only)."
+      "description": "Traffic Light Protocol level (0-4) indicating information sharing restrictions. 0=TLP:CLEAR (unlimited), 1=TLP:GREEN (community), 2=TLP:AMBER (limited), 3=TLP:AMBER+STRICT (organisation only), 4=TLP:RED (personal/recipient only)."
     },
     "tlpLabel": {
       "type": "string",
@@ -150,7 +150,7 @@
           }
         }
       },
-      "description": "Organization-specific custom fields that extend the default alert schema. Allows capturing additional structured information from source systems or added during triage."
+      "description": "Organisation-specific custom fields that extend the default alert schema. Allows capturing additional structured information from source systems or added during triage."
     },
     "caseTemplate": {
       "type": "string",
@@ -167,7 +167,7 @@
     },
     "status": {
       "type": "string",
-      "description": "Current status of the alert within its stage. Status values are configurable per organization and vary by stage (e.g., 'New', 'Updated', 'Ignored', 'Imported')."
+      "description": "Current status of the alert within its stage. Status values are configurable per organisation and vary by stage (e.g., 'New', 'Updated', 'Ignored', 'Imported')."
     },
     "stage": {
       "type": "string",
@@ -214,11 +214,11 @@
             "accessKind": {
               "type": "string",
               "enum": ["OrganisationAccessKind", "UserAccessKind"],
-              "description": "Type of access the current user has to the related case. 'OrganisationAccessKind' indicates organization-level access (case is shared with user's org), 'UserAccessKind' indicates direct user-level access (user created or was granted access)."
+              "description": "Type of access the current user has to the related case. 'OrganisationAccessKind' indicates organisation-level access (case is shared with user's org), 'UserAccessKind' indicates direct user-level access (user created or was granted access)."
             },
             "isVisible": {
               "type": "boolean",
-              "description": "Whether the current user can view the related case. False if the case exists but the user lacks permissions to access it (e.g., case is in another organization without sharing)."
+              "description": "Whether the current user can view the related case. False if the case exists but the user lacks permissions to access it (e.g., case is in another organisation without sharing)."
             }
           }
         },

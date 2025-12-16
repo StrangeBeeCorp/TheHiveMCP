@@ -4,9 +4,9 @@
 
 The permissions system provides fine-grained access control over TheHive operations:
 
-- **Tool Access**: Control which MCP tools can be used
-- **Data Filtering**: Restrict what data can be accessed via queries
-- **Automation Control**: Manage which analyzers and responders can be executed
+- **Tool access**: Control which MCP tools can be used
+- **Data filtering**: Restrict what data can be accessed via queries
+- **Automation control**: Manage which analyzers and responders can be executed
 
 **Default**: Read-only access when no configuration is specified.
 
@@ -54,14 +54,14 @@ permissions:
 
 ## Tool Permissions
 
-### Available Tools
+### Available tools
 
 - `search-entities`: Search and query TheHive entities
 - `manage-entities`: Create, update, delete entities
 - `execute-automation`: Run analyzers and responders
 - `get-resource`: Access documentation, schemas, and metadata
 
-### Tool Filters (search-entities only)
+### Tool filters (search-entities only)
 
 Filters are automatically merged with user queries using AND logic:
 
@@ -75,9 +75,9 @@ tools:
         _value: 2
 ```
 
-Uses TheHive's native filter syntax where the operator (e.g., `_gte`, `_lte`, `_eq`) is the key, with `_field` and `_value` as properties.
+Uses TheHive's native filter syntax where the operator (for example, `_gte`, `_lte`, `_eq`) is the key, with `_field` and `_value` as properties.
 
-### Granular Entity Permissions (manage-entities only)
+### Granular entity permissions (manage-entities only)
 
 Control specific operations on each entity type:
 
@@ -109,14 +109,14 @@ tools:
 ```
 
 **Behavior:**
-- If no `entity_permissions` configured: all operations allowed (backward compatibility)
-- If `entity_permissions` configured: only specified entity types/operations allowed
+- If no `entity_permissions` are configured: all operations allowed (backward compatibility)
+- If `entity_permissions` are configured: only specified entity types/operations allowed
 - Entity types: `alert`, `case`, `task`, `observable`
 - Operations: `create`, `update`, `delete`, `comment`
 
 ## Automation Permissions
 
-### Allow List Mode
+### Allow list mode
 Only specified items are permitted:
 
 ```yaml
@@ -125,7 +125,7 @@ analyzers:
   allowed: ["VirusTotal_3_0", "Shodan_Host", "*"]  # "*" = all
 ```
 
-### Block List Mode
+### Block list mode
 All items except those blocked:
 
 ```yaml
@@ -136,7 +136,7 @@ responders:
 
 ## Example Configurations
 
-### Read-Only (Default)
+### Read-only (default)
 
 ```yaml
 version: "1.0"
@@ -276,7 +276,7 @@ docker run -d \
   strangebee/thehive-mcp:latest
 ```
 
-**MCPB (MCP Bundle):**
+**MCPB (MCP bundle):**
 
 When generating MCPB packages, permissions configs can be bundled directly:
 
