@@ -8,6 +8,7 @@ import (
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/permissions"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/prompts"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -327,13 +328,13 @@ func (t *SearchTool) parseDateFields(entities []map[string]interface{}) ([]map[s
 func (t *SearchTool) getExcludedFields(entityType string, keptColumns []string, extraData []string) []string {
 	var baseModel any
 	switch entityType {
-	case "alert":
+	case string(types.EntityTypeAlert):
 		baseModel = thehive.OutputAlert{}
-	case "case":
+	case string(types.EntityTypeCase):
 		baseModel = thehive.OutputCase{}
-	case "task":
+	case string(types.EntityTypeTask):
 		baseModel = thehive.OutputTask{}
-	case "observable":
+	case string(types.EntityTypeObservable):
 		baseModel = thehive.OutputObservable{}
 	default:
 		return []string{}

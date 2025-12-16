@@ -1,6 +1,9 @@
 package search
 
-import "github.com/mark3labs/mcp-go/mcp"
+import (
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
+	"github.com/mark3labs/mcp-go/mcp"
+)
 
 func (t *SearchTool) Definition() mcp.Tool {
 	return mcp.NewTool(
@@ -28,7 +31,7 @@ Only use this tool with precise queries related to searching TheHive entities. I
 		mcp.WithString(
 			"entity-type",
 			mcp.Required(),
-			mcp.Enum("alert", "case", "task", "observable"),
+			mcp.Enum(string(types.EntityTypeAlert), string(types.EntityTypeCase), string(types.EntityTypeTask), string(types.EntityTypeObservable)),
 			mcp.Description("Type of entity to search for."),
 		),
 		mcp.WithString(

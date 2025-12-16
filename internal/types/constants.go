@@ -62,3 +62,13 @@ const PermissionConfigAdmin PermissionConfig = "admin"
 
 const DefaultMaxCompletionTime = 60 * time.Second
 const DefaultMaxCompletionRetries = 3
+
+// EntityType represents the different types of entities in TheHive
+type EntityType string
+
+const (
+	EntityTypeAlert      EntityType = "alert"
+	EntityTypeCase       EntityType = "case"
+	EntityTypeTask       EntityType = "task"
+	EntityTypeObservable EntityType = "observable"
+)

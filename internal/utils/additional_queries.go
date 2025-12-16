@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 )
 
@@ -15,23 +16,23 @@ type EntityQueryConfig map[string]QueryFunc
 
 // queryRegistry maps entity types to their available queries
 var queryRegistry = map[string]EntityQueryConfig{
-	"case": {
+	string(types.EntityTypeCase): {
 		"tasks":       GetTasksFromCaseID,
 		"observables": GetObservablesFromCaseID,
 		"comments":    GetCommentsFromCaseID,
 		"pages":       GetPagesFromCaseID,
 		"attachments": GetAttachmentsFromCaseID,
 	},
-	"alert": {
+	string(types.EntityTypeAlert): {
 		"observables": GetObservablesFromAlertID,
 		"comments":    GetCommentsFromAlertID,
 		"pages":       GetPagesFromAlertID,
 		"attachments": GetAttachmentsFromAlertID,
 	},
-	"task": {
+	string(types.EntityTypeTask): {
 		"task-logs": GetTaskLogsFromTaskID,
 	},
-	"observable": {
+	string(types.EntityTypeObservable): {
 		// No additional queries supported yet
 	},
 }

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -106,10 +107,10 @@ func (t *ManageTool) validateOperation(params *manageParams) error {
 		if params.EntityData == nil {
 			return fmt.Errorf("entity-data is required for create operations. Use get-resource 'hive://schema/%s/create' to see required fields for %s creation", params.EntityType, params.EntityType)
 		}
-		if (params.EntityType == "task" || params.EntityType == "observable") && len(params.EntityIDs) == 0 {
+		if (params.EntityType == string(types.EntityTypeTask) || params.EntityType == string(types.EntityTypeObservable)) && len(params.EntityIDs) == 0 {
 			return fmt.Errorf("%s creation requires a parent case or alert ID in entity-ids parameter", params.EntityType)
 		}
-		if (params.EntityType == "task" || params.EntityType == "observable") && len(params.EntityIDs) > 1 {
+		if (params.EntityType == string(types.EntityTypeTask) || params.EntityType == string(types.EntityTypeObservable)) && len(params.EntityIDs) > 1 {
 			return fmt.Errorf("%s creation requires exactly one parent ID in entity-ids parameter, got %d", params.EntityType, len(params.EntityIDs))
 		}
 	case "update":
@@ -145,13 +146,13 @@ func (t *ManageTool) handleCreate(ctx context.Context, params *manageParams) (*m
 	}
 
 	switch params.EntityType {
-	case "alert":
+	case string(types.EntityTypeAlert):
 		return t.createAlert(ctx, hiveClient, params.EntityData)
-	case "case":
+	case string(types.EntityTypeCase):
 		return t.createCase(ctx, hiveClient, params.EntityData)
-	case "task":
+	case string(types.EntityTypeTask):
 		return t.createTask(ctx, hiveClient, params.EntityData, params.EntityIDs[0])
-	case "observable":
+	case string(types.EntityTypeObservable):
 		return t.createObservable(ctx, hiveClient, params.EntityData, params.EntityIDs[0])
 	default:
 		return mcp.NewToolResultError(fmt.Sprintf("unsupported entity type for create: %s", params.EntityType)), nil
@@ -177,7 +178,7 @@ func (t *ManageTool) createAlert(ctx context.Context, client *thehive.APIClient,
 
 	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
 		"operation":  "create",
-		"entityType": "alert",
+		"entityType": string(types.EntityTypeAlert),
 		"result":     result,
 	}), nil
 }
@@ -299,7 +300,7 @@ func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient
 	}
 
 	switch entityType {
-	case "alert":
+	case string(types.EntityTypeAlert):
 		var inputAlert thehive.InputUpdateAlert
 		if err := json.Unmarshal(jsonData, &inputAlert); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal alert update data: %w. Use get-resource 'hive://schema/alert/update' to see updatable fields", err)
@@ -310,7 +311,7 @@ func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient
 		}
 		return "updated", nil
 
-	case "case":
+	case string(types.EntityTypeCase):
 		var inputCase thehive.InputUpdateCase
 		if err := json.Unmarshal(jsonData, &inputCase); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal case update data: %w. Use get-resource 'hive://schema/case/update' to see updatable fields", err)
@@ -321,7 +322,7 @@ func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient
 		}
 		return "updated", nil
 
-	case "task":
+	case string(types.EntityTypeTask):
 		var inputTask thehive.InputUpdateTask
 		if err := json.Unmarshal(jsonData, &inputTask); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal task update data: %w. Use get-resource 'hive://schema/task/update' to see updatable fields", err)
@@ -332,7 +333,7 @@ func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient
 		}
 		return "updated", nil
 
-	case "observable":
+	case string(types.EntityTypeObservable):
 		var inputObservable thehive.InputUpdateObservable
 		if err := json.Unmarshal(jsonData, &inputObservable); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal observable update data: %w. Use get-resource 'hive://schema/observable/update' to see updatable fields", err)
@@ -381,28 +382,28 @@ func (t *ManageTool) handleDelete(ctx context.Context, params *manageParams) (*m
 
 func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient, entityType, entityID string) error {
 	switch entityType {
-	case "alert":
+	case string(types.EntityTypeAlert):
 		resp, err := client.AlertAPI.DeleteAlert(ctx, entityID).Execute()
 		if err != nil {
 			return fmt.Errorf("failed to delete alert %s: %w. Check that the alert exists and you have permissions. This operation is irreversible. API response: %v", entityID, err, resp)
 		}
 		return nil
 
-	case "case":
+	case string(types.EntityTypeCase):
 		resp, err := client.CaseAPI.DeleteCase(ctx, entityID).Execute()
 		if err != nil {
 			return fmt.Errorf("failed to delete case %s: %w. Check that the case exists and you have permissions. This operation is irreversible. API response: %v", entityID, err, resp)
 		}
 		return nil
 
-	case "task":
+	case string(types.EntityTypeTask):
 		resp, err := client.TaskAPI.DeleteTask(ctx, entityID).Execute()
 		if err != nil {
 			return fmt.Errorf("failed to delete task %s: %w. Check that the task exists and you have permissions. This operation is irreversible. API response: %v", entityID, err, resp)
 		}
 		return nil
 
-	case "observable":
+	case string(types.EntityTypeObservable):
 		resp, err := client.ObservableAPI.DeleteObservable(ctx, entityID).Execute()
 		if err != nil {
 			return fmt.Errorf("failed to delete observable %s: %w. Check that the observable exists and you have permissions. This operation is irreversible. API response: %v", entityID, err, resp)
@@ -447,7 +448,7 @@ func (t *ManageTool) handleComment(ctx context.Context, params *manageParams) (*
 
 func (t *ManageTool) addComment(ctx context.Context, client *thehive.APIClient, entityType, entityID, comment string) (interface{}, error) {
 	switch entityType {
-	case "case":
+	case string(types.EntityTypeCase):
 		inputComment := thehive.InputComment{
 			Message: comment,
 		}
@@ -457,7 +458,7 @@ func (t *ManageTool) addComment(ctx context.Context, client *thehive.APIClient, 
 		}
 		return result, nil
 
-	case "task":
+	case string(types.EntityTypeTask):
 		inputTaskLog := thehive.InputCreateLog{
 			Message: comment,
 		}
