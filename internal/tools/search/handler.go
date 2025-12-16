@@ -346,7 +346,7 @@ func (t *SearchTool) getExcludedFields(entityType string, keptColumns []string, 
 	excludeFields := make([]string, 0)
 
 	for _, field := range allFields {
-		if slices.Contains(keptColumns, field) {
+		if !slices.Contains(keptColumns, field) {
 			if field == "extraData" && len(extraData) > 0 {
 				continue
 			}
