@@ -158,9 +158,6 @@ func (t *SearchTool) parseQuery(ctx context.Context, params *searchParams, addit
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal search params: %w", err)
 	}
-	if query == nil {
-		return nil, fmt.Errorf("marshaled search params is nil")
-	}
 	prompt, err := prompts.GetBuildFiltersPrompt(ctx, string(query), params.EntityType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get search filter prompt: %w. This may indicate missing resources or system configuration issues", err)
