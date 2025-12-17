@@ -33,6 +33,9 @@ jobs:
 
   # Build and push multi-architecture Docker images
   docker-image:
+    permissions:
+      packages: write
+      contents: read
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
     needs: build
