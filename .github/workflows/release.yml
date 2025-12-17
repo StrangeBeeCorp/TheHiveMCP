@@ -1,6 +1,7 @@
 name: Release
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*.*.*'
@@ -49,7 +50,6 @@ jobs:
         with:
           app-id: ${{ secrets.THEHIVEMCPAPPID }}
           private-key: ${{ secrets.THEHIVEMCPSECRETKEY }}
-          owner: strangebee
 
       - name: Verify token generated
         run: |
