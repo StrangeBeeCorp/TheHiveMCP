@@ -73,9 +73,8 @@ jobs:
       - name: Extract version from tag
         id: version
         run: |
-          [[ "heads" =~ $GITHUB_REF ]] && VERSION=${GITHUB_REF#refs/heads/}
-          echo $VERSION
-          VERSION=${GITHUB_REF#refs/tags/}
+          [[ "heads" =~ $GITHUB_REF ]] && VERSION=$(date "+%Y%m%d%H%M%S")
+          [[ "tags" =~ $GITHUB_REF ]] && VERSION=${GITHUB_REF#refs/tags/}
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
           echo "Building version: ${VERSION}"
 
