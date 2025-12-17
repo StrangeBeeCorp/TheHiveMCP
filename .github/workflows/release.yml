@@ -36,6 +36,7 @@ jobs:
     permissions:
       packages: write
       contents: read
+      id-token: write
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
     needs: build
