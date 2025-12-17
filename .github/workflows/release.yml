@@ -73,8 +73,8 @@ jobs:
       - name: Extract version from tag
         id: version
         run: |
-          [[ "heads" =~ ${{ github.ref }} ]] && VERSION=$(date "+%Y%m%d%H%M%S")
-          [[ "tags" =~ ${{ github.ref }} ]] && VERSION=${GITHUB_REF#refs/tags/}
+          (echo "${{ github.ref }}" | grep -E 'heads') && VERSION=$(date "+%Y%m%d%H%M%S")
+          (echo "${{ github.ref }}" | grep -E 'tags')  && VERSION=${GITHUB_REF#refs/tags/}
           echo ${{ github.ref }}
           echo $VERSION
           echo $GITHUB_REF
