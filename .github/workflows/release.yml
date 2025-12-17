@@ -44,8 +44,7 @@ jobs:
         with:
           app-id: ${{ secrets.THEHIVEMCPAPPID }}
           private-key: ${{ secrets.THEHIVEMCPSECRETKEY }}
-          owner: StrangeBee
-          repositories: TheHiveMCP
+          owner: strangebee
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -72,8 +71,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/strangebee/thehivemcp/thehivemcp:${{ steps.version.outputs.VERSION }}
-            ghcr.io/strangebee/thehivemcp/thehivemcp:latest
+            ghcr.io/strangebee/thehivemcp:${{ steps.version.outputs.VERSION }}
+            ghcr.io/strangebee/thehivemcp:latest
           build-args: |
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
             GIT_COMMIT=${{ github.sha }}
