@@ -38,6 +38,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check secrets availability
+        run: |
+          echo "App ID exists: ${{ secrets.THEHIVEMCPAPPID != '' }}"
+          echo "Private key exists: ${{ secrets.THEHIVEMCPSECRETKEY != '' }}"
+
       - name: Generate App Token
         id: generate_token
         uses: actions/create-github-app-token@v1
@@ -45,6 +50,15 @@ jobs:
           app-id: ${{ secrets.THEHIVEMCPAPPID }}
           private-key: ${{ secrets.THEHIVEMCPSECRETKEY }}
           owner: strangebee
+
+      - name: Verify token generated
+        run: |
+          if [ -z "${{ steps.generate_token.outputs.token }}" ]; then
+            echo "❌ Token generation failed!"
+            exit 1
+          else
+            echo "✅ Token generated successfully"
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -71,8 +85,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/strangebee/thehivemcp:${{ steps.version.outputs.VERSION }}
-            ghcr.io/strangebee/thehivemcp:latest
+            ghcr.io/strangebee/thehivemcp/thehivemcp:${{ steps.version.outputs.VERSION }}
+            ghcr.io/strangebee/thehivemcp/thehivemcp:latest
           build-args: |
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
             GIT_COMMIT=${{ github.sha }}
