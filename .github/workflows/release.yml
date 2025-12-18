@@ -1,6 +1,8 @@
+---
 name: Release
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*.*.*'
@@ -32,6 +34,10 @@ jobs:
 
   # Build and push multi-architecture Docker images
   docker-image:
+    permissions:
+      packages: write
+      contents: read
+      id-token: write
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
     needs: build
@@ -54,7 +60,11 @@ jobs:
       - name: Extract version from tag
         id: version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          (echo "${{ github.ref }}" | grep -E 'heads') && VERSION=SNAPSHOT-$(date "+%Y%m%d%H%M%S")
+          (echo "${{ github.ref }}" | grep -E 'tags')  && VERSION=${GITHUB_REF#refs/tags/}
+          echo ${{ github.ref }}
+          echo $VERSION
+          echo $GITHUB_REF
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
           echo "Building version: ${VERSION}"
 
