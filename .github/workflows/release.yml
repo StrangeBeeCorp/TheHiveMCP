@@ -69,8 +69,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/strangebee/thehivemcp/thehivemcp:${{ steps.version.outputs.VERSION }}
-            ghcr.io/strangebee/thehivemcp/thehivemcp:latest
+            ghcr.io/${{ github.repository_owner }}/thehivemcp/thehivemcp:${{ steps.version.outputs.VERSION }}
+            ghcr.io/${{ github.repository_owner }}/thehivemcp/thehivemcp:latest
           build-args: |
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
             GIT_COMMIT=${{ github.sha }}
