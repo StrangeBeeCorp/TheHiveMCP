@@ -7,10 +7,6 @@ on:
     tags:
       - 'v*.*.*'
 
-permissions:
-  contents: write
-  packages: write
-
 jobs:
   build:
     name: Build and package release binaries
@@ -41,9 +37,6 @@ jobs:
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
     needs: build
-    permissions:
-      contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
 
