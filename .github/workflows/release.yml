@@ -106,3 +106,37 @@ jobs:
             dist/*.tar.gz
             dist/*.mcpb
             dist/*.sha256
+  publish-registry:
+    name: Publish to MCP Registry
+    runs-on: ubuntu-latest
+    needs: [release]
+    # Only run on public repo
+    if: github.repository == 'StrangeBeeCorp/TheHiveMCP'
+    permissions:
+      id-token: write  # Required for OIDC
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      # Download artifacts to generate server.json with correct hashes
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-binaries
+          path: dist
+
+      - name: Download MCP Publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz
+
+      - name: Generate server.json
+        run: ./scripts/generate-server-json.sh
+        env:
+          DOCKER_REGISTRY: docker.io
+          DOCKER_IMAGE: strangebee/thehive-mcp
+
+      - name: Authenticate with MCP Registry
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish to Registry
+        run: ./mcp-publisher publish
