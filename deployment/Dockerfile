@@ -32,6 +32,7 @@ RUN go build \
 
 # Stage 2: Runtime image
 FROM gcr.io/distroless/static-debian12
+LABEL io.modelcontextprotocol.server.name="io.github.StrangeBeeCorp/TheHiveMCP"
 
 # Copy built binary and config
 COPY --from=builder /binary /app/server
