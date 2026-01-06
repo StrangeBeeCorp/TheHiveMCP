@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
@@ -24,6 +25,9 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 			{string(types.HeaderKeyTheHiveAPIKey), types.HiveAPIKeyCtxKey, options.TheHiveAPIKey},
 			{string(types.HeaderKeyTheHiveOrganisation), types.HiveOrgCtxKey, options.TheHiveOrganisation},
 			{string(types.HeaderKeyTheHiveURL), types.HiveURLCtxKey, options.TheHiveURL},
+			{string(types.HeaderKeyOpenAIAPIKey), types.OpenAIAPIKeyCtxKey, options.OpenAIAPIKey},
+			{string(types.HeaderKeyOpenAIBaseURL), types.OpenAIBaseURLCtxKey, options.OpenAIBaseURL},
+			{string(types.HeaderKeyOpenAIModelName), types.OpenAIModelCtxKey, options.OpenAIModel},
 		}
 
 		// Extract string values into context
@@ -41,6 +45,16 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 			}
 		}
 
+		// Handle max tokens header separately (integer value)
+		maxTokensHeader := r.Header.Get(string(types.HeaderKeyOpenAIMaxTokens))
+		maxTokens := options.OpenAIMaxTokens
+		if maxTokensHeader != "" {
+			if parsed, err := strconv.Atoi(maxTokensHeader); err == nil {
+				maxTokens = parsed
+			}
+		}
+		ctx = context.WithValue(ctx, types.OpenAIMaxTokensCtxKey, maxTokens)
+
 		// Add Hive client to context using extracted credentials
 		hiveAPIKey, _ := ctx.Value(types.HiveAPIKeyCtxKey).(string)
 		hiveOrganisation, _ := ctx.Value(types.HiveOrgCtxKey).(string)
@@ -57,6 +71,36 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 
 			if newCtx, err := AddTheHiveClientToContextWithCreds(ctx, creds); err != nil {
 				slog.Warn("Failed to add TheHive client to context", "error", err)
+			} else {
+				ctx = newCtx
+			}
+		}
+
+		// Add OpenAI client to context using extracted configuration
+		openAIAPIKey, _ := ctx.Value(types.OpenAIAPIKeyCtxKey).(string)
+		openAIBaseURL, _ := ctx.Value(types.OpenAIBaseURLCtxKey).(string)
+		openAIModel, _ := ctx.Value(types.OpenAIModelCtxKey).(string)
+		openAIMaxTokens, _ := ctx.Value(types.OpenAIMaxTokensCtxKey).(int)
+
+		// Only create OpenAI client if we have an API key
+		if openAIAPIKey != "" {
+			openAICreds := &OpenAICredentials{
+				APIKey:    openAIAPIKey,
+				BaseURL:   openAIBaseURL,
+				Model:     openAIModel,
+				MaxTokens: openAIMaxTokens,
+			}
+
+			// Set defaults if not provided
+			if openAICreds.BaseURL == "" {
+				openAICreds.BaseURL = "https://api.openai.com/v1"
+			}
+			if openAICreds.Model == "" {
+				openAICreds.Model = "gpt-4"
+			}
+
+			if newCtx, err := AddOpenAIClientToContextWithCreds(ctx, openAICreds); err != nil {
+				slog.Warn("Failed to add OpenAI client to context", "error", err)
 			} else {
 				ctx = newCtx
 			}

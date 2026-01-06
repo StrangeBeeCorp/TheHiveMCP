@@ -319,10 +319,10 @@ This allows you to set defaults via environment variables while overriding speci
 | Endpoint path | `MCP_ENDPOINT_PATH` | `--mcp-endpoint-path` | - | `/mcp` | HTTP endpoint path |
 | Heartbeat interval | `MCP_HEARTBEAT_INTERVAL` | `--mcp-heartbeat-interval` | - | `30s` | Heartbeat interval for HTTP connections |
 | **OpenAI Integration** |
-| API key | `OPENAI_API_KEY` | `--openai-api-key` | - | - | OpenAI-compatible API key |
-| Base URL | `OPENAI_BASE_URL` | `--openai-base-url` | - | `https://api.openai.com/v1` | OpenAI-compatible API base URL |
-| Model | `OPENAI_MODEL` | `--openai-model` | - | `gpt-5` | Model name |
-| Max tokens | `OPENAI_MAX_TOKENS` | `--openai-max-tokens` | - | `32000` | Maximum tokens for completions |
+| API key | `OPENAI_API_KEY` | `--openai-api-key` | `X-OpenAI-Api-Key` | - | OpenAI-compatible API key |
+| Base URL | `OPENAI_BASE_URL` | `--openai-base-url` | `X-OpenAI-Base-Url` | `https://api.openai.com/v1` | OpenAI-compatible API base URL |
+| Model | `OPENAI_MODEL` | `--openai-model` | `X-OpenAI-Model-Name` | `gpt-4` | Model name |
+| Max tokens | `OPENAI_MAX_TOKENS` | `--openai-max-tokens` | `X-OpenAI-Max-Tokens` | `32000` | Maximum tokens for completions |
 | **Logging** |
 | Log level | `LOG_LEVEL` | `--log-level` | - | `info` | Logging level |
 

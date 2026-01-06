@@ -9,7 +9,6 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/bootstrap"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/logging"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 	"github.com/StrangeBeeCorp/TheHiveMCP/version"
 )
 
@@ -25,9 +24,6 @@ func main() {
 	logging.InitLogger(options.LogLevel, options.TransportType)
 
 	slog.Info("Starting TheHiveMCP server", "version", version.GitVersion())
-
-	// Initialize OpenAI if configured (warnings only, no crash)
-	utils.InitOpenai(options)
 
 	mcpServer := bootstrap.GetMCPServerAndRegisterTools()
 

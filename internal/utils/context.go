@@ -17,6 +17,15 @@ func GetHiveClientFromContext(ctx context.Context) (*thehive.APIClient, error) {
 	return client, nil
 }
 
+// GetOpenAIClientFromContext retrieves OpenAI wrapper from the context
+func GetOpenAIClientFromContext(ctx context.Context) (*OpenAIWrapper, error) {
+	client, ok := ctx.Value(types.OpenAIClientCtxKey).(*OpenAIWrapper)
+	if !ok || client == nil {
+		return nil, fmt.Errorf("openai client not found in context")
+	}
+	return client, nil
+}
+
 // AddPermissionsToContext adds permissions configuration to the context
 func AddPermissionsToContext(ctx context.Context, perms *permissions.Config) context.Context {
 	return context.WithValue(ctx, types.PermissionsCtxKey, perms)

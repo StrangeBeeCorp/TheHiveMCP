@@ -12,6 +12,11 @@ const PermissionsCtxKey CtxKey = "permissions"
 const RequestIDCtxKey CtxKey = "request_id"
 const OpenAIRequestStartTimeCtxKey CtxKey = "openai_request_start_time"
 const SamplingModelRequestStartTimeCtxKey CtxKey = "sampling_model_request_start_time"
+const OpenAIClientCtxKey CtxKey = "openai_client"
+const OpenAIAPIKeyCtxKey CtxKey = "openai_api_key"
+const OpenAIBaseURLCtxKey CtxKey = "openai_base_url"
+const OpenAIModelCtxKey CtxKey = "openai_model"
+const OpenAIMaxTokensCtxKey CtxKey = "openai_max_tokens"
 
 type EnvKey string
 
@@ -54,6 +59,10 @@ type HeaderKey string
 const HeaderKeyTheHiveAPIKey HeaderKey = "X-TheHive-Api-Key"
 const HeaderKeyTheHiveOrganisation HeaderKey = "X-TheHive-Org"
 const HeaderKeyTheHiveURL HeaderKey = "X-TheHive-Url"
+const HeaderKeyOpenAIAPIKey HeaderKey = "X-OpenAI-Api-Key"
+const HeaderKeyOpenAIBaseURL HeaderKey = "X-OpenAI-Base-Url"
+const HeaderKeyOpenAIModelName HeaderKey = "X-OpenAI-Model-Name"
+const HeaderKeyOpenAIMaxTokens HeaderKey = "X-OpenAI-Max-Tokens"
 
 type PermissionConfig string
 

@@ -16,7 +16,7 @@ import (
 var globalOpenAIWrapper *OpenAIWrapper
 
 type OpenAIWrapper struct {
-	client     *openai.Client
+	Client     *openai.Client
 	ModelName  string
 	MaxTokens  int
 	MaxRetries int
@@ -77,7 +77,7 @@ func InitOpenai(options *types.TheHiveMcpDefaultOptions) {
 	client := openai.NewClientWithConfig(config)
 
 	globalOpenAIWrapper = &OpenAIWrapper{
-		client:     client,
+		Client:     client,
 		ModelName:  options.OpenAIModel,
 		MaxTokens:  options.OpenAIMaxTokens,
 		MaxRetries: types.DefaultMaxCompletionRetries,
@@ -108,7 +108,7 @@ func (w *OpenAIWrapper) getModelCompletion(
 	}
 
 	for attempt := 0; attempt < w.MaxRetries; attempt++ {
-		resp, err := w.client.CreateChatCompletion(ctx, req)
+		resp, err := w.Client.CreateChatCompletion(ctx, req)
 		if err != nil {
 			slog.Warn("Failed to get model completion", "error", err, "attempt", attempt+1)
 			continue
@@ -155,7 +155,21 @@ func (w *OpenAIWrapper) getModelCompletion(
 	return errors.New("failed to get model completion after max retries")
 }
 
-// GetOpenaiModelCompletion uses the globally initialized OpenAI wrapper
+// GetOpenaiModelCompletionWithWrapper uses the provided OpenAI wrapper
+func GetOpenaiModelCompletionWithWrapper(
+	ctx context.Context,
+	messages []openai.ChatCompletionMessage,
+	target interface{},
+	wrapper *OpenAIWrapper,
+) error {
+	if wrapper == nil {
+		return errors.New("OpenAI wrapper is nil")
+	}
+
+	return wrapper.getModelCompletion(ctx, messages, target)
+}
+
+// GetOpenaiModelCompletion uses the globally initialized OpenAI wrapper (deprecated, use context-based approach)
 func GetOpenaiModelCompletion(
 	ctx context.Context,
 	messages []openai.ChatCompletionMessage,
