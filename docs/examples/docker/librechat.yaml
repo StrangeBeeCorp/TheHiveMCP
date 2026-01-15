@@ -16,8 +16,20 @@ mcpServers:
       THEHIVE_ORG:
         title: "TheHive Organisation"
         description: "Your TheHive organisation name"
+      OPENAI_API_KEY:
+        title: "OpenAI API Key"
+        description: "Your OpenAI API key (optional, for AI features)"
+      OPENAI_BASE_URL:
+        title: "OpenAI Base URL"
+        description: "OpenAI API base URL (optional, defaults to OpenAI)"
+      OPENAI_MODEL:
+        title: "OpenAI Model"
+        description: "OpenAI model name (optional, defaults to gpt-4)"
 
     headers:
       X-TheHive-Api-Key: "{{THEHIVE_API_KEY}}"
       X-TheHive-Org: "{{THEHIVE_ORG}}"
       X-TheHive-Url: "{{THEHIVE_URL}}"
+      X-OpenAI-Api-Key: "{{OPENAI_API_KEY}}"
+      X-OpenAI-Base-Url: "{{OPENAI_BASE_URL}}"
+      X-OpenAI-Model-Name: "{{OPENAI_MODEL}}"

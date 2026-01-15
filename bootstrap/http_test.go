@@ -145,3 +145,33 @@ func TestGetHTTPAuthContextFunc_AuthorizationHeader(t *testing.T) {
 		})
 	}
 }
+
+func TestGetHTTPAuthContextFunc_OpenAIHeaders(t *testing.T) {
+	options := &types.TheHiveMcpDefaultOptions{
+		TheHiveURL:      "https://test.thehive.com",
+		TheHiveAPIKey:   "default-hive-key",
+		OpenAIAPIKey:    "default-openai-key",
+		OpenAIBaseURL:   "https://api.openai.com/v1",
+		OpenAIModel:     "gpt-4",
+		OpenAIMaxTokens: 32000,
+	}
+
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Header.Set(string(types.HeaderKeyOpenAIAPIKey), "header-openai-key")
+	req.Header.Set(string(types.HeaderKeyOpenAIBaseURL), "https://api.openrouter.ai/api/v1")
+	req.Header.Set(string(types.HeaderKeyOpenAIModelName), "anthropic/claude-3-sonnet")
+	req.Header.Set(string(types.HeaderKeyOpenAIMaxTokens), "8192")
+
+	authFunc := GetHTTPAuthContextFunc(options)
+	ctx := authFunc(context.Background(), req)
+
+	// Verify OpenAI configuration is set correctly from headers
+	assert.Equal(t, "header-openai-key", ctx.Value(types.OpenAIAPIKeyCtxKey))
+	assert.Equal(t, "https://api.openrouter.ai/api/v1", ctx.Value(types.OpenAIBaseURLCtxKey))
+	assert.Equal(t, "anthropic/claude-3-sonnet", ctx.Value(types.OpenAIModelCtxKey))
+	assert.Equal(t, 8192, ctx.Value(types.OpenAIMaxTokensCtxKey))
+
+	// Verify OpenAI client is created and added to context
+	openAIClient := ctx.Value(types.OpenAIClientCtxKey)
+	assert.NotNil(t, openAIClient)
+}

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/logging"
@@ -15,6 +16,7 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
+	openai "github.com/sashabaranov/go-openai"
 )
 
 // Common errors
@@ -33,6 +35,14 @@ type TheHiveCredentials struct {
 	Username     string
 	Password     string
 	Organisation string
+}
+
+// OpenAICredentials holds authentication and configuration information for OpenAI
+type OpenAICredentials struct {
+	APIKey    string
+	BaseURL   string
+	Model     string
+	MaxTokens int
 }
 
 // Validate validates the credentials
@@ -65,6 +75,24 @@ func (c *TheHiveCredentials) Validate() error {
 	return nil
 }
 
+// Validate validates the OpenAI credentials
+func (c *OpenAICredentials) Validate() error {
+	// OpenAI credentials are optional, so we don't require an API key
+	// However, if provided, it should not be empty or dummy
+	if c.APIKey != "" && strings.ToLower(c.APIKey) == "dummy" {
+		return errors.New("OpenAI API key cannot be 'dummy'")
+	}
+
+	// Validate base URL format if provided
+	if c.BaseURL != "" {
+		if _, err := url.ParseRequestURI(c.BaseURL); err != nil {
+			return fmt.Errorf("invalid OpenAI base URL format: %v", err)
+		}
+	}
+
+	return nil
+}
+
 // LoadTheHiveCredentialsFromEnv loads TheHive credentials from environment variables
 func LoadTheHiveCredentialsFromEnv() (*TheHiveCredentials, error) {
 	creds := &TheHiveCredentials{
@@ -77,6 +105,38 @@ func LoadTheHiveCredentialsFromEnv() (*TheHiveCredentials, error) {
 
 	if err := creds.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid TheHive credentials: %w", err)
+	}
+
+	return creds, nil
+}
+
+// LoadOpenAICredentialsFromEnv loads OpenAI credentials from environment variables
+func LoadOpenAICredentialsFromEnv() (*OpenAICredentials, error) {
+	maxTokensStr := os.Getenv(string(types.EnvKeyOpenAIMaxTokens))
+	maxTokens := 32000 // default value
+	if maxTokensStr != "" {
+		if parsed, err := strconv.Atoi(maxTokensStr); err == nil {
+			maxTokens = parsed
+		}
+	}
+
+	creds := &OpenAICredentials{
+		APIKey:    os.Getenv(string(types.EnvKeyOpenAIAPIKey)),
+		BaseURL:   os.Getenv(string(types.EnvKeyOpenAIBaseURL)),
+		Model:     os.Getenv(string(types.EnvKeyOpenAIModel)),
+		MaxTokens: maxTokens,
+	}
+
+	// Set default values if not provided
+	if creds.BaseURL == "" {
+		creds.BaseURL = "https://api.openai.com/v1"
+	}
+	if creds.Model == "" {
+		creds.Model = "gpt-4"
+	}
+
+	if err := creds.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid OpenAI credentials: %w", err)
 	}
 
 	return creds, nil
@@ -178,6 +238,92 @@ func ExtractBearerToken(authHeader string) string {
 	}
 
 	return authHeader
+}
+
+// CreateOpenAIClient creates an OpenAI client from credentials
+func CreateOpenAIClient(creds *OpenAICredentials) (*openai.Client, error) {
+	if err := creds.Validate(); err != nil {
+		return nil, fmt.Errorf("failed to validate OpenAI credentials: %w", err)
+	}
+
+	config := openai.DefaultConfig(creds.APIKey)
+	if creds.BaseURL != "" {
+		config.BaseURL = creds.BaseURL
+	}
+
+	client := openai.NewClientWithConfig(config)
+	slog.Info("Created OpenAI client",
+		"base_url", creds.BaseURL,
+		"model", creds.Model,
+		"max_tokens", creds.MaxTokens,
+		"has_api_key", creds.APIKey != "")
+	return client, nil
+}
+
+// CreateOpenAIWrapper creates an OpenAI wrapper from credentials
+func CreateOpenAIWrapper(creds *OpenAICredentials) (*utils.OpenAIWrapper, error) {
+	client, err := CreateOpenAIClient(creds)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create OpenAI client: %w", err)
+	}
+
+	wrapper := &utils.OpenAIWrapper{
+		Client:     client,
+		ModelName:  creds.Model,
+		MaxTokens:  creds.MaxTokens,
+		MaxRetries: types.DefaultMaxCompletionRetries,
+	}
+
+	return wrapper, nil
+}
+
+// AddOpenAIClientToContext adds an OpenAI client to the context using environment variables
+func AddOpenAIClientToContext(ctx context.Context) (context.Context, error) {
+	creds, err := LoadOpenAICredentialsFromEnv()
+	if err != nil {
+		return ctx, fmt.Errorf("failed to load OpenAI credentials: %w", err)
+	}
+
+	// If no API key is provided, we don't add OpenAI to context (it's optional)
+	if creds.APIKey == "" {
+		slog.Debug("No OpenAI API key provided, skipping OpenAI client creation")
+		return ctx, nil
+	}
+
+	wrapper, err := CreateOpenAIWrapper(creds)
+	if err != nil {
+		return ctx, fmt.Errorf("failed to create OpenAI wrapper: %w", err)
+	}
+
+	// Add OpenAI configuration to context
+	ctx = context.WithValue(ctx, types.OpenAIAPIKeyCtxKey, creds.APIKey)
+	ctx = context.WithValue(ctx, types.OpenAIBaseURLCtxKey, creds.BaseURL)
+	ctx = context.WithValue(ctx, types.OpenAIModelCtxKey, creds.Model)
+	ctx = context.WithValue(ctx, types.OpenAIMaxTokensCtxKey, creds.MaxTokens)
+
+	return context.WithValue(ctx, types.OpenAIClientCtxKey, wrapper), nil
+}
+
+// AddOpenAIClientToContextWithCreds adds an OpenAI client to the context using provided credentials
+func AddOpenAIClientToContextWithCreds(ctx context.Context, creds *OpenAICredentials) (context.Context, error) {
+	// If no API key is provided, we don't add OpenAI to context (it's optional)
+	if creds.APIKey == "" {
+		slog.Debug("No OpenAI API key provided, skipping OpenAI client creation")
+		return ctx, nil
+	}
+
+	wrapper, err := CreateOpenAIWrapper(creds)
+	if err != nil {
+		return ctx, fmt.Errorf("failed to create OpenAI wrapper: %w", err)
+	}
+
+	// Add OpenAI configuration to context
+	ctx = context.WithValue(ctx, types.OpenAIAPIKeyCtxKey, creds.APIKey)
+	ctx = context.WithValue(ctx, types.OpenAIBaseURLCtxKey, creds.BaseURL)
+	ctx = context.WithValue(ctx, types.OpenAIModelCtxKey, creds.Model)
+	ctx = context.WithValue(ctx, types.OpenAIMaxTokensCtxKey, creds.MaxTokens)
+
+	return context.WithValue(ctx, types.OpenAIClientCtxKey, wrapper), nil
 }
 
 // SafeGetEnv gets an environment variable with optional default value

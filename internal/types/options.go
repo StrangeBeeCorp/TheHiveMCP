@@ -90,7 +90,7 @@ func NewTheHiveMcpDefaultOptions() (*TheHiveMcpDefaultOptions, error) {
 	flag.StringVar(&logLevel, string(FlagVarLogLevel), defaultToEnv(EnvKeyLogLevel, "info"), "Logging level (overrides env var LOG_LEVEL)")
 	flag.StringVar(&openAIBaseURL, string(FlagVarOpenAIBaseURL), defaultToEnv(EnvKeyOpenAIBaseURL, "https://api.openai.com/v1"), "OpenAI base URL (overrides env var OPENAI_BASE_URL)")
 	flag.StringVar(&openAIAPIKey, string(FlagVarOpenAIAPIKey), defaultToEnv(EnvKeyOpenAIAPIKey, ""), "OpenAI API key (overrides env var OPENAI_API_KEY)")
-	flag.StringVar(&openAIModel, string(FlagVarOpenAIModel), defaultToEnv(EnvKeyOpenAIModel, "gpt-5"), "OpenAI model (overrides env var OPENAI_MODEL)")
+	flag.StringVar(&openAIModel, string(FlagVarOpenAIModel), defaultToEnv(EnvKeyOpenAIModel, "gpt-4"), "OpenAI model (overrides env var OPENAI_MODEL)")
 	flag.IntVar(&openAIMaxTokens, string(FlagVarOpenAIMaxTokens), defaultToEnvInt(EnvKeyOpenAIMaxTokens, 32000), "OpenAI max tokens (overrides env var OPENAI_MAX_TOKENS)")
 	flag.Parse()
 

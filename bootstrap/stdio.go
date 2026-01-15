@@ -18,6 +18,13 @@ func makeStdioAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(cont
 			return ctx
 		}
 
+		// Add OpenAI client to context from environment variables
+		newCtx, err = AddOpenAIClientToContext(newCtx)
+		if err != nil {
+			slog.Warn("Failed to add OpenAI client to context from environment variables", "error", err)
+			// Don't return early here since OpenAI is optional
+		}
+
 		// Add permissions to context
 		newCtx, err = AddPermissionsToContext(newCtx, options)
 		if err != nil {

@@ -97,7 +97,7 @@ func GetMCPTestClientWithPermissions(
 		Password:     options.TheHivePassword,
 		Organisation: options.TheHiveOrganisation,
 	}
-	mcpServer := bootstrap.GetInprocessServer(creds, permissionsConfigPath)
+	mcpServer := bootstrap.GetInprocessServer(creds, nil, permissionsConfigPath)
 	bootstrap.RegisterToolsToMCPServer(mcpServer)
 
 	// Create wrappers that implement server.SamplingHandler and server.ElicitationHandler

@@ -103,14 +103,19 @@ func GetModelCompletion(ctx context.Context, messages []mcp.PromptMessage, targe
 		return response
 	}
 
-	// Check if OpenAI is configured before attempting to use it
-	if globalOpenAIWrapper == nil {
-		return fmt.Errorf("no AI service available: OpenAI not configured and sampling not supported")
+	// Try to get OpenAI client from context
+	openAIWrapper, err := GetOpenAIClientFromContext(ctx)
+	if err != nil {
+		// Fallback to global OpenAI wrapper for backward compatibility
+		if globalOpenAIWrapper == nil {
+			return fmt.Errorf("no AI service available: OpenAI not configured and sampling not supported")
+		}
+		openAIWrapper = globalOpenAIWrapper
 	}
 
-	logging.LogOpenAIRequest(ctx, globalOpenAIWrapper.ModelName, messages)
+	logging.LogOpenAIRequest(ctx, openAIWrapper.ModelName, messages)
 	chatMessages := translatePromptMessagesToOpenAI(messages)
-	response := GetOpenaiModelCompletion(ctx, chatMessages, target)
-	logging.LogOpenAIResponse(ctx, globalOpenAIWrapper.ModelName, response)
+	response := GetOpenaiModelCompletionWithWrapper(ctx, chatMessages, target, openAIWrapper)
+	logging.LogOpenAIResponse(ctx, openAIWrapper.ModelName, response)
 	return response
 }
