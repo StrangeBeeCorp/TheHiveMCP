@@ -136,6 +136,14 @@ func (t *ExecuteAutomationTool) validateOperation(params *executeAutomationParam
 		if params.ActionID == "" {
 			return fmt.Errorf("action-id is required for get-action-status operations. Provide the action ID returned by run-responder")
 		}
+		if params.EntityType == "" {
+			return fmt.Errorf("entity-type is required for get-action-status operations. Must be one of: 'case', 'alert', 'task', 'observable'")
+		}
+		if params.EntityID == "" {
+			return fmt.Errorf("entity-id is required for get-action-status operations. This is the ID of the entity the action is running against")
+		}
+	default:
+		return fmt.Errorf("unsupported operation: %s", params.Operation)
 	}
 	return nil
 }
@@ -252,10 +260,47 @@ func (t *ExecuteAutomationTool) handleGetJobStatus(ctx context.Context, params *
 	return utils.NewToolResultJSONUnescaped(result), nil
 }
 
-// Get action status operation (Note: TheHive API may have limited support for this)
+// Get action status operation
 func (t *ExecuteAutomationTool) handleGetActionStatus(ctx context.Context, params *executeAutomationParams) (*mcp.CallToolResult, error) {
-	// Note: TheHive API doesn't have a direct GetAction endpoint like GetJob
-	// We would need to query actions by entity to find this specific action
-	// For now, return a helpful error message
-	return mcp.NewToolResultError("get-action-status is not fully supported by TheHive API. To check responder actions, use search-entities to query the entity and check its actions, or use the CortexAPI.GetActionByEntity method with entity type and ID."), nil
+	hiveClient, err := utils.GetHiveClientFromContext(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to get TheHive client: %v. Check your authentication and connection settings.", err)), nil
+	}
+
+	actionList, resp, err := hiveClient.CortexAPI.GetActionByEntity(ctx, params.EntityType, params.EntityID).Execute()
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to get action status: %v. Check that the entity type and entity ID are correct. API response: %v", err, resp)), nil
+	}
+
+	var targetAction *thehive.OutputAction
+	for _, action := range actionList {
+		if action.GetUnderscoreId() == params.ActionID {
+			targetAction = &action
+			break
+		}
+	}
+
+	if targetAction == nil {
+		return mcp.NewToolResultError(fmt.Sprintf("action with ID %s not found for entity %s:%s. Check that the action ID, entity type, and entity ID are correct", params.ActionID, params.EntityType, params.EntityID)), nil
+	}
+
+	slog.Info("Action status retrieved",
+		"actionId", params.ActionID,
+		"status", targetAction.GetStatus())
+
+	result := map[string]interface{}{
+		"operation":     "get-action-status",
+		"actionId":      params.ActionID,
+		"responderId":   targetAction.GetResponderId(),
+		"responderName": targetAction.GetResponderName(),
+		"startDate":     targetAction.GetStartDate(),
+		"status":        targetAction.GetStatus(),
+		"report":        targetAction.GetReport(),
+	}
+
+	if targetAction.HasEndDate() {
+		result["endDate"] = targetAction.GetEndDate()
+	}
+
+	return utils.NewToolResultJSONUnescaped(result), nil
 }
