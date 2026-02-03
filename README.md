@@ -425,7 +425,7 @@ Entity: {"title": "Security Incident", "severity": 3, ...}
 
 - **search-entities**: Search for entities using natural language (for example, "high severity alerts from last week")
 - **manage-entities**: Create, update, delete entities, add comments
-- **execute-automation**: Run Cortex analyzers and responders, check job status
+- **execute-automation**: Run Cortex analyzers and responders, check job and action status
 - **get-resource**: Access schemas, docs, and metadata through hierarchical browsing (for example, `uri="hive://schema"` or `uri="hive://metadata/automation"`)
 
 <details>
