@@ -46,6 +46,16 @@ func (t *ResourceTool) fetchUnified(ctx context.Context, uri string) (*mcp.CallT
 	// Extract category path from URI
 	category := strings.TrimPrefix(uri, "hive://")
 
+	// Extract parameters from uri
+	var parameters map[string]any
+	var err error
+	if strings.Contains(uri, "?") {
+		uri, parameters, err = utils.ParseURIParameters(uri)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to parse URI parameters: %v", err)), nil
+		}
+	}
+
 	// Try to fetch as a specific resource first
 	resource, handler, resourceErr := t.resourceRegistry.Get(uri)
 
@@ -54,7 +64,8 @@ func (t *ResourceTool) fetchUnified(ctx context.Context, uri string) (*mcp.CallT
 		// It's a resource, fetch its content
 		readRequest := mcp.ReadResourceRequest{
 			Params: mcp.ReadResourceParams{
-				URI: uri,
+				URI:       uri,
+				Arguments: parameters,
 			},
 		}
 
@@ -97,15 +108,13 @@ func (t *ResourceTool) fetchUnified(ctx context.Context, uri string) (*mcp.CallT
 		}
 	}
 
-	// Also check for subcategories and resources at this path
-	resources, subcategories := t.resourceRegistry.ListByCategory(category)
-
 	// If we found a specific resource, return it (no need for subcategories/resources)
 	if resourceData != nil {
-		// For specific resources, we typically don't show subcategories/resources
-		// unless the resource itself is also a category (edge case)
 		return utils.NewToolResultJSONUnescaped(resourceData), nil
 	}
+
+	// Also check for subcategories and resources at this path
+	resources, subcategories := t.resourceRegistry.ListByCategory(category)
 
 	// If we didn't find a resource, check if we found a category with contents
 	if len(resources) > 0 || len(subcategories) > 0 {

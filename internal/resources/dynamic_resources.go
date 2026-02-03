@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
@@ -169,16 +168,16 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 		return nil, fmt.Errorf("failed to get TheHive client from context: %w. Check authentication and connection settings", err)
 	}
 
-	// Extract entity type and ID from request URI query parameters
-	// Expected format: hive://metadata/automation/responders?entityType=case&entityId=~123456
-	parsedURI, err := url.Parse(req.Params.URI)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse URI: %w", err)
+	// Extract entityType and entityId from query parameters and validate that tbey are strings
+	entityType, ok := req.Params.Arguments["entityType"].(string)
+	if !ok {
+		return nil, fmt.Errorf("entityType query parameter is required and must be a string. Example: hive://metadata/automation/responders?entityType=case&entityId=~123456")
 	}
 
-	query := parsedURI.Query()
-	entityType := query.Get("entityType")
-	entityID := query.Get("entityId")
+	entityID, ok := req.Params.Arguments["entityId"].(string)
+	if !ok {
+		return nil, fmt.Errorf("entityId query parameter is required and must be a string. Example: hive://metadata/automation/responders?entityType=case&entityId=~123456")
+	}
 
 	if entityType == "" || entityID == "" {
 		return nil, fmt.Errorf("entityType and entityId query parameters are required. Example: hive://metadata/automation/responders?entityType=case&entityId=~123456")
