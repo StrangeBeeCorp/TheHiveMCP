@@ -72,6 +72,7 @@ get-resource(uri="hive://metadata/automation/analyzers")
 - **Get alert update schema**: `get-resource(uri="hive://schema/alert/update")`
 - **Get case documentation**: `get-resource(uri="hive://docs/entities/case")`
 - **Get available analyzers**: `get-resource(uri="hive://metadata/automation/analyzers")`
+- **Get available responders**: `get-resource(uri="hive://metadata/automation/responders?entityType=case&entityId=~123456")`
 
 ## Schema Organisation
 

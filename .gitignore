@@ -44,3 +44,5 @@ integration_test/data/test_questions.json
 
 .claude/
 extension/
+
+mcp-cli.py

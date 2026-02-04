@@ -37,7 +37,7 @@ Responders perform active responses on entities (block IP, send email, create ti
 STATUS RETRIEVAL:
 Check the execution status and retrieve results of jobs or actions.
 - For analyzers: provide job-id
-- For responders: provide action-id (not yet fully supported by API)
+- For responders: provide action-id, entity-type, and entity-id to find the specific action on that entity
 
 GETTING INFORMATION:
 - List available analyzers: get-resource hive://metadata/automation/analyzers

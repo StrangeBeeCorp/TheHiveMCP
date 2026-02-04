@@ -4,7 +4,7 @@
   <img src="https://strangebee.com/wp-content/uploads/2024/07/Icon4Nav_TheHive.png" alt="TheHive Logo" width="400"/>
 </div>
 
-[![Go Version](https://img.shields.io/badge/go-1.24.11+-blue.svg)](https://golang.org/doc/go1.24)
+[![Go Version](https://img.shields.io/badge/go-1.24.12+-blue.svg)](https://golang.org/doc/go1.24)
 
 **Model Context Protocol server for TheHive security platform**
 
@@ -425,7 +425,7 @@ Entity: {"title": "Security Incident", "severity": 3, ...}
 
 - **search-entities**: Search for entities using natural language (for example, "high severity alerts from last week")
 - **manage-entities**: Create, update, delete entities, add comments
-- **execute-automation**: Run Cortex analyzers and responders, check job status
+- **execute-automation**: Run Cortex analyzers and responders, check job and action status
 - **get-resource**: Access schemas, docs, and metadata through hierarchical browsing (for example, `uri="hive://schema"` or `uri="hive://metadata/automation"`)
 
 <details>

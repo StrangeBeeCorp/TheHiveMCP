@@ -15,8 +15,8 @@ The `execute-automation` tool provides integration with Cortex for running autom
 | `responder-id` | string | Conditional | Responder ID (required for `run-responder`) |
 | `cortex-id` | string | No | Cortex instance ID (auto-routed if not specified) |
 | `observable-id` | string | Conditional | Observable ID (required for `run-analyzer`) |
-| `entity-type` | string | Conditional | Entity type for responders (`case`, `alert`, `task`, `observable`) |
-| `entity-id` | string | Conditional | Entity ID (required for `run-responder`) |
+| `entity-type` | string | Conditional | Entity type (`case`, `alert`, `task`, `observable`) - required for `run-responder` and `get-action-status` |
+| `entity-id` | string | Conditional | Entity ID - required for `run-responder` and `get-action-status` |
 | `job-id` | string | Conditional | Job ID (required for `get-job-status`) |
 | `action-id` | string | Conditional | Action ID (required for `get-action-status`) |
 | `parameters` | object | No | JSON object with automation-specific configuration |
@@ -111,7 +111,9 @@ Responders perform active responses on entities (block IP, send email, create ti
 ```json
 {
   "operation": "get-action-status",
-  "action-id": "AWabc456"
+  "action-id": "AWabc456",
+  "entity-type": "case",
+  "entity-id": "~123456"
 }
 ```
 
