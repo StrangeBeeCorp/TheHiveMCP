@@ -70,9 +70,12 @@ func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 			}
 			continue
 		}
-		results, err = utils.ExpandEntitiesWithQueries(ctx, params.EntityType, results, filters.AdditionalQueries)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to perform additional queries: %v", err)), nil
+		// Skip additional queries for count-only requests
+		if !params.Count {
+			results, err = utils.ExpandEntitiesWithQueries(ctx, params.EntityType, results, filters.AdditionalQueries)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to perform additional queries: %v", err)), nil
+			}
 		}
 		// 7. Process and format results
 		return t.formatResults(results, params, filters.RawFilters)
@@ -106,6 +109,7 @@ type searchParams struct {
 	ExtraColumns      []string
 	ExtraData         []string
 	AdditionalQueries []string
+	Count             bool
 }
 
 // extractParams extracts and validates parameters from the tool request
@@ -133,13 +137,15 @@ func (t *SearchTool) extractParams(req mcp.CallToolRequest) (*searchParams, erro
 		ExtraColumns:      req.GetStringSlice("extra-columns", []string{"_id", "title"}),
 		ExtraData:         req.GetStringSlice("extra-data", []string{}),
 		AdditionalQueries: req.GetStringSlice("additional-queries", []string{}),
+		Count:             req.GetBool("count", false),
 	}
 
 	slog.Info("SearchEntities called",
 		"entityType", params.EntityType,
 		"query", params.Query,
 		"sortBy", params.SortBy,
-		"limit", params.Limit)
+		"limit", params.Limit,
+		"count", params.Count)
 
 	return params, nil
 }
@@ -179,22 +185,33 @@ func (t *SearchTool) parseQuery(ctx context.Context, params *searchParams, addit
 
 // Query building
 func (t *SearchTool) buildHiveQuery(params *searchParams, filters *FilterResult) (thehive.InputQuery, error) {
+
 	// Build operations
 	listOp := t.buildListOperation(params.EntityType)
 	filterOp := t.buildFilterOperation(filters.RawFilters)
-	sortOp := t.buildSortOperation(filters.SortBy, filters.SortOrder)
-	pageOp := t.buildPagingOperation(filters.NumResults, filters.ExtraData)
 
 	// Exclude unneeded fields
 	excludedFields := t.getExcludedFields(params.EntityType, filters.KeptColumns, filters.ExtraData)
 
-	hiveQuery := thehive.InputQuery{
-		Query: []thehive.InputQueryNamedOperation{
-			thehive.InputQueryGenericOperationAsInputQueryNamedOperation(listOp),
-			thehive.MapmapOfStringAnyAsInputQueryNamedOperation(filterOp),
+	query := []thehive.InputQueryNamedOperation{
+		thehive.InputQueryGenericOperationAsInputQueryNamedOperation(listOp),
+		thehive.MapmapOfStringAnyAsInputQueryNamedOperation(filterOp),
+	}
+
+	if params.Count {
+		countOp := thehive.NewInputQueryGenericOperation("count")
+		query = append(query, thehive.InputQueryGenericOperationAsInputQueryNamedOperation(countOp))
+	} else {
+		sortOp := t.buildSortOperation(filters.SortBy, filters.SortOrder)
+		pageOp := t.buildPagingOperation(filters.NumResults, filters.ExtraData)
+		query = append(query,
 			thehive.InputQuerySortOperationAsInputQueryNamedOperation(sortOp),
 			thehive.InputQueryPagingOperationAsInputQueryNamedOperation(pageOp),
-		},
+		)
+	}
+
+	hiveQuery := thehive.InputQuery{
+		Query:         query,
 		ExcludeFields: excludedFields,
 	}
 
@@ -252,10 +269,19 @@ func (t *SearchTool) executeQuery(ctx context.Context, hiveQuery thehive.InputQu
 		return nil, fmt.Errorf("failed to search %ss: %v. Check that you have permissions to view %ss. API response: %v", entityType, err, entityType, resp)
 	}
 
-	// First try to cast to []interface{}
+	// Handle count queries - they return a number instead of an array
+	if countValue, ok := results.(float64); ok {
+		// For count queries, create a special entry to indicate the count
+		countResult := map[string]interface{}{
+			"_count": countValue,
+		}
+		return []map[string]interface{}{countResult}, nil
+	}
+
+	// Handle regular queries - they return an array of entities
 	resultsInterface, ok := results.([]interface{})
 	if !ok {
-		return nil, fmt.Errorf("unexpected result type from TheHive API. Expected []interface{} but got %T: %v", results, results)
+		return nil, fmt.Errorf("unexpected result type from TheHive API. Expected []interface{} or float64 but got %T: %v", results, results)
 	}
 
 	// Convert each interface{} to map[string]interface{}
@@ -275,6 +301,19 @@ func (t *SearchTool) executeQuery(ctx context.Context, hiveQuery thehive.InputQu
 
 // Result processing
 func (t *SearchTool) formatResults(results []map[string]interface{}, params *searchParams, filters map[string]interface{}) (*mcp.CallToolResult, error) {
+
+	if params.Count {
+		// For count-only requests, extract the count from the special result
+		countValue := results[0]["_count"]
+		response := map[string]interface{}{
+			"count":      countValue,
+			"countOnly":  true,
+			"entityType": params.EntityType,
+			"query":      params.Query,
+			"filters":    filters,
+		}
+		return utils.NewToolResultJSONUnescaped(response), nil
+	}
 
 	// Serialize entities (format dates, etc.)
 	parsedResults, err := t.parseDateFields(results)

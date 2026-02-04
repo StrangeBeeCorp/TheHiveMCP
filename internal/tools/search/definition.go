@@ -27,6 +27,7 @@ The search understands:
 - Tags and keywords
 - Sorting (latest, oldest, newest)
 
+When asked for statistics, it is recommended to use count=true to get only the count of matching entities. Otherwise, the tool will be limited by the limit parameter.
 Only use this tool with precise queries related to searching TheHive entities. It is highly recommended to refer to the [entity]-schema from server resources for available fields and types. Every investigation should start by exploring the available entities and their fields using the get-resource tool.`),
 		mcp.WithString(
 			"entity-type",
@@ -52,7 +53,7 @@ Only use this tool with precise queries related to searching TheHive entities. I
 		),
 		mcp.WithNumber(
 			"limit",
-			mcp.Description("Number of results to return. Default is 10."),
+			mcp.Description("Number of results to return. Default is 10. Not applicable if count=true."),
 			mcp.DefaultNumber(10),
 		),
 		mcp.WithArray(
@@ -67,8 +68,13 @@ Only use this tool with precise queries related to searching TheHive entities. I
 		),
 		mcp.WithArray(
 			"additional-queries",
-			mcp.Description("Additional queries to perform on the results. Differnt queries are supported depending on the entity type. For example, for cases you can fetch tasks or observables related to the found cases. Use this to enrich the results with related data. Refer to the entity schema from server resources for supported additional queries."),
+			mcp.Description("Additional queries to perform on the results. Different queries are supported depending on the entity type. For example, for cases you can fetch tasks or observables related to the found cases. Use this to enrich the results with related data. Refer to the entity schema from server resources for supported additional queries."),
 			mcp.DefaultArray([]string{}),
+		),
+		mcp.WithBoolean(
+			"count",
+			mcp.Description("If true, only return the count of matching entities instead of the entities themselves."),
+			mcp.DefaultBool(false),
 		),
 	)
 }
