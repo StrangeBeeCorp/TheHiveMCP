@@ -675,3 +675,213 @@ func TestSearchWithReadOnlyPermissions(t *testing.T) {
 	}
 	require.True(t, found, "Should find our test alert")
 }
+
+// TestSearchCasesWithCountOnly tests searching cases with count=true parameter
+func TestSearchCasesWithCountOnly(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+
+	// Create test cases with different severities
+	createTestCase(t, hiveClient, "High severity case 1", 3, "New", "")
+	createTestCase(t, hiveClient, "High severity case 2", 3, "InProgress", "")
+	createTestCase(t, hiveClient, "Low severity case", 1, "New", "")
+
+	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
+		`{
+			"raw_filters": {
+				"_gte": {
+					"_field": "severity",
+					"_value": 3
+				}
+			},
+			"sort_by": "_createdAt",
+			"sort_order": "desc",
+			"num_results": 10,
+			"kept_columns": ["_id", "title"],
+			"extra_data": [],
+			"additional_queries": []
+		}`,
+	)
+
+	mcpClient := testutils.GetMCPTestClient(
+		t,
+		samplingHandler,
+		testutils.DummyElicitationAccept,
+	)
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "search-entities",
+			Arguments: map[string]any{
+				"entity-type": types.EntityTypeCase,
+				"query":       "high severity cases",
+				"count":       true,
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+
+	// Check that we got a count-only response
+	countOnly, ok := structuredData["countOnly"].(bool)
+	require.True(t, ok)
+	require.True(t, countOnly)
+
+	// Check that count is 2 (two high severity cases)
+	count, ok := structuredData["count"].(float64)
+	require.True(t, ok)
+	require.Equal(t, float64(2), count)
+
+	// Check that results field is not present in count-only responses
+	_, hasResults := structuredData["results"]
+	require.False(t, hasResults, "Count-only response should not include results field")
+
+	// Verify other expected fields are present
+	require.Equal(t, types.EntityTypeCase, structuredData["entityType"])
+	require.Equal(t, "high severity cases", structuredData["query"])
+	require.NotNil(t, structuredData["filters"])
+}
+
+// TestSearchAlertsWithCountOnly tests searching alerts with count=true parameter
+func TestSearchAlertsWithCountOnly(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+
+	// Create test alerts
+	createTestAlert(t, hiveClient, "Critical Alert 1", 4, []string{"malware", "phishing"})
+	createTestAlert(t, hiveClient, "Critical Alert 2", 4, []string{"malware"})
+	createTestAlert(t, hiveClient, "Medium Alert", 2, []string{"suspicious"})
+
+	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
+		`{
+			"raw_filters": {
+				"_eq": {
+					"_field": "severity",
+					"_value": 4
+				}
+			},
+			"sort_by": "_createdAt",
+			"sort_order": "desc",
+			"num_results": 10,
+			"kept_columns": ["_id", "title"],
+			"extra_data": [],
+			"additional_queries": []
+		}`,
+	)
+
+	mcpClient := testutils.GetMCPTestClient(
+		t,
+		samplingHandler,
+		testutils.DummyElicitationAccept,
+	)
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "search-entities",
+			Arguments: map[string]any{
+				"entity-type": types.EntityTypeAlert,
+				"query":       "critical alerts",
+				"count":       true,
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+
+	// Verify count-only response structure
+	require.True(t, structuredData["countOnly"].(bool))
+	require.Equal(t, float64(2), structuredData["count"].(float64))
+	require.Equal(t, types.EntityTypeAlert, structuredData["entityType"])
+
+	// Ensure no results field is present
+	_, hasResults := structuredData["results"]
+	require.False(t, hasResults)
+}
+
+// TestSearchCountVsRegularSearch tests that count matches the number of results in regular search
+func TestSearchCountVsRegularSearch(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+
+	// Create test cases for comparison (use valid statuses)
+	createTestCase(t, hiveClient, "Test case 1", 2, "New", "")
+	createTestCase(t, hiveClient, "Test case 2", 2, "InProgress", "")
+	createTestCase(t, hiveClient, "Test case 3", 2, "New", "")
+
+	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
+		`{
+			"raw_filters": {
+				"_eq": {
+					"_field": "severity",
+					"_value": 2
+				}
+			},
+			"sort_by": "_createdAt",
+			"sort_order": "desc",
+			"num_results": 10,
+			"kept_columns": ["_id", "title"],
+			"extra_data": [],
+			"additional_queries": []
+		}`,
+	)
+
+	mcpClient := testutils.GetMCPTestClient(
+		t,
+		samplingHandler,
+		testutils.DummyElicitationAccept,
+	)
+
+	// First, do a regular search (without explicit count=false)
+	regularRequest := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "search-entities",
+			Arguments: map[string]any{
+				"entity-type": types.EntityTypeCase,
+				"query":       "medium severity cases",
+				"count":       false,
+			},
+		},
+	}
+
+	regularResult, err := mcpClient.CallTool(t.Context(), regularRequest)
+	require.NoError(t, err)
+
+	regularData, ok := regularResult.StructuredContent.(map[string]any)
+	require.True(t, ok)
+
+	regularResults, ok := regularData["results"].([]any)
+	require.True(t, ok)
+	regularCount := len(regularResults)
+
+	// Now do a count-only search
+	countRequest := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "search-entities",
+			Arguments: map[string]any{
+				"entity-type": types.EntityTypeCase,
+				"query":       "medium severity cases",
+				"count":       true,
+			},
+		},
+	}
+
+	countResult, err := mcpClient.CallTool(t.Context(), countRequest)
+	require.NoError(t, err)
+
+	countData, ok := countResult.StructuredContent.(map[string]any)
+	require.True(t, ok)
+
+	countOnlyValue, ok := countData["count"].(float64)
+	require.True(t, ok)
+
+	// Verify that the count matches the number of results
+	require.Equal(t, float64(regularCount), countOnlyValue)
+	require.Equal(t, 3, regularCount) // We created 3 test cases
+}
