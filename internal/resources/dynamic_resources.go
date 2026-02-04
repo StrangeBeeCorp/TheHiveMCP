@@ -168,7 +168,7 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 		return nil, fmt.Errorf("failed to get TheHive client from context: %w. Check authentication and connection settings", err)
 	}
 
-	// Extract entityType and entityId from query parameters and validate that tbey are strings
+	// Extract entityType and entityId from query parameters and validate that they are strings
 	entityType, ok := req.Params.Arguments["entityType"].(string)
 	if !ok {
 		return nil, fmt.Errorf("entityType query parameter is required and must be a string. Example: hive://metadata/automation/responders?entityType=case&entityId=~123456")
