@@ -68,7 +68,7 @@ Only use this tool with precise queries related to searching TheHive entities. I
 		),
 		mcp.WithArray(
 			"additional-queries",
-			mcp.Description("Additional queries to perform on the results. Differnt queries are supported depending on the entity type. For example, for cases you can fetch tasks or observables related to the found cases. Use this to enrich the results with related data. Refer to the entity schema from server resources for supported additional queries."),
+			mcp.Description("Additional queries to perform on the results. Different queries are supported depending on the entity type. For example, for cases you can fetch tasks or observables related to the found cases. Use this to enrich the results with related data. Refer to the entity schema from server resources for supported additional queries."),
 			mcp.DefaultArray([]string{}),
 		),
 		mcp.WithBoolean(
