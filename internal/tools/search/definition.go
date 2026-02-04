@@ -53,7 +53,7 @@ Only use this tool with precise queries related to searching TheHive entities. I
 		),
 		mcp.WithNumber(
 			"limit",
-			mcp.Description("Number of results to return. Default is 10. Unapplicable if count=true."),
+			mcp.Description("Number of results to return. Default is 10. Not applicable if count=true."),
 			mcp.DefaultNumber(10),
 		),
 		mcp.WithArray(
