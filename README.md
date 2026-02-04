@@ -458,6 +458,7 @@ Search for entities in TheHive using natural language queries. Uses AI to transl
 - Support for all entity types (alerts, cases, tasks, observables)
 - Flexible filtering and sorting options
 - Custom column and data field selection
+- Count-only queries for performance optimization
 
 ### [manage-entities](docs/tools/manage-entities.md)
 Perform comprehensive CRUD operations on TheHive entities with full support for relationships and constraints.

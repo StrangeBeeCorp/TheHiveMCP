@@ -18,6 +18,7 @@ The `search-entities` tool allows you to search for TheHive entities (alerts, ca
 | `extra-columns` | array | No | Additional columns to include in output (default: `['_id', 'title']`) |
 | `extra-data` | array | No | Additional data fields to include in output (see `Extra Data` in the Api docs) |
 | `additional-queries` | array | No | Additional queries to enrich results with related data (see `Queries available` in the Api docs)|
+| `count` | boolean | No | Return only the count of matching entities instead of the actual entities (default: `false`) |
 
 ## Natural Language Query Examples
 
@@ -45,6 +46,12 @@ The search tool understands various natural language patterns:
 - "phishing alerts"
 - "cases tagged with APT"
 - "tasks with keyword 'investigation'"
+
+### Count queries (use count=true parameter)
+- "how many high severity cases are there"
+- "total number of open alerts"
+- "count of tasks assigned to security team"
+- "number of observables created today"
 
 ### Complex queries
 - "latest phishing alerts with severity greater than 2"
@@ -83,6 +90,27 @@ Search for artifacts and IOCs with filters on:
 
 ## Advanced Usage
 
+### Count-only queries
+Get only the total count of matching entities without returning the actual data:
+```json
+{
+  "entity-type": "case",
+  "query": "high severity cases",
+  "count": true
+}
+```
+
+Response:
+```json
+{
+  "count": 42,
+  "countOnly": true,
+  "entityType": "case",
+  "query": "high severity cases",
+  "filters": {...}
+}
+```
+
 ### Custom columns
 Specify which fields to return in the results:
 ```json
@@ -120,6 +148,7 @@ Enrich results with related information:
 3. **Review filters**: The tool returns the generated filters for transparency
 4. **Iterate**: Refine your query based on results and filter feedback
 5. **Limit results**: Use appropriate limits for performance
+6. **Use count for statistics**: When you only need totals, use `count=true` for better performance
 
 ## Understanding Schema Types
 
