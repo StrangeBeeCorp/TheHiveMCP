@@ -128,13 +128,16 @@ func (t *SearchTool) extractParams(req mcp.CallToolRequest) (*searchParams, erro
 
 	sortOrder := req.GetString("sort-order", "desc")
 
+	// Get entity-specific default fields
+	defaultFields := types.DefaultFields[entityType]
+
 	params := &searchParams{
 		EntityType:        entityType,
 		Query:             query,
 		SortBy:            sortBy,
 		SortOrder:         sortOrder,
 		Limit:             int(req.GetInt("limit", 10)),
-		ExtraColumns:      req.GetStringSlice("extra-columns", []string{"_id", "title"}),
+		ExtraColumns:      req.GetStringSlice("extra-columns", defaultFields),
 		ExtraData:         req.GetStringSlice("extra-data", []string{}),
 		AdditionalQueries: req.GetStringSlice("additional-queries", []string{}),
 		Count:             req.GetBool("count", false),

@@ -35,16 +35,16 @@
       "description": "User login who last updated the observable"
     },
     "_createdAt": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Creation timestamp in milliseconds since epoch"
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the observable was created. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "_updatedAt": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Last update timestamp in milliseconds since epoch"
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the observable was last updated. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "dataType": {
       "type": "string",
@@ -55,10 +55,10 @@
       "description": "The actual observable value (e.g., IP address, domain name, file hash). Cannot be changed after creation."
     },
     "startDate": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp when the observable was first observed or became relevant"
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the observable was first observed or became relevant. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "attachment": {
       "type": "object",
@@ -82,16 +82,16 @@
           "description": "User who last updated the attachment"
         },
         "_createdAt": {
-          "type": "integer",
-          "format": "datetime_ms",
-          "example": 1640000000000,
-          "description": "Upload timestamp in milliseconds"
+          "type": "string",
+          "format": "date-time",
+          "example": "01-01-2022T00:00:00",
+          "description": "Date-time string when the attachment was uploaded. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
         },
         "_updatedAt": {
-          "type": "integer",
-          "format": "datetime_ms",
-          "example": 1640000000000,
-          "description": "Last update timestamp in milliseconds"
+          "type": "string",
+          "format": "date-time",
+          "example": "01-01-2022T00:00:00",
+          "description": "Date-time string when the attachment was last updated. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
         },
         "name": {
           "type": "string",
@@ -153,10 +153,10 @@
       "description": "Marks if this observable has been seen/confirmed in the wild or in other incidents"
     },
     "sightedAt": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp when the observable was sighted"
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the observable was sighted. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "reports": {
       "type": "object",

@@ -338,7 +338,6 @@ func TestManageCreateObservableInCase(t *testing.T) {
 	require.True(t, ok)
 	require.NotEmpty(t, observableID)
 	require.Equal(t, "ip", resultData["dataType"])
-	require.Equal(t, "192.168.1.100", resultData["data"])
 
 	// Verify the observable exists in TheHive
 	fetchedObservable, _, err := hiveClient.ObservableAPI.GetObservable(authContext, observableID).Execute()

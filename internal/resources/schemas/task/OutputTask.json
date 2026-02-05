@@ -20,16 +20,16 @@
       "description": "Email or username of the user who last updated this task."
     },
     "_createdAt": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds since Unix epoch) when the task was created."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the task was created. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "_updatedAt": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds since Unix epoch) when the task was last updated."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the task was last updated. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "title": {
       "type": "string",
@@ -58,16 +58,16 @@
       "description": "Whether this task is flagged for attention. Flagged tasks are highlighted in the task list for visibility across the organisation."
     },
     "startDate": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds) when work on this task began. Can be set manually or automatically when status changes to 'InProgress'."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when work on this task began. Can be set manually or automatically when status changes to 'InProgress'. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "endDate": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds) when the task was completed or cancelled. Set when status changes to 'Completed' or 'Cancel'."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the task was completed or cancelled. Set when status changes to 'Completed' or 'Cancel'. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "assignee": {
       "type": "string",
@@ -81,10 +81,10 @@
       "description": "Sort order of the task within its group. Lower numbers appear first. Used to control display order in task lists."
     },
     "dueDate": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds) when the task is due to be completed. Used for deadline tracking and task prioritization."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the task is due to be completed. Used for deadline tracking and task prioritization. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "mandatory": {
       "type": "boolean",

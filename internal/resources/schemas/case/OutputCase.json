@@ -40,16 +40,16 @@
       "description": "Email or username of the user who last updated this case."
     },
     "_createdAt": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds since Unix epoch) when the case was created."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the case was created. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "_updatedAt": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds since Unix epoch) when the case was last updated."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the case was last updated. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "number": {
       "type": "integer",
@@ -74,16 +74,16 @@
       "description": "Human-readable label corresponding to the severity value (e.g., 'Low', 'Medium', 'High', 'Critical'). Defined in organisation configuration."
     },
     "startDate": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds) when the incident began or when investigation started. Used for timeline tracking and metrics calculation."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the incident began or when investigation started. Used for timeline tracking and metrics calculation. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "endDate": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds) when the case was closed or the incident was resolved. Set automatically when case moves to 'Closed' stage."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the case was closed or the incident was resolved. Set automatically when case moves to 'Closed' stage. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "tags": {
       "type": "array",
@@ -290,46 +290,46 @@
       }
     },
     "newDate": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds) when the case entered 'New' stage. Used for metrics calculation and tracking time spent in each stage."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the case entered 'New' stage. Used for metrics calculation and tracking time spent in each stage. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "inProgressDate": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds) when the case entered 'InProgress' stage. Marks the start of active investigation."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the case entered 'InProgress' stage. Marks the start of active investigation. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "closedDate": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds) when the case was closed. Used to calculate total case handling duration."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the case was closed. Used to calculate total case handling duration. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "alertDate": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds) of the earliest alert merged into this case. Used for tracking the initial detection time of the incident."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string of the earliest alert merged into this case. Used for tracking the initial detection time of the incident. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "alertNewDate": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds) when the first merged alert entered 'New' status. Used for alert-to-case workflow metrics."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the first merged alert entered 'New' status. Used for alert-to-case workflow metrics. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "alertInProgressDate": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds) when the first merged alert entered 'InProgress' status. Tracks alert triage timeline."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the first merged alert entered 'InProgress' status. Tracks alert triage timeline. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "alertImportedDate": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds) when an alert was imported/merged into this case. Measures time from alert creation to case creation."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when an alert was imported/merged into this case. Measures time from alert creation to case creation. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "timeToDetect": {
       "type": "integer",

@@ -24,14 +24,16 @@
       "type": "string"
     },
     "_createdAt": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the template was created. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "_updatedAt": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the template was last updated. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "name": {
       "type": "string"
@@ -138,14 +140,16 @@
             "type": "string"
           },
           "_createdAt": {
-            "type": "integer",
-            "format": "datetime_ms",
-            "example": 1640000000000
+            "type": "string",
+            "format": "date-time",
+            "example": "01-01-2022T00:00:00",
+            "description": "Date-time string when the template task was created. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
           },
           "_updatedAt": {
-            "type": "integer",
-            "format": "datetime_ms",
-            "example": 1640000000000
+            "type": "string",
+            "format": "date-time",
+            "example": "01-01-2022T00:00:00",
+            "description": "Date-time string when the template task was last updated. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
           },
           "title": {
             "type": "string"
@@ -163,14 +167,16 @@
             "type": "boolean"
           },
           "startDate": {
-            "type": "integer",
-            "format": "datetime_ms",
-            "example": 1640000000000
+            "type": "string",
+            "format": "date-time",
+            "example": "01-01-2022T00:00:00",
+            "description": "Date-time string for template task start date. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
           },
           "endDate": {
-            "type": "integer",
-            "format": "datetime_ms",
-            "example": 1640000000000
+            "type": "string",
+            "format": "date-time",
+            "example": "01-01-2022T00:00:00",
+            "description": "Date-time string for template task end date. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
           },
           "assignee": {
             "type": "string"
@@ -180,9 +186,10 @@
             "format": "int32"
           },
           "dueDate": {
-            "type": "integer",
-            "format": "datetime_ms",
-            "example": 1640000000000
+            "type": "string",
+            "format": "date-time",
+            "example": "01-01-2022T00:00:00",
+            "description": "Date-time string for template task due date. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
           },
           "mandatory": {
             "type": "boolean"
