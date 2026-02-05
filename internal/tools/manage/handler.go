@@ -307,12 +307,6 @@ func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APICl
 		return mcp.NewToolResultError(fmt.Sprintf("failed to create observable: %v. Check that the target case/alert exists and you have permissions. API response: %v", err, resp)), nil
 	}
 
-	// Convert []thehive.OutputObservable to []any
-	resultAny := make([]any, len(result))
-	for i, item := range result {
-		resultAny[i] = item
-	}
-
 	processedResult, err := parseDateFieldsAndExtractColumnsFromArray(result, types.DefaultFields[types.EntityTypeObservable])
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields and extract columns in observable result: %v", err)), nil
