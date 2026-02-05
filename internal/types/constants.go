@@ -1,6 +1,10 @@
 package types
 
-import "time"
+import (
+	"time"
+
+	"github.com/StrangeBeeCorp/thehive4go/thehive"
+)
 
 type CtxKey string
 
@@ -78,4 +82,28 @@ const (
 	EntityTypeCase       = "case"
 	EntityTypeTask       = "task"
 	EntityTypeObservable = "observable"
+	EntityTypeComment    = "comment"
+	EntityTypePage       = "page"
+	EntityTypeAttachment = "attachment"
+	EntityTypeTaskLog    = "task-log"
 )
+
+// OutputEntity is a union type representing possible output entities
+type OutputEntity interface {
+	thehive.OutputAlert |
+		thehive.OutputCase |
+		thehive.OutputTask |
+		thehive.OutputObservable |
+		map[string]interface{}
+}
+
+var DefaultFields map[string][]string = map[string][]string{
+	EntityTypeAlert:      {"_id", "title", "_createdAt", "severity", "status"},
+	EntityTypeCase:       {"_id", "title", "_createdAt", "status", "severity"},
+	EntityTypeTask:       {"_id", "title", "status", "_createdAt", "assignee"},
+	EntityTypeObservable: {"_id", "dataType", "_createdAt"},
+	EntityTypeComment:    {"_id", "content", "_createdAt", "_createdBy"},
+	EntityTypePage:       {"_id", "title", "_createdAt"},
+	EntityTypeAttachment: {"_id", "fileName", "size", "_createdAt"},
+	EntityTypeTaskLog:    {"_id", "message", "_createdAt", "_createdBy"},
+}

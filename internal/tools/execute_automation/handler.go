@@ -257,7 +257,11 @@ func (t *ExecuteAutomationTool) handleGetJobStatus(ctx context.Context, params *
 		result["message"] = fmt.Sprintf("Job status: %s. No report available yet.", job.GetStatus())
 	}
 
-	return utils.NewToolResultJSONUnescaped(result), nil
+	processedResult, err := utils.ParseDateFields(result)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields in job result: %v", err)), nil
+	}
+	return utils.NewToolResultJSONUnescaped(processedResult), nil
 }
 
 // Get action status operation
@@ -302,5 +306,10 @@ func (t *ExecuteAutomationTool) handleGetActionStatus(ctx context.Context, param
 		result["endDate"] = targetAction.GetEndDate()
 	}
 
-	return utils.NewToolResultJSONUnescaped(result), nil
+	processedResult, err := utils.ParseDateFields(result)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields in action result: %v", err)), nil
+	}
+
+	return utils.NewToolResultJSONUnescaped(processedResult), nil
 }

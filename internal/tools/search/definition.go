@@ -58,8 +58,8 @@ Only use this tool with precise queries related to searching TheHive entities. I
 		),
 		mcp.WithArray(
 			"extra-columns",
-			mcp.Description("List of columns to keep in the output. Default is ['_id', 'title']. Query the [entity]-schema from server resources for available columns."),
-			mcp.DefaultArray([]string{"_id", "title"}),
+			mcp.Description("List of columns to keep in the output. Defaults are entity-specific: alerts include severity/status, cases include status/severity, tasks include assignee, etc. Query the [entity]-schema from server resources for available columns."),
+			mcp.DefaultArray([]string{"_id", "title"}), // This default is overridden by entity-specific defaults in the handler
 		),
 		mcp.WithArray(
 			"extra-data",

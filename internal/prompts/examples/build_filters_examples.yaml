@@ -1,8 +1,8 @@
 - user: "List all high severity alerts from the last week [submitted 2024-08-07]"
-  assistant: '{"raw_filters": {"_and": [{"_gt": {"_field": "severity", "_value": 3}}, {"_gte": {"_field": "date", "_value": 2024-08-01T00:00:00}}]}}'
+  assistant: '{"raw_filters": {"_and": [{"_gt": {"_field": "severity", "_value": 3}}, {"_gte": {"_field": "date", "_value": "2024-08-01T00:00:00"}}]}}'
 
 - user: "Find the 3 newest high severity cases, displaying only title and severity."
-  assistant: '{"raw_filters": {"_eq": {"_field": "severity", "_value": 3}}, "num_results": 3, "kept_columns": ["title", "severity"], "sort_by": "date", "sort_order": "desc"}'
+  assistant: '{"raw_filters": {"_eq": {"_field": "severity", "_value": 3}}, "num_results": 3, "kept_columns": ["title", "severity"], "sort_by": "_createdAt", "sort_order": "desc"}'
 
 - user: "Find observables with 'malware' or 'phishing' in the title, created in the last month [submitted 2024-08-07]"
-  assistant: '{"raw_filters":{"_and": [{"_or": [{"_like": {"_field": "title", "_value": "%malware%"}}, {"_like": {"_field": "title", "_value": "%phishing%"}}]}, {"_gte": {"_field": "date", "_value": 2024-07-07T00:00:00}}]}}'
+  assistant: '{"raw_filters":{"_and": [{"_or": [{"_like": {"_field": "title", "_value": "%malware%"}}, {"_like": {"_field": "title", "_value": "%phishing%"}}]}, {"_gte": {"_field": "_createdAt", "_value": "2024-07-07T00:00:00"}}]}}'

@@ -55,13 +55,46 @@ func (t *ManageTool) Handle(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 	}
 }
 
-// Parameter extraction and validation
 type manageParams struct {
 	Operation  string
 	EntityType string
 	EntityIDs  []string
 	EntityData map[string]interface{}
 	Comment    string
+}
+
+func filterEntityColumns(entity map[string]interface{}, defaultFields []string) map[string]interface{} {
+	filtered := make(map[string]interface{})
+	for _, col := range defaultFields {
+		if val, exists := entity[col]; exists {
+			filtered[col] = val
+		}
+	}
+	return filtered
+}
+func parseDateFieldsAndExtractColumns[T types.OutputEntity](result T, defaultFields []string) (map[string]interface{}, error) {
+	// Handle single entity - wrap it in an array for processing
+	processedResult, err := utils.ParseDateFields(result)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse date fields: %w", err)
+	}
+	filtered := filterEntityColumns(processedResult, defaultFields)
+
+	return filtered, nil
+}
+
+func parseDateFieldsAndExtractColumnsFromArray[T types.OutputEntity](result []T, defaultFields []string) ([]map[string]interface{}, error) {
+	// Handle array of entities
+	finalResults := make([]map[string]interface{}, 0, len(result))
+	for _, item := range result {
+		parsedItem, err := parseDateFieldsAndExtractColumns(item, defaultFields)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse date fields in array item: %w", err)
+		}
+		finalResults = append(finalResults, parsedItem)
+	}
+	return finalResults, nil
 }
 
 func (t *ManageTool) extractParams(req mcp.CallToolRequest) (*manageParams, error) {
@@ -145,15 +178,17 @@ func (t *ManageTool) handleCreate(ctx context.Context, params *manageParams) (*m
 		return mcp.NewToolResultError(fmt.Sprintf("failed to get TheHive client: %v. Check your authentication and connection settings.", err)), nil
 	}
 
+	processedData := utils.TranslateDatesToTimestamps(params.EntityData)
+
 	switch params.EntityType {
 	case types.EntityTypeAlert:
-		return t.createAlert(ctx, hiveClient, params.EntityData)
+		return t.createAlert(ctx, hiveClient, processedData)
 	case types.EntityTypeCase:
-		return t.createCase(ctx, hiveClient, params.EntityData)
+		return t.createCase(ctx, hiveClient, processedData)
 	case types.EntityTypeTask:
-		return t.createTask(ctx, hiveClient, params.EntityData, params.EntityIDs[0])
+		return t.createTask(ctx, hiveClient, processedData, params.EntityIDs[0])
 	case types.EntityTypeObservable:
-		return t.createObservable(ctx, hiveClient, params.EntityData, params.EntityIDs[0])
+		return t.createObservable(ctx, hiveClient, processedData, params.EntityIDs[0])
 	default:
 		return mcp.NewToolResultError(fmt.Sprintf("unsupported entity type for create: %s", params.EntityType)), nil
 	}
@@ -176,10 +211,16 @@ func (t *ManageTool) createAlert(ctx context.Context, client *thehive.APIClient,
 		return mcp.NewToolResultError(fmt.Sprintf("failed to create alert: %v. Check required fields and permissions. API response: %v", err, resp)), nil
 	}
 
+	processedResult, err := parseDateFieldsAndExtractColumns[thehive.OutputAlert](*result, types.DefaultFields[types.EntityTypeAlert])
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields and extract columns in alert result: %v", err)), nil
+	}
+
+	// For create operations, return the single entity, not an array
 	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
 		"operation":  "create",
 		"entityType": types.EntityTypeAlert,
-		"result":     result,
+		"result":     processedResult,
 	}), nil
 }
 
@@ -199,10 +240,16 @@ func (t *ManageTool) createCase(ctx context.Context, client *thehive.APIClient, 
 		return mcp.NewToolResultError(fmt.Sprintf("failed to create case: %v. Check required fields and permissions. API response: %v", err, resp)), nil
 	}
 
+	processedResult, err := parseDateFieldsAndExtractColumns[thehive.OutputCase](*result, types.DefaultFields[types.EntityTypeCase])
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields and extract columns in case result: %v", err)), nil
+	}
+
+	// For create operations, return the single entity, not an array
 	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
 		"operation":  "create",
-		"entityType": "case",
-		"result":     result,
+		"entityType": types.EntityTypeCase,
+		"result":     processedResult,
 	}), nil
 }
 
@@ -223,10 +270,16 @@ func (t *ManageTool) createTask(ctx context.Context, client *thehive.APIClient, 
 		return mcp.NewToolResultError(fmt.Sprintf("failed to create task in case %s: %v. Check that the case exists and you have permissions. API response: %v", parentID, err, resp)), nil
 	}
 
+	processedResult, err := parseDateFieldsAndExtractColumns[thehive.OutputTask](*result, types.DefaultFields[types.EntityTypeTask])
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields and extract columns in task result: %v", err)), nil
+	}
+
+	// For create operations, return the single entity, not an array
 	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
 		"operation":  "create",
-		"entityType": "task",
-		"result":     result,
+		"entityType": types.EntityTypeTask,
+		"result":     processedResult,
 	}), nil
 }
 
@@ -254,10 +307,22 @@ func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APICl
 		return mcp.NewToolResultError(fmt.Sprintf("failed to create observable: %v. Check that the target case/alert exists and you have permissions. API response: %v", err, resp)), nil
 	}
 
+	// Convert []thehive.OutputObservable to []any
+	resultAny := make([]any, len(result))
+	for i, item := range result {
+		resultAny[i] = item
+	}
+
+	processedResult, err := parseDateFieldsAndExtractColumnsFromArray(result, types.DefaultFields[types.EntityTypeObservable])
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields and extract columns in observable result: %v", err)), nil
+	}
+
+	// For create operations, return the single entity, not an array
 	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
 		"operation":  "create",
-		"entityType": "observable",
-		"result":     result,
+		"entityType": types.EntityTypeObservable,
+		"result":     processedResult, // Return the full array for observables
 	}), nil
 }
 

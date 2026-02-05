@@ -43,16 +43,16 @@
       "description": "Email or username of the user who last updated this alert. Tracks manual modifications during triage."
     },
     "_createdAt": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds since Unix epoch) when the alert was created in TheHive."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the alert was created in TheHive. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "_updatedAt": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds since Unix epoch) when the alert was last updated."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the alert was last updated. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "type": {
       "type": "string",
@@ -88,10 +88,10 @@
       "description": "Human-readable label corresponding to the severity value (e.g., 'Low', 'Medium', 'High', 'Critical'). Defined in organisation configuration."
     },
     "date": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds) when the security event occurred in the source system. Represents the actual incident time, not the alert creation time in TheHive."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the security event occurred in the source system. Represents the actual incident time, not the alert creation time in TheHive. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "tags": {
       "type": "array",
@@ -195,9 +195,10 @@
           "description": "[DEPRECATED] Array of similar alerts based on observable matching. Decommissioned in favor of dedicated 'similarAlerts' query operation which is more efficient when there are many similar observables. Use the query API instead of requesting this extraData field."
         },
         "importDate": {
-          "type": "integer",
-          "format": "datetime_ms",
-          "description": "Timestamp (in milliseconds) when this alert was imported/merged into a case. Measures the time from alert creation to case promotion. Present only for alerts that have been converted to cases."
+          "type": "string",
+          "format": "date-time",
+          "example": "01-01-2022T00:00:00",
+          "description": "Date-time string when this alert was imported/merged into a case. Measures the time from alert creation to case promotion. Present only for alerts that have been converted to cases. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
         },
         "caseNumber": {
           "type": "integer",
@@ -255,28 +256,28 @@
       }
     },
     "newDate": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds) when the alert entered 'New' stage. Used for metrics calculation and tracking time spent in each stage."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the alert entered 'New' stage. Used for metrics calculation and tracking time spent in each stage. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "inProgressDate": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds) when the alert entered 'InProgress' stage. Marks the start of active triage."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the alert entered 'InProgress' stage. Marks the start of active triage. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "closedDate": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds) when the alert was closed (dismissed or imported). Used to calculate total alert handling duration."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the alert was closed (dismissed or imported). Used to calculate total alert handling duration. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "importedDate": {
-      "type": "integer",
-      "format": "datetime_ms",
-      "example": 1640000000000,
-      "description": "Timestamp (in milliseconds) when the alert was imported/merged into a case. Same value as extraData.importDate but available at the root level."
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the alert was imported/merged into a case. Same value as extraData.importDate but available at the root level. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "timeToDetect": {
       "type": "integer",

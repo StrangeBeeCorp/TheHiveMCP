@@ -15,7 +15,7 @@ The `search-entities` tool allows you to search for TheHive entities (alerts, ca
 | `sort-by` | string | No | Column to sort results by (default: `_createdAt`) |
 | `sort-order` | string | No | Sort order `asc` or `desc` (default: `desc`) |
 | `limit` | number | No | Number of results to return (default: 10) |
-| `extra-columns` | array | No | Additional columns to include in output (default: `['_id', 'title']`) |
+| `extra-columns` | array | No | Additional columns to include in output. Entity-specific defaults: alerts `['_id', 'title', '_createdAt', 'severity', 'status']`, cases `['_id', 'title', '_createdAt', 'status', 'severity']`, tasks `['_id', 'title', 'status', '_createdAt', 'assignee']`, observables `['_id', 'dataType', '_createdAt']` |
 | `extra-data` | array | No | Additional data fields to include in output (see `Extra Data` in the Api docs) |
 | `additional-queries` | array | No | Additional queries to enrich results with related data (see `Queries available` in the Api docs)|
 | `count` | boolean | No | Return only the count of matching entities instead of the actual entities (default: `false`) |

@@ -5,3 +5,8 @@ JSON Responses
 - Include all required fields
 - Use correct data types
 - Follow field naming conventions
+
+Date Handling
+- Date fields are automatically converted from Unix timestamps to DD-MM-YYYYTHH:MM:SS format for better readability
+- When filtering by dates, use ISO date strings (YYYY-MM-DDTHH:MM:SS format like "2024-08-01T00:00:00")
+- Entity outputs will show dates in human-readable DD-MM-YYYYTHH:MM:SS format
