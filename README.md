@@ -24,9 +24,8 @@
 > ### Feature Limitations
 > - **No TTP (Tactics, Techniques, Procedures) Support**: MITRE ATT&CK integration not implemented
 > - **Limited Responder Support**: Cortex responder execution has known issues and limitations
-> - **No Alert Promotion**: Cannot promote alerts to cases automatically
 > - **No Alert Comments**: Alert commenting functionality not implemented
-> - **Incomplete Observable Management**: Limited observable type support and operations
+> - **Limited Observable Types**: Some specialized observable types not fully supported
 > - **No Case Templates**: Custom case template support not implemented
 > - **Limited Task Management**: Advanced task workflows not fully supported
 > - **No Dashboard Integration**: No support for TheHive dashboard widgets or custom views
@@ -58,6 +57,7 @@ TheHiveMCP is an MCP (Model Context Protocol) server that enables AI agents to i
 - **Comprehensive security operations**:
   - Natural language entity search (alerts, cases, tasks, observables)
   - Full CRUD operations on TheHive entities
+  - Workflow operations (promote alerts to cases, merge entities)
   - Cortex analyzer and responder execution
   - Dynamic resource catalog with live metadata
 
@@ -424,7 +424,7 @@ Entity: {"title": "Security Incident", "severity": 3, ...}
 ## 🛠️ MCP Tools
 
 - **search-entities**: Search for entities using natural language (for example, "high severity alerts from last week")
-- **manage-entities**: Create, update, delete entities, add comments
+- **manage-entities**: Create, update, delete entities, add comments, promote alerts to cases, merge cases/alerts/observables
 - **execute-automation**: Run Cortex analyzers and responders, check job and action status
 - **get-resource**: Access schemas, docs, and metadata through hierarchical browsing (for example, `uri="hive://schema"` or `uri="hive://metadata/automation"`)
 
@@ -461,11 +461,13 @@ Search for entities in TheHive using natural language queries. Uses AI to transl
 - Count-only queries for performance optimization
 
 ### [manage-entities](docs/tools/manage-entities.md)
-Perform comprehensive CRUD operations on TheHive entities with full support for relationships and constraints.
+Perform comprehensive CRUD and workflow operations on TheHive entities with full support for relationships and constraints.
 
 **Key features:**
 - Create, update, delete operations for all entity types
 - Comment support for cases and task logs
+- Promote alerts to cases
+- Merge cases together, merge alerts into cases, deduplicate observables
 - Respect for entity hierarchies and relationships
 - Batch operations support
 

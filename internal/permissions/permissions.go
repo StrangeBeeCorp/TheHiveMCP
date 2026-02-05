@@ -43,6 +43,8 @@ type EntityOperation struct {
 	Update  bool `yaml:"update"`
 	Delete  bool `yaml:"delete"`
 	Comment bool `yaml:"comment"`
+	Promote bool `yaml:"promote"`
+	Merge   bool `yaml:"merge"`
 }
 
 // AutomationPermissions defines analyzer or responder access
@@ -98,6 +100,10 @@ func (c *Config) IsEntityOperationAllowed(entityType, operation string) bool {
 		return entityPerm.Delete
 	case "comment":
 		return entityPerm.Comment
+	case "promote":
+		return entityPerm.Promote
+	case "merge":
+		return entityPerm.Merge
 	default:
 		return false
 	}
