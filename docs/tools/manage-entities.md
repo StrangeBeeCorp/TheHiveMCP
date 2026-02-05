@@ -1,20 +1,21 @@
 # manage-entities
 
-Perform CRUD operations on TheHive entities (alerts, cases, tasks, observables).
+Perform CRUD and workflow operations on TheHive entities (alerts, cases, tasks, observables).
 
 ## Overview
 
-The `manage-entities` tool provides comprehensive Create, Read, Update, Delete, and Comment operations for all TheHive entity types. It allows you to manipulate entities programmatically while respecting TheHive's data integrity and relationship constraints.
+The `manage-entities` tool provides comprehensive Create, Read, Update, Delete, Comment, Promote, and Merge operations for all TheHive entity types. It allows you to manipulate entities programmatically while respecting TheHive's data integrity and relationship constraints.
 
 ## Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `operation` | string | Yes | Operation to perform (`create`, `update`, `delete`, `comment`) |
+| `operation` | string | Yes | Operation to perform (`create`, `update`, `delete`, `comment`, `promote`, `merge`) |
 | `entity-type` | string | Yes | Type of entity (`alert`, `case`, `task`, `observable`) |
-| `entity-ids` | array | Conditional | List of entity IDs (required for update/delete/comment operations) |
-| `entity-data` | object | Conditional | JSON object with entity data (required for create/update) |
+| `entity-ids` | array | Conditional | List of entity IDs (usage varies by operation) |
+| `entity-data` | object | Conditional | JSON object with entity data (required for create/update, optional for promote) |
 | `comment` | string | Conditional | Text content (required for comment operations) |
+| `target-id` | string | Conditional | Target entity ID (required for merge operations on alerts/observables) |
 
 ## Operations
 
@@ -174,6 +175,89 @@ Add comments to cases or task logs to tasks.
 }
 ```
 
+### Promote operations
+
+Convert an alert into a new case. The alert's observables, TTPs, and other data are transferred to the newly created case.
+
+#### Promoting an alert to a case
+```json
+{
+  "operation": "promote",
+  "entity-type": "alert",
+  "entity-ids": ["alert-123"]
+}
+```
+
+#### Promoting with case creation parameters
+```json
+{
+  "operation": "promote",
+  "entity-type": "alert",
+  "entity-ids": ["alert-123"],
+  "entity-data": {
+    "caseTemplate": "incident-response-template",
+    "title": "Custom Case Title"
+  }
+}
+```
+
+**Notes:**
+- Only alerts can be promoted
+- Requires exactly one alert ID
+- Optional `entity-data` can specify case creation parameters like `caseTemplate`
+- Returns the newly created case
+
+### Merge operations
+
+Merge entities together. Behavior varies by entity type.
+
+#### Merging cases together
+Merges multiple cases into a single new case. All tasks, observables, and other data from the source cases are combined.
+
+```json
+{
+  "operation": "merge",
+  "entity-type": "case",
+  "entity-ids": ["case-123", "case-456", "case-789"]
+}
+```
+
+**Requirements:**
+- Requires at least 2 case IDs in `entity-ids`
+- Returns a single merged case containing all data from source cases
+
+#### Merging alerts into a case
+Merges one or more alerts into an existing case. The alerts' observables and data are added to the target case.
+
+```json
+{
+  "operation": "merge",
+  "entity-type": "alert",
+  "entity-ids": ["alert-123", "alert-456"],
+  "target-id": "case-789"
+}
+```
+
+**Requirements:**
+- Requires alert IDs in `entity-ids`
+- Requires `target-id` specifying the case to merge alerts into
+- The target case must exist
+
+#### Deduplicating observables in a case
+Merges similar observables within a case (deduplication). This finds and merges observables with identical data values.
+
+```json
+{
+  "operation": "merge",
+  "entity-type": "observable",
+  "target-id": "case-123"
+}
+```
+
+**Requirements:**
+- Requires `target-id` specifying the case containing observables to deduplicate
+- No `entity-ids` needed - operates on all similar observables in the case
+
 ## Entity Relationships and Constraints
 
 ### Hierarchical structure
@@ -193,6 +277,17 @@ Add comments to cases or task logs to tasks.
 - **Tasks**: Use "task logs" instead of comments
 - **Alerts**: Not supported for comments
 - **Observables**: Not supported for comments
+
+### Promote constraints
+- **Alerts**: Can be promoted to cases
+- **Cases, Tasks, Observables**: Not supported for promotion
+- Requires exactly one alert ID
+
+### Merge constraints
+- **Cases**: Can be merged together (requires 2+ case IDs)
+- **Alerts**: Can be merged into an existing case (requires target case ID)
+- **Observables**: Can be deduplicated within a case (requires target case ID)
+- **Tasks**: Not supported for merging
 
 ## Schema Reference
 
@@ -288,8 +383,9 @@ When creating alerts, the following fields are **required**:
 ### Alert processing
 1. Create alert from external source
 2. Analyze alert content and create observables
-3. Promote to case if investigation needed
+3. Promote alert to case if investigation needed (use `promote` operation)
 4. Create tasks for investigation activities
+5. Merge related alerts into the case if more alerts arrive (use `merge` operation with alerts)
 
 ### Batch operations
 Use multiple `entity-ids` for bulk operations:
@@ -303,6 +399,19 @@ Use multiple `entity-ids` for bulk operations:
   }
 }
 ```
+
+### Case consolidation
+When multiple cases are related to the same incident:
+1. Identify related cases through search or analysis
+2. Merge cases together to consolidate all data (use `merge` operation with cases)
+3. The merged case contains all tasks, observables, and comments from source cases
+4. Continue investigation in the merged case
+
+### Observable deduplication
+After importing data or merging alerts:
+1. Check for duplicate observables in a case
+2. Use merge operation on observables to deduplicate (use `merge` operation with observable entity-type)
+3. Identical observables are merged, keeping all relevant metadata
 
 ## Error Handling
 

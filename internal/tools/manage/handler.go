@@ -50,6 +50,10 @@ func (t *ManageTool) Handle(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		return t.handleDelete(ctx, params)
 	case "comment":
 		return t.handleComment(ctx, params)
+	case "promote":
+		return t.handlePromote(ctx, params)
+	case "merge":
+		return t.handleMerge(ctx, params)
 	default:
 		return mcp.NewToolResultError(fmt.Sprintf("unsupported operation: %s", params.Operation)), nil
 	}
@@ -61,6 +65,7 @@ type manageParams struct {
 	EntityIDs  []string
 	EntityData map[string]interface{}
 	Comment    string
+	TargetID   string
 }
 
 func filterEntityColumns(entity map[string]interface{}, defaultFields []string) map[string]interface{} {
@@ -100,7 +105,7 @@ func parseDateFieldsAndExtractColumnsFromArray[T types.OutputEntity](result []T,
 func (t *ManageTool) extractParams(req mcp.CallToolRequest) (*manageParams, error) {
 	operation := req.GetString("operation", "")
 	if operation == "" {
-		return nil, fmt.Errorf("operation parameter is required. Must be one of: 'create', 'update', 'delete', 'comment'")
+		return nil, fmt.Errorf("operation parameter is required. Must be one of: 'create', 'update', 'delete', 'comment', 'promote', 'merge'")
 	}
 
 	entityType := req.GetString("entity-type", "")
@@ -113,6 +118,7 @@ func (t *ManageTool) extractParams(req mcp.CallToolRequest) (*manageParams, erro
 		EntityType: entityType,
 		EntityIDs:  req.GetStringSlice("entity-ids", []string{}),
 		Comment:    req.GetString("comment", ""),
+		TargetID:   req.GetString("target-id", ""),
 	}
 
 	// Extract entity data if provided
@@ -129,7 +135,8 @@ func (t *ManageTool) extractParams(req mcp.CallToolRequest) (*manageParams, erro
 		"entityType", params.EntityType,
 		"entityIDs", params.EntityIDs,
 		"hasEntityData", params.EntityData != nil,
-		"hasComment", params.Comment != "")
+		"hasComment", params.Comment != "",
+		"targetID", params.TargetID)
 
 	return params, nil
 }
@@ -166,6 +173,36 @@ func (t *ManageTool) validateOperation(params *manageParams) error {
 		}
 		if params.EntityType != types.EntityTypeCase && params.EntityType != types.EntityTypeTask {
 			return fmt.Errorf("comments are only supported on cases and tasks, not %s. For cases: adds a comment. For tasks: adds a task log", params.EntityType)
+		}
+	case "promote":
+		if params.EntityType != types.EntityTypeAlert {
+			return fmt.Errorf("promote operation is only supported for alerts, not %s. Use promote to convert an alert into a new case", params.EntityType)
+		}
+		if len(params.EntityIDs) == 0 {
+			return fmt.Errorf("entity-ids are required for promote operations. Provide a single alert ID to promote to a case, e.g., ['alert-id']")
+		}
+		if len(params.EntityIDs) > 1 {
+			return fmt.Errorf("promote operation requires exactly one alert ID, got %d. Provide a single alert ID in entity-ids", len(params.EntityIDs))
+		}
+	case "merge":
+		switch params.EntityType {
+		case types.EntityTypeCase:
+			if len(params.EntityIDs) < 2 {
+				return fmt.Errorf("merge operation for cases requires at least 2 case IDs in entity-ids, got %d. Provide multiple case IDs to merge together", len(params.EntityIDs))
+			}
+		case types.EntityTypeAlert:
+			if len(params.EntityIDs) == 0 {
+				return fmt.Errorf("merge operation for alerts requires alert IDs in entity-ids. Provide alert IDs to merge into the target case")
+			}
+			if params.TargetID == "" {
+				return fmt.Errorf("merge operation for alerts requires target-id parameter. Provide the case ID to merge alerts into")
+			}
+		case types.EntityTypeObservable:
+			if params.TargetID == "" {
+				return fmt.Errorf("merge operation for observables requires target-id parameter. Provide the case ID containing observables to deduplicate")
+			}
+		default:
+			return fmt.Errorf("merge operation is not supported for entity type %s. Merge is only supported for cases, alerts, and observables", params.EntityType)
 		}
 	}
 	return nil
@@ -530,4 +567,143 @@ func (t *ManageTool) addComment(ctx context.Context, client *thehive.APIClient, 
 	default:
 		return nil, fmt.Errorf("comments not supported for entity type '%s'. Comments are only supported on 'case' (adds comment) and 'task' (adds task log)", entityType)
 	}
+}
+
+// Promote operations
+func (t *ManageTool) handlePromote(ctx context.Context, params *manageParams) (*mcp.CallToolResult, error) {
+	hiveClient, err := utils.GetHiveClientFromContext(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to get TheHive client: %v. Check your authentication and connection settings.", err)), nil
+	}
+
+	alertID := params.EntityIDs[0]
+
+	// Create case from alert - use entity-data if provided for case creation parameters
+	req := hiveClient.AlertAPI.CreateCaseFromAlert(ctx, alertID)
+
+	if params.EntityData != nil {
+		jsonData, err := json.Marshal(params.EntityData)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to marshal promote data: %v", err)), nil
+		}
+		var inputCase thehive.InputCreateCaseFromAlert
+		if err := json.Unmarshal(jsonData, &inputCase); err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal promote data: %v. Optional fields include 'caseTemplate' for template name", err)), nil
+		}
+		req = req.InputCreateCaseFromAlert(inputCase)
+	}
+
+	result, resp, err := req.Execute()
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to promote alert %s to case: %v. Check that the alert exists and you have permissions. API response: %v", alertID, err, resp)), nil
+	}
+
+	processedResult, err := parseDateFieldsAndExtractColumns[thehive.OutputCase](*result, types.DefaultFields[types.EntityTypeCase])
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields and extract columns in promoted case result: %v", err)), nil
+	}
+
+	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
+		"operation":  "promote",
+		"entityType": types.EntityTypeAlert,
+		"alertId":    alertID,
+		"result":     processedResult,
+	}), nil
+}
+
+// Merge operations
+func (t *ManageTool) handleMerge(ctx context.Context, params *manageParams) (*mcp.CallToolResult, error) {
+	hiveClient, err := utils.GetHiveClientFromContext(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to get TheHive client: %v. Check your authentication and connection settings.", err)), nil
+	}
+
+	switch params.EntityType {
+	case types.EntityTypeCase:
+		return t.mergeCases(ctx, hiveClient, params.EntityIDs)
+	case types.EntityTypeAlert:
+		return t.mergeAlertsIntoCase(ctx, hiveClient, params.EntityIDs, params.TargetID)
+	case types.EntityTypeObservable:
+		return t.mergeObservables(ctx, hiveClient, params.TargetID)
+	default:
+		return mcp.NewToolResultError(fmt.Sprintf("merge operation not supported for entity type: %s", params.EntityType)), nil
+	}
+}
+
+func (t *ManageTool) mergeCases(ctx context.Context, client *thehive.APIClient, caseIDs []string) (*mcp.CallToolResult, error) {
+	// MergeCases expects comma-separated case IDs as a string
+	idsString := ""
+	for i, id := range caseIDs {
+		if i > 0 {
+			idsString += ","
+		}
+		idsString += id
+	}
+
+	result, resp, err := client.CaseAPI.MergeCases(ctx, idsString).Execute()
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to merge cases %v: %v. Check that all cases exist and you have permissions. API response: %v", caseIDs, err, resp)), nil
+	}
+
+	processedResult, err := parseDateFieldsAndExtractColumns[thehive.OutputCase](*result, types.DefaultFields[types.EntityTypeCase])
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields and extract columns in merged case result: %v", err)), nil
+	}
+
+	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
+		"operation":  "merge",
+		"entityType": types.EntityTypeCase,
+		"mergedIds":  caseIDs,
+		"result":     processedResult,
+	}), nil
+}
+
+func (t *ManageTool) mergeAlertsIntoCase(ctx context.Context, client *thehive.APIClient, alertIDs []string, targetCaseID string) (*mcp.CallToolResult, error) {
+	// Use bulk merge if multiple alerts, otherwise single merge
+	var result *thehive.OutputCase
+	var resp *http.Response
+	var err error
+
+	if len(alertIDs) == 1 {
+		// Single alert merge
+		result, resp, err = client.AlertAPI.MergeAlertWithCase(ctx, alertIDs[0], targetCaseID).Execute()
+	} else {
+		// Bulk merge
+		inputMerge := thehive.InputAlertsMergeWithCase{
+			AlertIds: alertIDs,
+			CaseId:   targetCaseID,
+		}
+		result, resp, err = client.AlertAPI.MergeBulkAlertsWithCase(ctx).InputAlertsMergeWithCase(inputMerge).Execute()
+	}
+
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to merge alerts %v into case %s: %v. Check that alerts and case exist and you have permissions. API response: %v", alertIDs, targetCaseID, err, resp)), nil
+	}
+
+	processedResult, err := parseDateFieldsAndExtractColumns[thehive.OutputCase](*result, types.DefaultFields[types.EntityTypeCase])
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields and extract columns in merged case result: %v", err)), nil
+	}
+
+	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
+		"operation":    "merge",
+		"entityType":   types.EntityTypeAlert,
+		"mergedIds":    alertIDs,
+		"targetCaseId": targetCaseID,
+		"result":       processedResult,
+	}), nil
+}
+
+func (t *ManageTool) mergeObservables(ctx context.Context, client *thehive.APIClient, targetCaseID string) (*mcp.CallToolResult, error) {
+	result, resp, err := client.CaseAPI.MergeSimilarObservablesOfThisCase(ctx, targetCaseID).Execute()
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to merge/deduplicate observables in case %s: %v. Check that the case exists and you have permissions. API response: %v", targetCaseID, err, resp)), nil
+	}
+
+	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
+		"operation":    "merge",
+		"entityType":   types.EntityTypeObservable,
+		"targetCaseId": targetCaseID,
+		"result":       result,
+	}), nil
 }

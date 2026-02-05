@@ -6,6 +6,7 @@ import (
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
+	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
 )
@@ -522,4 +523,216 @@ func TestManageWithReadOnlyPermissions(t *testing.T) {
 	require.NotNil(t, result)
 	require.True(t, result.IsError, "Comment should be denied with read-only permissions")
 	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
+}
+
+// TestManagePromoteAlert tests promoting an alert to a case via the manage-entities tool
+func TestManagePromoteAlert(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+
+	// Create an alert to promote
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	testAlert := testutils.MockInputAlert()
+	testAlert.Title = "Alert to Promote"
+	testAlert.SourceRef = "test-promote-alert-001"
+
+	createdAlert, _, err := hiveClient.AlertAPI.CreateAlert(authContext).InputCreateAlert(*testAlert).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdAlert)
+
+	// Promote the alert to a case using manage-entities
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "promote",
+				"entity-type": types.EntityTypeAlert,
+				"entity-ids":  []string{createdAlert.UnderscoreId},
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "promote", structuredData["operation"])
+	require.Equal(t, types.EntityTypeAlert, structuredData["entityType"])
+
+	// Verify the case was created
+	caseResult, ok := structuredData["result"].(map[string]any)
+	require.True(t, ok)
+
+	caseID, ok := caseResult["_id"].(string)
+	require.True(t, ok)
+	require.NotEmpty(t, caseID)
+
+	// Verify the case exists in TheHive
+	fetchedCase, _, err := hiveClient.CaseAPI.GetCase(authContext, caseID).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, fetchedCase)
+}
+
+// TestManageMergeCases tests merging multiple cases together
+func TestManageMergeCases(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+
+	// Create multiple cases to merge
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	var caseIDs []string
+
+	for i := 1; i <= 2; i++ {
+		testCase := testutils.MockInputCase()
+		testCase.Title = fmt.Sprintf("Case %d for Merging", i)
+
+		createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+		require.NoError(t, err)
+		caseIDs = append(caseIDs, createdCase.UnderscoreId)
+	}
+
+	// Merge the cases using manage-entities
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "merge",
+				"entity-type": types.EntityTypeCase,
+				"entity-ids":  caseIDs,
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "merge", structuredData["operation"])
+	require.Equal(t, types.EntityTypeCase, structuredData["entityType"])
+
+	// Verify the merged case was created
+	caseResult, ok := structuredData["result"].(map[string]any)
+	require.True(t, ok)
+
+	mergedCaseID, ok := caseResult["_id"].(string)
+	require.True(t, ok)
+	require.NotEmpty(t, mergedCaseID)
+
+	// Verify the merged case exists
+	fetchedCase, _, err := hiveClient.CaseAPI.GetCase(authContext, mergedCaseID).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, fetchedCase)
+}
+
+// TestManageMergeAlertsIntoCase tests merging alerts into an existing case
+func TestManageMergeAlertsIntoCase(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+
+	// Create a target case
+	testCase := testutils.MockInputCase()
+	testCase.Title = "Target Case for Alert Merge"
+
+	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdCase)
+
+	// Create alerts to merge
+	var alertIDs []string
+	for i := 1; i <= 2; i++ {
+		testAlert := testutils.MockInputAlert()
+		testAlert.Title = fmt.Sprintf("Alert %d to Merge", i)
+		testAlert.SourceRef = fmt.Sprintf("test-merge-alert-%03d", i)
+
+		createdAlert, _, err := hiveClient.AlertAPI.CreateAlert(authContext).InputCreateAlert(*testAlert).Execute()
+		require.NoError(t, err)
+		alertIDs = append(alertIDs, createdAlert.UnderscoreId)
+	}
+
+	// Merge the alerts into the case using manage-entities
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "merge",
+				"entity-type": types.EntityTypeAlert,
+				"entity-ids":  alertIDs,
+				"target-id":   createdCase.UnderscoreId,
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "merge", structuredData["operation"])
+	require.Equal(t, types.EntityTypeAlert, structuredData["entityType"])
+
+	// Verify the target case ID is in the result
+	targetCaseID, ok := structuredData["targetCaseId"].(string)
+	require.True(t, ok)
+	require.Equal(t, createdCase.UnderscoreId, targetCaseID)
+}
+
+// TestManageMergeObservables tests deduplicating observables in a case
+func TestManageMergeObservables(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+
+	// Create a case
+	testCase := testutils.MockInputCase()
+	testCase.Title = "Case for Observable Merge"
+
+	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdCase)
+
+	// Create duplicate observables in the case
+	for i := 1; i <= 2; i++ {
+		inputObservable := thehive.NewInputCreateObservable("ip")
+		inputObservable.SetData(thehive.StringAsInputObservableData(thehive.PtrString("192.168.1.100")))
+		inputObservable.SetMessage("Duplicate IP for testing merge")
+		inputObservable.SetIoc(true)
+
+		_, _, err := hiveClient.ObservableAPI.CreateObservableInCase(authContext, createdCase.UnderscoreId).
+			InputCreateObservable(*inputObservable).Execute()
+		require.NoError(t, err)
+	}
+
+	// Merge/deduplicate the observables using manage-entities
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "merge",
+				"entity-type": types.EntityTypeObservable,
+				"target-id":   createdCase.UnderscoreId,
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "merge", structuredData["operation"])
+	require.Equal(t, types.EntityTypeObservable, structuredData["entityType"])
+
+	// Verify the target case ID is in the result
+	targetCaseID, ok := structuredData["targetCaseId"].(string)
+	require.True(t, ok)
+	require.Equal(t, createdCase.UnderscoreId, targetCaseID)
 }

@@ -424,7 +424,7 @@ Entity: {"title": "Security Incident", "severity": 3, ...}
 ## 🛠️ MCP Tools
 
 - **search-entities**: Search for entities using natural language (for example, "high severity alerts from last week")
-- **manage-entities**: Create, update, delete entities, add comments
+- **manage-entities**: Create, update, delete entities, add comments, promote alerts to cases, merge cases/alerts/observables
 - **execute-automation**: Run Cortex analyzers and responders, check job and action status
 - **get-resource**: Access schemas, docs, and metadata through hierarchical browsing (for example, `uri="hive://schema"` or `uri="hive://metadata/automation"`)
 
@@ -461,11 +461,13 @@ Search for entities in TheHive using natural language queries. Uses AI to transl
 - Count-only queries for performance optimization
 
 ### [manage-entities](docs/tools/manage-entities.md)
-Perform comprehensive CRUD operations on TheHive entities with full support for relationships and constraints.
+Perform comprehensive CRUD and workflow operations on TheHive entities with full support for relationships and constraints.
 
 **Key features:**
 - Create, update, delete operations for all entity types
 - Comment support for cases and task logs
+- Promote alerts to cases
+- Merge cases together, merge alerts into cases, deduplicate observables
 - Respect for entity hierarchies and relationships
 - Batch operations support
 
