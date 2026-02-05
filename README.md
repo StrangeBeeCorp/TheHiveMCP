@@ -24,9 +24,8 @@
 > ### Feature Limitations
 > - **No TTP (Tactics, Techniques, Procedures) Support**: MITRE ATT&CK integration not implemented
 > - **Limited Responder Support**: Cortex responder execution has known issues and limitations
-> - **No Alert Promotion**: Cannot promote alerts to cases automatically
 > - **No Alert Comments**: Alert commenting functionality not implemented
-> - **Incomplete Observable Management**: Limited observable type support and operations
+> - **Limited Observable Types**: Some specialized observable types not fully supported
 > - **No Case Templates**: Custom case template support not implemented
 > - **Limited Task Management**: Advanced task workflows not fully supported
 > - **No Dashboard Integration**: No support for TheHive dashboard widgets or custom views
@@ -58,6 +57,7 @@ TheHiveMCP is an MCP (Model Context Protocol) server that enables AI agents to i
 - **Comprehensive security operations**:
   - Natural language entity search (alerts, cases, tasks, observables)
   - Full CRUD operations on TheHive entities
+  - Workflow operations (promote alerts to cases, merge entities)
   - Cortex analyzer and responder execution
   - Dynamic resource catalog with live metadata
 

@@ -6,7 +6,6 @@ import (
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
-	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
 )
@@ -698,15 +697,28 @@ func TestManageMergeObservables(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
 
-	// Create duplicate observables in the case
+	// Create duplicate observables in the case using the MCP tool
 	for i := 1; i <= 2; i++ {
-		inputObservable := thehive.NewInputCreateObservable("ip")
-		inputObservable.SetData(thehive.StringAsInputObservableData(thehive.PtrString("192.168.1.100")))
-		inputObservable.SetMessage("Duplicate IP for testing merge")
-		inputObservable.SetIoc(true)
+		observableData := map[string]interface{}{
+			"dataType": "ip",
+			"data":     "192.168.1.100",
+			"message":  "Duplicate IP for testing merge",
+			"ioc":      true,
+		}
 
-		_, _, err := hiveClient.ObservableAPI.CreateObservableInCase(authContext, createdCase.UnderscoreId).
-			InputCreateObservable(*inputObservable).Execute()
+		createRequest := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Name: "manage-entities",
+				Arguments: map[string]any{
+					"operation":   "create",
+					"entity-type": types.EntityTypeObservable,
+					"entity-ids":  []string{createdCase.UnderscoreId}, // Parent case ID
+					"entity-data": observableData,
+				},
+			},
+		}
+
+		_, err := mcpClient.CallTool(t.Context(), createRequest)
 		require.NoError(t, err)
 	}
 
@@ -735,4 +747,127 @@ func TestManageMergeObservables(t *testing.T) {
 	targetCaseID, ok := structuredData["targetCaseId"].(string)
 	require.True(t, ok)
 	require.Equal(t, createdCase.UnderscoreId, targetCaseID)
+}
+
+// TestManagePromoteWithAnalystPermissions tests promote is allowed with analyst permissions
+func TestManagePromoteWithAnalystPermissions(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "../../../docs/examples/permissions/analyst.yaml")
+
+	// Create an alert to promote
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	testAlert := testutils.MockInputAlert()
+	testAlert.Title = "Alert for Analyst Promote Test"
+	testAlert.SourceRef = "test-analyst-promote-001"
+
+	createdAlert, _, err := hiveClient.AlertAPI.CreateAlert(authContext).InputCreateAlert(*testAlert).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdAlert)
+
+	// Promote should succeed with analyst permissions
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "promote",
+				"entity-type": types.EntityTypeAlert,
+				"entity-ids":  []string{createdAlert.UnderscoreId},
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError, "Promote should succeed with analyst permissions")
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "promote", structuredData["operation"])
+}
+
+// TestManageMergeWithAnalystPermissions tests merge is allowed with analyst permissions
+func TestManageMergeWithAnalystPermissions(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "../../../docs/examples/permissions/analyst.yaml")
+
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+
+	// Create cases to merge
+	var caseIDs []string
+	for i := 1; i <= 2; i++ {
+		testCase := testutils.MockInputCase()
+		testCase.Title = fmt.Sprintf("Case %d for Analyst Merge Test", i)
+
+		createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+		require.NoError(t, err)
+		caseIDs = append(caseIDs, createdCase.UnderscoreId)
+	}
+
+	// Merge should succeed with analyst permissions
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "merge",
+				"entity-type": types.EntityTypeCase,
+				"entity-ids":  caseIDs,
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError, "Merge should succeed with analyst permissions")
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "merge", structuredData["operation"])
+}
+
+// TestManagePromoteWithReadOnlyPermissions tests promote is denied with read-only permissions
+func TestManagePromoteWithReadOnlyPermissions(t *testing.T) {
+	testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "")
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "promote",
+				"entity-type": types.EntityTypeAlert,
+				"entity-ids":  []string{"~123"},
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.IsError, "Promote should be denied with read-only permissions")
+	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
+}
+
+// TestManageMergeWithReadOnlyPermissions tests merge is denied with read-only permissions
+func TestManageMergeWithReadOnlyPermissions(t *testing.T) {
+	testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "")
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "merge",
+				"entity-type": types.EntityTypeCase,
+				"entity-ids":  []string{"~123", "~456"},
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.IsError, "Merge should be denied with read-only permissions")
+	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
 }

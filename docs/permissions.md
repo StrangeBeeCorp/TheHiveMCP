@@ -91,28 +91,36 @@ tools:
         update: true
         delete: false  # Deny delete for analysts
         comment: true
+        promote: true   # Allow promoting alerts to cases
+        merge: true     # Allow merging alerts into cases
       case:
         create: true
         update: true
         delete: false
         comment: true
+        promote: false  # N/A for cases
+        merge: true     # Allow merging cases together
       task:
         create: true
         update: true
         delete: false
         comment: true
+        promote: false  # N/A for tasks
+        merge: false    # N/A for tasks
       observable:
         create: true
         update: true
         delete: false
         comment: true
+        promote: false  # N/A for observables
+        merge: true     # Allow deduplicating observables
 ```
 
 **Behavior:**
 - If no `entity_permissions` are configured: all operations allowed (backward compatibility)
 - If `entity_permissions` are configured: only specified entity types/operations allowed
 - Entity types: `alert`, `case`, `task`, `observable`
-- Operations: `create`, `update`, `delete`, `comment`
+- Operations: `create`, `update`, `delete`, `comment`, `promote`, `merge`
 
 ## Automation Permissions
 
@@ -185,16 +193,22 @@ permissions:
           update: true
           delete: false  # Analysts cannot delete alerts
           comment: true
+          promote: true  # Allow alert promotion
+          merge: true    # Allow merging alerts
         case:
           create: true
           update: true
           delete: false  # Analysts cannot delete cases
           comment: true
+          promote: false # N/A for cases
+          merge: true    # Allow case merging
         task:
           create: true
           update: true
           delete: false
           comment: true
+          promote: false # N/A for tasks
+          merge: false   # N/A for tasks
         observable:
           create: true
           update: true

@@ -28,21 +28,29 @@ permissions:
           update: true
           delete: false  # Analysts cannot delete alerts
           comment: true
+          promote: true  # Allow promoting alerts to cases
+          merge: true    # Allow merging alerts into cases
         case:
           create: true
           update: true
           delete: false  # Analysts cannot delete cases
           comment: true
+          promote: false # Cases cannot be promoted
+          merge: true    # Allow merging cases
         task:
           create: true
           update: true
           delete: false
           comment: true
+          promote: false # Tasks cannot be promoted
+          merge: false   # Tasks cannot be merged
         observable:
           create: true
           update: true
           delete: false
           comment: true
+          promote: false # Observables cannot be promoted
+          merge: true    # Allow deduplicating observables
 
     # Allow running analyzers and responders
     # Specific analyzers/responders are controlled via global settings below

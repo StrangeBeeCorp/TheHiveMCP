@@ -10,6 +10,36 @@ permissions:
 
     manage-entities:
       allowed: true
+      # Full permissions for all entity types and operations
+      entity_permissions:
+        alert:
+          create: true
+          update: true
+          delete: true
+          comment: true
+          promote: true
+          merge: true
+        case:
+          create: true
+          update: true
+          delete: true
+          comment: true
+          promote: false  # Cases cannot be promoted (not applicable)
+          merge: true
+        task:
+          create: true
+          update: true
+          delete: true
+          comment: true
+          promote: false  # Tasks cannot be promoted (not applicable)
+          merge: false    # Tasks cannot be merged (not applicable)
+        observable:
+          create: true
+          update: true
+          delete: true
+          comment: true
+          promote: false  # Observables cannot be promoted (not applicable)
+          merge: true
 
     execute-automation:
       allowed: true

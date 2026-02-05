@@ -333,15 +333,18 @@ func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APICl
 
 	// Try to create in case first, then alert if that fails
 	var result []thehive.OutputObservable
-	var resp *http.Response
-	result, resp, err = client.ObservableAPI.CreateObservableInCase(ctx, parentID).InputCreateObservable(inputObservable).Execute()
-	if err != nil {
-		// If case creation fails, try alert
-		result, resp, err = client.ObservableAPI.CreateObservableInAlert(ctx, parentID).InputCreateObservable(inputObservable).Execute()
-	}
 
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to create observable: %v. Check that the target case/alert exists and you have permissions. API response: %v", err, resp)), nil
+	// First attempt with case
+	caseResult, _, caseErr := client.ObservableAPI.CreateObservableInCase(ctx, parentID).InputCreateObservable(inputObservable).Execute()
+	if caseErr != nil {
+		// If case creation fails, try alert
+		alertResult, _, alertErr := client.ObservableAPI.CreateObservableInAlert(ctx, parentID).InputCreateObservable(inputObservable).Execute()
+		if alertErr != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to create observable: %v. Check that the target case/alert exists and you have permissions.", alertErr)), nil
+		}
+		result = alertResult
+	} else {
+		result = caseResult
 	}
 
 	processedResult, err := parseDateFieldsAndExtractColumnsFromArray(result, types.DefaultFields[types.EntityTypeObservable])
@@ -581,17 +584,18 @@ func (t *ManageTool) handlePromote(ctx context.Context, params *manageParams) (*
 	// Create case from alert - use entity-data if provided for case creation parameters
 	req := hiveClient.AlertAPI.CreateCaseFromAlert(ctx, alertID)
 
+	// Always provide a JSON body, even if empty
+	var inputCase thehive.InputCreateCaseFromAlert
 	if params.EntityData != nil {
 		jsonData, err := json.Marshal(params.EntityData)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("failed to marshal promote data: %v", err)), nil
 		}
-		var inputCase thehive.InputCreateCaseFromAlert
 		if err := json.Unmarshal(jsonData, &inputCase); err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal promote data: %v. Optional fields include 'caseTemplate' for template name", err)), nil
 		}
-		req = req.InputCreateCaseFromAlert(inputCase)
 	}
+	req = req.InputCreateCaseFromAlert(inputCase)
 
 	result, resp, err := req.Execute()
 	if err != nil {
@@ -700,10 +704,28 @@ func (t *ManageTool) mergeObservables(ctx context.Context, client *thehive.APICl
 		return mcp.NewToolResultError(fmt.Sprintf("failed to merge/deduplicate observables in case %s: %v. Check that the case exists and you have permissions. API response: %v", targetCaseID, err, resp)), nil
 	}
 
+	// The API returns summary information about the merge operation
+	// Convert result to a map to avoid type marshalling issues
+	var resultData interface{}
+	if result != nil {
+		// Parse the result as JSON to ensure proper serialization
+		jsonBytes, marshalErr := json.Marshal(result)
+		if marshalErr == nil {
+			err = json.Unmarshal(jsonBytes, &resultData)
+			if err != nil {
+				resultData = fmt.Sprintf("merge completed, but failed to parse result: %v", err)
+			}
+		} else {
+			resultData = "merge completed"
+		}
+	} else {
+		resultData = "merge completed"
+	}
+
 	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
 		"operation":    "merge",
 		"entityType":   types.EntityTypeObservable,
 		"targetCaseId": targetCaseID,
-		"result":       result,
+		"result":       resultData,
 	}), nil
 }
