@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
@@ -17,27 +18,27 @@ func (t *ManageTool) Handle(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 	// 1. Check permissions
 	perms, err := utils.GetPermissionsFromContext(ctx)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get permissions: %v", err)), nil
+		return tools.NewToolError("failed to get permissions").Cause(err).Result()
 	}
 
 	if !perms.IsToolAllowed("manage-entities") {
-		return mcp.NewToolResultError("manage-entities tool is not permitted by your permissions configuration"), nil
+		return tools.NewToolError("manage-entities tool is not permitted by your permissions configuration").Result()
 	}
 
 	// 2. Extract and validate parameters
 	params, err := t.extractParams(req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return tools.NewToolError(err.Error()).Result()
 	}
 
 	// 3. Check entity operation permissions
 	if !perms.IsEntityOperationAllowed(params.EntityType, params.Operation) {
-		return mcp.NewToolResultError(fmt.Sprintf("operation '%s' on entity type '%s' is not permitted by your permissions configuration", params.Operation, params.EntityType)), nil
+		return tools.NewToolErrorf("operation '%s' on entity type '%s' is not permitted by your permissions configuration", params.Operation, params.EntityType).Result()
 	}
 
 	// 4. Validate operation constraints
 	if err := t.validateOperation(params); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return tools.NewToolError(err.Error()).Result()
 	}
 
 	// 5. Execute operation
@@ -55,7 +56,7 @@ func (t *ManageTool) Handle(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 	case "merge":
 		return t.handleMerge(ctx, params)
 	default:
-		return mcp.NewToolResultError(fmt.Sprintf("unsupported operation: %s", params.Operation)), nil
+		return tools.NewToolErrorf("unsupported operation: %s", params.Operation).Result()
 	}
 }
 
@@ -212,7 +213,8 @@ func (t *ManageTool) validateOperation(params *manageParams) error {
 func (t *ManageTool) handleCreate(ctx context.Context, params *manageParams) (*mcp.CallToolResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get TheHive client: %v. Check your authentication and connection settings.", err)), nil
+		return tools.NewToolError("failed to get TheHive client").Cause(err).
+			Hint("Check your authentication and connection settings").Result()
 	}
 
 	processedData := utils.TranslateDatesToTimestamps(params.EntityData)
@@ -227,7 +229,7 @@ func (t *ManageTool) handleCreate(ctx context.Context, params *manageParams) (*m
 	case types.EntityTypeObservable:
 		return t.createObservable(ctx, hiveClient, processedData, params.EntityIDs[0])
 	default:
-		return mcp.NewToolResultError(fmt.Sprintf("unsupported entity type for create: %s", params.EntityType)), nil
+		return tools.NewToolErrorf("unsupported entity type for create: %s", params.EntityType).Result()
 	}
 }
 
@@ -235,22 +237,27 @@ func (t *ManageTool) createAlert(ctx context.Context, client *thehive.APIClient,
 	// Convert map to JSON then to InputAlert
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal alert data: %v. Check that entity-data contains valid JSON fields. Use get-resource 'hive://schema/alert/create' for field definitions.", err)), nil
+		return tools.NewToolError("failed to marshal alert data").Cause(err).
+			Hint("Check that entity-data contains valid JSON fields").
+			Schema("alert", "create").Result()
 	}
 
 	var inputAlert thehive.InputCreateAlert
 	if err := json.Unmarshal(jsonData, &inputAlert); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal alert data: %v. Ensure entity-data fields match the alert schema. Use get-resource 'hive://schema/alert/create' to see required fields like 'type', 'source', 'sourceRef', 'title', 'description'.", err)), nil
+		return tools.NewToolError("failed to unmarshal alert data").Cause(err).
+			Hint("Ensure entity-data fields match the alert schema").
+			Schema("alert", "create").Result()
 	}
 
 	result, resp, err := client.AlertAPI.CreateAlert(ctx).InputCreateAlert(inputAlert).Execute()
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to create alert: %v. Check required fields and permissions. API response: %v", err, resp)), nil
+		return tools.NewToolError("failed to create alert").Cause(err).
+			Hint("Check required fields and permissions").API(resp).Result()
 	}
 
 	processedResult, err := parseDateFieldsAndExtractColumns[thehive.OutputAlert](*result, types.DefaultFields[types.EntityTypeAlert])
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields and extract columns in alert result: %v", err)), nil
+		return tools.NewToolError("failed to parse date fields and extract columns in alert result").Cause(err).Result()
 	}
 
 	// For create operations, return the single entity, not an array
@@ -264,22 +271,27 @@ func (t *ManageTool) createAlert(ctx context.Context, client *thehive.APIClient,
 func (t *ManageTool) createCase(ctx context.Context, client *thehive.APIClient, data map[string]interface{}) (*mcp.CallToolResult, error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal case data: %v. Check that entity-data contains valid JSON fields. Use get-resource 'hive://schema/case/create' for field definitions.", err)), nil
+		return tools.NewToolError("failed to marshal case data").Cause(err).
+			Hint("Check that entity-data contains valid JSON fields").
+			Schema("case", "create").Result()
 	}
 
 	var inputCase thehive.InputCreateCase
 	if err := json.Unmarshal(jsonData, &inputCase); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal case data: %v. Ensure entity-data fields match the case schema. Use get-resource 'hive://schema/case/create' to see required and optional fields.", err)), nil
+		return tools.NewToolError("failed to unmarshal case data").Cause(err).
+			Hint("Ensure entity-data fields match the case schema").
+			Schema("case", "create").Result()
 	}
 
 	result, resp, err := client.CaseAPI.CreateCase(ctx).InputCreateCase(inputCase).Execute()
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to create case: %v. Check required fields and permissions. API response: %v", err, resp)), nil
+		return tools.NewToolError("failed to create case").Cause(err).
+			Hint("Check required fields and permissions").API(resp).Result()
 	}
 
 	processedResult, err := parseDateFieldsAndExtractColumns[thehive.OutputCase](*result, types.DefaultFields[types.EntityTypeCase])
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields and extract columns in case result: %v", err)), nil
+		return tools.NewToolError("failed to parse date fields and extract columns in case result").Cause(err).Result()
 	}
 
 	// For create operations, return the single entity, not an array
@@ -294,22 +306,27 @@ func (t *ManageTool) createTask(ctx context.Context, client *thehive.APIClient, 
 
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal task data: %v. Check that entity-data contains valid JSON fields. Use get-resource 'hive://schema/task/create' for field definitions.", err)), nil
+		return tools.NewToolError("failed to marshal task data").Cause(err).
+			Hint("Check that entity-data contains valid JSON fields").
+			Schema("task", "create").Result()
 	}
 
 	var inputTask thehive.InputCreateTask
 	if err := json.Unmarshal(jsonData, &inputTask); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal task data: %v. Ensure entity-data fields match the task schema. Use get-resource 'hive://schema/task/create' to see required and optional fields.", err)), nil
+		return tools.NewToolError("failed to unmarshal task data").Cause(err).
+			Hint("Ensure entity-data fields match the task schema").
+			Schema("task", "create").Result()
 	}
 
 	result, resp, err := client.TaskAPI.CreateTaskInCase(ctx, parentID).InputCreateTask(inputTask).Execute()
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to create task in case %s: %v. Check that the case exists and you have permissions. API response: %v", parentID, err, resp)), nil
+		return tools.NewToolErrorf("failed to create task in case %s", parentID).Cause(err).
+			Hint("Check that the case exists and you have permissions").API(resp).Result()
 	}
 
 	processedResult, err := parseDateFieldsAndExtractColumns[thehive.OutputTask](*result, types.DefaultFields[types.EntityTypeTask])
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields and extract columns in task result: %v", err)), nil
+		return tools.NewToolError("failed to parse date fields and extract columns in task result").Cause(err).Result()
 	}
 
 	// For create operations, return the single entity, not an array
@@ -323,12 +340,16 @@ func (t *ManageTool) createTask(ctx context.Context, client *thehive.APIClient, 
 func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APIClient, data map[string]interface{}, parentID string) (*mcp.CallToolResult, error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal observable data: %v. Check that entity-data contains valid JSON fields. Use get-resource 'hive://schema/observable/create' for field definitions.", err)), nil
+		return tools.NewToolError("failed to marshal observable data").Cause(err).
+			Hint("Check that entity-data contains valid JSON fields").
+			Schema("observable", "create").Result()
 	}
 
 	var inputObservable thehive.InputCreateObservable
 	if err := json.Unmarshal(jsonData, &inputObservable); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal observable data: %v. Ensure entity-data fields match the observable schema. Use get-resource 'hive://schema/observable/create' to see required and optional fields.", err)), nil
+		return tools.NewToolError("failed to unmarshal observable data").Cause(err).
+			Hint("Ensure entity-data fields match the observable schema").
+			Schema("observable", "create").Result()
 	}
 
 	// Try to create in case first, then alert if that fails
@@ -340,7 +361,8 @@ func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APICl
 		// If case creation fails, try alert
 		alertResult, _, alertErr := client.ObservableAPI.CreateObservableInAlert(ctx, parentID).InputCreateObservable(inputObservable).Execute()
 		if alertErr != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to create observable: %v. Check that the target case/alert exists and you have permissions.", alertErr)), nil
+			return tools.NewToolError("failed to create observable").Cause(alertErr).
+				Hint("Check that the target case/alert exists and you have permissions").Result()
 		}
 		result = alertResult
 	} else {
@@ -349,7 +371,7 @@ func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APICl
 
 	processedResult, err := parseDateFieldsAndExtractColumnsFromArray(result, types.DefaultFields[types.EntityTypeObservable])
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields and extract columns in observable result: %v", err)), nil
+		return tools.NewToolError("failed to parse date fields and extract columns in observable result").Cause(err).Result()
 	}
 
 	// For create operations, return the single entity, not an array
@@ -364,7 +386,8 @@ func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APICl
 func (t *ManageTool) handleUpdate(ctx context.Context, params *manageParams) (*mcp.CallToolResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get TheHive client: %v. Check your authentication and connection settings.", err)), nil
+		return tools.NewToolError("failed to get TheHive client").Cause(err).
+			Hint("Check your authentication and connection settings").Result()
 	}
 
 	results := make([]map[string]interface{}, 0, len(params.EntityIDs))
@@ -452,7 +475,8 @@ func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient
 func (t *ManageTool) handleDelete(ctx context.Context, params *manageParams) (*mcp.CallToolResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get TheHive client: %v. Check your authentication and connection settings.", err)), nil
+		return tools.NewToolError("failed to get TheHive client").Cause(err).
+			Hint("Check your authentication and connection settings").Result()
 	}
 
 	results := make([]map[string]interface{}, 0, len(params.EntityIDs))
@@ -518,7 +542,8 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 func (t *ManageTool) handleComment(ctx context.Context, params *manageParams) (*mcp.CallToolResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get TheHive client: %v. Check your authentication and connection settings.", err)), nil
+		return tools.NewToolError("failed to get TheHive client").Cause(err).
+			Hint("Check your authentication and connection settings").Result()
 	}
 
 	results := make([]map[string]interface{}, 0, len(params.EntityIDs))
@@ -576,7 +601,8 @@ func (t *ManageTool) addComment(ctx context.Context, client *thehive.APIClient, 
 func (t *ManageTool) handlePromote(ctx context.Context, params *manageParams) (*mcp.CallToolResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get TheHive client: %v. Check your authentication and connection settings.", err)), nil
+		return tools.NewToolError("failed to get TheHive client").Cause(err).
+			Hint("Check your authentication and connection settings").Result()
 	}
 
 	alertID := params.EntityIDs[0]
@@ -589,22 +615,24 @@ func (t *ManageTool) handlePromote(ctx context.Context, params *manageParams) (*
 	if params.EntityData != nil {
 		jsonData, err := json.Marshal(params.EntityData)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to marshal promote data: %v", err)), nil
+			return tools.NewToolError("failed to marshal promote data").Cause(err).Result()
 		}
 		if err := json.Unmarshal(jsonData, &inputCase); err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal promote data: %v. Optional fields include 'caseTemplate' for template name", err)), nil
+			return tools.NewToolError("failed to unmarshal promote data").Cause(err).
+				Hint("Optional fields include 'caseTemplate' for template name").Result()
 		}
 	}
 	req = req.InputCreateCaseFromAlert(inputCase)
 
 	result, resp, err := req.Execute()
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to promote alert %s to case: %v. Check that the alert exists and you have permissions. API response: %v", alertID, err, resp)), nil
+		return tools.NewToolErrorf("failed to promote alert %s to case", alertID).Cause(err).
+			Hint("Check that the alert exists and you have permissions").API(resp).Result()
 	}
 
 	processedResult, err := parseDateFieldsAndExtractColumns[thehive.OutputCase](*result, types.DefaultFields[types.EntityTypeCase])
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields and extract columns in promoted case result: %v", err)), nil
+		return tools.NewToolError("failed to parse date fields and extract columns in promoted case result").Cause(err).Result()
 	}
 
 	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
@@ -619,7 +647,8 @@ func (t *ManageTool) handlePromote(ctx context.Context, params *manageParams) (*
 func (t *ManageTool) handleMerge(ctx context.Context, params *manageParams) (*mcp.CallToolResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get TheHive client: %v. Check your authentication and connection settings.", err)), nil
+		return tools.NewToolError("failed to get TheHive client").Cause(err).
+			Hint("Check your authentication and connection settings").Result()
 	}
 
 	switch params.EntityType {
@@ -630,7 +659,7 @@ func (t *ManageTool) handleMerge(ctx context.Context, params *manageParams) (*mc
 	case types.EntityTypeObservable:
 		return t.mergeObservables(ctx, hiveClient, params.TargetID)
 	default:
-		return mcp.NewToolResultError(fmt.Sprintf("merge operation not supported for entity type: %s", params.EntityType)), nil
+		return tools.NewToolErrorf("merge operation not supported for entity type: %s", params.EntityType).Result()
 	}
 }
 
@@ -646,12 +675,13 @@ func (t *ManageTool) mergeCases(ctx context.Context, client *thehive.APIClient, 
 
 	result, resp, err := client.CaseAPI.MergeCases(ctx, idsString).Execute()
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to merge cases %v: %v. Check that all cases exist and you have permissions. API response: %v", caseIDs, err, resp)), nil
+		return tools.NewToolErrorf("failed to merge cases %v", caseIDs).Cause(err).
+			Hint("Check that all cases exist and you have permissions").API(resp).Result()
 	}
 
 	processedResult, err := parseDateFieldsAndExtractColumns[thehive.OutputCase](*result, types.DefaultFields[types.EntityTypeCase])
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields and extract columns in merged case result: %v", err)), nil
+		return tools.NewToolError("failed to parse date fields and extract columns in merged case result").Cause(err).Result()
 	}
 
 	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
@@ -681,12 +711,13 @@ func (t *ManageTool) mergeAlertsIntoCase(ctx context.Context, client *thehive.AP
 	}
 
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to merge alerts %v into case %s: %v. Check that alerts and case exist and you have permissions. API response: %v", alertIDs, targetCaseID, err, resp)), nil
+		return tools.NewToolErrorf("failed to merge alerts %v into case %s", alertIDs, targetCaseID).Cause(err).
+			Hint("Check that alerts and case exist and you have permissions").API(resp).Result()
 	}
 
 	processedResult, err := parseDateFieldsAndExtractColumns[thehive.OutputCase](*result, types.DefaultFields[types.EntityTypeCase])
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields and extract columns in merged case result: %v", err)), nil
+		return tools.NewToolError("failed to parse date fields and extract columns in merged case result").Cause(err).Result()
 	}
 
 	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
@@ -701,7 +732,8 @@ func (t *ManageTool) mergeAlertsIntoCase(ctx context.Context, client *thehive.AP
 func (t *ManageTool) mergeObservables(ctx context.Context, client *thehive.APIClient, targetCaseID string) (*mcp.CallToolResult, error) {
 	result, resp, err := client.CaseAPI.MergeSimilarObservablesOfThisCase(ctx, targetCaseID).Execute()
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to merge/deduplicate observables in case %s: %v. Check that the case exists and you have permissions. API response: %v", targetCaseID, err, resp)), nil
+		return tools.NewToolErrorf("failed to merge/deduplicate observables in case %s", targetCaseID).Cause(err).
+			Hint("Check that the case exists and you have permissions").API(resp).Result()
 	}
 
 	// The API returns summary information about the merge operation

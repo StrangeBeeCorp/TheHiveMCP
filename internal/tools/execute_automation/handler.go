@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -14,34 +15,34 @@ func (t *ExecuteAutomationTool) Handle(ctx context.Context, req mcp.CallToolRequ
 	// 1. Check permissions
 	perms, err := utils.GetPermissionsFromContext(ctx)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get permissions: %v", err)), nil
+		return tools.NewToolError("failed to get permissions").Cause(err).Result()
 	}
 
 	if !perms.IsToolAllowed("execute-automation") {
-		return mcp.NewToolResultError("execute-automation tool is not permitted by your permissions configuration"), nil
+		return tools.NewToolError("execute-automation tool is not permitted by your permissions configuration").Result()
 	}
 
 	// 2. Extract and validate parameters
 	params, err := t.extractParams(req)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return tools.NewToolError(err.Error()).Result()
 	}
 
 	// 3. Check analyzer/responder specific permissions
 	switch params.Operation {
 	case "run-analyzer":
 		if !perms.IsAnalyzerAllowed(params.AnalyzerID) {
-			return mcp.NewToolResultError(fmt.Sprintf("analyzer '%s' is not permitted by your permissions configuration", params.AnalyzerID)), nil
+			return tools.NewToolErrorf("analyzer '%s' is not permitted by your permissions configuration", params.AnalyzerID).Result()
 		}
 	case "run-responder":
 		if !perms.IsResponderAllowed(params.ResponderID) {
-			return mcp.NewToolResultError(fmt.Sprintf("responder '%s' is not permitted by your permissions configuration", params.ResponderID)), nil
+			return tools.NewToolErrorf("responder '%s' is not permitted by your permissions configuration", params.ResponderID).Result()
 		}
 	}
 
 	// 4. Validate operation constraints
 	if err := t.validateOperation(params); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return tools.NewToolError(err.Error()).Result()
 	}
 
 	// 5. Execute operation
@@ -55,7 +56,7 @@ func (t *ExecuteAutomationTool) Handle(ctx context.Context, req mcp.CallToolRequ
 	case "get-action-status":
 		return t.handleGetActionStatus(ctx, params)
 	default:
-		return mcp.NewToolResultError(fmt.Sprintf("unsupported operation: %s", params.Operation)), nil
+		return tools.NewToolErrorf("unsupported operation: %s", params.Operation).Result()
 	}
 }
 
@@ -152,7 +153,8 @@ func (t *ExecuteAutomationTool) validateOperation(params *executeAutomationParam
 func (t *ExecuteAutomationTool) handleRunAnalyzer(ctx context.Context, params *executeAutomationParams) (*mcp.CallToolResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get TheHive client: %v. Check your authentication and connection settings.", err)), nil
+		return tools.NewToolError("failed to get TheHive client").Cause(err).
+			Hint("Check your authentication and connection settings").Result()
 	}
 
 	// Create InputJob
@@ -165,7 +167,8 @@ func (t *ExecuteAutomationTool) handleRunAnalyzer(ctx context.Context, params *e
 	// Execute job
 	job, resp, err := hiveClient.CortexAPI.CreateCortexJob(ctx).InputJob(*inputJob).Execute()
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to execute analyzer: %v. Check that the analyzer ID, Cortex ID, and observable ID are correct. API response: %v", err, resp)), nil
+		return tools.NewToolError("failed to execute analyzer").Cause(err).
+			Hint("Check that the analyzer ID, Cortex ID, and observable ID are correct").API(resp).Result()
 	}
 
 	slog.Info("Analyzer job created",
@@ -186,7 +189,8 @@ func (t *ExecuteAutomationTool) handleRunAnalyzer(ctx context.Context, params *e
 func (t *ExecuteAutomationTool) handleRunResponder(ctx context.Context, params *executeAutomationParams) (*mcp.CallToolResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get TheHive client: %v. Check your authentication and connection settings.", err)), nil
+		return tools.NewToolError("failed to get TheHive client").Cause(err).
+			Hint("Check your authentication and connection settings").Result()
 	}
 
 	// Create InputAction
@@ -201,7 +205,8 @@ func (t *ExecuteAutomationTool) handleRunResponder(ctx context.Context, params *
 	// Execute action
 	action, resp, err := hiveClient.CortexAPI.CreateAnAction(ctx).InputAction(*inputAction).Execute()
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to execute responder: %v. Check that the responder ID, entity type, and entity ID are correct. API response: %v", err, resp)), nil
+		return tools.NewToolError("failed to execute responder").Cause(err).
+			Hint("Check that the responder ID, entity type, and entity ID are correct").API(resp).Result()
 	}
 
 	slog.Info("Responder action created",
@@ -222,13 +227,15 @@ func (t *ExecuteAutomationTool) handleRunResponder(ctx context.Context, params *
 func (t *ExecuteAutomationTool) handleGetJobStatus(ctx context.Context, params *executeAutomationParams) (*mcp.CallToolResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get TheHive client: %v. Check your authentication and connection settings.", err)), nil
+		return tools.NewToolError("failed to get TheHive client").Cause(err).
+			Hint("Check your authentication and connection settings").Result()
 	}
 
 	// Get job status
 	job, resp, err := hiveClient.CortexAPI.GetCortexJob(ctx, params.JobID).Execute()
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get job status: %v. Check that the job ID is correct. API response: %v", err, resp)), nil
+		return tools.NewToolError("failed to get job status").Cause(err).
+			Hint("Check that the job ID is correct").API(resp).Result()
 	}
 
 	slog.Info("Job status retrieved",
@@ -259,7 +266,7 @@ func (t *ExecuteAutomationTool) handleGetJobStatus(ctx context.Context, params *
 
 	processedResult, err := utils.ParseDateFields(result)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields in job result: %v", err)), nil
+		return tools.NewToolError("failed to parse date fields in job result").Cause(err).Result()
 	}
 	return utils.NewToolResultJSONUnescaped(processedResult), nil
 }
@@ -268,12 +275,14 @@ func (t *ExecuteAutomationTool) handleGetJobStatus(ctx context.Context, params *
 func (t *ExecuteAutomationTool) handleGetActionStatus(ctx context.Context, params *executeAutomationParams) (*mcp.CallToolResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get TheHive client: %v. Check your authentication and connection settings.", err)), nil
+		return tools.NewToolError("failed to get TheHive client").Cause(err).
+			Hint("Check your authentication and connection settings").Result()
 	}
 
 	actionList, resp, err := hiveClient.CortexAPI.GetActionByEntity(ctx, params.EntityType, params.EntityID).Execute()
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get action status: %v. Check that the entity type and entity ID are correct. API response: %v", err, resp)), nil
+		return tools.NewToolError("failed to get action status").Cause(err).
+			Hint("Check that the entity type and entity ID are correct").API(resp).Result()
 	}
 
 	var targetAction *thehive.OutputAction
@@ -285,7 +294,8 @@ func (t *ExecuteAutomationTool) handleGetActionStatus(ctx context.Context, param
 	}
 
 	if targetAction == nil {
-		return mcp.NewToolResultError(fmt.Sprintf("action with ID %s not found for entity %s:%s. Check that the action ID, entity type, and entity ID are correct", params.ActionID, params.EntityType, params.EntityID)), nil
+		return tools.NewToolErrorf("action with ID %s not found for entity %s:%s", params.ActionID, params.EntityType, params.EntityID).
+			Hint("Check that the action ID, entity type, and entity ID are correct").Result()
 	}
 
 	slog.Info("Action status retrieved",
@@ -308,7 +318,7 @@ func (t *ExecuteAutomationTool) handleGetActionStatus(ctx context.Context, param
 
 	processedResult, err := utils.ParseDateFields(result)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to parse date fields in action result: %v", err)), nil
+		return tools.NewToolError("failed to parse date fields in action result").Cause(err).Result()
 	}
 
 	return utils.NewToolResultJSONUnescaped(processedResult), nil

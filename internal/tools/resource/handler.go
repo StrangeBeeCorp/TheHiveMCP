@@ -3,10 +3,10 @@ package resource
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"strings"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -52,7 +52,7 @@ func (t *ResourceTool) fetchUnified(ctx context.Context, uri string) (*mcp.CallT
 	if strings.Contains(uri, "?") {
 		uri, parameters, err = utils.ParseURIParameters(uri)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to parse URI parameters: %v", err)), nil
+			return tools.NewToolError("failed to parse URI parameters").Cause(err).Result()
 		}
 	}
 
@@ -71,17 +71,21 @@ func (t *ResourceTool) fetchUnified(ctx context.Context, uri string) (*mcp.CallT
 
 		contents, err := handler(ctx, readRequest)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to fetch resource: %v. This may be due to network issues, authentication problems, or the resource being temporarily unavailable.", err)), nil
+			return tools.NewToolError("failed to fetch resource").Cause(err).
+				Hint("This may be due to network issues, authentication problems, or the resource being temporarily unavailable").Result()
 		}
 
 		if len(contents) == 0 {
-			return mcp.NewToolResultError("resource returned no content. The resource exists but contains no data. This may be a temporary issue or the resource may be empty."), nil
+			return tools.NewToolError("resource returned no content").
+				Hint("The resource exists but contains no data").
+				Hint("This may be a temporary issue or the resource may be empty").Result()
 		}
 
 		// Assert the type of the first element (contents)
 		textContent, ok := contents[0].(mcp.TextResourceContents)
 		if !ok {
-			return mcp.NewToolResultError(fmt.Sprintf("resource content is not readable text or JSON compatible: %T. The resource may be a binary file or in an unsupported format.", contents)), nil
+			return tools.NewToolErrorf("resource content is not readable text or JSON compatible: %T", contents).
+				Hint("The resource may be a binary file or in an unsupported format").Result()
 		}
 
 		contentText := textContent.Text
@@ -127,5 +131,6 @@ func (t *ResourceTool) fetchUnified(ctx context.Context, uri string) (*mcp.CallT
 	}
 
 	// Nothing found
-	return mcp.NewToolResultError(fmt.Sprintf("resource not found: %s. Use get-resource without parameters to browse available resources.", uri)), nil
+	return tools.NewToolErrorf("resource not found: %s", uri).
+		Hint("Use get-resource without parameters to browse available resources").Result()
 }
