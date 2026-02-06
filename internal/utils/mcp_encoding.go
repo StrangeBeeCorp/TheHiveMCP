@@ -3,8 +3,8 @@ package utils
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -19,7 +19,7 @@ func NewToolResultJSONUnescaped(data interface{}) *mcp.CallToolResult {
 	encoder.SetEscapeHTML(false)
 
 	if err := encoder.Encode(data); err != nil {
-		return mcp.NewToolResultError(tools.NewToolError("failed to encode response data as JSON").Cause(err).Error())
+		return mcp.NewToolResultError(fmt.Sprintf("failed to encode data to JSON: %v", err))
 	}
 
 	// Remove the trailing newline that encoder.Encode adds

@@ -30,6 +30,10 @@ func (r *Registry) Register(tool Tool) {
 
 func (r *Registry) RegisterAll(s *server.MCPServer) {
 	for _, tool := range r.tools {
-		s.AddTool(tool.Definition(), tool.Handle)
+		def := tool.Definition()
+		wrapped := withPermissionCheck(def.Name, tool.Handle)
+		s.AddTool(def, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return wrapped(ctx, req)
+		})
 	}
 }
