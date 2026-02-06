@@ -56,7 +56,7 @@ func (t *ManageTool) createAlert(ctx context.Context, client *thehive.APIClient,
 			Hint("Check required fields and permissions").API(resp).Result()
 	}
 
-	processedResult, err := parseDateFieldsAndExtractColumns[thehive.OutputAlert](*result, types.DefaultFields[types.EntityTypeAlert])
+	processedResult, err := parseDateFieldsAndExtractColumns(*result, types.DefaultFields[types.EntityTypeAlert])
 	if err != nil {
 		return tools.NewToolError("failed to parse date fields and extract columns in alert result").Cause(err).Result()
 	}
@@ -90,7 +90,7 @@ func (t *ManageTool) createCase(ctx context.Context, client *thehive.APIClient, 
 			Hint("Check required fields and permissions").API(resp).Result()
 	}
 
-	processedResult, err := parseDateFieldsAndExtractColumns[thehive.OutputCase](*result, types.DefaultFields[types.EntityTypeCase])
+	processedResult, err := parseDateFieldsAndExtractColumns(*result, types.DefaultFields[types.EntityTypeCase])
 	if err != nil {
 		return tools.NewToolError("failed to parse date fields and extract columns in case result").Cause(err).Result()
 	}
@@ -125,7 +125,7 @@ func (t *ManageTool) createTask(ctx context.Context, client *thehive.APIClient, 
 			Hint("Check that the case exists and you have permissions").API(resp).Result()
 	}
 
-	processedResult, err := parseDateFieldsAndExtractColumns[thehive.OutputTask](*result, types.DefaultFields[types.EntityTypeTask])
+	processedResult, err := parseDateFieldsAndExtractColumns(*result, types.DefaultFields[types.EntityTypeTask])
 	if err != nil {
 		return tools.NewToolError("failed to parse date fields and extract columns in task result").Cause(err).Result()
 	}
