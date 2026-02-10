@@ -112,10 +112,10 @@ func (t *ExecuteAutomationTool) handleGetJobStatus(ctx context.Context, params E
 		"status", job.GetStatus(),
 		"hasReport", job.HasReport())
 
-	analyzerJobResult := NewAnalyzerJobResult(job)
+	jobStatusResult := NewAnalyzerJobStatusResult(job)
 
 	return ExecuteAutomationResult{
-		AnalyzerResult: analyzerJobResult,
+		JobStatusResult: jobStatusResult,
 	}, nil
 }
 
