@@ -9,93 +9,121 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func (t *ManageTool) handleUpdate(ctx context.Context, params *manageParams) (*mcp.CallToolResult, error) {
+func (t *ManageTool) handleUpdate(ctx context.Context, params *ManageEntityParams) (ManageEntityResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return tools.NewToolError("failed to get TheHive client").Cause(err).
-			Hint("Check your authentication and connection settings").Result()
+		return ManageEntityResult{}, tools.NewToolError("failed to get TheHive client").Cause(err).
+			Hint("Check your authentication and connection settings")
 	}
 
-	results := make([]map[string]interface{}, 0, len(params.EntityIDs))
+	results := make([]SingleEntityUpdateResult, 0, len(params.EntityIDs))
 
 	for _, entityID := range params.EntityIDs {
-		result, err := t.updateEntity(ctx, hiveClient, params.EntityType, entityID, params.EntityData)
-		if err != nil {
-			results = append(results, map[string]interface{}{
-				"id":    entityID,
-				"error": err.Error(),
-			})
-		} else {
-			results = append(results, map[string]interface{}{
-				"id":     entityID,
-				"result": result,
-			})
-		}
+		result := t.updateEntity(ctx, hiveClient, params.EntityType, entityID, params.EntityData)
+		results = append(results, result)
 	}
 
-	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
-		"operation":  "update",
-		"entityType": params.EntityType,
-		"results":    results,
-	}), nil
+	return ManageEntityResult{
+		UpdateResults: NewUpdateEntityResult(params.EntityType, results),
+	}, nil
 }
 
-func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient, entityType, entityID string, data map[string]interface{}) (interface{}, error) {
+func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient, entityType, entityID string, data map[string]interface{}) SingleEntityUpdateResult {
 	// Convert map to update structure
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal update data: %w. Check that entity-data contains valid JSON fields for updating", err)
+		return SingleEntityUpdateResult{
+			EntityID: entityID,
+			Error:    tools.NewToolError("Failed to marshal update data").Cause(err).Hint("Check that entity-data contains valid JSON fields for updating").Error(),
+		}
 	}
-
 	switch entityType {
 	case types.EntityTypeAlert:
 		var inputAlert thehive.InputUpdateAlert
 		if err := json.Unmarshal(jsonData, &inputAlert); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal alert update data: %w. Use get-resource 'hive://schema/alert/update' to see updatable fields", err)
+			return SingleEntityUpdateResult{
+				EntityID: entityID,
+				Error:    tools.NewToolError("failed to unmarshal alert update data").Cause(err).Hint("Use get-resource 'hive://schema/alert/update' to see updatable fields").Error(),
+			}
 		}
 		resp, err := client.AlertAPI.UpdateAlert(ctx, entityID).InputUpdateAlert(inputAlert).Execute()
 		if err != nil {
-			return nil, fmt.Errorf("failed to update alert %s: %w. Check that the alert exists and you have permissions. API response: %v", entityID, err, resp)
+			return SingleEntityUpdateResult{
+				EntityID: entityID,
+				Error:    tools.NewToolError("failed to update alert").Cause(err).Hint(fmt.Sprintf("Check that the alert %s exists and you have permissions. API response: %v", entityID, resp)).Error(),
+			}
 		}
-		return "updated", nil
+		return SingleEntityUpdateResult{
+			EntityID: entityID,
+			Result:   "updated",
+		}
 
 	case types.EntityTypeCase:
 		var inputCase thehive.InputUpdateCase
 		if err := json.Unmarshal(jsonData, &inputCase); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal case update data: %w. Use get-resource 'hive://schema/case/update' to see updatable fields", err)
+			return SingleEntityUpdateResult{
+				EntityID: entityID,
+				Error:    tools.NewToolError("failed to unmarshal case update data").Cause(err).Hint("Use get-resource 'hive://schema/case/update' to see updatable fields").Error(),
+			}
 		}
 		resp, err := client.CaseAPI.UpdateCase(ctx, entityID).InputUpdateCase(inputCase).Execute()
 		if err != nil {
-			return nil, fmt.Errorf("failed to update case %s: %w. Check that the case exists and you have permissions. API response: %v", entityID, err, resp)
+			return SingleEntityUpdateResult{
+				EntityID: entityID,
+				Error:    tools.NewToolError("failed to update case").Cause(err).Hint(fmt.Sprintf("Check that the case %s exists and you have permissions. API response: %v", entityID, resp)).Error(),
+			}
 		}
-		return "updated", nil
+		return SingleEntityUpdateResult{
+			EntityID: entityID,
+			Result:   "updated",
+		}
 
 	case types.EntityTypeTask:
 		var inputTask thehive.InputUpdateTask
 		if err := json.Unmarshal(jsonData, &inputTask); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal task update data: %w. Use get-resource 'hive://schema/task/update' to see updatable fields", err)
+			return SingleEntityUpdateResult{
+				EntityID: entityID,
+				Error:    tools.NewToolError("failed to unmarshal task update data").Cause(err).Hint("Use get-resource 'hive://schema/task/update' to see updatable fields").Error(),
+			}
 		}
 		resp, err := client.TaskAPI.UpdateTask(ctx, entityID).InputUpdateTask(inputTask).Execute()
 		if err != nil {
-			return nil, fmt.Errorf("failed to update task %s: %w. Check that the task exists and you have permissions. API response: %v", entityID, err, resp)
+			return SingleEntityUpdateResult{
+				EntityID: entityID,
+				Error:    tools.NewToolError("failed to update task").Cause(err).Hint(fmt.Sprintf("Check that the task %s exists and you have permissions. API response: %v", entityID, resp)).Error(),
+			}
 		}
-		return "updated", nil
+		return SingleEntityUpdateResult{
+			EntityID: entityID,
+			Result:   "updated",
+		}
 
 	case types.EntityTypeObservable:
 		var inputObservable thehive.InputUpdateObservable
 		if err := json.Unmarshal(jsonData, &inputObservable); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal observable update data: %w. Use get-resource 'hive://schema/observable/update' to see updatable fields", err)
+			return SingleEntityUpdateResult{
+				EntityID: entityID,
+				Error:    tools.NewToolError("failed to unmarshal observable update data").Cause(err).Hint("Use get-resource 'hive://schema/observable/update' to see updatable fields").Error(),
+			}
 		}
 		resp, err := client.ObservableAPI.UpdateObservable(ctx, entityID).InputUpdateObservable(inputObservable).Execute()
 		if err != nil {
-			return nil, fmt.Errorf("failed to update observable %s: %w. Check that the observable exists and you have permissions. API response: %v", entityID, err, resp)
+			return SingleEntityUpdateResult{
+				EntityID: entityID,
+				Error:    tools.NewToolError("failed to update observable").Cause(err).Hint(fmt.Sprintf("Check that the observable %s exists and you have permissions. API response: %v", entityID, resp)).Error(),
+			}
 		}
-		return "updated", nil
+		return SingleEntityUpdateResult{
+			EntityID: entityID,
+			Result:   "updated",
+		}
 
 	default:
-		return nil, fmt.Errorf("unsupported entity type for update: %s", entityType)
+		return SingleEntityUpdateResult{
+			EntityID: entityID,
+			Error:    tools.NewToolError("unsupported entity type for update").Hint(fmt.Sprintf("Entity type: %s", entityType)).Error(),
+		}
 	}
 }

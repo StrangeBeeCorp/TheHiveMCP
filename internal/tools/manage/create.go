@@ -8,14 +8,13 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func (t *ManageTool) handleCreate(ctx context.Context, params *manageParams) (*mcp.CallToolResult, error) {
+func (t *ManageTool) handleCreate(ctx context.Context, params *ManageEntityParams) (ManageEntityResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return tools.NewToolError("failed to get TheHive client").Cause(err).
-			Hint("Check your authentication and connection settings").Result()
+		return ManageEntityResult{}, tools.NewToolError("failed to get TheHive client").Cause(err).
+			Hint("Check your authentication and connection settings")
 	}
 
 	processedData := utils.TranslateDatesToTimestamps(params.EntityData)
@@ -30,127 +29,103 @@ func (t *ManageTool) handleCreate(ctx context.Context, params *manageParams) (*m
 	case types.EntityTypeObservable:
 		return t.createObservable(ctx, hiveClient, processedData, params.EntityIDs[0])
 	default:
-		return tools.NewToolErrorf("unsupported entity type for create: %s", params.EntityType).Result()
+		return ManageEntityResult{}, tools.NewToolErrorf("unsupported entity type for create: %s", params.EntityType)
 	}
 }
 
-func (t *ManageTool) createAlert(ctx context.Context, client *thehive.APIClient, data map[string]interface{}) (*mcp.CallToolResult, error) {
-	// Convert map to JSON then to InputAlert
+func (t *ManageTool) createAlert(ctx context.Context, client *thehive.APIClient, data map[string]interface{}) (ManageEntityResult, error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return tools.NewToolError("failed to marshal alert data").Cause(err).
+		return ManageEntityResult{}, tools.NewToolError("failed to marshal alert data").Cause(err).
 			Hint("Check that entity-data contains valid JSON fields").
-			Schema("alert", "create").Result()
+			Schema("alert", "create")
 	}
 
 	var inputAlert thehive.InputCreateAlert
 	if err := json.Unmarshal(jsonData, &inputAlert); err != nil {
-		return tools.NewToolError("failed to unmarshal alert data").Cause(err).
+		return ManageEntityResult{}, tools.NewToolError("failed to unmarshal alert data").Cause(err).
 			Hint("Ensure entity-data fields match the alert schema").
-			Schema("alert", "create").Result()
+			Schema("alert", "create")
 	}
 
-	result, resp, err := client.AlertAPI.CreateAlert(ctx).InputCreateAlert(inputAlert).Execute()
+	alert, resp, err := client.AlertAPI.CreateAlert(ctx).InputCreateAlert(inputAlert).Execute()
 	if err != nil {
-		return tools.NewToolError("failed to create alert").Cause(err).
-			Hint("Check required fields and permissions").API(resp).Result()
+		return ManageEntityResult{}, tools.NewToolError("failed to create alert").Cause(err).
+			Hint("Check required fields and permissions").API(resp)
 	}
 
-	processedResult, err := parseDateFieldsAndExtractColumns(*result, types.DefaultFields[types.EntityTypeAlert])
-	if err != nil {
-		return tools.NewToolError("failed to parse date fields and extract columns in alert result").Cause(err).Result()
-	}
-
-	// For create operations, return the single entity, not an array
-	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
-		"operation":  "create",
-		"entityType": types.EntityTypeAlert,
-		"result":     processedResult,
-	}), nil
+	return ManageEntityResult{
+		CreateAlertResult: NewCreateAlertResult(alert),
+	}, nil
 }
 
-func (t *ManageTool) createCase(ctx context.Context, client *thehive.APIClient, data map[string]interface{}) (*mcp.CallToolResult, error) {
+func (t *ManageTool) createCase(ctx context.Context, client *thehive.APIClient, data map[string]interface{}) (ManageEntityResult, error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return tools.NewToolError("failed to marshal case data").Cause(err).
+		return ManageEntityResult{}, tools.NewToolError("failed to marshal case data").Cause(err).
 			Hint("Check that entity-data contains valid JSON fields").
-			Schema("case", "create").Result()
+			Schema("case", "create")
 	}
 
 	var inputCase thehive.InputCreateCase
 	if err := json.Unmarshal(jsonData, &inputCase); err != nil {
-		return tools.NewToolError("failed to unmarshal case data").Cause(err).
+		return ManageEntityResult{}, tools.NewToolError("failed to unmarshal case data").Cause(err).
 			Hint("Ensure entity-data fields match the case schema").
-			Schema("case", "create").Result()
+			Schema("case", "create")
 	}
 
 	result, resp, err := client.CaseAPI.CreateCase(ctx).InputCreateCase(inputCase).Execute()
 	if err != nil {
-		return tools.NewToolError("failed to create case").Cause(err).
-			Hint("Check required fields and permissions").API(resp).Result()
-	}
-
-	processedResult, err := parseDateFieldsAndExtractColumns(*result, types.DefaultFields[types.EntityTypeCase])
-	if err != nil {
-		return tools.NewToolError("failed to parse date fields and extract columns in case result").Cause(err).Result()
+		return ManageEntityResult{}, tools.NewToolError("failed to create case").Cause(err).
+			Hint("Check required fields and permissions").API(resp)
 	}
 
 	// For create operations, return the single entity, not an array
-	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
-		"operation":  "create",
-		"entityType": types.EntityTypeCase,
-		"result":     processedResult,
-	}), nil
+	return ManageEntityResult{
+		CreateCaseResult: NewCreateCaseResult(result),
+	}, nil
 }
 
-func (t *ManageTool) createTask(ctx context.Context, client *thehive.APIClient, data map[string]interface{}, parentID string) (*mcp.CallToolResult, error) {
+func (t *ManageTool) createTask(ctx context.Context, client *thehive.APIClient, data map[string]interface{}, parentID string) (ManageEntityResult, error) {
 
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return tools.NewToolError("failed to marshal task data").Cause(err).
+		return ManageEntityResult{}, tools.NewToolError("failed to marshal task data").Cause(err).
 			Hint("Check that entity-data contains valid JSON fields").
-			Schema("task", "create").Result()
+			Schema("task", "create")
 	}
 
 	var inputTask thehive.InputCreateTask
 	if err := json.Unmarshal(jsonData, &inputTask); err != nil {
-		return tools.NewToolError("failed to unmarshal task data").Cause(err).
+		return ManageEntityResult{}, tools.NewToolError("failed to unmarshal task data").Cause(err).
 			Hint("Ensure entity-data fields match the task schema").
-			Schema("task", "create").Result()
+			Schema("task", "create")
 	}
 
 	result, resp, err := client.TaskAPI.CreateTaskInCase(ctx, parentID).InputCreateTask(inputTask).Execute()
 	if err != nil {
-		return tools.NewToolErrorf("failed to create task in case %s", parentID).Cause(err).
-			Hint("Check that the case exists and you have permissions").API(resp).Result()
+		return ManageEntityResult{}, tools.NewToolErrorf("failed to create task in case %s", parentID).Cause(err).
+			Hint("Check that the case exists and you have permissions").API(resp)
 	}
-
-	processedResult, err := parseDateFieldsAndExtractColumns(*result, types.DefaultFields[types.EntityTypeTask])
-	if err != nil {
-		return tools.NewToolError("failed to parse date fields and extract columns in task result").Cause(err).Result()
-	}
-
 	// For create operations, return the single entity, not an array
-	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
-		"operation":  "create",
-		"entityType": types.EntityTypeTask,
-		"result":     processedResult,
-	}), nil
+	return ManageEntityResult{
+		CreateTaskResult: NewCreateTaskResult(result),
+	}, nil
 }
 
-func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APIClient, data map[string]interface{}, parentID string) (*mcp.CallToolResult, error) {
+func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APIClient, data map[string]interface{}, parentID string) (ManageEntityResult, error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return tools.NewToolError("failed to marshal observable data").Cause(err).
+		return ManageEntityResult{}, tools.NewToolError("failed to marshal observable data").Cause(err).
 			Hint("Check that entity-data contains valid JSON fields").
-			Schema("observable", "create").Result()
+			Schema("observable", "create")
 	}
 
 	var inputObservable thehive.InputCreateObservable
 	if err := json.Unmarshal(jsonData, &inputObservable); err != nil {
-		return tools.NewToolError("failed to unmarshal observable data").Cause(err).
+		return ManageEntityResult{}, tools.NewToolError("failed to unmarshal observable data").Cause(err).
 			Hint("Ensure entity-data fields match the observable schema").
-			Schema("observable", "create").Result()
+			Schema("observable", "create")
 	}
 
 	// Try to create in case first, then alert if that fails
@@ -162,23 +137,16 @@ func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APICl
 		// If case creation fails, try alert
 		alertResult, _, alertErr := client.ObservableAPI.CreateObservableInAlert(ctx, parentID).InputCreateObservable(inputObservable).Execute()
 		if alertErr != nil {
-			return tools.NewToolError("failed to create observable").Cause(alertErr).
-				Hint("Check that the target case/alert exists and you have permissions").Result()
+			return ManageEntityResult{}, tools.NewToolError("failed to create observable").Cause(alertErr).
+				Hint("Check that the target case/alert exists and you have permissions")
 		}
 		result = alertResult
 	} else {
 		result = caseResult
 	}
 
-	processedResult, err := parseDateFieldsAndExtractColumnsFromArray(result, types.DefaultFields[types.EntityTypeObservable])
-	if err != nil {
-		return tools.NewToolError("failed to parse date fields and extract columns in observable result").Cause(err).Result()
-	}
+	return ManageEntityResult{
+		CreateObservableResult: NewCreateObservableResult(result),
+	}, nil
 
-	// For create operations, return the single entity, not an array
-	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
-		"operation":  "create",
-		"entityType": types.EntityTypeObservable,
-		"result":     processedResult, // Return the full array for observables
-	}), nil
 }

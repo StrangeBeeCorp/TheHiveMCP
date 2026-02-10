@@ -7,8 +7,6 @@ import (
 	"reflect"
 	"strings"
 	"time"
-
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 // ParseURIParameters extracts query parameters from a parameters string
@@ -135,87 +133,137 @@ func processDateField(key string, value interface{}) (interface{}, error) {
 	return value, nil
 }
 
-func ParseDateFields[T types.OutputEntity](entity T) (map[string]interface{}, error) {
-	val := reflect.ValueOf(entity)
+// ProcessDatesRecursive processes any Go value recursively to convert date fields
+// Handles structs, maps, slices, arrays, and nested combinations
+func ProcessDatesRecursive(value interface{}) (interface{}, error) {
+	if value == nil {
+		return nil, nil
+	}
+
+	val := reflect.ValueOf(value)
+	return processDatesValue(val)
+}
+
+func processDatesValue(val reflect.Value) (interface{}, error) {
+	// Handle pointers
 	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
-
-	// Handle map[string]interface{} directly
-	if val.Kind() == reflect.Map {
-		if mapEntity, ok := any(entity).(map[string]interface{}); ok {
-			return parseMapDateFields(mapEntity)
+		if val.IsNil() {
+			return nil, nil
 		}
+		return processDatesValue(val.Elem())
 	}
 
-	// Handle struct types
-	if val.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("expected struct or map, got %s", val.Kind())
+	switch val.Kind() {
+	case reflect.Struct:
+		return processDatesStruct(val)
+	case reflect.Map:
+		return processDatesMap(val)
+	case reflect.Slice, reflect.Array:
+		return processDatesSlice(val)
+	case reflect.Interface:
+		if val.IsNil() {
+			return nil, nil
+		}
+		return processDatesValue(val.Elem())
+	default:
+		// For primitive types, return as-is
+		return val.Interface(), nil
 	}
-
-	return parseStructDateFields(val)
 }
 
-func parseMapDateFields(mapEntity map[string]interface{}) (map[string]interface{}, error) {
-	serialized := make(map[string]interface{})
-
-	for key, value := range mapEntity {
-		processedValue, err := processDateField(key, value)
-		if err != nil {
-			return nil, err
-		}
-		serialized[key] = processedValue
-	}
-
-	return serialized, nil
-}
-
-func parseStructDateFields(val reflect.Value) (map[string]interface{}, error) {
-	serialized := make(map[string]interface{})
+func processDatesStruct(val reflect.Value) (map[string]interface{}, error) {
+	result := make(map[string]interface{})
 	typ := val.Type()
 
 	for i := 0; i < val.NumField(); i++ {
 		field := typ.Field(i)
-		if field.PkgPath != "" { // skip unexported fields
+		if field.PkgPath != "" { // Skip unexported fields
 			continue
 		}
 
-		// Get the field name (use json tag if present)
+		// Get field name (prefer json tag)
 		key := field.Name
 		if tag := field.Tag.Get("json"); tag != "" && tag != "-" {
 			key = strings.Split(tag, ",")[0]
 		}
 
-		value := val.Field(i).Interface()
-
-		// Handle pointer types by dereferencing
 		fieldVal := val.Field(i)
-		if fieldVal.Kind() == reflect.Ptr && !fieldVal.IsNil() {
-			value = fieldVal.Elem().Interface()
-		} else if fieldVal.Kind() == reflect.Ptr && fieldVal.IsNil() {
-			value = nil
+		var processedValue interface{}
+		var err error
+
+		// Check if this is a date field and handle appropriately
+		if isDateField(key) {
+			processedValue, err = processDateField(key, fieldVal.Interface())
+			if err != nil {
+				return nil, fmt.Errorf("failed to process date field %s: %w", key, err)
+			}
+		} else {
+			// Recursively process nested structures
+			processedValue, err = processDatesValue(fieldVal)
+			if err != nil {
+				slog.Error("Failed to process nested value in struct", "field", key, "error", err)
+				continue // Skip this field but continue processing others
+			}
 		}
 
-		processedValue, err := processDateField(key, value)
-		if err != nil {
-			return nil, err
-		}
-		serialized[key] = processedValue
+		result[key] = processedValue
 	}
 
-	return serialized, nil
+	return result, nil
 }
 
-// ParseDateFieldsInArray converts any array of structs to maps and applies date parsing
-func ParseDateFieldsInArray[T types.OutputEntity](result []T) ([]map[string]interface{}, error) {
-	finalResults := make([]map[string]interface{}, 0, len(result))
-	for _, item := range result {
-		processed, err := ParseDateFields(item)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse date fields: %w", err)
+func processDatesMap(val reflect.Value) (map[string]interface{}, error) {
+	result := make(map[string]interface{})
+
+	for _, key := range val.MapKeys() {
+		keyStr := fmt.Sprintf("%v", key.Interface())
+		mapVal := val.MapIndex(key)
+
+		var processedValue interface{}
+		var err error
+
+		// Check if this is a date field
+		if isDateField(keyStr) {
+			processedValue, err = processDateField(keyStr, mapVal.Interface())
+			if err != nil {
+				return nil, fmt.Errorf("failed to process date field %s: %w", keyStr, err)
+			}
+		} else {
+			// Recursively process nested structures
+			processedValue, err = processDatesValue(mapVal)
+			if err != nil {
+				return nil, fmt.Errorf("failed to process map value for key %s: %w", keyStr, err)
+			}
 		}
-		finalResults = append(finalResults, processed)
+
+		result[keyStr] = processedValue
 	}
 
-	return finalResults, nil
+	return result, nil
+}
+
+func processDatesSlice(val reflect.Value) ([]interface{}, error) {
+	length := val.Len()
+	result := make([]interface{}, length)
+
+	for i := 0; i < length; i++ {
+		elem := val.Index(i)
+		processedElem, err := processDatesValue(elem)
+		if err != nil {
+			return nil, fmt.Errorf("failed to process slice element %d: %w", i, err)
+		}
+		result[i] = processedElem
+	}
+
+	return result, nil
+}
+
+// isDateField checks if a field name is a recognized date field
+func isDateField(fieldName string) bool {
+	for _, dateField := range dateFields {
+		if fieldName == dateField {
+			return true
+		}
+	}
+	return false
 }

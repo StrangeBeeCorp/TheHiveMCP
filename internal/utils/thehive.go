@@ -40,11 +40,6 @@ func executeQuery(ctx context.Context, client *thehive.APIClient, parentOp, pare
 		return nil, fmt.Errorf("failed to unmarshal results: %w", err)
 	}
 
-	mapped, err = ParseDateFieldsInArray(mapped)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse date fields: %w", err)
-	}
-
 	return mapped, nil
 }
 

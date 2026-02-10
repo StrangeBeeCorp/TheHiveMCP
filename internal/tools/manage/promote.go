@@ -5,17 +5,15 @@ import (
 	"encoding/json"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func (t *ManageTool) handlePromote(ctx context.Context, params *manageParams) (*mcp.CallToolResult, error) {
+func (t *ManageTool) handlePromote(ctx context.Context, params *ManageEntityParams) (ManageEntityResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return tools.NewToolError("failed to get TheHive client").Cause(err).
-			Hint("Check your authentication and connection settings").Result()
+		return ManageEntityResult{}, tools.NewToolError("failed to get TheHive client").Cause(err).
+			Hint("Check your authentication and connection settings")
 	}
 
 	alertID := params.EntityIDs[0]
@@ -28,30 +26,22 @@ func (t *ManageTool) handlePromote(ctx context.Context, params *manageParams) (*
 	if params.EntityData != nil {
 		jsonData, err := json.Marshal(params.EntityData)
 		if err != nil {
-			return tools.NewToolError("failed to marshal promote data").Cause(err).Result()
+			return ManageEntityResult{}, tools.NewToolError("failed to marshal promote data").Cause(err)
 		}
 		if err := json.Unmarshal(jsonData, &inputCase); err != nil {
-			return tools.NewToolError("failed to unmarshal promote data").Cause(err).
-				Hint("Optional fields include 'caseTemplate' for template name").Result()
+			return ManageEntityResult{}, tools.NewToolError("failed to unmarshal promote data").Cause(err).
+				Hint("Optional fields include 'caseTemplate' for template name")
 		}
 	}
 	req = req.InputCreateCaseFromAlert(inputCase)
 
 	result, resp, err := req.Execute()
 	if err != nil {
-		return tools.NewToolErrorf("failed to promote alert %s to case", alertID).Cause(err).
-			Hint("Check that the alert exists and you have permissions").API(resp).Result()
+		return ManageEntityResult{}, tools.NewToolErrorf("failed to promote alert %s to case", alertID).Cause(err).
+			Hint("Check that the alert exists and you have permissions").API(resp)
 	}
 
-	processedResult, err := parseDateFieldsAndExtractColumns[thehive.OutputCase](*result, types.DefaultFields[types.EntityTypeCase])
-	if err != nil {
-		return tools.NewToolError("failed to parse date fields and extract columns in promoted case result").Cause(err).Result()
-	}
-
-	return utils.NewToolResultJSONUnescaped(map[string]interface{}{
-		"operation":  "promote",
-		"entityType": types.EntityTypeAlert,
-		"alertId":    alertID,
-		"result":     processedResult,
-	}), nil
+	return ManageEntityResult{
+		PromoteAlertResult: NewPromoteAlertResult(result),
+	}, nil
 }
