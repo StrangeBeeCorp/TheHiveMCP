@@ -74,7 +74,7 @@ func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest, params
 		}
 
 		// 7. Process and format results
-		return NewSearchEntitiesResult(results, params, filters.RawFilters), nil
+		return NewSearchEntitiesResult(results, params, filters.RawFilters)
 	}
 
 	return SearchEntitiesResult{}, tools.NewToolError("maximum search retries exceeded").

@@ -15,7 +15,7 @@ func (t *ManageTool) ValidatePermissions(ctx context.Context, params ManageEntit
 	}
 
 	if !permissions.IsToolAllowed(t.Name()) {
-		return tools.NewToolErrorf("tool %s is not allowed by your permissions configuration", t.Name())
+		return tools.NewToolErrorf("tool %s is not permitted by your permissions configuration", t.Name())
 	}
 
 	if !permissions.IsEntityOperationAllowed(params.EntityType, params.Operation) {

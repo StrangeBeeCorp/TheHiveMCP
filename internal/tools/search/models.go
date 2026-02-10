@@ -1,5 +1,7 @@
 package search
 
+import "github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
+
 const SearchEntitiesToolDescription = `Search for entities in TheHive using natural language queries.
 
 The query will be translated to TheHive filters using AI. You can use natural language to describe what you're looking for.
@@ -36,16 +38,20 @@ type SearchEntitiesParams struct {
 
 type SearchEntitiesResult struct {
 	Count      int                      `json:"count"`
-	CountOnly  bool                     `json:"count_only"`
-	EntityType string                   `json:"entity-type"`
+	CountOnly  bool                     `json:"countOnly"`
+	EntityType string                   `json:"entityType"`
 	Results    []map[string]interface{} `json:"results,omitempty"`
-	RawFilters map[string]interface{}   `json:"raw_filters"`
+	RawFilters map[string]interface{}   `json:"rawFilters"`
 }
 
-func NewSearchEntitiesResult(results []map[string]interface{}, params SearchEntitiesParams, filters map[string]interface{}) SearchEntitiesResult {
+func NewSearchEntitiesResult(results []map[string]interface{}, params SearchEntitiesParams, filters map[string]interface{}) (SearchEntitiesResult, error) {
 	var countValue int
 	if params.Count {
-		countValue = results[0]["_count"].(int)
+		floatCountValue, ok := results[0]["_count"].(float64)
+		if !ok {
+			return SearchEntitiesResult{}, tools.NewToolError("failed to parse count from results").Hint("Ensure the query returns a count field when count=true").Schema(params.EntityType, "")
+		}
+		countValue = int(floatCountValue)
 	} else {
 		countValue = len(results)
 	}
@@ -55,7 +61,7 @@ func NewSearchEntitiesResult(results []map[string]interface{}, params SearchEnti
 		EntityType: params.EntityType,
 		Results:    results,
 		RawFilters: filters,
-	}
+	}, nil
 }
 
 // Query parsing - internal helper struct

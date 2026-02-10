@@ -6,6 +6,7 @@ import (
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
+	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
 )
@@ -210,14 +211,36 @@ func TestManageAddCommentToCase(t *testing.T) {
 	firstResult, ok := resultsArray[0].(map[string]any)
 	require.True(t, ok)
 
-	// The actual comment data is in the "result" field
-	commentData, ok := firstResult["result"].(map[string]any)
+	commentID, ok := firstResult["commentId"].(string)
 	require.True(t, ok)
 
-	// Verify the comment message
-	commentMessage, ok := commentData["message"].(string)
+	// Verify the comment exists in TheHive
+	listOp := thehive.NewInputQueryGenericOperation("listComment")
+	filterOp := map[string]interface{}{
+		"_name": "filter",
+		"_eq": map[string]interface{}{
+			"_field": "_id",
+			"_value": commentID,
+		},
+	}
+	query := []thehive.InputQueryNamedOperation{
+		thehive.InputQueryGenericOperationAsInputQueryNamedOperation(listOp),
+		thehive.MapmapOfStringAnyAsInputQueryNamedOperation(&filterOp),
+	}
+	hiveQuery := thehive.InputQuery{
+		Query: query,
+	}
+	results, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(authContext).InputQuery(hiveQuery).Execute()
+	fmt.Printf("API response: %v\n", resp)
+	require.NoError(t, err)
+
+	fectchedComments, ok := results.([]interface{})
 	require.True(t, ok)
-	require.Equal(t, commentText, commentMessage)
+	require.NotEmpty(t, fectchedComments)
+	fetchedComment, ok := fectchedComments[0].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, commentText, fetchedComment["message"])
+
 }
 
 // TestManageCreateTaskInCase tests creating a task within a case via the manage-entities tool
@@ -558,7 +581,7 @@ func TestManagePromoteAlert(t *testing.T) {
 	structuredData, ok := result.StructuredContent.(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "promote", structuredData["operation"])
-	require.Equal(t, types.EntityTypeAlert, structuredData["entityType"])
+	require.Equal(t, types.EntityTypeCase, structuredData["entityType"])
 
 	// Verify the case was created
 	caseResult, ok := structuredData["result"].(map[string]any)
@@ -674,10 +697,13 @@ func TestManageMergeAlertsIntoCase(t *testing.T) {
 	structuredData, ok := result.StructuredContent.(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "merge", structuredData["operation"])
-	require.Equal(t, types.EntityTypeAlert, structuredData["entityType"])
+	require.Equal(t, types.EntityTypeCase, structuredData["entityType"])
+
+	resultCase, ok := structuredData["result"].(map[string]any)
+	require.True(t, ok)
 
 	// Verify the target case ID is in the result
-	targetCaseID, ok := structuredData["targetCaseId"].(string)
+	targetCaseID, ok := resultCase["_id"].(string)
 	require.True(t, ok)
 	require.Equal(t, createdCase.UnderscoreId, targetCaseID)
 }
@@ -744,7 +770,7 @@ func TestManageMergeObservables(t *testing.T) {
 	require.Equal(t, types.EntityTypeObservable, structuredData["entityType"])
 
 	// Verify the target case ID is in the result
-	targetCaseID, ok := structuredData["targetCaseId"].(string)
+	targetCaseID, ok := structuredData["targetId"].(string)
 	require.True(t, ok)
 	require.Equal(t, createdCase.UnderscoreId, targetCaseID)
 }

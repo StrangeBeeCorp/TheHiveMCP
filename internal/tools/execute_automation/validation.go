@@ -14,17 +14,17 @@ func (t *ExecuteAutomationTool) ValidatePermissions(ctx context.Context, params 
 	}
 
 	if !permissions.IsToolAllowed(t.Name()) {
-		return tools.NewToolErrorf("tool %s is not allowed by your permissions configuration", t.Name())
+		return tools.NewToolErrorf("tool %s is not permitted by your permissions configuration", t.Name())
 	}
 
 	switch params.Operation {
 	case OperationRunAnalyzer:
 		if !permissions.IsAnalyzerAllowed(params.AnalyzerID) {
-			return tools.NewToolErrorf("Analyzer %s is not allowed by your permissions configuration", params.AnalyzerID)
+			return tools.NewToolErrorf("Analyzer %s is not permitted by your permissions configuration", params.AnalyzerID)
 		}
 	case OperationRunResponder:
 		if !permissions.IsResponderAllowed(params.ResponderID) {
-			return tools.NewToolErrorf("Responder %s is not allowed by your permissions configuration", params.ResponderID)
+			return tools.NewToolErrorf("Responder %s is not permitted by your permissions configuration", params.ResponderID)
 		}
 	case OperationGetJobStatus, OperationGetActionStatus:
 		// Assuming that if the user can run analyzers/responders, they can check status. Adjust if needed.

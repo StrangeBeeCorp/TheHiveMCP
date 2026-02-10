@@ -133,11 +133,49 @@ func processDateField(key string, value interface{}) (interface{}, error) {
 	return value, nil
 }
 
-// ProcessDatesRecursive processes any Go value recursively to convert date fields
-// Handles structs, maps, slices, arrays, and nested combinations
+// Unwrapper is implemented by union/sum types that wrap a single active variant.
+// When processing results, the wrapper is unwrapped so that only the active
+// variant is serialized, avoiding unnecessary nesting with nil sibling fields.
+type Unwrapper interface {
+	Unwrap() any
+}
+
+// UnwrapUnion is a reflection-based helper for union structs whose fields are
+// all optional pointer variants. It returns the first non-nil pointer field's
+// value, or the original value if none is found. Union types opt in by
+// implementing Unwrap() with a one-liner:
+//
+//	func (r T) Unwrap() any { return utils.UnwrapUnion(r) }
+func UnwrapUnion(v any) any {
+	val := reflect.ValueOf(v)
+	if val.Kind() == reflect.Ptr {
+		if val.IsNil() {
+			return v
+		}
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct {
+		return v
+	}
+	for i := 0; i < val.NumField(); i++ {
+		f := val.Field(i)
+		if f.Kind() == reflect.Ptr && !f.IsNil() {
+			return f.Interface()
+		}
+	}
+	return v
+}
+
+// ProcessDatesRecursive processes any Go value recursively to convert date fields.
+// Handles structs, maps, slices, arrays, and nested combinations.
 func ProcessDatesRecursive(value interface{}) (interface{}, error) {
 	if value == nil {
 		return nil, nil
+	}
+
+	// Unwrap union types before processing so the output is flat
+	if u, ok := value.(Unwrapper); ok {
+		return ProcessDatesRecursive(u.Unwrap())
 	}
 
 	val := reflect.ValueOf(value)
@@ -181,13 +219,30 @@ func processDatesStruct(val reflect.Value) (map[string]interface{}, error) {
 			continue
 		}
 
-		// Get field name (prefer json tag)
+		// Parse json tag for field name and omitempty option
 		key := field.Name
-		if tag := field.Tag.Get("json"); tag != "" && tag != "-" {
-			key = strings.Split(tag, ",")[0]
+		omitempty := false
+		if tag := field.Tag.Get("json"); tag != "" {
+			if tag == "-" {
+				continue
+			}
+			parts := strings.Split(tag, ",")
+			key = parts[0]
+			for _, opt := range parts[1:] {
+				if opt == "omitempty" {
+					omitempty = true
+					break
+				}
+			}
 		}
 
 		fieldVal := val.Field(i)
+
+		// Respect omitempty: skip fields with zero values, matching encoding/json behavior
+		if omitempty && fieldVal.IsZero() {
+			continue
+		}
+
 		var processedValue interface{}
 		var err error
 

@@ -1,5 +1,7 @@
 package resource
 
+import "github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
+
 const GetResourceToolDescription = `Access TheHive resources for documentation, schemas, and metadata.
 
 Resources are organized hierarchically:
@@ -93,3 +95,6 @@ func NewCategoryResult(category *CategoryBrowse) *GetResourceResult {
 		Category: category,
 	}
 }
+
+// Unwrap implements utils.Unwrapper to flatten the union for serialization.
+func (r GetResourceResult) Unwrap() any { return utils.UnwrapUnion(r) }

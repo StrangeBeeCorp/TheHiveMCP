@@ -43,8 +43,9 @@ func (t *ManageTool) addComment(ctx context.Context, client *thehive.APIClient, 
 			}
 		}
 		return SingleEntityCommentResult{
-			EntityID: entityID,
-			Result:   fmt.Sprintf("comment added with ID %s", result.GetUnderscoreId()),
+			EntityID:  entityID,
+			CommentID: result.GetUnderscoreId(),
+			Result:    fmt.Sprintf("comment added with ID %s", result.GetUnderscoreId()),
 		}
 
 	case types.EntityTypeTask:
@@ -59,8 +60,9 @@ func (t *ManageTool) addComment(ctx context.Context, client *thehive.APIClient, 
 			}
 		}
 		return SingleEntityCommentResult{
-			EntityID: entityID,
-			Result:   fmt.Sprintf("task log added with ID %s", result.GetUnderscoreId()),
+			EntityID:  entityID,
+			CommentID: result.GetUnderscoreId(),
+			Result:    fmt.Sprintf("task log added with ID %s", result.GetUnderscoreId()),
 		}
 
 	default:

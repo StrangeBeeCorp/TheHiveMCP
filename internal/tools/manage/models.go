@@ -2,6 +2,7 @@ package manage
 
 import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 )
 
@@ -203,7 +204,7 @@ func NewCreateObservableResult(observable []thehive.OutputObservable) *CreateObs
 }
 
 type SingleEntityUpdateResult struct {
-	EntityID string `json:"id"`
+	EntityID string `json:"_id"`
 	Result   string `json:"result,omitempty"`
 	Error    string `json:"error,omitempty"`
 }
@@ -211,21 +212,21 @@ type SingleEntityUpdateResult struct {
 type UpdateEntityResult struct {
 	Operation  string                     `json:"operation"`
 	EntityType string                     `json:"entityType"`
-	Result     []SingleEntityUpdateResult `json:"result,omitempty"`
+	Results    []SingleEntityUpdateResult `json:"results,omitempty"`
 	Message    string                     `json:"message,omitempty"`
 }
 
-func NewUpdateEntityResult(entityType string, result []SingleEntityUpdateResult) *UpdateEntityResult {
+func NewUpdateEntityResult(entityType string, results []SingleEntityUpdateResult) *UpdateEntityResult {
 	return &UpdateEntityResult{
 		Operation:  OperationUpdate,
 		EntityType: entityType,
-		Result:     result,
+		Results:    results,
 		Message:    "Entity updated successfully",
 	}
 }
 
 type SingleEntityDeleteResult struct {
-	EntityID string `json:"id"`
+	EntityID string `json:"_id"`
 	Deleted  bool   `json:"deleted,omitempty"`
 	Error    string `json:"error,omitempty"`
 }
@@ -233,37 +234,38 @@ type SingleEntityDeleteResult struct {
 type DeleteEntityResult struct {
 	Operation  string                     `json:"operation"`
 	EntityType string                     `json:"entityType"`
-	Result     []SingleEntityDeleteResult `json:"result,omitempty"`
+	Results    []SingleEntityDeleteResult `json:"results,omitempty"`
 	Message    string                     `json:"message,omitempty"`
 }
 
-func NewDeleteEntityResult(entityType string, result []SingleEntityDeleteResult) *DeleteEntityResult {
+func NewDeleteEntityResult(entityType string, results []SingleEntityDeleteResult) *DeleteEntityResult {
 	return &DeleteEntityResult{
 		Operation:  OperationDelete,
 		EntityType: entityType,
-		Result:     result,
+		Results:    results,
 		Message:    "Entity deletion completed",
 	}
 }
 
 type SingleEntityCommentResult struct {
-	EntityID string `json:"id"`
-	Result   string `json:"result,omitempty"`
-	Error    string `json:"error,omitempty"`
+	CommentID string `json:"commentId,omitempty"`
+	EntityID  string `json:"entityId"`
+	Result    string `json:"result,omitempty"`
+	Error     string `json:"error,omitempty"`
 }
 
 type CommentEntityResult struct {
 	Operation  string                      `json:"operation"`
 	EntityType string                      `json:"entityType"`
-	Result     []SingleEntityCommentResult `json:"result,omitempty"`
+	Results    []SingleEntityCommentResult `json:"results,omitempty"`
 	Message    string                      `json:"message,omitempty"`
 }
 
-func NewCommentEntityResult(entityType string, result []SingleEntityCommentResult) *CommentEntityResult {
+func NewCommentEntityResult(entityType string, results []SingleEntityCommentResult) *CommentEntityResult {
 	return &CommentEntityResult{
 		Operation:  OperationComment,
 		EntityType: entityType,
-		Result:     result,
+		Results:    results,
 		Message:    "Comments added successfully",
 	}
 }
@@ -314,7 +316,7 @@ type MergeAlertsIntoCaseResult struct {
 func NewMergeAlertsResult(caseEntity *thehive.OutputCase, alertIds []string, targetCaseId string) *MergeAlertsIntoCaseResult {
 	return &MergeAlertsIntoCaseResult{
 		Operation:  OperationMerge,
-		EntityType: types.EntityTypeAlert,
+		EntityType: types.EntityTypeCase,
 		EntityIds:  alertIds,
 		TargetId:   targetCaseId,
 		Result:     NewFilteredOutputCase(caseEntity),
@@ -353,3 +355,6 @@ type ManageEntityResult struct {
 	MergeAlertsResult      *MergeAlertsIntoCaseResult `json:"mergeAlertsResult,omitempty"`
 	MergeObservablesResult *MergeObservablesResult    `json:"mergeObservablesResult,omitempty"`
 }
+
+// Unwrap implements utils.Unwrapper to flatten the union for serialization.
+func (r ManageEntityResult) Unwrap() any { return utils.UnwrapUnion(r) }

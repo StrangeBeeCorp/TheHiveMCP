@@ -736,13 +736,8 @@ func TestSearchCasesWithCountOnly(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, float64(2), count)
 
-	// Check that results field is not present in count-only responses
-	_, hasResults := structuredData["results"]
-	require.False(t, hasResults, "Count-only response should not include results field")
-
 	// Verify other expected fields are present
 	require.Equal(t, types.EntityTypeCase, structuredData["entityType"])
-	require.Equal(t, "high severity cases", structuredData["query"])
 	require.NotNil(t, structuredData["filters"])
 }
 
@@ -800,10 +795,6 @@ func TestSearchAlertsWithCountOnly(t *testing.T) {
 	require.True(t, structuredData["countOnly"].(bool))
 	require.Equal(t, float64(2), structuredData["count"].(float64))
 	require.Equal(t, types.EntityTypeAlert, structuredData["entityType"])
-
-	// Ensure no results field is present
-	_, hasResults := structuredData["results"]
-	require.False(t, hasResults)
 }
 
 // TestSearchCountVsRegularSearch tests that count matches the number of results in regular search

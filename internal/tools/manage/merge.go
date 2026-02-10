@@ -3,7 +3,6 @@ package manage
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
@@ -88,16 +87,13 @@ func (t *ManageTool) mergeObservables(ctx context.Context, client *thehive.APICl
 	}
 
 	// The API returns summary information about the merge operation
-	// Convert result to a map to avoid type marshalling issues
+	// Convert result to a string representation
 	var resultData string
 	if result != nil {
-		// Parse the result as JSON to ensure proper serialization
+		// Convert the result to JSON string for serialization
 		jsonBytes, marshalErr := json.Marshal(result)
 		if marshalErr == nil {
-			err = json.Unmarshal(jsonBytes, &resultData)
-			if err != nil {
-				resultData = fmt.Sprintf("merge completed, but failed to parse result: %v", err)
-			}
+			resultData = string(jsonBytes)
 		} else {
 			resultData = "merge completed"
 		}

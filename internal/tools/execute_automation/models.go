@@ -3,6 +3,7 @@ package execute_automation
 import (
 	"fmt"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 )
 
@@ -205,3 +206,6 @@ type ExecuteAutomationResult struct {
 	JobStatusResult    *AnalyzerJobStatusResult     `json:"jobStatusResult,omitempty"`
 	ActionStatusResult *ResponderActionStatusResult `json:"actionStatusResult,omitempty"`
 }
+
+// Unwrap implements utils.Unwrapper to flatten the union for serialization.
+func (r ExecuteAutomationResult) Unwrap() any { return utils.UnwrapUnion(r) }

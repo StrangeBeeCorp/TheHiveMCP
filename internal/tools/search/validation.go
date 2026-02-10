@@ -15,7 +15,7 @@ func (t *SearchTool) ValidatePermissions(ctx context.Context, params SearchEntit
 	}
 
 	if !permissions.IsToolAllowed(t.Name()) {
-		return tools.NewToolErrorf("tool %s is not allowed by your permissions configuration", t.Name())
+		return tools.NewToolErrorf("tool %s is not permitted by your permissions configuration", t.Name())
 	}
 
 	return nil
