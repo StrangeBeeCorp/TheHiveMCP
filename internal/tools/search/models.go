@@ -47,6 +47,9 @@ type SearchEntitiesResult struct {
 func NewSearchEntitiesResult(results []map[string]interface{}, params SearchEntitiesParams, filters map[string]interface{}) (SearchEntitiesResult, error) {
 	var countValue int
 	if params.Count {
+		if len(results) == 0 {
+			return SearchEntitiesResult{}, tools.NewToolError("no results returned for count query").Hint("Ensure the query returns at least one result with a count field when count=true").Schema(params.EntityType, "")
+		}
 		floatCountValue, ok := results[0]["_count"].(float64)
 		if !ok {
 			return SearchEntitiesResult{}, tools.NewToolError("failed to parse count from results").Hint("Ensure the query returns a count field when count=true").Schema(params.EntityType, "")
