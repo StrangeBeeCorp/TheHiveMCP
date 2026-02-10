@@ -738,7 +738,7 @@ func TestSearchCasesWithCountOnly(t *testing.T) {
 
 	// Verify other expected fields are present
 	require.Equal(t, types.EntityTypeCase, structuredData["entityType"])
-	require.NotNil(t, structuredData["filters"])
+	require.NotNil(t, structuredData["rawFilters"])
 }
 
 // TestSearchAlertsWithCountOnly tests searching alerts with count=true parameter

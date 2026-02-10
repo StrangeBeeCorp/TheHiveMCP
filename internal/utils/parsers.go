@@ -123,8 +123,8 @@ func processDateField(key string, value interface{}) (interface{}, error) {
 			case int:
 				timestamp = int64(v)
 			default:
-				slog.Error("Date field is not a number", "field", key, "value", value, "type", fmt.Sprintf("%T", value))
-				return nil, fmt.Errorf("date field %s is not a number, got %T", key, value)
+				slog.Warn("Date field is not a number", "field", key, "value", value, "type", fmt.Sprintf("%T", value))
+				continue
 			}
 			return timestampToString(timestamp), nil
 		}
