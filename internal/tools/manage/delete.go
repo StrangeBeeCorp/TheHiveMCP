@@ -36,7 +36,7 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 			return SingleEntityDeleteResult{
 				EntityID: entityID,
 				Error: tools.NewToolErrorf(
-					"failed to delete alert %s: %v. Check that the alert exists and you have permissions. This operation is irreversible.", entityID, err).API(resp).Error(),
+					"failed to delete alert %s: %v. Check that the alert exists and you have permissions. This operation is irreversible.", entityID, err).API(resp).ToMap(),
 			}
 		}
 		return SingleEntityDeleteResult{
@@ -49,7 +49,7 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 		if err != nil {
 			return SingleEntityDeleteResult{
 				EntityID: entityID,
-				Error:    tools.NewToolErrorf("failed to delete case %s: %v. Check that the case exists and you have permissions. This operation is irreversible.", entityID, err).API(resp).Error(),
+				Error:    tools.NewToolErrorf("failed to delete case %s: %v. Check that the case exists and you have permissions. This operation is irreversible.", entityID, err).API(resp).ToMap(),
 			}
 		}
 		return SingleEntityDeleteResult{
@@ -62,7 +62,7 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 		if err != nil {
 			return SingleEntityDeleteResult{
 				EntityID: entityID,
-				Error:    tools.NewToolErrorf("failed to delete task %s: %v. Check that the task exists and you have permissions. This operation is irreversible.", entityID, err).API(resp).Error(),
+				Error:    tools.NewToolErrorf("failed to delete task %s: %v. Check that the task exists and you have permissions. This operation is irreversible.", entityID, err).API(resp).ToMap(),
 			}
 		}
 		return SingleEntityDeleteResult{
@@ -75,7 +75,7 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 		if err != nil {
 			return SingleEntityDeleteResult{
 				EntityID: entityID,
-				Error:    tools.NewToolErrorf("failed to delete observable %s: %v. Check that the observable exists and you have permissions. This operation is irreversible.", entityID, err).API(resp).Error(),
+				Error:    tools.NewToolErrorf("failed to delete observable %s: %v. Check that the observable exists and you have permissions. This operation is irreversible.", entityID, err).API(resp).ToMap(),
 			}
 		}
 		return SingleEntityDeleteResult{
@@ -86,7 +86,7 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 	default:
 		return SingleEntityDeleteResult{
 			EntityID: entityID,
-			Error:    tools.NewToolErrorf("unsupported entity type for delete: %s", entityType).Error(),
+			Error:    tools.NewToolErrorf("unsupported entity type for delete: %s", entityType).ToMap(),
 		}
 	}
 }

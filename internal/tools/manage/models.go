@@ -204,16 +204,15 @@ func NewCreateObservableResult(observable []thehive.OutputObservable) *CreateObs
 }
 
 type SingleEntityUpdateResult struct {
-	EntityID string `json:"_id"`
-	Result   string `json:"result,omitempty"`
-	Error    string `json:"error,omitempty"`
+	EntityID string                 `json:"_id"`
+	Result   string                 `json:"result,omitempty"`
+	Error    map[string]interface{} `json:"error,omitempty"`
 }
 
 type UpdateEntityResult struct {
 	Operation  string                     `json:"operation"`
 	EntityType string                     `json:"entityType"`
 	Results    []SingleEntityUpdateResult `json:"results,omitempty"`
-	Message    string                     `json:"message,omitempty"`
 }
 
 func NewUpdateEntityResult(entityType string, results []SingleEntityUpdateResult) *UpdateEntityResult {
@@ -221,21 +220,19 @@ func NewUpdateEntityResult(entityType string, results []SingleEntityUpdateResult
 		Operation:  OperationUpdate,
 		EntityType: entityType,
 		Results:    results,
-		Message:    "Entity updated successfully",
 	}
 }
 
 type SingleEntityDeleteResult struct {
-	EntityID string `json:"_id"`
-	Deleted  bool   `json:"deleted,omitempty"`
-	Error    string `json:"error,omitempty"`
+	EntityID string                 `json:"_id"`
+	Deleted  bool                   `json:"deleted,omitempty"`
+	Error    map[string]interface{} `json:"error,omitempty"`
 }
 
 type DeleteEntityResult struct {
 	Operation  string                     `json:"operation"`
 	EntityType string                     `json:"entityType"`
 	Results    []SingleEntityDeleteResult `json:"results,omitempty"`
-	Message    string                     `json:"message,omitempty"`
 }
 
 func NewDeleteEntityResult(entityType string, results []SingleEntityDeleteResult) *DeleteEntityResult {
@@ -243,22 +240,20 @@ func NewDeleteEntityResult(entityType string, results []SingleEntityDeleteResult
 		Operation:  OperationDelete,
 		EntityType: entityType,
 		Results:    results,
-		Message:    "Entity deletion completed",
 	}
 }
 
 type SingleEntityCommentResult struct {
-	CommentID string `json:"commentId,omitempty"`
-	EntityID  string `json:"entityId"`
-	Result    string `json:"result,omitempty"`
-	Error     string `json:"error,omitempty"`
+	CommentID string                 `json:"commentId,omitempty"`
+	EntityID  string                 `json:"entityId"`
+	Result    string                 `json:"result,omitempty"`
+	Error     map[string]interface{} `json:"error,omitempty"`
 }
 
 type CommentEntityResult struct {
 	Operation  string                      `json:"operation"`
 	EntityType string                      `json:"entityType"`
 	Results    []SingleEntityCommentResult `json:"results,omitempty"`
-	Message    string                      `json:"message,omitempty"`
 }
 
 func NewCommentEntityResult(entityType string, results []SingleEntityCommentResult) *CommentEntityResult {
@@ -266,7 +261,6 @@ func NewCommentEntityResult(entityType string, results []SingleEntityCommentResu
 		Operation:  OperationComment,
 		EntityType: entityType,
 		Results:    results,
-		Message:    "Comments added successfully",
 	}
 }
 
@@ -274,7 +268,6 @@ type PromoteAlertResult struct {
 	Operation  string              `json:"operation"`
 	EntityType string              `json:"entityType"`
 	Result     *FilteredOutputCase `json:"result,omitempty"`
-	Message    string              `json:"message,omitempty"`
 }
 
 func NewPromoteAlertResult(caseEntity *thehive.OutputCase) *PromoteAlertResult {
@@ -282,7 +275,6 @@ func NewPromoteAlertResult(caseEntity *thehive.OutputCase) *PromoteAlertResult {
 		Operation:  OperationPromote,
 		EntityType: types.EntityTypeCase,
 		Result:     NewFilteredOutputCase(caseEntity),
-		Message:    "Alert promoted to case successfully",
 	}
 }
 

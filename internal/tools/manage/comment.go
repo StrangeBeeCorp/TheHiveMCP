@@ -39,7 +39,7 @@ func (t *ManageTool) addComment(ctx context.Context, client *thehive.APIClient, 
 		if err != nil {
 			return SingleEntityCommentResult{
 				EntityID: entityID,
-				Error:    tools.NewToolError("failed to add comment to case").Cause(err).Hint("Check that the case exists and you have permissions to add comments.").API(resp).Error(),
+				Error:    tools.NewToolError("failed to add comment to case").Cause(err).Hint("Check that the case exists and you have permissions to add comments.").API(resp).ToMap(),
 			}
 		}
 		return SingleEntityCommentResult{
@@ -56,7 +56,7 @@ func (t *ManageTool) addComment(ctx context.Context, client *thehive.APIClient, 
 		if err != nil {
 			return SingleEntityCommentResult{
 				EntityID: entityID,
-				Error:    tools.NewToolError("failed to add task log to task").Cause(err).Hint("Check that the task exists and you have permissions to add task logs.").API(resp).Error(),
+				Error:    tools.NewToolError("failed to add task log to task").Cause(err).Hint("Check that the task exists and you have permissions to add task logs.").API(resp).ToMap(),
 			}
 		}
 		return SingleEntityCommentResult{
@@ -68,7 +68,7 @@ func (t *ManageTool) addComment(ctx context.Context, client *thehive.APIClient, 
 	default:
 		return SingleEntityCommentResult{
 			EntityID: entityID,
-			Error:    tools.NewToolError(fmt.Sprintf("comments not supported for entity type '%s'. Comments are only supported on 'case' (adds comment) and 'task' (adds task log)", entityType)).Error(),
+			Error:    tools.NewToolError(fmt.Sprintf("comments not supported for entity type '%s'. Comments are only supported on 'case' (adds comment) and 'task' (adds task log)", entityType)).ToMap(),
 		}
 	}
 }
