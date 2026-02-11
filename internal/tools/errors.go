@@ -52,8 +52,20 @@ func (e *ToolError) Schema(entityType, operation string) *ToolError {
 }
 
 // API adds the API response for debugging
+// Note: This method consumes and closes the response body
 func (e *ToolError) API(resp *http.Response) *ToolError {
+	// Guard against nil response
+	if resp == nil {
+		return e.Hintf("API response is nil")
+	}
+
+	// Guard against nil body
+	if resp.Body == nil {
+		return e.Hintf("API response body is nil")
+	}
+
 	body, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close() // Close the body, ignore close errors as they're not critical
 	if err != nil {
 		return e.Hintf("failed to read API response body: %v", err)
 	}
