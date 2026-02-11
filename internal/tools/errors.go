@@ -1,10 +1,10 @@
 package tools
 
 import (
+	"encoding/json"
 	"fmt"
-	"strings"
-
-	"github.com/mark3labs/mcp-go/mcp"
+	"io"
+	"net/http"
 )
 
 // Error represents a tool error with optional context
@@ -52,36 +52,83 @@ func (e *ToolError) Schema(entityType, operation string) *ToolError {
 }
 
 // API adds the API response for debugging
-func (e *ToolError) API(resp interface{}) *ToolError {
-	e.apiResponse = resp
+// Note: This method consumes and closes the response body
+func (e *ToolError) API(resp *http.Response) *ToolError {
+	// Guard against nil response
+	if resp == nil {
+		return e.Hintf("API response is nil")
+	}
+
+	// Guard against nil body
+	if resp.Body == nil {
+		return e.Hintf("API response body is nil")
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close() // Close the body, ignore close errors as they're not critical
+	if err != nil {
+		return e.Hintf("failed to read API response body: %v", err)
+	}
+
+	// Try to parse as JSON first, fallback to string
+	var jsonObj interface{}
+	if err := json.Unmarshal(body, &jsonObj); err == nil {
+		e.apiResponse = jsonObj
+	} else {
+		// If not valid JSON, store as string
+		e.apiResponse = string(body)
+	}
 	return e
 }
 
 // Error implements the error interface
 func (e *ToolError) Error() string {
-	var b strings.Builder
-	b.WriteString(e.message)
-
-	if e.cause != nil {
-		b.WriteString(": ")
-		b.WriteString(e.cause.Error())
+	errorObj := map[string]interface{}{
+		"error":   true,
+		"message": e.message,
 	}
 
-	for _, hint := range e.hints {
-		b.WriteString(". ")
-		b.WriteString(hint)
+	if e.cause != nil {
+		errorObj["cause"] = e.cause.Error()
+	}
+
+	if len(e.hints) > 0 {
+		errorObj["hints"] = e.hints
 	}
 
 	if e.apiResponse != nil {
-		fmt.Fprintf(&b, ". API response: %v", e.apiResponse)
+		errorObj["apiResponse"] = e.apiResponse
 	}
 
-	return b.String()
+	errorJson, err := json.Marshal(errorObj)
+	if err != nil {
+		// Fallback to simple string if JSON marshaling fails
+		return fmt.Sprintf("error: %s", e.message)
+	}
+
+	return string(errorJson)
 }
 
-// Result returns the MCP tool result tuple for direct use in handlers
-func (e *ToolError) Result() (*mcp.CallToolResult, error) {
-	return mcp.NewToolResultError(e.Error()), nil
+// ToMap returns the error as a structured map for JSON serialization
+func (e *ToolError) ToMap() map[string]interface{} {
+	errorObj := map[string]interface{}{
+		"error":   true,
+		"message": e.message,
+	}
+
+	if e.cause != nil {
+		errorObj["cause"] = e.cause.Error()
+	}
+
+	if len(e.hints) > 0 {
+		errorObj["hints"] = e.hints
+	}
+
+	if e.apiResponse != nil {
+		errorObj["apiResponse"] = e.apiResponse
+	}
+
+	return errorObj
 }
 
 // Unwrap returns the underlying cause for errors.Is/As support

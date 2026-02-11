@@ -107,3 +107,5 @@ var DefaultFields map[string][]string = map[string][]string{
 	EntityTypeAttachment: {"_id", "fileName", "size", "_createdAt"},
 	EntityTypeTaskLog:    {"_id", "message", "_createdAt", "_createdBy"},
 }
+
+const DateFormat = "2006-01-02T15:04:05"

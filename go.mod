@@ -1,6 +1,8 @@
 module github.com/StrangeBeeCorp/TheHiveMCP
 
-go 1.24.12
+go 1.24.0
+
+toolchain go1.24.13
 
 require (
 	github.com/StrangeBeeCorp/thehive4go v0.1.1

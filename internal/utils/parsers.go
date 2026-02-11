@@ -7,8 +7,6 @@ import (
 	"reflect"
 	"strings"
 	"time"
-
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 // ParseURIParameters extracts query parameters from a parameters string
@@ -125,8 +123,8 @@ func processDateField(key string, value interface{}) (interface{}, error) {
 			case int:
 				timestamp = int64(v)
 			default:
-				slog.Error("Date field is not a number", "field", key, "value", value, "type", fmt.Sprintf("%T", value))
-				return nil, fmt.Errorf("date field %s is not a number, got %T", key, value)
+				slog.Warn("Date field is not a number", "field", key, "value", value, "type", fmt.Sprintf("%T", value))
+				continue
 			}
 			return timestampToString(timestamp), nil
 		}
@@ -135,87 +133,207 @@ func processDateField(key string, value interface{}) (interface{}, error) {
 	return value, nil
 }
 
-func ParseDateFields[T types.OutputEntity](entity T) (map[string]interface{}, error) {
-	val := reflect.ValueOf(entity)
+// Unwrapper is implemented by union/sum types that wrap a single active variant.
+// When processing results, the wrapper is unwrapped so that only the active
+// variant is serialized, avoiding unnecessary nesting with nil sibling fields.
+type Unwrapper interface {
+	Unwrap() any
+}
+
+// UnwrapUnion is a reflection-based helper for union structs whose fields are
+// all optional pointer variants. It returns the first non-nil pointer field's
+// value, or the original value if none is found. Union types opt in by
+// implementing Unwrap() with a one-liner:
+//
+//	func (r T) Unwrap() any { return utils.UnwrapUnion(r) }
+func UnwrapUnion(v any) any {
+	val := reflect.ValueOf(v)
 	if val.Kind() == reflect.Ptr {
+		if val.IsNil() {
+			return v
+		}
 		val = val.Elem()
 	}
-
-	// Handle map[string]interface{} directly
-	if val.Kind() == reflect.Map {
-		if mapEntity, ok := any(entity).(map[string]interface{}); ok {
-			return parseMapDateFields(mapEntity)
-		}
-	}
-
-	// Handle struct types
 	if val.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("expected struct or map, got %s", val.Kind())
+		return v
 	}
-
-	return parseStructDateFields(val)
-}
-
-func parseMapDateFields(mapEntity map[string]interface{}) (map[string]interface{}, error) {
-	serialized := make(map[string]interface{})
-
-	for key, value := range mapEntity {
-		processedValue, err := processDateField(key, value)
-		if err != nil {
-			return nil, err
+	for i := 0; i < val.NumField(); i++ {
+		f := val.Field(i)
+		if f.Kind() == reflect.Ptr && !f.IsNil() {
+			return f.Interface()
 		}
-		serialized[key] = processedValue
 	}
-
-	return serialized, nil
+	return v
 }
 
-func parseStructDateFields(val reflect.Value) (map[string]interface{}, error) {
-	serialized := make(map[string]interface{})
+// ProcessDatesRecursive processes any Go value recursively to convert date fields.
+// Handles structs, maps, slices, arrays, and nested combinations.
+func ProcessDatesRecursive(value interface{}) (interface{}, error) {
+	if value == nil {
+		return nil, nil
+	}
+
+	// Unwrap union types before processing so the output is flat
+	if u, ok := value.(Unwrapper); ok {
+		return ProcessDatesRecursive(u.Unwrap())
+	}
+
+	val := reflect.ValueOf(value)
+	return processDatesValue(val)
+}
+
+func processDatesValue(val reflect.Value) (interface{}, error) {
+	// Handle pointers
+	if val.Kind() == reflect.Ptr {
+		if val.IsNil() {
+			return nil, nil
+		}
+		return processDatesValue(val.Elem())
+	}
+
+	switch val.Kind() {
+	case reflect.Struct:
+		return processDatesStruct(val)
+	case reflect.Map:
+		return processDatesMap(val)
+	case reflect.Slice, reflect.Array:
+		return processDatesSlice(val)
+	case reflect.Interface:
+		if val.IsNil() {
+			return nil, nil
+		}
+		return processDatesValue(val.Elem())
+	default:
+		// For primitive types, return as-is
+		return val.Interface(), nil
+	}
+}
+
+func processDatesStruct(val reflect.Value) (map[string]interface{}, error) {
+	result := make(map[string]interface{})
 	typ := val.Type()
 
 	for i := 0; i < val.NumField(); i++ {
 		field := typ.Field(i)
-		if field.PkgPath != "" { // skip unexported fields
+		if field.PkgPath != "" { // Skip unexported fields
 			continue
 		}
 
-		// Get the field name (use json tag if present)
+		// Parse json tag for field name and omitempty option
 		key := field.Name
-		if tag := field.Tag.Get("json"); tag != "" && tag != "-" {
-			key = strings.Split(tag, ",")[0]
+		omitempty := false
+		if tag := field.Tag.Get("json"); tag != "" {
+			if tag == "-" {
+				continue
+			}
+			parts := strings.Split(tag, ",")
+			if parts[0] != "" {
+				key = parts[0]
+			}
+			// If parts[0] is empty (e.g., json:",omitempty"), keep field.Name
+			for _, opt := range parts[1:] {
+				if opt == "omitempty" {
+					omitempty = true
+					break
+				}
+			}
 		}
 
-		value := val.Field(i).Interface()
-
-		// Handle pointer types by dereferencing
 		fieldVal := val.Field(i)
-		if fieldVal.Kind() == reflect.Ptr && !fieldVal.IsNil() {
-			value = fieldVal.Elem().Interface()
-		} else if fieldVal.Kind() == reflect.Ptr && fieldVal.IsNil() {
-			value = nil
+
+		// Respect omitempty: skip fields with zero values, matching encoding/json behavior
+		if omitempty && fieldVal.IsZero() {
+			continue
 		}
 
-		processedValue, err := processDateField(key, value)
-		if err != nil {
-			return nil, err
+		var processedValue interface{}
+		var err error
+
+		// Check if this is a date field and handle appropriately
+		if isDateField(key) {
+			// Handle nil pointers for date fields explicitly
+			if fieldVal.Kind() == reflect.Ptr && fieldVal.IsNil() {
+				processedValue = nil
+			} else {
+				// For non-nil pointers, get the underlying value
+				var dateValue interface{}
+				if fieldVal.Kind() == reflect.Ptr {
+					dateValue = fieldVal.Elem().Interface()
+				} else {
+					dateValue = fieldVal.Interface()
+				}
+				processedValue, err = processDateField(key, dateValue)
+				if err != nil {
+					return nil, fmt.Errorf("failed to process date field %s: %w", key, err)
+				}
+			}
+		} else {
+			// Recursively process nested structures
+			processedValue, err = processDatesValue(fieldVal)
+			if err != nil {
+				slog.Error("Failed to process nested value in struct", "field", key, "error", err)
+				continue // Skip this field but continue processing others
+			}
 		}
-		serialized[key] = processedValue
+
+		result[key] = processedValue
 	}
 
-	return serialized, nil
+	return result, nil
 }
 
-// ParseDateFieldsInArray converts any array of structs to maps and applies date parsing
-func ParseDateFieldsInArray[T types.OutputEntity](result []T) ([]map[string]interface{}, error) {
-	finalResults := make([]map[string]interface{}, 0, len(result))
-	for _, item := range result {
-		processed, err := ParseDateFields(item)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse date fields: %w", err)
+func processDatesMap(val reflect.Value) (map[string]interface{}, error) {
+	result := make(map[string]interface{})
+
+	for _, key := range val.MapKeys() {
+		keyStr := fmt.Sprintf("%v", key.Interface())
+		mapVal := val.MapIndex(key)
+
+		var processedValue interface{}
+		var err error
+
+		// Check if this is a date field
+		if isDateField(keyStr) {
+			processedValue, err = processDateField(keyStr, mapVal.Interface())
+			if err != nil {
+				return nil, fmt.Errorf("failed to process date field %s: %w", keyStr, err)
+			}
+		} else {
+			// Recursively process nested structures
+			processedValue, err = processDatesValue(mapVal)
+			if err != nil {
+				return nil, fmt.Errorf("failed to process map value for key %s: %w", keyStr, err)
+			}
 		}
-		finalResults = append(finalResults, processed)
+
+		result[keyStr] = processedValue
 	}
 
-	return finalResults, nil
+	return result, nil
+}
+
+func processDatesSlice(val reflect.Value) ([]interface{}, error) {
+	length := val.Len()
+	result := make([]interface{}, length)
+
+	for i := 0; i < length; i++ {
+		elem := val.Index(i)
+		processedElem, err := processDatesValue(elem)
+		if err != nil {
+			return nil, fmt.Errorf("failed to process slice element %d: %w", i, err)
+		}
+		result[i] = processedElem
+	}
+
+	return result, nil
+}
+
+// isDateField checks if a field name is a recognized date field
+func isDateField(fieldName string) bool {
+	for _, dateField := range dateFields {
+		if fieldName == dateField {
+			return true
+		}
+	}
+	return false
 }

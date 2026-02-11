@@ -398,16 +398,4 @@ func TestGetResourceResourcesFieldBehavior(t *testing.T) {
 	subcategoriesList, ok := subcategories.([]any)
 	require.True(t, ok)
 	require.NotEmpty(t, subcategoriesList, "Should contain automation, entities, organisation subcategories")
-
-	// Check resources field behavior when no direct resources exist
-	resources, exists := structuredData["resources"]
-	require.True(t, exists, "resources field should exist")
-
-	if resources == nil {
-		t.Log("resources field is null when no direct resources exist")
-	} else {
-		resourcesList, ok := resources.([]any)
-		require.True(t, ok)
-		require.Empty(t, resourcesList, "Should be empty array when no direct resources")
-	}
 }

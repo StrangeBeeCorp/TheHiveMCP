@@ -19,34 +19,23 @@ import (
 
 const maxSearchRetries = 3
 
-func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// 1. Check permissions
-	perms, err := utils.GetPermissionsFromContext(ctx)
-	if err != nil {
-		return tools.NewToolError("failed to get permissions").Cause(err).Result()
-	}
-
-	if !perms.IsToolAllowed("search-entities") {
-		return tools.NewToolError("search-entities tool is not permitted by your permissions configuration").Result()
-	}
-
-	// 2. Extract and validate parameters
-	params, err := t.extractParams(req)
-	if err != nil {
-		return tools.NewToolError(err.Error()).Result()
-	}
+func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest, params SearchEntitiesParams) (SearchEntitiesResult, error) {
 	additionalMessages := []mcp.PromptMessage{}
 	for attempt := 1; attempt <= maxSearchRetries; attempt++ {
 		// 3. Get filters from natural language query
 		filters, err := t.parseQuery(ctx, params, additionalMessages)
 		if err != nil {
-			return tools.NewToolError("failed to parse natural language query").Cause(err).
+			return SearchEntitiesResult{}, tools.NewToolError("failed to parse natural language query").Cause(err).
 				Hint("Try rephrasing your query or check that the entity type supports the fields you're searching for").
-				Schema(params.EntityType, "").Result()
+				Schema(params.EntityType, "")
 		}
 
 		// 4. Apply permission filters
-		permFilters := perms.GetToolFilters("search-entities")
+		perms, err := utils.GetPermissionsFromContext(ctx)
+		if err != nil {
+			return SearchEntitiesResult{}, tools.NewToolError("failed to get permissions").Cause(err)
+		}
+		permFilters := perms.GetToolFilters(t.Name())
 		if len(permFilters) > 0 {
 			rawFilters, filtersApplied := permissions.MergeFilters(filters.RawFilters, permFilters)
 			if filtersApplied {
@@ -60,9 +49,9 @@ func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		// 5. Build TheHive query
 		hiveQuery, err := t.buildHiveQuery(params, filters)
 		if err != nil {
-			return tools.NewToolError("failed to build TheHive query").Cause(err).
+			return SearchEntitiesResult{}, tools.NewToolError("failed to build TheHive query").Cause(err).
 				Hint("This may be due to unsupported field names or filter combinations").
-				Schema(params.EntityType, "").Result()
+				Schema(params.EntityType, "")
 		}
 
 		// 6. Execute query
@@ -71,23 +60,26 @@ func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 			slog.Warn("Search attempt failed, retrying", "attempt", attempt, "error", err)
 			additionalMessages, err = expandAdditionalMessages(additionalMessages, filters, err)
 			if err != nil {
-				return tools.NewToolError("failed to expand messages for retry").Cause(err).Result()
+				return SearchEntitiesResult{}, tools.NewToolError("failed to expand messages for retry").Cause(err)
 			}
 			continue
 		}
+
 		// Skip additional queries for count-only requests
 		if !params.Count {
 			results, err = utils.ExpandEntitiesWithQueries(ctx, params.EntityType, results, filters.AdditionalQueries)
 			if err != nil {
-				return tools.NewToolError("failed to perform additional queries").Cause(err).Result()
+				return SearchEntitiesResult{}, tools.NewToolError("failed to perform additional queries").Cause(err)
 			}
 		}
+
 		// 7. Process and format results
-		return t.formatResults(results, params, filters.RawFilters)
+		return NewSearchEntitiesResult(results, params, filters.RawFilters)
 	}
-	return tools.NewToolError("maximum search retries exceeded").
+
+	return SearchEntitiesResult{}, tools.NewToolError("maximum search retries exceeded").
 		Hint("The query could not be translated to valid TheHive filters").
-		Hint("Try simplifying your search criteria or using more specific field names").Result()
+		Hint("Try simplifying your search criteria or using more specific field names")
 }
 
 func expandAdditionalMessages(original []mcp.PromptMessage, filters *FilterResult, execErr error) ([]mcp.PromptMessage, error) {
@@ -106,72 +98,7 @@ func expandAdditionalMessages(original []mcp.PromptMessage, filters *FilterResul
 	return messages, nil
 }
 
-// Parameter extraction and validation
-type searchParams struct {
-	EntityType        string
-	Query             string
-	SortBy            string
-	SortOrder         string
-	Limit             int
-	ExtraColumns      []string
-	ExtraData         []string
-	AdditionalQueries []string
-	Count             bool
-}
-
-// extractParams extracts and validates parameters from the tool request
-func (t *SearchTool) extractParams(req mcp.CallToolRequest) (*searchParams, error) {
-	entityType := req.GetString("entity-type", "")
-	if entityType == "" {
-		return nil, fmt.Errorf("entity-type parameter is required. Must be one of: 'alert', 'case', 'task', 'observable'")
-	}
-
-	query := req.GetString("query", "")
-	if query == "" {
-		return nil, fmt.Errorf("query parameter is required. Provide a natural language description of what entities to find, e.g., 'high severity alerts from last week'")
-	}
-
-	sortBy := req.GetString("sort-by", "_createdAt")
-
-	sortOrder := req.GetString("sort-order", "desc")
-
-	// Get entity-specific default fields
-	defaultFields := types.DefaultFields[entityType]
-
-	params := &searchParams{
-		EntityType:        entityType,
-		Query:             query,
-		SortBy:            sortBy,
-		SortOrder:         sortOrder,
-		Limit:             int(req.GetInt("limit", 10)),
-		ExtraColumns:      req.GetStringSlice("extra-columns", defaultFields),
-		ExtraData:         req.GetStringSlice("extra-data", []string{}),
-		AdditionalQueries: req.GetStringSlice("additional-queries", []string{}),
-		Count:             req.GetBool("count", false),
-	}
-
-	slog.Info("SearchEntities called",
-		"entityType", params.EntityType,
-		"query", params.Query,
-		"sortBy", params.SortBy,
-		"limit", params.Limit,
-		"count", params.Count)
-
-	return params, nil
-}
-
-// Query parsing
-type FilterResult struct {
-	RawFilters        map[string]interface{} `json:"raw_filters" jsonschema_description:"Raw filter dictionary for TheHive queries. Format: {operator: {_field: <field>, _value: <value>}}. Operators: _and, _or, _not, _eq, _ne, _gt, _gte, _lt, _lte, _between (_from, _to), _like, _in, _startsWith, _endsWith, _has, _id, _any, _match."`
-	SortBy            string                 `json:"sort_by" jsonschema_description:"Column to sort the results by."`
-	SortOrder         string                 `json:"sort_order" jsonschema_description:"Sort order ('asc' for ascending, 'desc' for descending)."`
-	NumResults        int                    `json:"num_results" jsonschema_description:"Number of results to return. Default is 10."`
-	KeptColumns       []string               `json:"kept_columns" jsonschema_description:"List of columns to keep in the output. Default is ['_id', 'title', 'url']"`
-	ExtraData         []string               `json:"extra_data" jsonschema_description:"List of additional data fields to include in the output."`
-	AdditionalQueries []string               `json:"additional_queries" jsonschema_description:"List of additional queries to perform on the results to enrich them with related data."`
-}
-
-func (t *SearchTool) parseQuery(ctx context.Context, params *searchParams, additionalMessages []mcp.PromptMessage) (*FilterResult, error) {
+func (t *SearchTool) parseQuery(ctx context.Context, params SearchEntitiesParams, additionalMessages []mcp.PromptMessage) (*FilterResult, error) {
 	query, err := json.MarshalIndent(params, "", "  ")
 	slog.Debug("Search parameters for query parsing", "json", string(query))
 	if err != nil {
@@ -194,7 +121,7 @@ func (t *SearchTool) parseQuery(ctx context.Context, params *searchParams, addit
 }
 
 // Query building
-func (t *SearchTool) buildHiveQuery(params *searchParams, filters *FilterResult) (thehive.InputQuery, error) {
+func (t *SearchTool) buildHiveQuery(params SearchEntitiesParams, filters *FilterResult) (thehive.InputQuery, error) {
 
 	// Build operations
 	listOp := t.buildListOperation(params.EntityType)
@@ -307,54 +234,6 @@ func (t *SearchTool) executeQuery(ctx context.Context, hiveQuery thehive.InputQu
 	slog.Debug("Query executed", "type", entityType, "count", len(resultsSlice))
 
 	return resultsSlice, nil
-}
-
-// Result processing
-func (t *SearchTool) formatResults(results []map[string]interface{}, params *searchParams, filters map[string]interface{}) (*mcp.CallToolResult, error) {
-
-	if params.Count {
-		// For count-only requests, extract the count from the special result
-		countValue := results[0]["_count"]
-		response := map[string]interface{}{
-			"count":      countValue,
-			"countOnly":  true,
-			"entityType": params.EntityType,
-			"query":      params.Query,
-			"filters":    filters,
-		}
-		return utils.NewToolResultJSONUnescaped(response), nil
-	}
-
-	// Serialize entities (format dates, etc.)
-	parsedResults, err := t.parseDateFields(results)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse entities: %w", err)
-	}
-
-	// Build response
-	response := map[string]interface{}{
-		"results":    parsedResults,
-		"count":      len(parsedResults),
-		"entityType": params.EntityType,
-		"query":      params.Query,
-		"filters":    filters,
-	}
-
-	return utils.NewToolResultJSONUnescaped(response), nil
-}
-
-func (t *SearchTool) parseDateFields(entities []map[string]interface{}) ([]map[string]interface{}, error) {
-	parsedResults := make([]map[string]interface{}, 0, len(entities))
-
-	for _, entity := range entities {
-		parsedEntity, err := utils.ParseDateFields(entity)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse entity: %w", err)
-		}
-		parsedResults = append(parsedResults, parsedEntity)
-	}
-
-	return parsedResults, nil
 }
 
 // Helper methods
