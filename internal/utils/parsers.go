@@ -227,7 +227,10 @@ func processDatesStruct(val reflect.Value) (map[string]interface{}, error) {
 				continue
 			}
 			parts := strings.Split(tag, ",")
-			key = parts[0]
+			if parts[0] != "" {
+				key = parts[0]
+			}
+			// If parts[0] is empty (e.g., json:",omitempty"), keep field.Name
 			for _, opt := range parts[1:] {
 				if opt == "omitempty" {
 					omitempty = true
@@ -248,9 +251,21 @@ func processDatesStruct(val reflect.Value) (map[string]interface{}, error) {
 
 		// Check if this is a date field and handle appropriately
 		if isDateField(key) {
-			processedValue, err = processDateField(key, fieldVal.Interface())
-			if err != nil {
-				return nil, fmt.Errorf("failed to process date field %s: %w", key, err)
+			// Handle nil pointers for date fields explicitly
+			if fieldVal.Kind() == reflect.Ptr && fieldVal.IsNil() {
+				processedValue = nil
+			} else {
+				// For non-nil pointers, get the underlying value
+				var dateValue interface{}
+				if fieldVal.Kind() == reflect.Ptr {
+					dateValue = fieldVal.Elem().Interface()
+				} else {
+					dateValue = fieldVal.Interface()
+				}
+				processedValue, err = processDateField(key, dateValue)
+				if err != nil {
+					return nil, fmt.Errorf("failed to process date field %s: %w", key, err)
+				}
 			}
 		} else {
 			// Recursively process nested structures

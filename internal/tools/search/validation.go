@@ -31,7 +31,7 @@ func (t *SearchTool) ValidateParams(params *SearchEntitiesParams) error {
 		params.SortOrder = "desc"
 	}
 
-	if params.Limit <= 0 {
+	if params.Limit == 0 {
 		params.Limit = 10
 	}
 

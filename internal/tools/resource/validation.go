@@ -31,11 +31,6 @@ func (t *ResourceTool) ValidateParams(params *GetResourceParams) error {
 		params.URI = normalizeURI(params.URI)
 	}
 
-	// Validate URI format
-	if !strings.HasPrefix(params.URI, "hive://") {
-		return tools.NewToolError("URI must start with 'hive://' prefix")
-	}
-
 	return nil
 }
 

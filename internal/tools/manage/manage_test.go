@@ -230,14 +230,13 @@ func TestManageAddCommentToCase(t *testing.T) {
 	hiveQuery := thehive.InputQuery{
 		Query: query,
 	}
-	results, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(authContext).InputQuery(hiveQuery).Execute()
-	fmt.Printf("API response: %v\n", resp)
+	results, _, err := hiveClient.QueryAndExportAPI.QueryAPI(authContext).InputQuery(hiveQuery).Execute()
 	require.NoError(t, err)
 
-	fectchedComments, ok := results.([]interface{})
+	fetchedComments, ok := results.([]interface{})
 	require.True(t, ok)
-	require.NotEmpty(t, fectchedComments)
-	fetchedComment, ok := fectchedComments[0].(map[string]interface{})
+	require.NotEmpty(t, fetchedComments)
+	fetchedComment, ok := fetchedComments[0].(map[string]interface{})
 	require.True(t, ok)
 	require.Equal(t, commentText, fetchedComment["message"])
 
