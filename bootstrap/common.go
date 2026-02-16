@@ -240,6 +240,21 @@ func ExtractBearerToken(authHeader string) string {
 	return authHeader
 }
 
+func ValidateTheHiveClient(client *thehive.APIClient, ctx context.Context) error {
+
+	currentUser, resp, err := client.UserAPI.GetCurrentUserInfo(ctx).Execute()
+	if err != nil {
+		return fmt.Errorf("failed to validate TheHive credentials: %w", err)
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("failed to validate TheHive credentials: unexpected status code %d", resp.StatusCode)
+	}
+	if currentUser == nil {
+		return fmt.Errorf("failed to validate TheHive credentials: current user info is nil")
+	}
+	return nil
+}
+
 // CreateOpenAIClient creates an OpenAI client from credentials
 func CreateOpenAIClient(creds *OpenAICredentials) (*openai.Client, error) {
 	if err := creds.Validate(); err != nil {

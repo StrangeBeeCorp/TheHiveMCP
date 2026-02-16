@@ -3,6 +3,7 @@ package prompts
 import (
 	"context"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/auth"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -24,6 +25,6 @@ func RegisterBaseSystemPromptHandler(s *server.MCPServer) {
 		return GetBaseSystemPrompt(ctx)
 	}
 
-	s.AddPrompt(baseSystemPrompt, handler)
+	s.AddPrompt(baseSystemPrompt, auth.AuthenticatedPromptHandlerFunc(handler))
 
 }

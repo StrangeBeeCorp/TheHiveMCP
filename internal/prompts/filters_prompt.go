@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/auth"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/resources"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -105,5 +106,5 @@ func RegisterBuildFiltersPromptHandler(s *server.MCPServer) {
 		return GetBuildFiltersPrompt(ctx, userQuery, entityType)
 	}
 
-	s.AddPrompt(buildFiltersPrompt, handler)
+	s.AddPrompt(buildFiltersPrompt, auth.AuthenticatedPromptHandlerFunc(handler))
 }
