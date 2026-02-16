@@ -71,5 +71,8 @@ func (t *ExecuteAutomationTool) ValidateParams(params *ExecuteAutomationParams) 
 	default:
 		return tools.NewToolErrorf("unsupported operation: %s", params.Operation)
 	}
+	if params.CortexID == "" {
+		params.CortexID = "local"
+	}
 	return nil
 }

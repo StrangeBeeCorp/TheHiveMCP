@@ -34,7 +34,6 @@ func (t *ExecuteAutomationTool) handleRunAnalyzer(ctx context.Context, params Ex
 			Hint("Check your authentication and connection settings")
 	}
 	// Create InputJob
-	// Use empty string for cortexID if not provided - backend will auto-route
 	inputJob := thehive.NewInputJob(params.AnalyzerID, params.CortexID, params.ObservableID)
 	if params.Parameters != nil {
 		inputJob.SetParameters(params.Parameters)
