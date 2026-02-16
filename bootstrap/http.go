@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
+	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -73,6 +74,16 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 				slog.Warn("Failed to add TheHive client to context", "error", err)
 			} else {
 				ctx = newCtx
+				// Validate TheHive client credentials
+				if client, ok := ctx.Value(types.HiveClientCtxKey).(*thehive.APIClient); ok && client != nil {
+					if err := ValidateTheHiveClient(client, ctx); err != nil {
+						slog.Error("TheHive authentication failed", "error", err)
+						// Add error marker to context for downstream error handling
+						ctx = context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: %w", err))
+					} else {
+						slog.Info("TheHive authentication validated successfully")
+					}
+				}
 			}
 		}
 

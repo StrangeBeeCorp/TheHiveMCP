@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/auth"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/logging"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/resources"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
@@ -21,6 +22,8 @@ func GetMCPServer() *server.MCPServer {
 		server.WithResourceCapabilities(true, true),
 		server.WithHooks(logging.GetLoggingHooks()),
 		server.WithElicitation(),
+		server.WithToolHandlerMiddleware(auth.AuthenticationMiddleware()),
+		server.WithResourceHandlerMiddleware(auth.ResourceAuthenticationMiddleware()),
 	)
 	mcpServer.EnableSampling()
 	return mcpServer
