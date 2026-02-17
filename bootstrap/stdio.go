@@ -15,8 +15,8 @@ func makeStdioAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(cont
 		// Add TheHive client to context from environment variables
 		newCtx, err := AddTheHiveClientToContext(ctx)
 		if err != nil {
-			slog.Warn("Failed to add TheHive client to context from environment variables", "error", err)
-			return ctx
+			slog.Error("Failed to add TheHive client to context from environment variables", "error", err)
+			return context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: %w", err))
 		}
 
 		// Validate TheHive client credentials
