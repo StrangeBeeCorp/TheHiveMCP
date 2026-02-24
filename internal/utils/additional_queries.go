@@ -3,7 +3,6 @@ package utils
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
@@ -39,7 +38,7 @@ var queryRegistry = map[string]EntityQueryConfig{
 }
 
 var queryToEntityType = map[string]string{
-	"tasks":       types.EntityTypeCase,
+	"tasks":       types.EntityTypeTask,
 	"observables": types.EntityTypeObservable,
 	"comments":    types.EntityTypeComment,
 	"pages":       types.EntityTypePage,
@@ -108,14 +107,12 @@ func ExpandEntitiesWithQueries(
 			if err != nil {
 				return nil, fmt.Errorf("failed to get %s for %s ID %s: %w", queryName, entityType, entityID, err)
 			}
-			slog.Info("Additional query executed", "entityType", entityType, "queryName", queryName, "entityID", entityID, "result", data)
 			// Add the results directly to the entity
 			filteredData, err := filterAdditionalQueryResults(data, queryName)
 			if err != nil {
 				return nil, fmt.Errorf("failed to filter additional query results for %s ID %s: %w", entityType, entityID, err)
 			}
 			entities[i][queryName] = filteredData
-			slog.Info("After filtering additional query results", "entityType", entityType, "queryName", queryName, "entityID", entityID, "filteredResult", entities[i][queryName])
 		}
 	}
 

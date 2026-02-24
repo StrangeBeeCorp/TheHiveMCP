@@ -158,8 +158,8 @@ func (e *ElicitationTransport) handleElicitation(req *http.Request) error {
 func (e *ElicitationTransport) formatRequestDetails(req *http.Request, bodyBytes []byte) string {
 	var details strings.Builder
 
-	details.WriteString(fmt.Sprintf("Method: %s\n", req.Method))
-	details.WriteString(fmt.Sprintf("URL: %s\n", req.URL.String()))
+	fmt.Fprintf(&details, "Method: %s\n", req.Method)
+	fmt.Fprintf(&details, "URL: %s\n", req.URL.String())
 
 	if len(bodyBytes) > 0 {
 		details.WriteString("Payload:\n")
