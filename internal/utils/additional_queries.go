@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
@@ -37,8 +38,22 @@ var queryRegistry = map[string]EntityQueryConfig{
 	},
 }
 
-func filterAdditionalQueryResults(results []map[string]interface{}, queryType string) []map[string]interface{} {
-	fields := types.DefaultFields[queryType]
+var queryToEntityType = map[string]string{
+	"tasks":       types.EntityTypeCase,
+	"observables": types.EntityTypeObservable,
+	"comments":    types.EntityTypeComment,
+	"pages":       types.EntityTypePage,
+	"attachments": types.EntityTypeAttachment,
+	"task-logs":   types.EntityTypeTaskLog,
+}
+
+func filterAdditionalQueryResults(results []map[string]interface{}, queryType string) ([]map[string]interface{}, error) {
+	entityType, exists := queryToEntityType[queryType]
+	if !exists {
+		return nil, fmt.Errorf("unsupported query type: %s", queryType)
+	}
+
+	fields := types.DefaultFields[entityType]
 
 	filtered := make([]map[string]interface{}, 0, len(results))
 	for _, item := range results {
@@ -50,7 +65,7 @@ func filterAdditionalQueryResults(results []map[string]interface{}, queryType st
 		}
 		filtered = append(filtered, filteredItem)
 	}
-	return filtered
+	return filtered, nil
 }
 
 // ExpandEntitiesWithQueries expands each entity with its related data inline
@@ -93,9 +108,14 @@ func ExpandEntitiesWithQueries(
 			if err != nil {
 				return nil, fmt.Errorf("failed to get %s for %s ID %s: %w", queryName, entityType, entityID, err)
 			}
-
+			slog.Info("Additional query executed", "entityType", entityType, "queryName", queryName, "entityID", entityID, "result", data)
 			// Add the results directly to the entity
-			entities[i][queryName] = filterAdditionalQueryResults(data, queryName)
+			filteredData, err := filterAdditionalQueryResults(data, queryName)
+			if err != nil {
+				return nil, fmt.Errorf("failed to filter additional query results for %s ID %s: %w", entityType, entityID, err)
+			}
+			entities[i][queryName] = filteredData
+			slog.Info("After filtering additional query results", "entityType", entityType, "queryName", queryName, "entityID", entityID, "filteredResult", entities[i][queryName])
 		}
 	}
 
