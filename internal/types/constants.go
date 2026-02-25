@@ -103,7 +103,7 @@ var DefaultFields map[string][]string = map[string][]string{
 	EntityTypeCase:       {"_id", "title", "_createdAt", "status", "severity"},
 	EntityTypeTask:       {"_id", "title", "status", "_createdAt", "assignee"},
 	EntityTypeObservable: {"_id", "dataType", "_createdAt"},
-	EntityTypeComment:    {"_id", "content", "_createdAt", "_createdBy"},
+	EntityTypeComment:    {"_id", "message", "_createdAt", "_createdBy"},
 	EntityTypePage:       {"_id", "title", "_createdAt"},
 	EntityTypeAttachment: {"_id", "fileName", "size", "_createdAt"},
 	EntityTypeTaskLog:    {"_id", "message", "_createdAt", "_createdBy"},

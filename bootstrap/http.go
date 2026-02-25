@@ -71,7 +71,8 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 			}
 
 			if newCtx, err := AddTheHiveClientToContextWithCreds(ctx, creds); err != nil {
-				slog.Warn("Failed to add TheHive client to context", "error", err)
+				slog.Error("Failed to add TheHive client to context", "error", err)
+				ctx = context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: %w", err))
 			} else {
 				ctx = newCtx
 				// Validate TheHive client credentials

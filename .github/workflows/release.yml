@@ -130,7 +130,7 @@ jobs:
           curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz
 
       - name: Generate server.json
-        run: ./scripts/generate-server-json.sh
+        run: ./scripts/generate-server-json.sh "" dist
         env:
           DOCKER_REGISTRY: docker.io
           DOCKER_IMAGE: strangebee/thehive-mcp

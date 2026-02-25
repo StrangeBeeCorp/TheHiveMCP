@@ -58,6 +58,30 @@ func createTestCase(t *testing.T, hiveClient *thehive.APIClient, title string, s
 	}
 }
 
+func createTestCaseWithTaskAndAlert(t *testing.T, hiveClient *thehive.APIClient) map[string]interface{} {
+	testCase := testutils.MockInputCase()
+	testCase.Title = "Test case with tasks"
+	testAlert := testutils.MockInputAlert()
+	testAlert.Title = "Test alert 1"
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	createdCase, resp, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+	slog.Info("Create case response", "response", resp)
+	require.NoError(t, err)
+	require.NotNil(t, createdCase)
+	createdAlert, resp, err := hiveClient.AlertAPI.CreateAlert(authContext).InputCreateAlert(*testAlert).Execute()
+	slog.Info("Create alert response", "response", resp)
+	require.NoError(t, err)
+	require.NotNil(t, createdAlert)
+	_, resp, err = hiveClient.AlertAPI.MergeAlertWithCase(authContext, createdAlert.UnderscoreId, createdCase.UnderscoreId).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	return map[string]interface{}{
+		"case_id":  createdCase.UnderscoreId,
+		"alert_id": createdAlert.UnderscoreId,
+	}
+}
+
 // TestSearchCasesBySeverityAndStatus tests searching cases with multiple filter conditions
 func TestSearchCasesBySeverityAndStatus(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
@@ -875,4 +899,245 @@ func TestSearchCountVsRegularSearch(t *testing.T) {
 	// Verify that the count matches the number of results
 	require.Equal(t, float64(regularCount), countOnlyValue)
 	require.Equal(t, 3, regularCount) // We created 3 test cases
+}
+
+func TestSearchExtraDataAndAdditionalQueries(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+
+	creationResult := createTestCaseWithTaskAndAlert(t, hiveClient)
+	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
+		`{
+			"raw_filters": {
+				"_any": ""
+			},
+			"sort_by": "_createdAt",
+			"sort_order": "desc",
+			"num_results": 10,
+			"kept_columns": ["_id", "title"],
+			"extra_data": [
+				"alerts"
+			],
+			"additional_queries": [
+				"tasks"
+			]
+		}`,
+	)
+
+	mcpClient := testutils.GetMCPTestClient(
+		t,
+		samplingHandler,
+		testutils.DummyElicitationAccept,
+	)
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "search-entities",
+			Arguments: map[string]any{
+				"entity-type":   types.EntityTypeCase,
+				"query":         "show me cases with extra data",
+				"extra-columns": []string{"_id", "title"},
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+
+	casesData, ok := structuredData["results"].([]any)
+	require.True(t, ok)
+	require.Len(t, casesData, 1)
+
+	caseData := casesData[0].(map[string]any)
+	require.Equal(t, creationResult["case_id"], caseData["_id"])
+	require.Equal(t, "Test case with tasks", caseData["title"])
+
+	restults, ok := structuredData["results"].([]any)
+	require.True(t, ok)
+	require.Len(t, restults, 1)
+
+	firstResult := restults[0].(map[string]any)
+	extraData, ok := firstResult["extraData"].(map[string]any)
+	require.True(t, ok)
+
+	// Verify extra data contains alerts
+	alertsData, ok := extraData["alerts"].([]any)
+	require.True(t, ok)
+	require.Len(t, alertsData, 1)
+
+	alert := alertsData[0].(map[string]any)
+	require.Equal(t, "test", alert["type"])
+	require.Equal(t, "test", alert["source"])
+
+	tasks, ok := firstResult["tasks"].([]any)
+	require.True(t, ok)
+	require.Len(t, tasks, 1)
+
+	task := tasks[0].(map[string]any)
+	require.Equal(t, "Test Task", task["title"])
+}
+
+func createTestCaseWithComment(t *testing.T, hiveClient *thehive.APIClient) map[string]interface{} {
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	testCase := testutils.MockInputCase()
+	testCase.Title = "Test case for comment"
+	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+	require.NoError(t, err)
+
+	commentInput := thehive.InputComment{
+		Message: "This is a test comment",
+	}
+	_, _, err = hiveClient.CommentAPI.CreateCommentInCase(authContext, createdCase.UnderscoreId).InputComment(commentInput).Execute()
+	require.NoError(t, err)
+
+	return map[string]interface{}{
+		"case_id": createdCase.UnderscoreId,
+	}
+}
+
+func TestSearchAdditionalQueriesComments(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	creationResult := createTestCaseWithComment(t, hiveClient)
+	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
+		`{
+			"raw_filters": {
+				"_any": ""
+			},
+			"sort_by": "_createdAt",
+			"sort_order": "desc",
+			"num_results": 10,
+			"kept_columns": ["_id", "title"],
+			"extra_data": [],
+			"additional_queries": [
+				"comments"
+			]
+		}`,
+	)
+
+	mcpClient := testutils.GetMCPTestClient(
+		t,
+		samplingHandler,
+		testutils.DummyElicitationAccept,
+	)
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "search-entities",
+			Arguments: map[string]any{
+				"entity-type":   types.EntityTypeCase,
+				"query":         "show me cases with comments",
+				"extra-columns": []string{"_id", "title"},
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+
+	casesData, ok := structuredData["results"].([]any)
+	require.True(t, ok)
+	require.Len(t, casesData, 1)
+
+	caseData := casesData[0].(map[string]any)
+	require.Equal(t, creationResult["case_id"], caseData["_id"])
+	require.Equal(t, "Test case for comment", caseData["title"])
+
+	comments, ok := caseData["comments"].([]any)
+	require.True(t, ok)
+	require.Len(t, comments, 1)
+
+	comment := comments[0].(map[string]any)
+	require.Equal(t, "This is a test comment", comment["message"])
+}
+
+func createTaskWithLog(t *testing.T, hiveClient *thehive.APIClient) map[string]interface{} {
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	testCase := testutils.MockInputCase()
+	testCase.Title = "Test case for task logs"
+	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+	require.NoError(t, err)
+
+	testTask := testutils.MockInputTask()
+	testTask.Title = "Test Task for logs"
+	createdTask, _, err := hiveClient.TaskAPI.CreateTaskInCase(authContext, createdCase.UnderscoreId).
+		InputCreateTask(*testTask).Execute()
+	require.NoError(t, err)
+
+	logInput := thehive.InputCreateLog{
+		Message: "This is a test log entry",
+	}
+	_, _, err = hiveClient.TaskLogAPI.CreateTaskLog(authContext, createdTask.UnderscoreId).InputCreateLog(logInput).Execute()
+	require.NoError(t, err)
+
+	return map[string]interface{}{
+		"case_id": createdCase.UnderscoreId,
+		"task_id": createdTask.UnderscoreId,
+	}
+}
+
+func TestSearchTaskTasKLogs(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	creationResult := createTaskWithLog(t, hiveClient)
+	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
+		`{
+			"raw_filters": {
+				"_any": ""
+			},
+			"sort_by": "_createdAt",
+			"sort_order": "desc",
+			"num_results": 10,
+			"kept_columns": ["_id", "title"],
+			"extra_data": [],
+			"additional_queries": [
+				"task-logs"
+			]
+		}`,
+	)
+
+	mcpClient := testutils.GetMCPTestClient(
+		t,
+		samplingHandler,
+		testutils.DummyElicitationAccept,
+	)
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "search-entities",
+			Arguments: map[string]any{
+				"entity-type":   types.EntityTypeTask,
+				"query":         "show me tasks with logs",
+				"extra-columns": []string{"_id", "title"},
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+
+	tasksData, ok := structuredData["results"].([]any)
+	require.True(t, ok)
+	require.Len(t, tasksData, 2)
+
+	for _, taskInterface := range tasksData {
+		task := taskInterface.(map[string]any)
+		if task["_id"].(string) == creationResult["task_id"] {
+			logs, ok := task["task-logs"].([]any)
+			require.True(t, ok)
+			require.Len(t, logs, 1)
+
+			log := logs[0].(map[string]any)
+			require.Equal(t, "This is a test log entry", log["message"])
+		}
+	}
 }
