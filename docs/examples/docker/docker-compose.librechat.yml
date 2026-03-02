@@ -14,7 +14,7 @@ services:
       - MEILI_NO_ANALYTICS=true
 
   thehivemcp:
-    image: ghcr.io/strangebee/thehivemcp/thehivemcp:v0.2.3
+    image: ghcr.io/strangebeecorp/thehivemcp/thehivemcp:v0.2.3
     restart: always
     environment:
       - PERMISSIONS_CONFIG=admin
@@ -26,7 +26,7 @@ services:
       - OPENAI_MODEL=claude-haiku-4-5
 
   api:
-    image: ghcr.io/strangebee/librechat-thehivemcp:latest
+    image: ghcr.io/strangebeecorp/librechat-thehivemcp:latest
     restart: always
     ports:
       - "3080:3080"
