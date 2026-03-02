@@ -158,7 +158,7 @@ docker run -d \
   -e THEHIVE_API_KEY=your-api-key-here \
   -e MCP_BIND_HOST=0.0.0.0 \
   -e MCP_PORT=8082 \
-  strangebee/thehive-mcp:latest
+  ghcr.io/strangebeecorp/thehivemcp/thehivemcp:latest
 ```
 
 
@@ -168,7 +168,7 @@ Create `docker-compose.yml`:
 ```yaml
 services:
   thehive-mcp:
-    image: strangebee/thehive-mcp:latest
+    image: ghcr.io/strangebeecorp/thehivemcp/thehivemcp:latest
     ports:
       - "8082:8082"
     environment:

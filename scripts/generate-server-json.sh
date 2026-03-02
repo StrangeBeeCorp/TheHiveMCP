@@ -61,15 +61,13 @@ if [ $found -eq 0 ]; then
 fi
 
 # Add Docker package
-DOCKER_REGISTRY="${DOCKER_REGISTRY:-docker.io}"
-DOCKER_IMAGE="${DOCKER_IMAGE:-strangebee/thehive-mcp}"
+DOCKER_REGISTRY="${DOCKER_REGISTRY:-ghcr.io}"
+DOCKER_IMAGE="${DOCKER_IMAGE:-strangebeecorp/thehivemcp/thehivemcp}"
 
 cat >> server.json << EOF
     {
       "registryType": "oci",
-      "registryBaseUrl": "https://${DOCKER_REGISTRY}",
-      "identifier": "${DOCKER_IMAGE}",
-      "version": "${VERSION_NUMBER}",
+      "identifier": "${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${VERSION_NUMBER}",
       "transport": {
         "type": "stdio"
       }
