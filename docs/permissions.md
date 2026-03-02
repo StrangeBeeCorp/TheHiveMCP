@@ -287,7 +287,7 @@ docker run -d \
   -e PERMISSIONS_CONFIG=/app/permissions.yaml \
   -e THEHIVE_URL=https://thehive.example.com \
   -e THEHIVE_API_KEY=your-api-key \
-  strangebee/thehive-mcp:latest
+  ghcr.io/strangebeecorp/thehivemcp/thehivemcp:latest
 ```
 
 **MCPB (MCP bundle):**

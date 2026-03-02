@@ -110,8 +110,8 @@ jobs:
     name: Publish to MCP Registry
     runs-on: ubuntu-latest
     needs: [release]
-    # Only run on public repo
-    if: github.repository == 'StrangeBeeCorp/TheHiveMCP'
+    # Only run on public repo OR manual dispatch for testing
+    if: github.repository == 'StrangeBeeCorp/TheHiveMCP' || github.event_name == 'workflow_dispatch'
     permissions:
       id-token: write  # Required for OIDC
       contents: read
@@ -132,8 +132,8 @@ jobs:
       - name: Generate server.json
         run: ./scripts/generate-server-json.sh "" dist
         env:
-          DOCKER_REGISTRY: docker.io
-          DOCKER_IMAGE: strangebee/thehive-mcp
+          DOCKER_REGISTRY: ghcr.io
+          DOCKER_IMAGE: strangebeecorp/thehivemcp/thehivemcp
 
       - name: Authenticate with MCP Registry
         run: ./mcp-publisher login github-oidc

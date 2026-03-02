@@ -1,6 +1,6 @@
 services:
   thehive-mcp:
-    image: strangebee/thehive-mcp:latest
+    image: ghcr.io/strangebeecorp/thehivemcp/thehivemcp:latest
     container_name: thehive-mcp-basic
     ports:
       - "8082:8082"
