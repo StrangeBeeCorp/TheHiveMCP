@@ -214,11 +214,21 @@ type FilteredOutputProcedure struct {
 }
 
 func NewFilteredOutputProcedure(procedure *thehive.OutputProcedure) *FilteredOutputProcedure {
+	patternID := ""
+	if procedure.PatternId != nil {
+		patternID = *procedure.PatternId
+	}
+
+	tactic := ""
+	if procedure.Tactic != nil {
+		tactic = *procedure.Tactic
+	}
+
 	return &FilteredOutputProcedure{
 		UnderscoreId: procedure.UnderscoreId,
 		CreatedAt:    procedure.UnderscoreCreatedAt,
-		PatternId:    *procedure.PatternId,
-		Tactic:       *procedure.Tactic,
+		PatternId:    patternID,
+		Tactic:       tactic,
 	}
 }
 
