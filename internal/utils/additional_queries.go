@@ -22,6 +22,7 @@ var queryRegistry = map[string]EntityQueryConfig{
 		"comments":    GetCommentsFromCaseID,
 		"pages":       GetPagesFromCaseID,
 		"attachments": GetAttachmentsFromCaseID,
+		"procedures":  GetProceduresFromCaseID,
 	},
 	types.EntityTypeAlert: {
 		"observables": GetObservablesFromAlertID,
@@ -44,6 +45,7 @@ var queryToEntityType = map[string]string{
 	"pages":       types.EntityTypePage,
 	"attachments": types.EntityTypeAttachment,
 	"task-logs":   types.EntityTypeTaskLog,
+	"procedures":  types.EntityTypeProcedure,
 }
 
 func filterAdditionalQueryResults(results []map[string]interface{}, queryType string) ([]map[string]interface{}, error) {

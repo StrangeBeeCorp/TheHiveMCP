@@ -28,6 +28,8 @@ func (t *ManageTool) handleCreate(ctx context.Context, params *ManageEntityParam
 		return t.createTask(ctx, hiveClient, processedData, params.EntityIDs[0])
 	case types.EntityTypeObservable:
 		return t.createObservable(ctx, hiveClient, processedData, params.EntityIDs[0])
+	case types.EntityTypeProcedure:
+		return t.createProcedure(ctx, hiveClient, processedData, params.EntityIDs[0])
 	default:
 		return ManageEntityResult{}, tools.NewToolErrorf("unsupported entity type for create: %s", params.EntityType)
 	}
@@ -149,4 +151,38 @@ func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APICl
 		CreateObservableResult: NewCreateObservableResult(result),
 	}, nil
 
+}
+
+func (t *ManageTool) createProcedure(ctx context.Context, client *thehive.APIClient, data map[string]interface{}, parentID string) (ManageEntityResult, error) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return ManageEntityResult{}, tools.NewToolError("failed to marshal procedure data").Cause(err).
+			Hint("Check that entity-data contains valid JSON fields").
+			Schema("procedure", "create")
+	}
+
+	var inputProcedure thehive.InputProcedure
+	if err := json.Unmarshal(jsonData, &inputProcedure); err != nil {
+		return ManageEntityResult{}, tools.NewToolError("failed to unmarshal procedure data").Cause(err).
+			Hint("Ensure entity-data fields match the procedure schema").
+			Schema("procedure", "create")
+	}
+
+	// First attempt with case
+	caseResult, _, caseErr := client.TTPAPI.CreateProcedureForCase(ctx, parentID).InputProcedure(inputProcedure).Execute()
+	if caseErr != nil {
+		// If case creation fails, try alert
+		alertResult, _, alertErr := client.TTPAPI.CreateProcedureForAlert(ctx, parentID).InputProcedure(inputProcedure).Execute()
+		if alertErr != nil {
+			return ManageEntityResult{}, tools.NewToolError("failed to create procedure").Cause(alertErr).
+				Hint("Check that the target case/alert exists and you have permissions")
+		}
+		return ManageEntityResult{
+			CreateProcedureResult: NewCreateProcedureResult(alertResult),
+		}, nil
+	}
+
+	return ManageEntityResult{
+		CreateProcedureResult: NewCreateProcedureResult(caseResult),
+	}, nil
 }

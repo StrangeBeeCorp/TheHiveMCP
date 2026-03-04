@@ -120,6 +120,26 @@ func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient
 			Result:   "updated",
 		}
 
+	case types.EntityTypeProcedure:
+		var inputProcedure thehive.InputUpdateProcedure
+		if err := json.Unmarshal(jsonData, &inputProcedure); err != nil {
+			return SingleEntityUpdateResult{
+				EntityID: entityID,
+				Error:    tools.NewToolError("failed to unmarshal procedure update data").Cause(err).Hint("Use get-resource 'hive://schema/procedure/update' to see updatable fields").ToMap(),
+			}
+		}
+		resp, err := client.TTPAPI.UpdateProcedure(ctx, entityID).InputUpdateProcedure(inputProcedure).Execute()
+		if err != nil {
+			return SingleEntityUpdateResult{
+				EntityID: entityID,
+				Error:    tools.NewToolError("failed to update procedure").Cause(err).Hint(fmt.Sprintf("Check that the procedure %s exists and you have permissions. API response: %v", entityID, resp)).ToMap(),
+			}
+		}
+		return SingleEntityUpdateResult{
+			EntityID: entityID,
+			Result:   "updated",
+		}
+
 	default:
 		return SingleEntityUpdateResult{
 			EntityID: entityID,

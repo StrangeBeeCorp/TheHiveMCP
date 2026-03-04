@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "required": ["patternId", "occurDate"],
+  "properties": {
+    "patternId": {
+      "type": "string",
+
+      "description": "The ID of the procedure pattern to be executed. This should correspond to a valid pattern defined in the system, such as a MITRE ATT&CK technique ID (e.g., Tactic:TA0043).",
+      "example": "Tactic:TA0043"
+    },
+    "occurDate": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The date and time when the procedure occurred.",
+      "example": "2024-01-01T12:00:00"
+    },
+    "tactic": {
+        "type": "string",
+        "description": "The MITRE ATT&CK tactic associated with the procedure. Useful if the technique belongs to several tactics.",
+        "example": "initial-access"
+    },
+    "description": {
+      "type": "string",
+      "description": "A detailed description of the procedure, including context, observed behavior, and any relevant information that can help analysts understand the procedure's purpose and impact.",
+      "maxLength": 1048576
+    }
+  }
+}

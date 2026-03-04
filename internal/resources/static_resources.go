@@ -130,6 +130,23 @@ func GetObservableUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("observable/UpdateObservable")
 }
 
+// Procedure schema handlers
+func GetProcedureSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("ttp/OutputProcedure")
+}
+
+func GetProcedureCreateSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("ttp/CreateProcedure")
+}
+
+func GetProcedureUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("ttp/UpdateProcedure")
+}
+
+func GetPatternSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("ttp/OutputPattern")
+}
+
 // Case template schema handler
 func GetCaseTemplateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("case_template/OutputCaseTemplate")
@@ -190,6 +207,14 @@ func GetAnalyzerFactHandler() ([]mcp.ResourceContents, error) {
 	return getFactContent("analyzer", nil)
 }
 
+func GetProcedureFactHandler() ([]mcp.ResourceContents, error) {
+	return getFactContent(types.EntityTypeProcedure, nil)
+}
+
+func GetPatternFactHandler() ([]mcp.ResourceContents, error) {
+	return getFactContent("pattern", nil)
+}
+
 // Helper to get catalog structure
 func GetCatalogData() map[string]interface{} {
 	return map[string]interface{}{
@@ -202,7 +227,26 @@ func GetCatalogData() map[string]interface{} {
 			{
 				"name":        "schema",
 				"description": "Entity field definitions and data types. Query these to understand what fields are available for each entity type and their constraints. Each entity has three variants: base (output), /create (input for creation), and /update (partial input for updates).",
-				"resources":   []string{types.EntityTypeAlert, types.EntityTypeAlert + "/create", types.EntityTypeAlert + "/update", types.EntityTypeCase, types.EntityTypeCase + "/create", types.EntityTypeCase + "/update", types.EntityTypeTask, types.EntityTypeTask + "/create", types.EntityTypeTask + "/update", types.EntityTypeObservable, types.EntityTypeObservable + "/create", types.EntityTypeObservable + "/update", "case-template", "filter"},
+				"resources": []string{
+					types.EntityTypeAlert,
+					types.EntityTypeAlert + "/create",
+					types.EntityTypeAlert + "/update",
+					types.EntityTypeCase,
+					types.EntityTypeCase + "/create",
+					types.EntityTypeCase + "/update",
+					types.EntityTypeTask,
+					types.EntityTypeTask + "/create",
+					types.EntityTypeTask + "/update",
+					types.EntityTypeObservable,
+					types.EntityTypeObservable + "/create",
+					types.EntityTypeObservable + "/update",
+					types.EntityTypeProcedure,
+					types.EntityTypeProcedure + "/create",
+					types.EntityTypeProcedure + "/update",
+					types.EntityTypePattern,
+					"case-template",
+					"filter",
+				},
 			},
 			{
 				"name":        "metadata",
@@ -237,7 +281,7 @@ func GetCatalogData() map[string]interface{} {
 					{
 						"name":        "entities",
 						"description": "Entity-specific guides and best practices",
-						"resources":   []string{types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable},
+						"resources":   []string{types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable, types.EntityTypeProcedure},
 					},
 					{
 						"name":        "automation",
@@ -398,6 +442,49 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		return GetObservableUpdateSchemaHandler()
 	})
 
+	procedureSchema := mcp.NewResource(
+		"hive://schema/procedure",
+		"Procedure Output Schema",
+		mcp.WithResourceDescription("Output fields, types, and constraints for procedures returned from TheHive API"),
+		mcp.WithMIMEType("application/json"),
+	)
+
+	registry.Register(procedureSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetProcedureSchemaHandler()
+	})
+
+	procedureCreateSchema := mcp.NewResource(
+		"hive://schema/procedure/create",
+		"Procedure Create Schema",
+		mcp.WithResourceDescription("Input fields and requirements for creating new procedures"),
+		mcp.WithMIMEType("application/json"),
+	)
+
+	registry.Register(procedureCreateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetProcedureCreateSchemaHandler()
+	})
+
+	procedureUpdateSchema := mcp.NewResource(
+		"hive://schema/procedure/update",
+		"Procedure Update Schema",
+		mcp.WithResourceDescription("Partial input fields for updating existing procedures"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(procedureUpdateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetProcedureUpdateSchemaHandler()
+	})
+
+	patternSchema := mcp.NewResource(
+		"hive://schema/pattern",
+		"Pattern Output Schema",
+		mcp.WithResourceDescription("Output fields, types, and constraints for patterns returned from TheHive API"),
+		mcp.WithMIMEType("application/json"),
+	)
+
+	registry.Register(patternSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetPatternSchemaHandler()
+	})
+
 	// Case template schema
 	caseTemplateSchema := mcp.NewResource(
 		"hive://schema/case-template",
@@ -514,6 +601,32 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		caseDocumentation,
 		func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 			return GetCaseFactHandler()
+		},
+	)
+
+	procedureDocumentation := mcp.NewResource(
+		"hive://docs/entities/procedure",
+		"Procedure Documentation",
+		mcp.WithResourceDescription("How procedures work, when to use them, and best practices"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(
+		procedureDocumentation,
+		func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+			return GetProcedureFactHandler()
+		},
+	)
+
+	patternDocumentation := mcp.NewResource(
+		"hive://docs/entities/pattern",
+		"Pattern Documentation",
+		mcp.WithResourceDescription("How patterns work, syntax, and usage in procedures"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(
+		patternDocumentation,
+		func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+			return GetPatternFactHandler()
 		},
 	)
 

@@ -64,6 +64,10 @@ func GetAttachmentsFromCaseID(ctx context.Context, client *thehive.APIClient, ca
 	return executeQuery(ctx, client, "getCase", caseID, "attachments")
 }
 
+func GetProceduresFromCaseID(ctx context.Context, client *thehive.APIClient, caseID string) ([]map[string]interface{}, error) {
+	return executeQuery(ctx, client, "getCase", caseID, "procedures")
+}
+
 // Alert-related functions
 func GetObservablesFromAlertID(ctx context.Context, client *thehive.APIClient, alertID string) ([]map[string]interface{}, error) {
 	return executeQuery(ctx, client, "getAlert", alertID, "observables")

@@ -1,0 +1,3 @@
+A procedure is TheHive's internal representation of a TTP (Tactic, Technique, and Procedure) entry attached to a case or an alert.
+Procedures map observed attacker behaviour to the MITRE ATT&CK framework.
+A procedure is always a child of a case or an alert.

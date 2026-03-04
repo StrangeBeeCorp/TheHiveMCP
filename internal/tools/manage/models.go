@@ -51,8 +51,8 @@ EXAMPLES:
 
 type ManageEntityParams struct {
 	Operation  string                 `json:"operation" jsonschema:"enum=create,enum=update,enum=delete,enum=comment,enum=promote,enum=merge,required=true" jsonschema_description:"The operation to perform on the entity."`
-	EntityType string                 `json:"entity-type" jsonschema:"enum=case,enum=alert,enum=task,enum=observable,required=true" jsonschema_description:"The type of entity to manage."`
-	EntityIDs  []string               `json:"entity-ids,omitempty" jsonschema_description:"List of entity IDs. Usage varies by operation: UPDATE/DELETE/COMMENT: entities to modify. CREATE (task/observable): parent case/alert ID. PROMOTE: single alert ID. MERGE (case): case IDs to merge. MERGE (alert): alert IDs to merge into target case."`
+	EntityType string                 `json:"entity-type" jsonschema:"enum=case,enum=alert,enum=task,enum=observable,enum=procedure,required=true" jsonschema_description:"The type of entity to manage."`
+	EntityIDs  []string               `json:"entity-ids,omitempty" jsonschema_description:"List of entity IDs. Usage varies by operation: UPDATE/DELETE/COMMENT: entities to modify. CREATE (task/observable/procedure): parent case/alert ID. PROMOTE: single alert ID. MERGE (case): case IDs to merge. MERGE (alert): alert IDs to merge into target case."`
 	EntityData map[string]interface{} `json:"entity-data,omitempty" jsonschema_description:"JSON object containing entity data. For CREATE: use get-resource hive://schema/[entity]/create for required fields. For UPDATE: only provide fields to change. For PROMOTE: optional case creation parameters."`
 	Comment    string                 `json:"comment,omitempty" jsonschema_description:"Text content for COMMENT operations. Required when operation=\"comment\". For cases: adds a comment. For tasks: adds a task log entry."`
 	TargetID   string                 `json:"target-id,omitempty" jsonschema_description:"Target entity ID for MERGE operations. For alerts: the case ID to merge alerts into. For observables: the case ID containing observables to deduplicate."`
@@ -203,6 +203,38 @@ func NewCreateObservableResult(observable []thehive.OutputObservable) *CreateObs
 	}
 }
 
+type FilteredOutputProcedure struct {
+	UnderscoreId string `json:"_id"`
+	CreatedAt    int64  `json:"_createdAt"`
+	PatternId    string `json:"patternId"`
+	Tactic       string `json:"tactic,omitempty"`
+}
+
+func NewFilteredOutputProcedure(procedure *thehive.OutputProcedure) *FilteredOutputProcedure {
+	return &FilteredOutputProcedure{
+		UnderscoreId: procedure.UnderscoreId,
+		CreatedAt:    procedure.UnderscoreCreatedAt,
+		PatternId:    *procedure.PatternId,
+		Tactic:       *procedure.Tactic,
+	}
+}
+
+type CreateProcedureResult struct {
+	Operation  string                  `json:"operation"`
+	EntityType string                  `json:"entityType"`
+	Result     FilteredOutputProcedure `json:"result,omitempty"`
+	Message    string                  `json:"message,omitempty"`
+}
+
+func NewCreateProcedureResult(procedure *thehive.OutputProcedure) *CreateProcedureResult {
+	return &CreateProcedureResult{
+		Operation:  OperationCreate,
+		EntityType: types.EntityTypeProcedure,
+		Result:     *NewFilteredOutputProcedure(procedure),
+		Message:    "Procedure created successfully",
+	}
+}
+
 type SingleEntityUpdateResult struct {
 	EntityID string                 `json:"_id"`
 	Result   string                 `json:"result,omitempty"`
@@ -339,6 +371,7 @@ type ManageEntityResult struct {
 	CreateCaseResult       *CreateCaseResult          `json:"createCaseResult,omitempty"`
 	CreateTaskResult       *CreateTaskResult          `json:"createTaskResult,omitempty"`
 	CreateObservableResult *CreateObservableResult    `json:"createObservableResult,omitempty"`
+	CreateProcedureResult  *CreateProcedureResult     `json:"createProcedureResult,omitempty"`
 	UpdateResults          *UpdateEntityResult        `json:"updateResults,omitempty"`
 	DeleteResults          *DeleteEntityResult        `json:"deleteResults,omitempty"`
 	CommentResults         *CommentEntityResult       `json:"commentResults,omitempty"`
