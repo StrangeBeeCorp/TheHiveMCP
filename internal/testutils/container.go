@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
@@ -14,6 +15,42 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
+
+// TestMITREPatternID is the patternId available in the test TheHive instance after initHiveInstance
+const TestMITREPatternID = "T1059"
+
+// minimalSTIXBundle is a minimal MITRE ATT&CK STIX 2.0 bundle for testing
+const minimalSTIXBundle = `{
+  "type": "bundle",
+  "id": "bundle--test-attck-bundle",
+  "spec_version": "2.0",
+  "objects": [
+    {
+      "type": "attack-pattern",
+      "id": "attack-pattern--7385dfaf-6886-4229-9ecd-6fd678040830",
+      "created": "2017-05-31T21:31:43.540Z",
+      "modified": "2023-01-01T00:00:00.000Z",
+      "name": "Command and Scripting Interpreter",
+      "description": "Adversaries may abuse command and script interpreters to execute commands.",
+      "kill_chain_phases": [
+        {
+          "kill_chain_name": "mitre-attack",
+          "phase_name": "execution"
+        }
+      ],
+      "external_references": [
+        {
+          "source_name": "mitre-attack",
+          "external_id": "T1059",
+          "url": "https://attack.mitre.org/techniques/T1059"
+        }
+      ],
+      "x_mitre_platforms": ["Windows", "macOS", "Linux"],
+      "x_mitre_is_subtechnique": false,
+      "x_mitre_version": "2.1"
+    }
+  ]
+}`
 
 var (
 	globalContainer testcontainers.Container
@@ -118,7 +155,39 @@ func initHiveInstance(t *testing.T, url string) error {
 	ensureTestOrganisation(t, client, ctx, testConfig.MainOrg)
 	setupUserPermissions(t, client, ctx, testConfig.MainOrg)
 
+	if err := setupAttckPatterns(client, ctx); err != nil {
+		return fmt.Errorf("failed to setup ATT&CK patterns: %w", err)
+	}
+
 	return nil
+}
+
+// setupAttckPatterns imports a minimal MITRE ATT&CK pattern catalog into TheHive.
+// It serves the STIX bundle over a temporary local HTTP server reachable from the Docker container.
+func setupAttckPatterns(client *thehive.APIClient, ctx context.Context) error {
+	listener, err := net.Listen("tcp", "0.0.0.0:0")
+	if err != nil {
+		return fmt.Errorf("failed to create listener: %w", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/mitre.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(minimalSTIXBundle))
+	})
+
+	server := &http.Server{Handler: mux}
+	go func() { _ = server.Serve(listener) }()
+
+	port := listener.Addr().(*net.TCPAddr).Port
+	url := fmt.Sprintf("http://host.docker.internal:%d/mitre.json", port)
+
+	input := thehive.NewInputPatternImportMitre("mitre-attack")
+	input.SetUrl(url)
+
+	_, _, err = client.AttckAPI.ImportMITREAttckFile(ctx).InputPatternImportMitre(*input).Execute()
+	_ = server.Close()
+	return err
 }
 
 func createClientAndContext(t *testing.T, cfg *Config) (*thehive.APIClient, context.Context) {

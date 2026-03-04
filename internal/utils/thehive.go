@@ -85,6 +85,10 @@ func GetAttachmentsFromAlertID(ctx context.Context, client *thehive.APIClient, a
 	return executeQuery(ctx, client, "getAlert", alertID, "attachments")
 }
 
+func GetProceduresFromAlertID(ctx context.Context, client *thehive.APIClient, alertID string) ([]map[string]interface{}, error) {
+	return executeQuery(ctx, client, "getAlert", alertID, "procedures")
+}
+
 // Task-related functions
 func GetTaskLogsFromTaskID(ctx context.Context, client *thehive.APIClient, taskID string) ([]map[string]interface{}, error) {
 	return executeQuery(ctx, client, "getTask", taskID, "logs")

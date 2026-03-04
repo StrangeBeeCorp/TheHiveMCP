@@ -29,6 +29,7 @@ var queryRegistry = map[string]EntityQueryConfig{
 		"comments":    GetCommentsFromAlertID,
 		"pages":       GetPagesFromAlertID,
 		"attachments": GetAttachmentsFromAlertID,
+		"procedures":  GetProceduresFromAlertID,
 	},
 	types.EntityTypeTask: {
 		"task-logs": GetTaskLogsFromTaskID,

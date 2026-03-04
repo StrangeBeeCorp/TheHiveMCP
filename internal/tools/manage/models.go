@@ -6,7 +6,7 @@ import (
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 )
 
-const ManageToolDescription = `Perform CRUD and workflow operations on TheHive entities (alerts, cases, tasks, observables).
+const ManageToolDescription = `Perform CRUD and workflow operations on TheHive entities (alerts, cases, tasks, observables, procedures).
 
 SUPPORTED OPERATIONS:
 - CREATE: Create new entities with complete schema data
@@ -19,6 +19,7 @@ SUPPORTED OPERATIONS:
 IMPORTANT CONSTRAINTS:
 - Tasks can only be created within a case (provide case ID in entity-ids parameter)
 - Observables can be created in cases OR alerts (provide case or alert ID in entity-ids parameter)
+- Procedures can be created in cases OR alerts (provide case or alert ID in entity-ids parameter)
 - Comments are only supported on cases and tasks (tasks use 'task logs')
 - DELETE operations are irreversible - use with caution
 - PROMOTE only applies to alerts
@@ -36,9 +37,9 @@ MERGE OPERATION:
 
 GETTING SCHEMA INFORMATION:
 Use the get-resource tool to query schemas before creating/updating entities:
-- Output schemas: hive://schema/alert, hive://schema/case, hive://schema/task, hive://schema/observable
-- Create schemas: hive://schema/alert/create, hive://schema/case/create, hive://schema/task/create, hive://schema/observable/create
-- Update schemas: hive://schema/alert/update, hive://schema/case/update, hive://schema/task/update, hive://schema/observable/update
+- Output schemas: hive://schema/alert, hive://schema/case, hive://schema/task, hive://schema/observable, hive://schema/procedure
+- Create schemas: hive://schema/alert/create, hive://schema/case/create, hive://schema/task/create, hive://schema/observable/create, hive://schema/procedure/create
+- Update schemas: hive://schema/alert/update, hive://schema/case/update, hive://schema/task/update, hive://schema/observable/update, hive://schema/procedure/update
 
 EXAMPLES:
 - Create alert: operation="create", entity-type="alert", entity-data={"type":"...", "source":"...", "title":"..."}
@@ -47,7 +48,9 @@ EXAMPLES:
 - Promote alert: operation="promote", entity-type="alert", entity-ids=["~456"]
 - Merge cases: operation="merge", entity-type="case", entity-ids=["~123", "~456"]
 - Merge alert into case: operation="merge", entity-type="alert", entity-ids=["~789"], target-id="~123"
-- Dedupe observables: operation="merge", entity-type="observable", target-id="~123"`
+- Dedupe observables: operation="merge", entity-type="observable", target-id="~123"
+- Create procedure: operation="create", entity-type="procedure", entity-ids=["~123"], entity-data={"patternId":"T1059","occurDate":"2024-01-01T12:00:00"}
+- Delete procedure: operation="delete", entity-type="procedure", entity-ids=["~456"]`
 
 type ManageEntityParams struct {
 	Operation  string                 `json:"operation" jsonschema:"enum=create,enum=update,enum=delete,enum=comment,enum=promote,enum=merge,required=true" jsonschema_description:"The operation to perform on the entity."`
