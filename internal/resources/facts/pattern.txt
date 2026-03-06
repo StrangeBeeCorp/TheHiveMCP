@@ -1,0 +1,8 @@
+# Definition
+A pattern is a MITRE ATT&CK technique or sub-technique entry loaded into TheHive from a catalog.
+Patterns are the reference data used when creating procedures on cases and alerts.
+Patterns are read-only — they are managed by administrators, not analysts.
+
+# Usage
+Before creating a procedure, search for the relevant pattern to obtain its patternId and confirm which tactics are valid for it.
+Filter patterns by name, platform, or tactic to narrow results from the full catalog.

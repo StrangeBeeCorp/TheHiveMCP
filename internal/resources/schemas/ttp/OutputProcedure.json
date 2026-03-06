@@ -1,0 +1,67 @@
+{
+  "type": "object",
+  "required": ["_id", "_createdAt", "_createdBy", "occurDate"],
+  "properties": {
+    "_id": {
+      "type": "string",
+      "description": "Unique identifier of the procedure. Generated automatically by TheHive using the format '~<number>'."
+    },
+    "_createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "example": "2022-01-15T10:30:00",
+      "description": "Date-time string when the procedure was created. Converted from Unix timestamp in YYYY-MM-DDTHH:MM:SS format."
+    },
+    "_createdBy": {
+      "type": "string",
+      "description": "Email or username of the user who created the procedure."
+    },
+    "_updatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "example": "2022-01-15T10:30:00",
+      "description": "Date-time string when the procedure was last updated. Converted from Unix timestamp in YYYY-MM-DDTHH:MM:SS format."
+    },
+    "_updatedBy": {
+      "type": "string",
+      "description": "Email or username of the user who last updated the procedure."
+    },
+    "patternId": {
+      "type": "string",
+      "description": "The MITRE ATT&CK technique or sub-technique ID for this procedure (e.g., 'T1059' for Command and Scripting Interpreter, 'T1059.001' for PowerShell). Corresponds to the patternId of the linked pattern.",
+      "example": "T1059.001"
+    },
+    "patternName": {
+      "type": "string",
+      "description": "The name of the procedure pattern. This is a human-readable name corresponding to the patternId.",
+      "example": "Spearphishing Link"
+    },
+    "occurDate": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The date and time when the procedure occurred.",
+      "example": "2024-01-01T12:00:00"
+    },
+    "tactic": {
+      "type": "string",
+      "description": "The MITRE ATT&CK tactic associated with the procedure. Useful if the technique belongs to several tactics.",
+      "example": "initial-access"
+    },
+    "tacticLabel": {
+      "type": "string",
+      "description": "The human-readable label of the MITRE ATT&CK tactic associated with the procedure.",
+      "example": "Initial Access"
+    },
+    "description": {
+      "type": "string",
+      "description": "A detailed description of the procedure, including context, observed behavior, and any relevant information that can help analysts understand the procedure's purpose and impact.",
+      "maxLength": 1048576
+    },
+    "extraData": {
+      "type": "object",
+      "description": "Optional fields that can be requested via the 'extraData' query parameter. These fields are not returned by default due to performance overhead. Request specific fields by adding 'extraData: [\"fieldName\"]' to the page operation in your query.",
+      "additionalProperties": false,
+      "properties": {}
+    }
+  }
+}

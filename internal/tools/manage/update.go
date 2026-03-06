@@ -31,6 +31,9 @@ func (t *ManageTool) handleUpdate(ctx context.Context, params *ManageEntityParam
 }
 
 func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient, entityType, entityID string, data map[string]interface{}) SingleEntityUpdateResult {
+	// Convert ISO date strings to timestamps before marshaling
+	data = utils.TranslateDatesToTimestamps(data)
+
 	// Convert map to update structure
 	jsonData, err := json.Marshal(data)
 	if err != nil {
@@ -113,6 +116,26 @@ func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient
 			return SingleEntityUpdateResult{
 				EntityID: entityID,
 				Error:    tools.NewToolError("failed to update observable").Cause(err).Hint(fmt.Sprintf("Check that the observable %s exists and you have permissions. API response: %v", entityID, resp)).ToMap(),
+			}
+		}
+		return SingleEntityUpdateResult{
+			EntityID: entityID,
+			Result:   "updated",
+		}
+
+	case types.EntityTypeProcedure:
+		var inputProcedure thehive.InputUpdateProcedure
+		if err := json.Unmarshal(jsonData, &inputProcedure); err != nil {
+			return SingleEntityUpdateResult{
+				EntityID: entityID,
+				Error:    tools.NewToolError("failed to unmarshal procedure update data").Cause(err).Hint("Use get-resource 'hive://schema/procedure/update' to see updatable fields").ToMap(),
+			}
+		}
+		resp, err := client.TTPAPI.UpdateProcedure(ctx, entityID).InputUpdateProcedure(inputProcedure).Execute()
+		if err != nil {
+			return SingleEntityUpdateResult{
+				EntityID: entityID,
+				Error:    tools.NewToolError("failed to update procedure").Cause(err).Hint(fmt.Sprintf("Check that the procedure %s exists and you have permissions. API response: %v", entityID, resp)).ToMap(),
 			}
 		}
 		return SingleEntityUpdateResult{

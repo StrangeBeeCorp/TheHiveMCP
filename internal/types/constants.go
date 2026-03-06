@@ -87,6 +87,8 @@ const (
 	EntityTypePage       = "page"
 	EntityTypeAttachment = "attachment"
 	EntityTypeTaskLog    = "task-log"
+	EntityTypeProcedure  = "procedure"
+	EntityTypePattern    = "pattern"
 )
 
 // OutputEntity is a union type representing possible output entities
@@ -107,6 +109,8 @@ var DefaultFields map[string][]string = map[string][]string{
 	EntityTypePage:       {"_id", "title", "_createdAt"},
 	EntityTypeAttachment: {"_id", "fileName", "size", "_createdAt"},
 	EntityTypeTaskLog:    {"_id", "message", "_createdAt", "_createdBy"},
+	EntityTypeProcedure:  {"_id", "patternId", "patternName", "description", "occurDate"},
+	EntityTypePattern:    {"_id", "patternId", "name", "tactics", "platforms"},
 }
 
 const DateFormat = "2006-01-02T15:04:05"

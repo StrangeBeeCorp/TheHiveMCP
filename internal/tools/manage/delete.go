@@ -83,6 +83,18 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 			Deleted:  true,
 		}
 
+	case types.EntityTypeProcedure:
+		resp, err := client.TTPAPI.DeleteProcedure(ctx, entityID).Execute()
+		if err != nil {
+			return SingleEntityDeleteResult{
+				EntityID: entityID,
+				Error:    tools.NewToolErrorf("failed to delete procedure %s: %v. Check that the procedure exists and you have permissions. This operation is irreversible.", entityID, err).API(resp).ToMap(),
+			}
+		}
+		return SingleEntityDeleteResult{
+			EntityID: entityID,
+			Deleted:  true,
+		}
 	default:
 		return SingleEntityDeleteResult{
 			EntityID: entityID,

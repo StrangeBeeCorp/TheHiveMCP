@@ -286,6 +286,10 @@
         "tasks": {
           "type": "array",
           "description": "Array of task objects created for the case investigation. Each task includes assignee, status, due date, and description."
+        },
+        "procedures": {
+          "type": "array",
+          "description": "Array of procedure objects (TTPs/tactics) associated with the case. Each procedure includes MITRE ATT&CK technique details and usage context."
         }
       }
     },

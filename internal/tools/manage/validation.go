@@ -32,10 +32,11 @@ func (t *ManageTool) ValidateParams(params *ManageEntityParams) error {
 			return tools.NewToolError("entity-data is required for create operations.").Hintf(
 				"Use get-resource 'hive://schema/%s/create' to see required fields for %s creation", params.EntityType, params.EntityType)
 		}
-		if (params.EntityType == types.EntityTypeTask || params.EntityType == types.EntityTypeObservable) && len(params.EntityIDs) == 0 {
+		needsParentID := params.EntityType == types.EntityTypeTask || params.EntityType == types.EntityTypeObservable || params.EntityType == types.EntityTypeProcedure
+		if needsParentID && len(params.EntityIDs) == 0 {
 			return tools.NewToolErrorf("%s creation requires a parent case or alert ID in entity-ids parameter", params.EntityType)
 		}
-		if (params.EntityType == types.EntityTypeTask || params.EntityType == types.EntityTypeObservable) && len(params.EntityIDs) > 1 {
+		if needsParentID && len(params.EntityIDs) > 1 {
 			return tools.NewToolErrorf("%s creation requires exactly one parent ID in entity-ids parameter, got %d", params.EntityType, len(params.EntityIDs))
 		}
 	case OperationUpdate:

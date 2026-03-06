@@ -1,6 +1,6 @@
 # manage-entities
 
-Perform CRUD and workflow operations on TheHive entities (alerts, cases, tasks, observables).
+Perform CRUD and workflow operations on TheHive entities (alerts, cases, tasks, observables, procedures).
 
 ## Overview
 
@@ -11,7 +11,7 @@ The `manage-entities` tool provides comprehensive Create, Read, Update, Delete, 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `operation` | string | Yes | Operation to perform (`create`, `update`, `delete`, `comment`, `promote`, `merge`) |
-| `entity-type` | string | Yes | Type of entity (`alert`, `case`, `task`, `observable`) |
+| `entity-type` | string | Yes | Type of entity (`alert`, `case`, `task`, `observable`, `procedure`) |
 | `entity-ids` | array | Conditional | List of entity IDs (usage varies by operation) |
 | `entity-data` | object | Conditional | JSON object with entity data (required for create/update, optional for promote) |
 | `comment` | string | Conditional | Text content (required for comment operations) |
@@ -122,6 +122,44 @@ Create new entities with complete schema data.
 }
 ```
 
+#### Creating procedures (requires parent case/alert)
+
+A procedure maps observed attacker behaviour to a MITRE ATT&CK technique. Use `search-entities` with `entity-type="pattern"` to find the `patternId` before creating a procedure.
+
+**Minimal example (required fields only):**
+```json
+{
+  "operation": "create",
+  "entity-type": "procedure",
+  "entity-ids": ["case-123"],
+  "entity-data": {
+    "patternId": "T1059",
+    "occurDate": "2024-01-15T10:30:00"
+  }
+}
+```
+
+**Recommended example (with tactic and description):**
+```json
+{
+  "operation": "create",
+  "entity-type": "procedure",
+  "entity-ids": ["case-123"],
+  "entity-data": {
+    "patternId": "T1059.001",
+    "occurDate": "2024-01-15T10:30:00",
+    "tactic": "execution",
+    "description": "Attacker executed PowerShell scripts to download and run malicious payloads"
+  }
+}
+```
+
+**Notes:**
+- `patternId` must reference a valid MITRE ATT&CK technique loaded in TheHive (use `search-entities` with `entity-type="pattern"` to find valid IDs)
+- `tactic` must be one of the tactics listed on the pattern (only required if the technique belongs to multiple tactics)
+- `occurDate` is the timestamp when the attacker behaviour was observed
+- Procedures can be attached to cases or alerts
+
 ### Update operations
 
 Update existing entities with partial field changes.
@@ -135,6 +173,19 @@ Update existing entities with partial field changes.
     "status": "InProgress",
     "assignee": "senior-analyst@example.com",
     "severity": 3
+  }
+}
+```
+
+Update an existing procedure (use the procedure's own ID, not the parent case/alert ID):
+```json
+{
+  "operation": "update",
+  "entity-type": "procedure",
+  "entity-ids": ["~456"],
+  "entity-data": {
+    "description": "Updated analysis: attacker used PowerShell to download Cobalt Strike beacon",
+    "occurDate": "2024-01-15T09:45:00"
   }
 }
 ```
@@ -264,11 +315,13 @@ Merges similar observables within a case (deduplication). This finds and merges 
 - **Cases** are top-level entities
 - **Tasks** belong to cases
 - **Observables** can belong to cases OR alerts
+- **Procedures** can belong to cases OR alerts
 - **Alerts** are independent but can be promoted to cases
 
 ### Creation constraints
 - **Tasks**: Must specify parent case ID in `entity-ids`
 - **Observables**: Must specify parent case or alert ID in `entity-ids`
+- **Procedures**: Must specify parent case or alert ID in `entity-ids`
 - **Alerts**: Can be created independently
 - **Cases**: Can be created independently
 
@@ -277,6 +330,7 @@ Merges similar observables within a case (deduplication). This finds and merges 
 - **Tasks**: Use "task logs" instead of comments
 - **Alerts**: Not supported for comments
 - **Observables**: Not supported for comments
+- **Procedures**: Not supported for comments
 
 ### Promote constraints
 - **Alerts**: Can be promoted to cases
@@ -306,6 +360,7 @@ Available create schemas:
 - `hive://schema/case/create` - Required and optional fields for creating cases
 - `hive://schema/task/create` - Required and optional fields for creating tasks
 - `hive://schema/observable/create` - Required and optional fields for creating observables
+- `hive://schema/procedure/create` - Required and optional fields for creating procedures
 
 ### For UPDATE operations:
 ```json
@@ -320,6 +375,7 @@ Available update schemas:
 - `hive://schema/case/update` - Fields available for updating cases
 - `hive://schema/task/update` - Fields available for updating tasks
 - `hive://schema/observable/update` - Fields available for updating observables
+- `hive://schema/procedure/update` - Fields available for updating procedures
 
 ### For understanding OUTPUT:
 Available output schemas (for understanding query results):
@@ -327,6 +383,8 @@ Available output schemas (for understanding query results):
 - `hive://schema/case` - Fields returned when querying cases
 - `hive://schema/task` - Fields returned when querying tasks
 - `hive://schema/observable` - Fields returned when querying observables
+- `hive://schema/procedure` - Fields returned when querying procedures
+- `hive://schema/pattern` - Fields returned when querying patterns (MITRE ATT&CK techniques)
 
 ## Best Practices
 
@@ -377,8 +435,15 @@ When creating alerts, the following fields are **required**:
 1. Create case for investigation
 2. Create tasks for specific activities
 3. Create observables as evidence is collected
-4. Update case status as investigation progresses
-5. Add comments to document findings
+4. Map attacker behaviour to MITRE ATT&CK by creating procedures
+5. Update case status as investigation progresses
+6. Add comments to document findings
+
+### TTP workflow
+1. Search for relevant MITRE ATT&CK techniques: `search-entities` with `entity-type="pattern"` and a keyword query
+2. Note the `patternId` and available `tactics` from the pattern
+3. Create a procedure on the case or alert with the `patternId`, `occurDate`, and optionally `tactic` and `description`
+4. Update or delete the procedure if details change during investigation
 
 ### Alert processing
 1. Create alert from external source

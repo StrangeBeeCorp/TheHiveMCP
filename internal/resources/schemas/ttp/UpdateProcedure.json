@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "description": "All fields are optional for updates. Only provide fields you want to change. Use null to clear nullable fields.",
+  "properties": {
+    "patternId": {
+      "type": "string",
+      "description": "The ID of the procedure pattern to be executed. This must correspond to a valid MITRE ATT&CK technique or sub-technique ID loaded in TheHive (e.g., 'T1059' for Command and Scripting Interpreter, 'T1059.001' for PowerShell). Use search-entities with entity-type='pattern' to find valid IDs.",
+      "example": "T1059.001"
+    },
+    "occurDate": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The date and time when the procedure occurred.",
+      "example": "2024-01-01T12:00:00"
+    },
+    "tactic": {
+      "type": "string",
+      "description": "The MITRE ATT&CK tactic associated with the procedure. Useful if the technique belongs to several tactics.",
+      "example": "initial-access"
+    },
+    "description": {
+      "type": "string",
+      "description": "A detailed description of the procedure, including context, observed behavior, and any relevant information that can help analysts understand the procedure's purpose and impact.",
+      "maxLength": 1048576
+    }
+  }
+}

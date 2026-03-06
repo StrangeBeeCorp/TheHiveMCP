@@ -4,18 +4,18 @@ Search for entities in TheHive using natural language queries.
 
 ## Overview
 
-The `search-entities` tool allows you to search for TheHive entities (alerts, cases, tasks, observables) using natural language queries. The tool uses AI to translate your natural language into TheHive filters, making it easy to find exactly what you're looking for without knowing the complex filter syntax.
+The `search-entities` tool allows you to search for TheHive entities (alerts, cases, tasks, observables, procedures, patterns) using natural language queries. The tool uses AI to translate your natural language into TheHive filters, making it easy to find exactly what you're looking for without knowing the complex filter syntax.
 
 ## Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `entity-type` | string | Yes | Type of entity to search for (`alert`, `case`, `task`, `observable`) |
+| `entity-type` | string | Yes | Type of entity to search for (`alert`, `case`, `task`, `observable`, `procedure`, `pattern`) |
 | `query` | string | Yes | Natural language query describing what entities you want to find |
 | `sort-by` | string | No | Column to sort results by (default: `_createdAt`) |
 | `sort-order` | string | No | Sort order `asc` or `desc` (default: `desc`) |
 | `limit` | number | No | Number of results to return (default: 10) |
-| `extra-columns` | array | No | Additional columns to include in output. Entity-specific defaults: alerts `['_id', 'title', '_createdAt', 'severity', 'status']`, cases `['_id', 'title', '_createdAt', 'status', 'severity']`, tasks `['_id', 'title', 'status', '_createdAt', 'assignee']`, observables `['_id', 'dataType', '_createdAt']` |
+| `extra-columns` | array | No | Additional columns to include in output. Entity-specific defaults: alerts `['_id', 'title', '_createdAt', 'severity', 'status']`, cases `['_id', 'title', '_createdAt', 'status', 'severity']`, tasks `['_id', 'title', 'status', '_createdAt', 'assignee']`, observables `['_id', 'dataType', '_createdAt']`, procedures `['_id', 'patternId', 'patternName', 'description', 'occurDate']`, patterns `['_id', 'patternId', 'name', 'tactics', 'platforms']` |
 | `extra-data` | array | No | Additional data fields to include in output (see `Extra Data` in the Api docs) |
 | `additional-queries` | array | No | Additional queries to enrich results with related data (see `Queries available` in the Api docs)|
 | `count` | boolean | No | Return only the count of matching entities instead of the actual entities (default: `false`) |
@@ -58,6 +58,13 @@ The search tool understands various natural language patterns:
 - "open cases with unassigned tasks"
 - "malware observables from compromised systems"
 
+### TTP and pattern queries
+- "PowerShell execution techniques" (entity-type: pattern)
+- "patterns for Windows platforms" (entity-type: pattern)
+- "T1059 technique" (entity-type: pattern)
+- "procedures related to initial access" (entity-type: procedure)
+- "procedures created this month" (entity-type: procedure)
+
 ## Supported Entity Types
 
 ### Alerts
@@ -87,6 +94,23 @@ Search for artifacts and IOCs with filters on:
 - Tags and analysis results
 - Creation and update dates
 - Associated cases or alerts
+
+### Procedures
+Search for TTP entries (MITRE ATT&CK mappings) attached to cases or alerts with filters on:
+- Pattern ID and pattern name
+- Tactic
+- Occurrence date
+- Description
+
+### Patterns
+Search the MITRE ATT&CK technique catalog loaded in TheHive with filters on:
+- Pattern ID (e.g. `T1059`, `T1059.001`)
+- Name and description
+- Tactics (e.g. `execution`, `persistence`)
+- Platforms (e.g. `Windows`, `Linux`)
+- `revoked` status
+
+**Tip**: Search patterns first to find valid `patternId` values before creating procedures.
 
 ## Advanced Usage
 
@@ -137,7 +161,7 @@ Enrich results with related information:
 {
   "entity-type": "case",
   "query": "open investigations",
-  "additional-queries": ["tasks", "observables"]
+  "additional-queries": ["tasks", "observables", "procedures"]
 }
 ```
 
@@ -158,6 +182,8 @@ When using search-entities, you'll work with output schemas to understand what f
 - Use `hive://schema/case` to see all fields available in case search results
 - Use `hive://schema/task` to see all fields available in task search results
 - Use `hive://schema/observable` to see all fields available in observable search results
+- Use `hive://schema/procedure` to see all fields available in procedure search results
+- Use `hive://schema/pattern` to see all fields available in pattern search results
 
 For creating or updating entities found through search, use the create/update schema variants:
 - `hive://schema/{entity}/create` for creating new entities

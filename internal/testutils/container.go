@@ -1,6 +1,7 @@
 package testutils
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,11 +13,49 @@ import (
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/network"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+// TestMITREPatternID is the patternId available in the test TheHive instance after initHiveInstance
+const TestMITREPatternID = "T1059"
+
+// minimalSTIXBundle is a minimal MITRE ATT&CK STIX 2.0 bundle for testing
+const minimalSTIXBundle = `{
+  "type": "bundle",
+  "id": "bundle--test-attck-bundle",
+  "spec_version": "2.0",
+  "objects": [
+    {
+      "type": "attack-pattern",
+      "id": "attack-pattern--7385dfaf-6886-4229-9ecd-6fd678040830",
+      "created": "2017-05-31T21:31:43.540Z",
+      "modified": "2023-01-01T00:00:00.000Z",
+      "name": "Command and Scripting Interpreter",
+      "description": "Adversaries may abuse command and script interpreters to execute commands.",
+      "kill_chain_phases": [
+        {
+          "kill_chain_name": "mitre-attack",
+          "phase_name": "execution"
+        }
+      ],
+      "external_references": [
+        {
+          "source_name": "mitre-attack",
+          "external_id": "T1059",
+          "url": "https://attack.mitre.org/techniques/T1059"
+        }
+      ],
+      "x_mitre_platforms": ["Windows", "macOS", "Linux"],
+      "x_mitre_is_subtechnique": false,
+      "x_mitre_version": "2.1"
+    }
+  ]
+}`
+
 var (
 	globalContainer testcontainers.Container
+	globalNetwork   *testcontainers.DockerNetwork
 	globalPort      string
 )
 
@@ -40,6 +79,15 @@ func StartTheHiveContainer(t *testing.T) (string, error) {
 		ExposedPorts: []string{"9000/tcp"},
 		WaitingFor:   wait.ForHTTP("/api/status").WithPort("9000/tcp").WithStartupTimeout(5 * time.Minute),
 	}
+
+	if globalNetwork == nil {
+		nw, err := network.New(t.Context())
+		if err != nil {
+			return "", fmt.Errorf("failed to create test network: %w", err)
+		}
+		globalNetwork = nw
+	}
+	req.Networks = []string{globalNetwork.Name}
 
 	container, err := testcontainers.GenericContainer(t.Context(), testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
@@ -91,6 +139,29 @@ func CreateAuthContext(username, password string) context.Context {
 	return context.WithValue(context.Background(), thehive.ContextBasicAuth, auth)
 }
 
+// TeardownContainers stops the global TheHive container and removes the shared Docker network.
+// Call this from TestMain(m *testing.M) after m.Run() returns to ensure full cleanup:
+//
+//	func TestMain(m *testing.M) {
+//	    code := m.Run()
+//	    testutils.TeardownContainers(context.Background())
+//	    os.Exit(code)
+//	}
+func TeardownContainers(ctx context.Context) {
+	if globalContainer != nil {
+		if err := globalContainer.Terminate(ctx); err != nil {
+			fmt.Printf("Warning: failed to terminate TheHive container: %v\n", err)
+		}
+		globalContainer = nil
+	}
+	if globalNetwork != nil {
+		if err := globalNetwork.Remove(ctx); err != nil {
+			fmt.Printf("Warning: failed to remove test Docker network: %v\n", err)
+		}
+		globalNetwork = nil
+	}
+}
+
 // ResetHiveInstance clears all data from the test organisations
 func ResetHiveInstance(t *testing.T, hiveUrl string, testConfig *HiveTestConfig) error {
 	t.Helper()
@@ -118,7 +189,55 @@ func initHiveInstance(t *testing.T, url string) error {
 	ensureTestOrganisation(t, client, ctx, testConfig.MainOrg)
 	setupUserPermissions(t, client, ctx, testConfig.MainOrg)
 
+	if err := setupAttackPatterns(ctx, client); err != nil {
+		return fmt.Errorf("failed to setup ATT&CK patterns: %w", err)
+	}
+
 	return nil
+}
+
+// setupAttackPatterns imports a minimal MITRE ATT&CK pattern catalog into TheHive.
+// It serves the STIX bundle from a sidecar container on the same Docker network as TheHive.
+func setupAttackPatterns(ctx context.Context, client *thehive.APIClient) error {
+	if globalNetwork == nil {
+		return fmt.Errorf("test network not initialized")
+	}
+
+	const mitreServerAlias = "mitre-server"
+
+	mitreRequest := testcontainers.ContainerRequest{
+		Image:        "nginx:alpine",
+		ExposedPorts: []string{"80/tcp"},
+		Networks:     []string{globalNetwork.Name},
+		NetworkAliases: map[string][]string{
+			globalNetwork.Name: {mitreServerAlias},
+		},
+		Files: []testcontainers.ContainerFile{
+			{
+				Reader:            bytes.NewBufferString(minimalSTIXBundle),
+				ContainerFilePath: "/usr/share/nginx/html/mitre.json",
+				FileMode:          0o644,
+			},
+		},
+		WaitingFor: wait.ForListeningPort("80/tcp").WithStartupTimeout(30 * time.Second),
+	}
+
+	mitreContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: mitreRequest,
+		Started:          true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to start MITRE sidecar container: %w", err)
+	}
+	defer func() { _ = mitreContainer.Terminate(ctx) }()
+
+	url := fmt.Sprintf("http://%s:80/mitre.json", mitreServerAlias)
+
+	input := thehive.NewInputPatternImportMitre("mitre-attack")
+	input.SetUrl(url)
+
+	_, _, err = client.AttckAPI.ImportMITREAttckFile(ctx).InputPatternImportMitre(*input).Execute()
+	return err
 }
 
 func createClientAndContext(t *testing.T, cfg *Config) (*thehive.APIClient, context.Context) {

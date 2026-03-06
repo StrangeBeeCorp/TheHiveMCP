@@ -248,6 +248,10 @@ func (t *SearchTool) getExcludedFields(entityType string, keptColumns []string, 
 		baseModel = thehive.OutputTask{}
 	case types.EntityTypeObservable:
 		baseModel = thehive.OutputObservable{}
+	case types.EntityTypeProcedure:
+		baseModel = thehive.OutputProcedure{}
+	case types.EntityTypePattern:
+		baseModel = thehive.OutputPattern{}
 	default:
 		return []string{}
 	}

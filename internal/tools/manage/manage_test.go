@@ -874,6 +874,156 @@ func TestManagePromoteWithReadOnlyPermissions(t *testing.T) {
 	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
 }
 
+// TestManageCreateProcedureInCase tests creating a procedure within a case via the manage-entities tool
+func TestManageCreateProcedureInCase(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	testCase := testutils.MockInputCase()
+	testCase.Title = "Case for Procedure Creation"
+
+	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdCase)
+
+	// Use ISO date strings — the MCP tool must handle conversion to timestamps internally
+	procedureData := map[string]interface{}{
+		"patternId":   testutils.TestMITREPatternID,
+		"occurDate":   "2023-11-14T22:13:20",
+		"tactic":      "execution",
+		"description": "Test procedure for Command and Scripting Interpreter",
+	}
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "create",
+				"entity-type": types.EntityTypeProcedure,
+				"entity-ids":  []string{createdCase.UnderscoreId},
+				"entity-data": procedureData,
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError, "create procedure should succeed")
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "create", structuredData["operation"])
+	require.Equal(t, types.EntityTypeProcedure, structuredData["entityType"])
+
+	procedureResult, ok := structuredData["result"].(map[string]any)
+	require.True(t, ok)
+	procedureID, ok := procedureResult["_id"].(string)
+	require.True(t, ok)
+	require.NotEmpty(t, procedureID)
+}
+
+// TestManageUpdateProcedure tests updating a procedure via the manage-entities tool
+func TestManageUpdateProcedure(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	testCase := testutils.MockInputCase()
+	testCase.Title = "Case for Procedure Update"
+
+	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdCase)
+
+	// Create a procedure directly via the API
+	input := thehive.NewInputProcedure(testutils.TestMITREPatternID, int64(1700000000000))
+	input.SetTactic("execution")
+	input.SetDescription("Original description")
+
+	createdProcedure, _, err := hiveClient.TTPAPI.CreateProcedureForCase(authContext, createdCase.UnderscoreId).InputProcedure(*input).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdProcedure)
+
+	// Update it via the MCP tool — use ISO date strings (the MCP handles conversion)
+	updateData := map[string]interface{}{
+		"description": "Updated description via MCP",
+		"occurDate":   "2023-11-15T10:00:00",
+	}
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "update",
+				"entity-type": types.EntityTypeProcedure,
+				"entity-ids":  []string{createdProcedure.UnderscoreId},
+				"entity-data": updateData,
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError, "update procedure should succeed")
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "update", structuredData["operation"])
+	require.Equal(t, types.EntityTypeProcedure, structuredData["entityType"])
+}
+
+// TestManageDeleteProcedure tests deleting a procedure via the manage-entities tool
+func TestManageDeleteProcedure(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	testCase := testutils.MockInputCase()
+	testCase.Title = "Case for Procedure Deletion"
+
+	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdCase)
+
+	// Create a procedure directly via the API
+	input := thehive.NewInputProcedure(testutils.TestMITREPatternID, int64(1700000000000))
+	input.SetTactic("execution")
+
+	createdProcedure, _, err := hiveClient.TTPAPI.CreateProcedureForCase(authContext, createdCase.UnderscoreId).InputProcedure(*input).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdProcedure)
+
+	// Delete it via the MCP tool
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "delete",
+				"entity-type": types.EntityTypeProcedure,
+				"entity-ids":  []string{createdProcedure.UnderscoreId},
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError, "delete procedure should succeed")
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "delete", structuredData["operation"])
+	require.Equal(t, types.EntityTypeProcedure, structuredData["entityType"])
+
+	// Verify it's gone
+	resp, err := hiveClient.TTPAPI.DeleteProcedure(authContext, createdProcedure.UnderscoreId).Execute()
+	require.Error(t, err)
+	require.Equal(t, 404, resp.StatusCode)
+}
+
 // TestManageMergeWithReadOnlyPermissions tests merge is denied with read-only permissions
 func TestManageMergeWithReadOnlyPermissions(t *testing.T) {
 	testutils.SetupTestWithCleanup(t)
