@@ -28,8 +28,8 @@
     },
     "patternId": {
       "type": "string",
-      "description": "The ID of the procedure pattern to be executed. This should correspond to a valid pattern defined in the system, such as a MITRE ATT&CK technique ID (e.g., Tactic:TA0043).",
-      "example": "Tactic:TA0043"
+      "description": "The MITRE ATT&CK technique or sub-technique ID for this procedure (e.g., 'T1059' for Command and Scripting Interpreter, 'T1059.001' for PowerShell). Corresponds to the patternId of the linked pattern.",
+      "example": "T1059.001"
     },
     "patternName": {
       "type": "string",

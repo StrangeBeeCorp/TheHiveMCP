@@ -139,6 +139,29 @@ func CreateAuthContext(username, password string) context.Context {
 	return context.WithValue(context.Background(), thehive.ContextBasicAuth, auth)
 }
 
+// TeardownContainers stops the global TheHive container and removes the shared Docker network.
+// Call this from TestMain(m *testing.M) after m.Run() returns to ensure full cleanup:
+//
+//	func TestMain(m *testing.M) {
+//	    code := m.Run()
+//	    testutils.TeardownContainers(context.Background())
+//	    os.Exit(code)
+//	}
+func TeardownContainers(ctx context.Context) {
+	if globalContainer != nil {
+		if err := globalContainer.Terminate(ctx); err != nil {
+			fmt.Printf("Warning: failed to terminate TheHive container: %v\n", err)
+		}
+		globalContainer = nil
+	}
+	if globalNetwork != nil {
+		if err := globalNetwork.Remove(ctx); err != nil {
+			fmt.Printf("Warning: failed to remove test Docker network: %v\n", err)
+		}
+		globalNetwork = nil
+	}
+}
+
 // ResetHiveInstance clears all data from the test organisations
 func ResetHiveInstance(t *testing.T, hiveUrl string, testConfig *HiveTestConfig) error {
 	t.Helper()

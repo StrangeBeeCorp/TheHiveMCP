@@ -887,9 +887,10 @@ func TestManageCreateProcedureInCase(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
 
+	// Use ISO date strings — the MCP tool must handle conversion to timestamps internally
 	procedureData := map[string]interface{}{
 		"patternId":   testutils.TestMITREPatternID,
-		"occurDate":   int64(1700000000000),
+		"occurDate":   "2023-11-14T22:13:20",
 		"tactic":      "execution",
 		"description": "Test procedure for Command and Scripting Interpreter",
 	}
@@ -945,9 +946,10 @@ func TestManageUpdateProcedure(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdProcedure)
 
-	// Update it via the MCP tool
+	// Update it via the MCP tool — use ISO date strings (the MCP handles conversion)
 	updateData := map[string]interface{}{
 		"description": "Updated description via MCP",
+		"occurDate":   "2023-11-15T10:00:00",
 	}
 
 	request := mcp.CallToolRequest{

@@ -212,7 +212,7 @@ func GetProcedureFactHandler() ([]mcp.ResourceContents, error) {
 }
 
 func GetPatternFactHandler() ([]mcp.ResourceContents, error) {
-	return getFactContent("pattern", nil)
+	return getFactContent(types.EntityTypePattern, nil)
 }
 
 // Helper to get catalog structure
@@ -281,7 +281,7 @@ func GetCatalogData() map[string]interface{} {
 					{
 						"name":        "entities",
 						"description": "Entity-specific guides and best practices",
-						"resources":   []string{types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable, types.EntityTypeProcedure},
+						"resources":   []string{types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable, types.EntityTypeProcedure, types.EntityTypePattern},
 					},
 					{
 						"name":        "automation",

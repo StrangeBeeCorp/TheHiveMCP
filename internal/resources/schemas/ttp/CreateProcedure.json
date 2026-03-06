@@ -4,9 +4,8 @@
   "properties": {
     "patternId": {
       "type": "string",
-
-      "description": "The ID of the procedure pattern to be executed. This should correspond to a valid pattern defined in the system, such as a MITRE ATT&CK technique ID (e.g., Tactic:TA0043).",
-      "example": "Tactic:TA0043"
+      "description": "The ID of the procedure pattern to be executed. This must correspond to a valid MITRE ATT&CK technique or sub-technique ID loaded in TheHive (e.g., 'T1059' for Command and Scripting Interpreter, 'T1059.001' for PowerShell). Use search-entities with entity-type='pattern' to find valid IDs.",
+      "example": "T1059.001"
     },
     "occurDate": {
       "type": "string",

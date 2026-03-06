@@ -31,6 +31,9 @@ func (t *ManageTool) handleUpdate(ctx context.Context, params *ManageEntityParam
 }
 
 func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient, entityType, entityID string, data map[string]interface{}) SingleEntityUpdateResult {
+	// Convert ISO date strings to timestamps before marshaling
+	data = utils.TranslateDatesToTimestamps(data)
+
 	// Convert map to update structure
 	jsonData, err := json.Marshal(data)
 	if err != nil {
