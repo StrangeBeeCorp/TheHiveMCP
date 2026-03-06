@@ -235,7 +235,7 @@ func NewFilteredOutputProcedure(procedure *thehive.OutputProcedure) *FilteredOut
 type CreateProcedureResult struct {
 	Operation  string                  `json:"operation"`
 	EntityType string                  `json:"entityType"`
-	Result     FilteredOutputProcedure `json:"result,omitempty"`
+	Result     FilteredOutputProcedure `json:"result"`
 	Message    string                  `json:"message,omitempty"`
 }
 
