@@ -7,19 +7,10 @@
     "_createdAt",
     "patternId",
     "name",
-    "description",
-    "tactics",
     "url",
     "patternType",
     "revoked",
     "remoteSupport",
-    "dataSources",
-    "defenseBypassed",
-    "detection",
-    "permissionsRequired",
-    "platforms",
-    "systemRequirements",
-    "version",
     "extraData"
   ],
   "properties": {
@@ -122,13 +113,11 @@
         "description": "Always empty for patterns. No extraData fields are supported."
       },
       "capecId": {
-        "type": "string",
-        "nullable": true,
+        "type": ["string", "null"],
         "description": "CAPEC identifier if this technique maps to a Common Attack Pattern Enumeration and Classification entry (e.g. 'CAPEC-471'). Null for most techniques."
       },
       "capecUrl": {
-        "type": "string",
-        "nullable": true,
+        "type": ["string", "null"],
         "description": "URL to the CAPEC entry. Null when capecId is null."
       }
   }

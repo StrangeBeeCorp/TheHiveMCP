@@ -1,6 +1,6 @@
 {
   "type": "object",
-  "required": ["_id", "_createdAt", "_createdBy", "_updatedAt", "occurDate"],
+  "required": ["_id", "_createdAt", "_createdBy", "occurDate"],
   "properties": {
     "_id": {
       "type": "string",
