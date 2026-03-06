@@ -114,12 +114,19 @@ tools:
         comment: true
         promote: false  # N/A for observables
         merge: true     # Allow deduplicating observables
+      procedure:
+        create: true
+        update: true
+        delete: false
+        comment: false  # N/A for procedures
+        promote: false  # N/A for procedures
+        merge: false    # N/A for procedures
 ```
 
 **Behavior:**
 - If no `entity_permissions` are configured: all operations allowed (backward compatibility)
 - If `entity_permissions` are configured: only specified entity types/operations allowed
-- Entity types: `alert`, `case`, `task`, `observable`
+- Entity types: `alert`, `case`, `task`, `observable`, `procedure`
 - Operations: `create`, `update`, `delete`, `comment`, `promote`, `merge`
 
 ## Automation Permissions
@@ -214,6 +221,11 @@ permissions:
           update: true
           delete: false
           comment: true
+        procedure:
+          create: true
+          update: true
+          delete: false
+          comment: false  # N/A for procedures
     execute-automation:
       allowed: true
     get-resource:

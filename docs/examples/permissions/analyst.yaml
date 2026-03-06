@@ -51,6 +51,13 @@ permissions:
           comment: true
           promote: false # Observables cannot be promoted
           merge: true    # Allow deduplicating observables
+        procedure:
+          create: true
+          update: true
+          delete: false  # Analysts cannot delete procedures
+          comment: false # Procedures do not support comments
+          promote: false # Procedures cannot be promoted
+          merge: false   # Procedures cannot be merged
 
     # Allow running analyzers and responders
     # Specific analyzers/responders are controlled via global settings below
