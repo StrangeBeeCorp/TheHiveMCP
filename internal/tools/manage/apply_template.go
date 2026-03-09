@@ -22,9 +22,18 @@ func (t *ManageTool) handleApplyTemplate(ctx context.Context, params *ManageEnti
 		CaseTemplate: params.TargetID,
 	}
 
-	// If entity-data is provided, unmarshal the optional fields
+	// If entity-data is provided, unmarshal the optional fields.
+	// The struct's UnmarshalJSON requires "ids" and "caseTemplate" to be present,
+	// so we merge them into the entity-data map before unmarshalling.
 	if params.EntityData != nil {
-		jsonData, err := json.Marshal(params.EntityData)
+		merged := make(map[string]interface{}, len(params.EntityData)+2)
+		for k, v := range params.EntityData {
+			merged[k] = v
+		}
+		merged["ids"] = params.EntityIDs
+		merged["caseTemplate"] = params.TargetID
+
+		jsonData, err := json.Marshal(merged)
 		if err != nil {
 			return ManageEntityResult{}, tools.NewToolError("failed to marshal apply-template data").Cause(err)
 		}
@@ -32,9 +41,6 @@ func (t *ManageTool) handleApplyTemplate(ctx context.Context, params *ManageEnti
 			return ManageEntityResult{}, tools.NewToolError("failed to unmarshal apply-template data").Cause(err).
 				Hint("Optional fields: updateTitlePrefix, updateDescription, updateTags, updateSeverity, updateFlag, updateTlp, updatePap, updateCustomFields, importTasks, importPages")
 		}
-		// Restore required fields that may have been overwritten by the unmarshal
-		input.Ids = params.EntityIDs
-		input.CaseTemplate = params.TargetID
 	}
 
 	resp, err := hiveClient.CaseAPI.ApplyCaseTemplateOnExistingCases(ctx).InputApplyCaseTemplateWithIds(input).Execute()
