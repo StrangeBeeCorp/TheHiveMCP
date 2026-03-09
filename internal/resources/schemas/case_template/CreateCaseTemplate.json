@@ -1,0 +1,109 @@
+{
+  "required": [
+    "name"
+  ],
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Unique internal name for the case template. Used in integrations and API references."
+    },
+    "displayName": {
+      "type": "string",
+      "description": "Human-friendly name shown in the UI. Optional."
+    },
+    "titlePrefix": {
+      "type": "string",
+      "description": "Prefix automatically added to case titles created from this template."
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of the template purpose and usage. Supports markdown."
+    },
+    "severity": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Default severity for cases created from this template (1=LOW, 2=MEDIUM, 3=HIGH, 4=CRITICAL)."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Default tags applied to cases created from this template."
+    },
+    "flag": {
+      "type": "boolean",
+      "description": "Whether cases created from this template are flagged by default."
+    },
+    "tlp": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Default Traffic Light Protocol level (0=CLEAR, 1=GREEN, 2=AMBER, 3=AMBER+STRICT, 4=RED)."
+    },
+    "pap": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Default Permissible Actions Protocol level (0=CLEAR, 1=GREEN, 2=AMBER, 3=AMBER+STRICT, 4=RED)."
+    },
+    "summary": {
+      "type": "string",
+      "description": "Default summary text for cases created from this template."
+    },
+    "tasks": {
+      "type": "array",
+      "description": "Template tasks that will be created in cases using this template.",
+      "items": {
+        "required": [
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Task title."
+          },
+          "group": {
+            "type": "string",
+            "description": "Task group for organizing tasks."
+          },
+          "description": {
+            "type": "string",
+            "description": "Task description with instructions."
+          },
+          "status": {
+            "type": "string",
+            "description": "Initial task status (e.g., 'Waiting')."
+          },
+          "flag": {
+            "type": "boolean"
+          },
+          "order": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Display order (0-based)."
+          },
+          "assignee": {
+            "type": "string",
+            "description": "Default assignee for the task."
+          },
+          "mandatory": {
+            "type": "boolean",
+            "description": "Whether the task must be completed before closing the case."
+          }
+        }
+      }
+    },
+    "customFields": {
+      "type": "object",
+      "description": "Default custom field values. Can be a map of field name to value, or an array of custom field objects."
+    },
+    "pageTemplateIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "IDs of page templates to link to this case template."
+    }
+  }
+}

@@ -30,6 +30,8 @@ func (t *ManageTool) handleCreate(ctx context.Context, params *ManageEntityParam
 		return t.createObservable(ctx, hiveClient, processedData, params.EntityIDs[0])
 	case types.EntityTypeProcedure:
 		return t.createProcedure(ctx, hiveClient, processedData, params.EntityIDs[0])
+	case types.EntityTypeCaseTemplate:
+		return t.createCaseTemplate(ctx, hiveClient, processedData)
 	default:
 		return ManageEntityResult{}, tools.NewToolErrorf("unsupported entity type for create: %s", params.EntityType)
 	}
@@ -184,5 +186,31 @@ func (t *ManageTool) createProcedure(ctx context.Context, client *thehive.APICli
 
 	return ManageEntityResult{
 		CreateProcedureResult: NewCreateProcedureResult(caseResult),
+	}, nil
+}
+
+func (t *ManageTool) createCaseTemplate(ctx context.Context, client *thehive.APIClient, data map[string]interface{}) (ManageEntityResult, error) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return ManageEntityResult{}, tools.NewToolError("failed to marshal case template data").Cause(err).
+			Hint("Check that entity-data contains valid JSON fields").
+			Schema("case-template", "create")
+	}
+
+	var inputCaseTemplate thehive.InputCreateCaseTemplate
+	if err := json.Unmarshal(jsonData, &inputCaseTemplate); err != nil {
+		return ManageEntityResult{}, tools.NewToolError("failed to unmarshal case template data").Cause(err).
+			Hint("Ensure entity-data fields match the case template schema").
+			Schema("case-template", "create")
+	}
+
+	result, resp, err := client.CaseTemplateAPI.CreateCaseTemplate(ctx).InputCreateCaseTemplate(inputCaseTemplate).Execute()
+	if err != nil {
+		return ManageEntityResult{}, tools.NewToolError("failed to create case template").Cause(err).
+			Hint("Check required fields (name) and permissions").API(resp)
+	}
+
+	return ManageEntityResult{
+		CreateCaseTemplateResult: NewCreateCaseTemplateResult(result),
 	}, nil
 }

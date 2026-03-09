@@ -95,6 +95,19 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 			EntityID: entityID,
 			Deleted:  true,
 		}
+
+	case types.EntityTypeCaseTemplate:
+		resp, err := client.CaseTemplateAPI.DeleteCaseTemplate(ctx, entityID).Execute()
+		if err != nil {
+			return SingleEntityDeleteResult{
+				EntityID: entityID,
+				Error:    tools.NewToolErrorf("failed to delete case template %s: %v. Check that the case template exists and you have permissions. This operation is irreversible.", entityID, err).API(resp).ToMap(),
+			}
+		}
+		return SingleEntityDeleteResult{
+			EntityID: entityID,
+			Deleted:  true,
+		}
 	default:
 		return SingleEntityDeleteResult{
 			EntityID: entityID,

@@ -152,6 +152,14 @@ func GetCaseTemplateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("case_template/OutputCaseTemplate")
 }
 
+func GetCaseTemplateCreateSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("case_template/CreateCaseTemplate")
+}
+
+func GetCaseTemplateUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("case_template/UpdateCaseTemplate")
+}
+
 func GetFilterSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("Filter")
 }
@@ -215,6 +223,10 @@ func GetPatternFactHandler() ([]mcp.ResourceContents, error) {
 	return getFactContent(types.EntityTypePattern, nil)
 }
 
+func GetCaseTemplateFactHandler() ([]mcp.ResourceContents, error) {
+	return getFactContent("case-template", nil)
+}
+
 // Helper to get catalog structure
 func GetCatalogData() map[string]interface{} {
 	return map[string]interface{}{
@@ -245,6 +257,8 @@ func GetCatalogData() map[string]interface{} {
 					types.EntityTypeProcedure + "/update",
 					types.EntityTypePattern,
 					"case-template",
+					"case-template/create",
+					"case-template/update",
 					"filter",
 				},
 			},
@@ -281,7 +295,7 @@ func GetCatalogData() map[string]interface{} {
 					{
 						"name":        "entities",
 						"description": "Entity-specific guides and best practices",
-						"resources":   []string{types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable, types.EntityTypeProcedure, types.EntityTypePattern},
+						"resources":   []string{types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable, types.EntityTypeProcedure, types.EntityTypePattern, types.EntityTypeCaseTemplate},
 					},
 					{
 						"name":        "automation",
@@ -496,6 +510,26 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		return GetCaseTemplateSchemaHandler()
 	})
 
+	caseTemplateCreateSchema := mcp.NewResource(
+		"hive://schema/case-template/create",
+		"Case Template Create Schema",
+		mcp.WithResourceDescription("Input fields and requirements for creating new case templates"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(caseTemplateCreateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetCaseTemplateCreateSchemaHandler()
+	})
+
+	caseTemplateUpdateSchema := mcp.NewResource(
+		"hive://schema/case-template/update",
+		"Case Template Update Schema",
+		mcp.WithResourceDescription("Partial input fields for updating existing case templates"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(caseTemplateUpdateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetCaseTemplateUpdateSchemaHandler()
+	})
+
 	// Filter schema
 	filterSchema := mcp.NewResource(
 		"hive://schema/filter",
@@ -627,6 +661,19 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		patternDocumentation,
 		func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 			return GetPatternFactHandler()
+		},
+	)
+
+	caseTemplateDocumentation := mcp.NewResource(
+		"hive://docs/entities/case-template",
+		"Case Template Documentation",
+		mcp.WithResourceDescription("How case templates work, their role as AI knowledge layer, and usage patterns"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(
+		caseTemplateDocumentation,
+		func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+			return GetCaseTemplateFactHandler()
 		},
 	)
 

@@ -39,12 +39,13 @@ type ToolPermission struct {
 
 // EntityOperation defines which operations are allowed for an entity type
 type EntityOperation struct {
-	Create  bool `yaml:"create"`
-	Update  bool `yaml:"update"`
-	Delete  bool `yaml:"delete"`
-	Comment bool `yaml:"comment"`
-	Promote bool `yaml:"promote"`
-	Merge   bool `yaml:"merge"`
+	Create        bool `yaml:"create"`
+	Update        bool `yaml:"update"`
+	Delete        bool `yaml:"delete"`
+	Comment       bool `yaml:"comment"`
+	Promote       bool `yaml:"promote"`
+	Merge         bool `yaml:"merge"`
+	ApplyTemplate bool `yaml:"apply-template"`
 }
 
 // AutomationPermissions defines analyzer or responder access
@@ -104,6 +105,8 @@ func (c *Config) IsEntityOperationAllowed(entityType, operation string) bool {
 		return entityPerm.Promote
 	case "merge":
 		return entityPerm.Merge
+	case "apply-template":
+		return entityPerm.ApplyTemplate
 	default:
 		return false
 	}

@@ -33,10 +33,11 @@ permissions:
         case:
           create: true
           update: true
-          delete: false  # Analysts cannot delete cases
+          delete: false        # Analysts cannot delete cases
           comment: true
-          promote: false # Cases cannot be promoted
-          merge: true    # Allow merging cases
+          promote: false       # Cases cannot be promoted
+          merge: true          # Allow merging cases
+          apply-template: true # Allow applying templates to existing cases
         task:
           create: true
           update: true
@@ -58,6 +59,13 @@ permissions:
           comment: false # Procedures do not support comments
           promote: false # Procedures cannot be promoted
           merge: false   # Procedures cannot be merged
+        case-template:
+          create: false  # Analysts cannot create templates
+          update: false  # Analysts cannot modify templates
+          delete: false  # Analysts cannot delete templates
+          comment: false # Case templates do not support comments
+          promote: false # Case templates cannot be promoted
+          merge: false   # Case templates cannot be merged
 
     # Allow running analyzers and responders
     # Specific analyzers/responders are controlled via global settings below

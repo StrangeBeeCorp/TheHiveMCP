@@ -22,6 +22,8 @@ func (t *ManageTool) Handle(ctx context.Context, request mcp.CallToolRequest, pa
 		return t.handlePromote(ctx, &params)
 	case "merge":
 		return t.handleMerge(ctx, &params)
+	case "apply-template":
+		return t.handleApplyTemplate(ctx, &params)
 	default:
 		return ManageEntityResult{}, tools.NewToolErrorf("unsupported operation: %s", params.Operation)
 	}

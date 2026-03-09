@@ -1,0 +1,66 @@
+{
+  "required": [
+    "ids",
+    "caseTemplate"
+  ],
+  "type": "object",
+  "properties": {
+    "ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of case IDs to apply the template to."
+    },
+    "caseTemplate": {
+      "type": "string",
+      "description": "The case template name or ID to apply."
+    },
+    "updateTitlePrefix": {
+      "type": "boolean",
+      "description": "Whether to update the case title prefix from the template. Default: false."
+    },
+    "updateDescription": {
+      "type": "boolean",
+      "description": "Whether to update the case description from the template. Default: false."
+    },
+    "updateTags": {
+      "type": "boolean",
+      "description": "Whether to update the case tags from the template. Default: false."
+    },
+    "updateSeverity": {
+      "type": "boolean",
+      "description": "Whether to update the case severity from the template. Default: false."
+    },
+    "updateFlag": {
+      "type": "boolean",
+      "description": "Whether to update the case flag from the template. Default: false."
+    },
+    "updateTlp": {
+      "type": "boolean",
+      "description": "Whether to update the case TLP from the template. Default: false."
+    },
+    "updatePap": {
+      "type": "boolean",
+      "description": "Whether to update the case PAP from the template. Default: false."
+    },
+    "updateCustomFields": {
+      "type": "boolean",
+      "description": "Whether to update the case custom fields from the template. Default: false."
+    },
+    "importTasks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of task titles from the template to import into the cases."
+    },
+    "importPages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of page titles from the template to import into the cases."
+    }
+  }
+}

@@ -24,8 +24,9 @@ permissions:
           update: true
           delete: true
           comment: true
-          promote: false  # Cases cannot be promoted (not applicable)
+          promote: false        # Cases cannot be promoted (not applicable)
           merge: true
+          apply-template: true  # Allow applying templates to existing cases
         task:
           create: true
           update: true
@@ -47,6 +48,13 @@ permissions:
           comment: false  # Procedures do not support comments
           promote: false  # Procedures cannot be promoted (not applicable)
           merge: false    # Procedures cannot be merged (not applicable)
+        case-template:
+          create: true
+          update: true
+          delete: true
+          comment: false  # Case templates do not support comments
+          promote: false  # Case templates cannot be promoted
+          merge: false    # Case templates cannot be merged
 
     execute-automation:
       allowed: true

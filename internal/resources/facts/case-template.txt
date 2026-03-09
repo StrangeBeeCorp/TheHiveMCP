@@ -1,0 +1,36 @@
+#Definition
+A case template is a reusable blueprint that defines default values and structure for new cases in TheHive. Case templates standardize incident response procedures by pre-configuring severity, TLP/PAP levels, tasks, tags, custom fields, and descriptions.
+
+#Role as AI Knowledge Layer
+Case templates serve as the primary knowledge layer for AI agents interacting with TheHive. They contain:
+- Instructions and procedures stored in the description and summary fields
+- Pre-defined task lists that guide investigation workflows
+- Default field values that encode organizational policies
+AI agents should consult case templates to understand how specific incident types should be handled.
+
+#Key Fields
+- name: Unique internal identifier used in API calls and integrations. This is the primary key for referencing templates.
+- displayName: Human-friendly name shown in the UI. May be empty.
+- description: Detailed description supporting markdown. Use this to store investigation procedures and instructions.
+- summary: Default summary text for cases created from this template.
+- titlePrefix: Automatically prepended to case titles (e.g., "[PHISH]" for phishing cases).
+- severity: Default severity level (1=LOW, 2=MEDIUM, 3=HIGH, 4=CRITICAL).
+- tlp/pap: Default Traffic Light Protocol and Permissible Actions Protocol values.
+- tags: Default tags applied to cases.
+- tasks: Pre-defined task list with titles, descriptions, groups, ordering, and mandatory flags.
+- customFields: Default custom field values.
+
+#Usage Patterns
+Case templates can be used in several ways:
+1. Create a case from template: Set the "caseTemplate" field (name or ID) when creating a case via manage-entities.
+2. Promote alert with template: Include "caseTemplate" in entity-data when promoting an alert to a case.
+3. Apply template to existing cases: Use the "apply-template" operation to retroactively apply a template to one or more existing cases, selectively importing tasks, pages, and updating fields.
+4. Search and list templates: Use search-entities with entity-type="case-template" to find available templates.
+
+#Best Practices
+- Use descriptive names that clearly indicate the incident type (e.g., "Phishing", "Malware-Analysis", "Data-Breach").
+- Include detailed task descriptions with step-by-step investigation instructions.
+- Set appropriate default severity, TLP, and PAP values based on incident type.
+- Use tags to categorize templates (e.g., by threat type, team, or priority).
+- Keep templates up to date as procedures evolve.
+- When applying templates to existing cases, carefully choose which fields to update to avoid overwriting analyst work.
