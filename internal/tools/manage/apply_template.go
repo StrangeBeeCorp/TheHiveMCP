@@ -30,8 +30,7 @@ func (t *ManageTool) handleApplyTemplate(ctx context.Context, params *ManageEnti
 		}
 		if err := json.Unmarshal(jsonData, &input); err != nil {
 			return ManageEntityResult{}, tools.NewToolError("failed to unmarshal apply-template data").Cause(err).
-				Hint("Optional fields: updateTitlePrefix, updateDescription, updateTags, updateSeverity, updateFlag, updateTlp, updatePap, updateCustomFields, importTasks, importPages").
-				Schema("case-template", "apply")
+				Hint("Optional fields: updateTitlePrefix, updateDescription, updateTags, updateSeverity, updateFlag, updateTlp, updatePap, updateCustomFields, importTasks, importPages")
 		}
 		// Restore required fields that may have been overwritten by the unmarshal
 		input.Ids = params.EntityIDs
