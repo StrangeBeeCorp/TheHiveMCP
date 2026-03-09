@@ -1,0 +1,92 @@
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Unique internal name for the case template."
+    },
+    "displayName": {
+      "type": "string",
+      "description": "Human-friendly name shown in the UI."
+    },
+    "titlePrefix": {
+      "type": "string",
+      "description": "Prefix automatically added to case titles created from this template."
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of the template purpose and usage. Supports markdown."
+    },
+    "severity": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Default severity (1=LOW, 2=MEDIUM, 3=HIGH, 4=CRITICAL)."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Default tags applied to cases."
+    },
+    "flag": {
+      "type": "boolean",
+      "description": "Whether cases are flagged by default."
+    },
+    "tlp": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Default TLP level (0=CLEAR, 1=GREEN, 2=AMBER, 3=AMBER+STRICT, 4=RED)."
+    },
+    "pap": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Default PAP level (0=CLEAR, 1=GREEN, 2=AMBER, 3=AMBER+STRICT, 4=RED)."
+    },
+    "summary": {
+      "type": "string",
+      "description": "Default summary text."
+    },
+    "customFields": {
+      "type": "object",
+      "description": "Custom field values to update."
+    },
+    "tasks": {
+      "type": "array",
+      "description": "Replace all template tasks with this list.",
+      "items": {
+        "required": [
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "group": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "flag": {
+            "type": "boolean"
+          },
+          "order": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "assignee": {
+            "type": "string"
+          },
+          "mandatory": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

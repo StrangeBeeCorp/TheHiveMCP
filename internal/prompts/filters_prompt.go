@@ -24,6 +24,8 @@ func getEntitySchema(entityType string) (string, error) {
 		content, err = resources.GetObservableSchemaHandler()
 	case types.EntityTypeTask:
 		content, err = resources.GetTaskSchemaHandler()
+	case types.EntityTypeCaseTemplate:
+		content, err = resources.GetCaseTemplateSchemaHandler()
 	default:
 		return "", fmt.Errorf("unsupported entity type: %s", entityType)
 	}
@@ -52,6 +54,8 @@ func getEntityFacts(entityType string) (string, error) {
 		content, err = resources.GetObservableFactHandler()
 	case types.EntityTypeTask:
 		content, err = resources.GetTaskFactHandler()
+	case types.EntityTypeCaseTemplate:
+		content, err = resources.GetCaseTemplateFactHandler()
 	default:
 		return "", fmt.Errorf("unsupported entity type: %s", entityType)
 	}

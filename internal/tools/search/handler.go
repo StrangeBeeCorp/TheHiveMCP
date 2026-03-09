@@ -161,6 +161,13 @@ func (t *SearchTool) buildHiveQuery(params SearchEntitiesParams, filters *Filter
 }
 
 func (t *SearchTool) buildListOperation(entityType string) *thehive.InputQueryGenericOperation {
+	// Handle entity types that don't follow simple capitalization
+	operationNameOverrides := map[string]string{
+		"case-template": "listCaseTemplate",
+	}
+	if override, ok := operationNameOverrides[entityType]; ok {
+		return thehive.NewInputQueryGenericOperation(override)
+	}
 	catpitalizedEntityType := string(unicode.ToUpper(rune(entityType[0]))) + entityType[1:]
 	operationName := fmt.Sprintf("list%s", catpitalizedEntityType)
 	return thehive.NewInputQueryGenericOperation(operationName)
@@ -252,6 +259,8 @@ func (t *SearchTool) getExcludedFields(entityType string, keptColumns []string, 
 		baseModel = thehive.OutputProcedure{}
 	case types.EntityTypePattern:
 		baseModel = thehive.OutputPattern{}
+	case types.EntityTypeCaseTemplate:
+		baseModel = thehive.OutputCaseTemplate{}
 	default:
 		return []string{}
 	}

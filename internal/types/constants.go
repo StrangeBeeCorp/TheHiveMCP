@@ -79,16 +79,17 @@ const DefaultMaxCompletionRetries = 3
 
 // Entity type constants for TheHive entities
 const (
-	EntityTypeAlert      = "alert"
-	EntityTypeCase       = "case"
-	EntityTypeTask       = "task"
-	EntityTypeObservable = "observable"
-	EntityTypeComment    = "comment"
-	EntityTypePage       = "page"
-	EntityTypeAttachment = "attachment"
-	EntityTypeTaskLog    = "task-log"
-	EntityTypeProcedure  = "procedure"
-	EntityTypePattern    = "pattern"
+	EntityTypeAlert        = "alert"
+	EntityTypeCase         = "case"
+	EntityTypeTask         = "task"
+	EntityTypeObservable   = "observable"
+	EntityTypeComment      = "comment"
+	EntityTypePage         = "page"
+	EntityTypeAttachment   = "attachment"
+	EntityTypeTaskLog      = "task-log"
+	EntityTypeProcedure    = "procedure"
+	EntityTypePattern      = "pattern"
+	EntityTypeCaseTemplate = "case-template"
 )
 
 // OutputEntity is a union type representing possible output entities
@@ -101,16 +102,17 @@ type OutputEntity interface {
 }
 
 var DefaultFields map[string][]string = map[string][]string{
-	EntityTypeAlert:      {"_id", "title", "_createdAt", "severity", "status"},
-	EntityTypeCase:       {"_id", "title", "_createdAt", "status", "severity"},
-	EntityTypeTask:       {"_id", "title", "status", "_createdAt", "assignee"},
-	EntityTypeObservable: {"_id", "dataType", "_createdAt"},
-	EntityTypeComment:    {"_id", "message", "_createdAt", "_createdBy"},
-	EntityTypePage:       {"_id", "title", "_createdAt"},
-	EntityTypeAttachment: {"_id", "fileName", "size", "_createdAt"},
-	EntityTypeTaskLog:    {"_id", "message", "_createdAt", "_createdBy"},
-	EntityTypeProcedure:  {"_id", "patternId", "patternName", "description", "occurDate"},
-	EntityTypePattern:    {"_id", "patternId", "name", "tactics", "platforms"},
+	EntityTypeAlert:        {"_id", "title", "_createdAt", "severity", "status"},
+	EntityTypeCase:         {"_id", "title", "_createdAt", "status", "severity"},
+	EntityTypeTask:         {"_id", "title", "status", "_createdAt", "assignee"},
+	EntityTypeObservable:   {"_id", "dataType", "_createdAt"},
+	EntityTypeComment:      {"_id", "message", "_createdAt", "_createdBy"},
+	EntityTypePage:         {"_id", "title", "_createdAt"},
+	EntityTypeAttachment:   {"_id", "fileName", "size", "_createdAt"},
+	EntityTypeTaskLog:      {"_id", "message", "_createdAt", "_createdBy"},
+	EntityTypeProcedure:    {"_id", "patternId", "patternName", "description", "occurDate"},
+	EntityTypePattern:      {"_id", "patternId", "name", "tactics", "platforms"},
+	EntityTypeCaseTemplate: {"_id", "name", "displayName", "description", "severity", "tags"},
 }
 
 const DateFormat = "2006-01-02T15:04:05"

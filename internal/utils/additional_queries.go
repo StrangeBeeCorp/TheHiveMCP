@@ -37,6 +37,9 @@ var queryRegistry = map[string]EntityQueryConfig{
 	types.EntityTypeObservable: {
 		// No additional queries supported yet
 	},
+	types.EntityTypeCaseTemplate: {
+		// No additional queries supported yet
+	},
 }
 
 var queryToEntityType = map[string]string{

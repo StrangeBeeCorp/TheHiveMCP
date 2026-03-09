@@ -6,7 +6,7 @@ import (
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 )
 
-const ManageToolDescription = `Perform CRUD and workflow operations on TheHive entities (alerts, cases, tasks, observables, procedures).
+const ManageToolDescription = `Perform CRUD and workflow operations on TheHive entities (alerts, cases, tasks, observables, procedures, case templates).
 
 SUPPORTED OPERATIONS:
 - CREATE: Create new entities with complete schema data
@@ -15,11 +15,13 @@ SUPPORTED OPERATIONS:
 - COMMENT: Add comments to cases or task logs to tasks
 - PROMOTE: Convert an alert into a new case (alert only)
 - MERGE: Merge entities together (cases, alerts, observables)
+- APPLY-TEMPLATE: Apply a case template to one or more existing cases
 
 IMPORTANT CONSTRAINTS:
 - Tasks can only be created within a case (provide case ID in entity-ids parameter)
 - Observables can be created in cases OR alerts (provide case or alert ID in entity-ids parameter)
 - Procedures can be created in cases OR alerts (provide case or alert ID in entity-ids parameter)
+- Case templates are top-level entities (no parent ID needed for creation)
 - Comments are only supported on cases and tasks (tasks use 'task logs')
 - DELETE operations are irreversible - use with caution
 - PROMOTE only applies to alerts
@@ -29,45 +31,66 @@ PROMOTE OPERATION (alert only):
 Converts an alert into a new case. The alert's observables, TTPs, and other data are transferred to the case.
 - Requires: entity-type="alert", entity-ids=[alert-id]
 - Optional: entity-data with case creation parameters (template, title override, etc.)
+- To promote with a template: include "caseTemplate" in entity-data
 
 MERGE OPERATION:
 - For cases: Merges multiple cases into a single new case. Requires entity-ids with 2+ case IDs.
 - For alerts: Merges alert(s) into an existing case. Requires entity-ids=[alert-ids...] and target-id=case-id.
 - For observables: Merges similar observables within a case (deduplication). Requires target-id=case-id.
 
+APPLY-TEMPLATE OPERATION:
+Applies a case template to one or more existing cases. Selectively imports tasks, pages, and updates fields.
+- Requires: entity-ids=[case-ids...], target-id=template-name-or-id
+- Optional: entity-data with boolean flags to control what gets updated:
+  updateTitlePrefix, updateDescription, updateTags, updateSeverity, updateFlag, updateTlp, updatePap, updateCustomFields
+  importTasks (array of task titles), importPages (array of page titles)
+
+CASE TEMPLATE OPERATIONS:
+- Create: operation="create", entity-type="case-template", entity-data={"name":"...", ...}
+- Update: operation="update", entity-type="case-template", entity-ids=["template-name-or-id"], entity-data={...}
+- Delete: operation="delete", entity-type="case-template", entity-ids=["template-name-or-id"]
+- Creating a case with a template: operation="create", entity-type="case", entity-data={"title":"...", "description":"...", "caseTemplate":"template-name"}
+
 GETTING SCHEMA INFORMATION:
 Use the get-resource tool to query schemas before creating/updating entities:
-- Output schemas: hive://schema/alert, hive://schema/case, hive://schema/task, hive://schema/observable, hive://schema/procedure
-- Create schemas: hive://schema/alert/create, hive://schema/case/create, hive://schema/task/create, hive://schema/observable/create, hive://schema/procedure/create
-- Update schemas: hive://schema/alert/update, hive://schema/case/update, hive://schema/task/update, hive://schema/observable/update, hive://schema/procedure/update
+- Output schemas: hive://schema/alert, hive://schema/case, hive://schema/task, hive://schema/observable, hive://schema/procedure, hive://schema/case-template
+- Create schemas: hive://schema/alert/create, hive://schema/case/create, hive://schema/task/create, hive://schema/observable/create, hive://schema/procedure/create, hive://schema/case-template/create
+- Update schemas: hive://schema/alert/update, hive://schema/case/update, hive://schema/task/update, hive://schema/observable/update, hive://schema/procedure/update, hive://schema/case-template/update
 
 EXAMPLES:
 - Create alert: operation="create", entity-type="alert", entity-data={"type":"...", "source":"...", "title":"..."}
 - Update case: operation="update", entity-type="case", entity-ids=["~123"], entity-data={"title":"New Title"}
 - Add comment: operation="comment", entity-type="case", entity-ids=["~123"], comment="Investigation update"
 - Promote alert: operation="promote", entity-type="alert", entity-ids=["~456"]
+- Promote alert with template: operation="promote", entity-type="alert", entity-ids=["~456"], entity-data={"caseTemplate":"Phishing"}
 - Merge cases: operation="merge", entity-type="case", entity-ids=["~123", "~456"]
 - Merge alert into case: operation="merge", entity-type="alert", entity-ids=["~789"], target-id="~123"
 - Dedupe observables: operation="merge", entity-type="observable", target-id="~123"
 - Create procedure: operation="create", entity-type="procedure", entity-ids=["~123"], entity-data={"patternId":"T1059","occurDate":"2024-01-01T12:00:00"}
-- Delete procedure: operation="delete", entity-type="procedure", entity-ids=["~456"]`
+- Delete procedure: operation="delete", entity-type="procedure", entity-ids=["~456"]
+- Create case template: operation="create", entity-type="case-template", entity-data={"name":"Phishing","displayName":"Phishing Investigation","severity":2,"tasks":[{"title":"Analyze headers"}]}
+- Update case template: operation="update", entity-type="case-template", entity-ids=["Phishing"], entity-data={"description":"Updated procedure"}
+- Delete case template: operation="delete", entity-type="case-template", entity-ids=["Phishing"]
+- Apply template to cases: operation="apply-template", entity-ids=["~123","~456"], target-id="Phishing", entity-data={"updateDescription":true,"importTasks":["Analyze headers"]}
+- Create case from template: operation="create", entity-type="case", entity-data={"title":"Phishing incident","description":"...","caseTemplate":"Phishing"}`
 
 type ManageEntityParams struct {
-	Operation  string                 `json:"operation" jsonschema:"enum=create,enum=update,enum=delete,enum=comment,enum=promote,enum=merge,required=true" jsonschema_description:"The operation to perform on the entity."`
-	EntityType string                 `json:"entity-type" jsonschema:"enum=case,enum=alert,enum=task,enum=observable,enum=procedure,required=true" jsonschema_description:"The type of entity to manage."`
-	EntityIDs  []string               `json:"entity-ids,omitempty" jsonschema_description:"List of entity IDs. Usage varies by operation: UPDATE/DELETE/COMMENT: entities to modify. CREATE (task/observable/procedure): parent case/alert ID. PROMOTE: single alert ID. MERGE (case): case IDs to merge. MERGE (alert): alert IDs to merge into target case."`
-	EntityData map[string]interface{} `json:"entity-data,omitempty" jsonschema_description:"JSON object containing entity data. For CREATE: use get-resource hive://schema/[entity]/create for required fields. For UPDATE: only provide fields to change. For PROMOTE: optional case creation parameters."`
+	Operation  string                 `json:"operation" jsonschema:"enum=create,enum=update,enum=delete,enum=comment,enum=promote,enum=merge,enum=apply-template,required=true" jsonschema_description:"The operation to perform on the entity."`
+	EntityType string                 `json:"entity-type" jsonschema:"enum=case,enum=alert,enum=task,enum=observable,enum=procedure,enum=case-template,required=true" jsonschema_description:"The type of entity to manage."`
+	EntityIDs  []string               `json:"entity-ids,omitempty" jsonschema_description:"List of entity IDs. Usage varies by operation: UPDATE/DELETE/COMMENT: entities to modify. CREATE (task/observable/procedure): parent case/alert ID. PROMOTE: single alert ID. MERGE (case): case IDs to merge. MERGE (alert): alert IDs to merge into target case. APPLY-TEMPLATE: case IDs to apply template to."`
+	EntityData map[string]interface{} `json:"entity-data,omitempty" jsonschema_description:"JSON object containing entity data. For CREATE: use get-resource hive://schema/[entity]/create for required fields. For UPDATE: only provide fields to change. For PROMOTE: optional case creation parameters. For APPLY-TEMPLATE: optional flags controlling what to update."`
 	Comment    string                 `json:"comment,omitempty" jsonschema_description:"Text content for COMMENT operations. Required when operation=\"comment\". For cases: adds a comment. For tasks: adds a task log entry."`
-	TargetID   string                 `json:"target-id,omitempty" jsonschema_description:"Target entity ID for MERGE operations. For alerts: the case ID to merge alerts into. For observables: the case ID containing observables to deduplicate."`
+	TargetID   string                 `json:"target-id,omitempty" jsonschema_description:"Target entity ID for MERGE and APPLY-TEMPLATE operations. For alerts: the case ID to merge alerts into. For observables: the case ID containing observables to deduplicate. For apply-template: the case template name or ID."`
 }
 
 const (
-	OperationCreate  = "create"
-	OperationUpdate  = "update"
-	OperationDelete  = "delete"
-	OperationComment = "comment"
-	OperationPromote = "promote"
-	OperationMerge   = "merge"
+	OperationCreate        = "create"
+	OperationUpdate        = "update"
+	OperationDelete        = "delete"
+	OperationComment       = "comment"
+	OperationPromote       = "promote"
+	OperationMerge         = "merge"
+	OperationApplyTemplate = "apply-template"
 )
 
 type FilteredOutputAlert struct {
@@ -380,19 +403,73 @@ func NewMergeObservablesResult(resultData, targetCaseId string) *MergeObservable
 }
 
 type ManageEntityResult struct {
-	CreateAlertResult      *CreateAlertResult         `json:"createAlertResult,omitempty"`
-	CreateCaseResult       *CreateCaseResult          `json:"createCaseResult,omitempty"`
-	CreateTaskResult       *CreateTaskResult          `json:"createTaskResult,omitempty"`
-	CreateObservableResult *CreateObservableResult    `json:"createObservableResult,omitempty"`
-	CreateProcedureResult  *CreateProcedureResult     `json:"createProcedureResult,omitempty"`
-	UpdateResults          *UpdateEntityResult        `json:"updateResults,omitempty"`
-	DeleteResults          *DeleteEntityResult        `json:"deleteResults,omitempty"`
-	CommentResults         *CommentEntityResult       `json:"commentResults,omitempty"`
-	PromoteAlertResult     *PromoteAlertResult        `json:"promoteAlertResult,omitempty"`
-	MergeCasesResult       *MergeCasesResult          `json:"mergeCasesResult,omitempty"`
-	MergeAlertsResult      *MergeAlertsIntoCaseResult `json:"mergeAlertsResult,omitempty"`
-	MergeObservablesResult *MergeObservablesResult    `json:"mergeObservablesResult,omitempty"`
+	CreateAlertResult        *CreateAlertResult         `json:"createAlertResult,omitempty"`
+	CreateCaseResult         *CreateCaseResult          `json:"createCaseResult,omitempty"`
+	CreateTaskResult         *CreateTaskResult          `json:"createTaskResult,omitempty"`
+	CreateObservableResult   *CreateObservableResult    `json:"createObservableResult,omitempty"`
+	CreateProcedureResult    *CreateProcedureResult     `json:"createProcedureResult,omitempty"`
+	CreateCaseTemplateResult *CreateCaseTemplateResult  `json:"createCaseTemplateResult,omitempty"`
+	UpdateResults            *UpdateEntityResult        `json:"updateResults,omitempty"`
+	DeleteResults            *DeleteEntityResult        `json:"deleteResults,omitempty"`
+	CommentResults           *CommentEntityResult       `json:"commentResults,omitempty"`
+	PromoteAlertResult       *PromoteAlertResult        `json:"promoteAlertResult,omitempty"`
+	MergeCasesResult         *MergeCasesResult          `json:"mergeCasesResult,omitempty"`
+	MergeAlertsResult        *MergeAlertsIntoCaseResult `json:"mergeAlertsResult,omitempty"`
+	MergeObservablesResult   *MergeObservablesResult    `json:"mergeObservablesResult,omitempty"`
+	ApplyTemplateResult      *ApplyTemplateResult       `json:"applyTemplateResult,omitempty"`
 }
 
 // Unwrap implements utils.Unwrapper to flatten the union for serialization.
 func (r ManageEntityResult) Unwrap() any { return utils.UnwrapUnion(r) }
+
+type FilteredOutputCaseTemplate struct {
+	UnderscoreId string  `json:"_id"`
+	Name         string  `json:"name"`
+	DisplayName  string  `json:"displayName"`
+	Description  *string `json:"description,omitempty"`
+	Severity     *int32  `json:"severity,omitempty"`
+}
+
+func NewFilteredOutputCaseTemplate(ct *thehive.OutputCaseTemplate) *FilteredOutputCaseTemplate {
+	return &FilteredOutputCaseTemplate{
+		UnderscoreId: ct.UnderscoreId,
+		Name:         ct.Name,
+		DisplayName:  ct.DisplayName,
+		Description:  ct.Description,
+		Severity:     ct.Severity,
+	}
+}
+
+type CreateCaseTemplateResult struct {
+	Operation  string                      `json:"operation"`
+	EntityType string                      `json:"entityType"`
+	Result     *FilteredOutputCaseTemplate `json:"result,omitempty"`
+	Message    string                      `json:"message,omitempty"`
+}
+
+func NewCreateCaseTemplateResult(ct *thehive.OutputCaseTemplate) *CreateCaseTemplateResult {
+	return &CreateCaseTemplateResult{
+		Operation:  OperationCreate,
+		EntityType: types.EntityTypeCaseTemplate,
+		Result:     NewFilteredOutputCaseTemplate(ct),
+		Message:    "Case template created successfully",
+	}
+}
+
+type ApplyTemplateResult struct {
+	Operation  string   `json:"operation"`
+	EntityType string   `json:"entityType"`
+	TemplateID string   `json:"templateId"`
+	CaseIDs    []string `json:"caseIds"`
+	Message    string   `json:"message,omitempty"`
+}
+
+func NewApplyTemplateResult(templateID string, caseIDs []string) *ApplyTemplateResult {
+	return &ApplyTemplateResult{
+		Operation:  OperationApplyTemplate,
+		EntityType: types.EntityTypeCaseTemplate,
+		TemplateID: templateID,
+		CaseIDs:    caseIDs,
+		Message:    "Case template applied successfully",
+	}
+}

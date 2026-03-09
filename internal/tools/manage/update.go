@@ -143,6 +143,26 @@ func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient
 			Result:   "updated",
 		}
 
+	case types.EntityTypeCaseTemplate:
+		var inputCaseTemplate thehive.InputUpdateCaseTemplate
+		if err := json.Unmarshal(jsonData, &inputCaseTemplate); err != nil {
+			return SingleEntityUpdateResult{
+				EntityID: entityID,
+				Error:    tools.NewToolError("failed to unmarshal case template update data").Cause(err).Hint("Use get-resource 'hive://schema/case-template/update' to see updatable fields").ToMap(),
+			}
+		}
+		resp, err := client.CaseTemplateAPI.UpdateCaseTemplate(ctx, entityID).InputUpdateCaseTemplate(inputCaseTemplate).Execute()
+		if err != nil {
+			return SingleEntityUpdateResult{
+				EntityID: entityID,
+				Error:    tools.NewToolError("failed to update case template").Cause(err).Hint(fmt.Sprintf("Check that the case template %s exists and you have permissions. API response: %v", entityID, resp)).ToMap(),
+			}
+		}
+		return SingleEntityUpdateResult{
+			EntityID: entityID,
+			Result:   "updated",
+		}
+
 	default:
 		return SingleEntityUpdateResult{
 			EntityID: entityID,

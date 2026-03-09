@@ -13,6 +13,8 @@ Examples:
 - "observables containing malware in the last month"
 - "latest phishing alerts with severity greater than 2"
 
+- "case templates with phishing in the name"
+
 The search understands:
 - Severity levels (high, medium, low, critical)
 - Status and stage filters
@@ -25,7 +27,7 @@ When asked for statistics, it is recommended to use count=true to get only the c
 Only use this tool with precise queries related to searching TheHive entities. It is highly recommended to refer to the [entity]-schema from server resources for available fields and types. Every investigation should start by exploring the available entities and their fields using the get-resource tool.`
 
 type SearchEntitiesParams struct {
-	EntityType        string   `json:"entity-type" jsonschema:"enum=alert,enum=case,enum=task,enum=observable,enum=procedure,enum=pattern,required=true" jsonschema_description:"Type of entity to search for."`
+	EntityType        string   `json:"entity-type" jsonschema:"enum=alert,enum=case,enum=task,enum=observable,enum=procedure,enum=pattern,enum=case-template,required=true" jsonschema_description:"Type of entity to search for."`
 	Query             string   `json:"query" jsonschema:"required=true" jsonschema_description:"Natural language query describing what entities you want to find. This query will be converted to TheHive filters using a specialized AI Agent. The filters will be returned along with the search results for transparency. If the results are not as expected, consider documenting yourself about the filters in the resources, that will help you refine your query."`
 	SortBy            string   `json:"sort-by,omitempty" jsonschema:"default=_createdAt" jsonschema_description:"Column to sort the results by. Leave empty to let the query determine sorting."`
 	SortOrder         string   `json:"sort-order,omitempty" jsonschema:"enum=asc,enum=desc,default=desc" jsonschema_description:"Sort order ('asc' or 'desc'). Default is 'desc'."`

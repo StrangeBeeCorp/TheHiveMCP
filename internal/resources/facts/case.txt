@@ -4,11 +4,17 @@ A case is a structured entity used to track, investigate, and respond to securit
 #Sources
 In TheHive, you can create a case from the following sources:
 Manual entry: Create a case manually by entering details.
-Case templates: Use predefined templates to standardize and simplify case creation.
+Case templates: Use predefined templates to standardize and simplify case creation. Set the "caseTemplate" field (name or ID) when creating a case.
 Archived cases: Restore cases from previous investigations stored in TheHive.
 MISP event files: Create cases by manually importing MISP events for further investigation.
-Alerts: Convert alerts from connected detection tools (SIEM, EDR, IDS, or firewalls), threat intelligence platforms (like MISP), or email servers into cases for further investigation.
+Alerts: Convert alerts from connected detection tools (SIEM, EDR, IDS, or firewalls), threat intelligence platforms (like MISP), or email servers into cases for further investigation. Include "caseTemplate" in entity-data when promoting an alert to apply a template.
 Detection tools (SIEM, EDR, IDS, or firewalls): Create cases directly from your detection tools if you prefer to manage alert triage there or if you trust the tool to generate mostly true positives.
+
+#Case Templates Integration
+Case templates can be used with cases in three ways:
+1. Create case from template: Include "caseTemplate" (name or ID) in entity-data when creating a case.
+2. Promote alert with template: Include "caseTemplate" in entity-data when promoting an alert.
+3. Apply template to existing cases: Use the "apply-template" operation with entity-ids=[case IDs] and target-id=template name/ID to retroactively apply a template.
 
 # Key components
 In TheHive, a case includes the following elements:

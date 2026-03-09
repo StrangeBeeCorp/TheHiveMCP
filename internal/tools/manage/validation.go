@@ -91,6 +91,13 @@ func (t *ManageTool) ValidateParams(params *ManageEntityParams) error {
 		default:
 			return tools.NewToolErrorf("merge operation is not supported for entity type %s. Merge is only supported for cases, alerts, and observables", params.EntityType)
 		}
+	case OperationApplyTemplate:
+		if len(params.EntityIDs) == 0 {
+			return tools.NewToolError("entity-ids are required for apply-template operations. Provide an array of case IDs to apply the template to")
+		}
+		if params.TargetID == "" {
+			return tools.NewToolError("target-id is required for apply-template operations. Provide the case template name or ID to apply")
+		}
 	}
 	return nil
 }

@@ -53,7 +53,7 @@ func (t *SearchTool) ValidateParams(params *SearchEntitiesParams) error {
 	}
 
 	// Validate entity type
-	validEntityTypes := []string{types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable, types.EntityTypeProcedure, types.EntityTypePattern}
+	validEntityTypes := []string{types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable, types.EntityTypeProcedure, types.EntityTypePattern, types.EntityTypeCaseTemplate}
 	var isValidEntityType bool
 	for _, validType := range validEntityTypes {
 		if params.EntityType == validType {
@@ -62,7 +62,7 @@ func (t *SearchTool) ValidateParams(params *SearchEntitiesParams) error {
 		}
 	}
 	if !isValidEntityType {
-		return tools.NewToolErrorf("invalid entity-type '%s'. Must be one of: 'alert', 'case', 'task', 'observable', 'procedure', 'pattern'", params.EntityType)
+		return tools.NewToolErrorf("invalid entity-type '%s'. Must be one of: 'alert', 'case', 'task', 'observable', 'procedure', 'pattern', 'case-template'", params.EntityType)
 	}
 
 	// Validate query is not empty
