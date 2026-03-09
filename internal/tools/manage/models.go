@@ -40,7 +40,7 @@ MERGE OPERATION:
 
 APPLY-TEMPLATE OPERATION:
 Applies a case template to one or more existing cases. Selectively imports tasks, pages, and updates fields.
-- Requires: entity-ids=[case-ids...], target-id=template-name-or-id
+- Requires: entity-type="case", entity-ids=[case-ids...], target-id=template-name-or-id
 - Optional: entity-data with boolean flags to control what gets updated:
   updateTitlePrefix, updateDescription, updateTags, updateSeverity, updateFlag, updateTlp, updatePap, updateCustomFields
   importTasks (array of task titles), importPages (array of page titles)
@@ -71,7 +71,7 @@ EXAMPLES:
 - Create case template: operation="create", entity-type="case-template", entity-data={"name":"Phishing","displayName":"Phishing Investigation","severity":2,"tasks":[{"title":"Analyze headers"}]}
 - Update case template: operation="update", entity-type="case-template", entity-ids=["Phishing"], entity-data={"description":"Updated procedure"}
 - Delete case template: operation="delete", entity-type="case-template", entity-ids=["Phishing"]
-- Apply template to cases: operation="apply-template", entity-ids=["~123","~456"], target-id="Phishing", entity-data={"updateDescription":true,"importTasks":["Analyze headers"]}
+- Apply template to cases: operation="apply-template", entity-type="case", entity-ids=["~123","~456"], target-id="Phishing", entity-data={"updateDescription":true,"importTasks":["Analyze headers"]}
 - Create case from template: operation="create", entity-type="case", entity-data={"title":"Phishing incident","description":"...","caseTemplate":"Phishing"}`
 
 type ManageEntityParams struct {

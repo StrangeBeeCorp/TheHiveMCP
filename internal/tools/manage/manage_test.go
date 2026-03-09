@@ -1046,3 +1046,268 @@ func TestManageMergeWithReadOnlyPermissions(t *testing.T) {
 	require.True(t, result.IsError, "Merge should be denied with read-only permissions")
 	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
 }
+
+// TestManageCreateCaseTemplate tests creating a new case template via the manage-entities tool
+func TestManageCreateCaseTemplate(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+
+	templateData := map[string]interface{}{
+		"name":        "Test-MCP-Template",
+		"displayName": "Test MCP Template",
+		"description": "A case template created via MCP for testing",
+		"severity":    2,
+		"tags":        []string{"test", "mcp"},
+		"tasks": []map[string]interface{}{
+			{"title": "Initial triage", "description": "Perform initial triage of the incident"},
+		},
+	}
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "create",
+				"entity-type": types.EntityTypeCaseTemplate,
+				"entity-data": templateData,
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError, "Case template creation should succeed")
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "create", structuredData["operation"])
+	require.Equal(t, types.EntityTypeCaseTemplate, structuredData["entityType"])
+
+	resultData, ok := structuredData["result"].(map[string]any)
+	require.True(t, ok)
+
+	templateID, ok := resultData["_id"].(string)
+	require.True(t, ok)
+	require.NotEmpty(t, templateID)
+	require.Equal(t, "Test-MCP-Template", resultData["name"])
+	require.Equal(t, "Test MCP Template", resultData["displayName"])
+
+	// Verify it exists in TheHive
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	fetchedTemplate, _, err := hiveClient.CaseTemplateAPI.GetCaseTemplate(authContext, templateID).Execute()
+	require.NoError(t, err)
+	require.Equal(t, "Test-MCP-Template", fetchedTemplate.Name)
+}
+
+// TestManageUpdateCaseTemplate tests updating an existing case template via the manage-entities tool
+func TestManageUpdateCaseTemplate(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+
+	// Create a template to update
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	input := testutils.MockInputCaseTemplate()
+	input.Name = "Update-Test-Template"
+
+	createdTemplate, _, err := hiveClient.CaseTemplateAPI.CreateCaseTemplate(authContext).InputCreateCaseTemplate(*input).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdTemplate)
+
+	updateData := map[string]interface{}{
+		"displayName": "Updated Display Name",
+		"description": "Updated description via MCP",
+		"severity":    3,
+	}
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "update",
+				"entity-type": types.EntityTypeCaseTemplate,
+				"entity-ids":  []string{createdTemplate.UnderscoreId},
+				"entity-data": updateData,
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError, "Case template update should succeed")
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "update", structuredData["operation"])
+
+	// Verify the update in TheHive
+	fetchedTemplate, _, err := hiveClient.CaseTemplateAPI.GetCaseTemplate(authContext, createdTemplate.UnderscoreId).Execute()
+	require.NoError(t, err)
+	require.Equal(t, "Updated Display Name", fetchedTemplate.DisplayName)
+	require.Equal(t, int32(3), *fetchedTemplate.Severity)
+}
+
+// TestManageDeleteCaseTemplate tests deleting a case template via the manage-entities tool
+func TestManageDeleteCaseTemplate(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+
+	// Create a template to delete
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	input := testutils.MockInputCaseTemplate()
+	input.Name = "Delete-Test-Template"
+
+	createdTemplate, _, err := hiveClient.CaseTemplateAPI.CreateCaseTemplate(authContext).InputCreateCaseTemplate(*input).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdTemplate)
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "delete",
+				"entity-type": types.EntityTypeCaseTemplate,
+				"entity-ids":  []string{createdTemplate.UnderscoreId},
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError, "Case template deletion should succeed")
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "delete", structuredData["operation"])
+
+	// Verify it no longer exists
+	_, resp, err := hiveClient.CaseTemplateAPI.GetCaseTemplate(authContext, createdTemplate.UnderscoreId).Execute()
+	require.Error(t, err)
+	require.Equal(t, 404, resp.StatusCode)
+}
+
+// TestManageApplyTemplateToCase tests applying a case template to existing cases
+func TestManageApplyTemplateToCase(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+
+	// Create a template with a task to import
+	input := testutils.MockInputCaseTemplate()
+	input.Name = "Apply-Test-Template"
+	severity := int32(3)
+	input.Severity = &severity
+	input.Tasks = []thehive.InputCreateTask{
+		{Title: "Template task to import"},
+	}
+
+	createdTemplate, _, err := hiveClient.CaseTemplateAPI.CreateCaseTemplate(authContext).InputCreateCaseTemplate(*input).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdTemplate)
+
+	// Create a case to apply the template to
+	testCase := testutils.MockInputCase()
+	testCase.Title = "Case for Template Application"
+
+	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdCase)
+
+	// Apply the template using manage-entities
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "apply-template",
+				"entity-type": types.EntityTypeCase,
+				"entity-ids":  []string{createdCase.UnderscoreId},
+				"target-id":   createdTemplate.UnderscoreId,
+				"entity-data": map[string]interface{}{
+					"updateSeverity": true,
+					"importTasks":    []string{"Template task to import"},
+				},
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError, "Apply template should succeed")
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "apply-template", structuredData["operation"])
+	require.Equal(t, createdTemplate.UnderscoreId, structuredData["templateId"])
+
+	caseIDs, ok := structuredData["caseIds"].([]any)
+	require.True(t, ok)
+	require.Contains(t, caseIDs, createdCase.UnderscoreId)
+}
+
+// TestManageApplyTemplateWithAnalystPermissions tests that apply-template is allowed with analyst permissions
+func TestManageApplyTemplateWithAnalystPermissions(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "../../../docs/examples/permissions/analyst.yaml")
+
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+
+	// Create a template
+	input := testutils.MockInputCaseTemplate()
+	input.Name = "Analyst-Apply-Template"
+
+	createdTemplate, _, err := hiveClient.CaseTemplateAPI.CreateCaseTemplate(authContext).InputCreateCaseTemplate(*input).Execute()
+	require.NoError(t, err)
+
+	// Create a case to apply the template to
+	testCase := testutils.MockInputCase()
+	testCase.Title = "Case for Analyst Apply Template Test"
+
+	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+	require.NoError(t, err)
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "apply-template",
+				"entity-type": types.EntityTypeCase,
+				"entity-ids":  []string{createdCase.UnderscoreId},
+				"target-id":   createdTemplate.UnderscoreId,
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError, "Apply template should succeed with analyst permissions")
+}
+
+// TestManageCaseTemplateCreateDeniedWithAnalystPermissions tests that creating templates is denied for analysts
+func TestManageCaseTemplateCreateDeniedWithAnalystPermissions(t *testing.T) {
+	testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "../../../docs/examples/permissions/analyst.yaml")
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "create",
+				"entity-type": types.EntityTypeCaseTemplate,
+				"entity-data": map[string]interface{}{
+					"name": "Analyst-Created-Template",
+				},
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.IsError, "Case template creation should be denied for analysts")
+	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
+}

@@ -1141,3 +1141,63 @@ func TestSearchTaskTasKLogs(t *testing.T) {
 		}
 	}
 }
+
+// TestSearchCaseTemplates tests searching case templates with the search-entities tool
+func TestSearchCaseTemplates(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+
+	// Create two templates with distinct names for query matching
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	for _, name := range []string{"Phishing-Search-Test", "Malware-Search-Test"} {
+		input := testutils.MockInputCaseTemplate()
+		input.Name = name
+		_, _, err := hiveClient.CaseTemplateAPI.CreateCaseTemplate(authContext).InputCreateCaseTemplate(*input).Execute()
+		require.NoError(t, err)
+	}
+
+	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
+		`{
+			"raw_filters": {
+				"_like": {
+					"_field": "name",
+					"_value": "Phishing*"
+				}
+			},
+			"sort_by": "_createdAt",
+			"sort_order": "desc",
+			"num_results": 10,
+			"kept_columns": ["_id", "name", "displayName"],
+			"extra_data": [],
+			"additional_queries": []
+		}`,
+	)
+
+	mcpClient := testutils.GetMCPTestClient(t, samplingHandler, testutils.DummyElicitationAccept)
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "search-entities",
+			Arguments: map[string]any{
+				"entity-type":   types.EntityTypeCaseTemplate,
+				"query":         "case templates with phishing in the name",
+				"extra-columns": []string{"_id", "name", "displayName"},
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError)
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+
+	templatesData, ok := structuredData["results"].([]any)
+	require.True(t, ok)
+	require.Len(t, templatesData, 1)
+
+	template, ok := templatesData[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "Phishing-Search-Test", template["name"])
+}
