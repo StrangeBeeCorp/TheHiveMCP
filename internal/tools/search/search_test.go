@@ -1201,3 +1201,72 @@ func TestSearchCaseTemplates(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "Phishing-Search-Test", template["name"])
 }
+
+// TestSearchPages tests searching page entities via the search-entities tool
+func TestSearchPages(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+
+	// Create a case and add a page to it
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	testCase := testutils.MockInputCase()
+	testCase.Title = "Case with Pages for Search"
+
+	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdCase)
+
+	// Create a page in the case via the TheHive API
+	inputPage := thehive.InputCreatePage{
+		Title:    "Searchable Investigation Page",
+		Content:  "## Notes\nSome investigation content.",
+		Category: "Default",
+	}
+	_, _, err = hiveClient.PageAPI.CreateAPageInACase(authContext, createdCase.UnderscoreId).InputCreatePage(inputPage).Execute()
+	require.NoError(t, err)
+
+	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
+		`{
+			"raw_filters": {
+				"_eq": {
+					"_field": "category",
+					"_value": "Default"
+				}
+			},
+			"sort_by": "_createdAt",
+			"sort_order": "desc",
+			"num_results": 10,
+			"kept_columns": ["_id", "title", "category"],
+			"extra_data": [],
+			"additional_queries": []
+		}`,
+	)
+
+	mcpClient := testutils.GetMCPTestClient(t, samplingHandler, testutils.DummyElicitationAccept)
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "search-entities",
+			Arguments: map[string]any{
+				"entity-type":   types.EntityTypePage,
+				"query":         "pages in the Default category",
+				"extra-columns": []string{"_id", "title", "category"},
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError)
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+
+	pagesData, ok := structuredData["results"].([]any)
+	require.True(t, ok)
+	require.GreaterOrEqual(t, len(pagesData), 1)
+
+	page, ok := pagesData[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "Default", page["category"])
+}

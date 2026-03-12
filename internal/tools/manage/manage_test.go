@@ -1311,3 +1311,262 @@ func TestManageCaseTemplateCreateDeniedWithAnalystPermissions(t *testing.T) {
 	require.True(t, result.IsError, "Case template creation should be denied for analysts")
 	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
 }
+
+// TestManageCreatePageInCase tests creating a page within a case via the manage-entities tool
+func TestManageCreatePageInCase(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+
+	// Create a parent case
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	testCase := testutils.MockInputCase()
+	testCase.Title = "Case for Page Creation"
+
+	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdCase)
+
+	// Create a page in the case using manage-entities
+	pageData := map[string]interface{}{
+		"title":    "Investigation Notes",
+		"content":  "## Summary\nInitial findings from the investigation.",
+		"category": "Default",
+	}
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "create",
+				"entity-type": types.EntityTypePage,
+				"entity-ids":  []string{createdCase.UnderscoreId},
+				"entity-data": pageData,
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError)
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "create", structuredData["operation"])
+	require.Equal(t, types.EntityTypePage, structuredData["entityType"])
+
+	resultData, ok := structuredData["result"].(map[string]any)
+	require.True(t, ok)
+
+	pageID, ok := resultData["_id"].(string)
+	require.True(t, ok)
+	require.NotEmpty(t, pageID)
+	require.Equal(t, "Investigation Notes", resultData["title"])
+	require.Equal(t, "Default", resultData["category"])
+}
+
+// TestManageCreateStandalonePage tests creating a standalone (non-case) page via the manage-entities tool
+func TestManageCreateStandalonePage(t *testing.T) {
+	testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+
+	// Create a standalone page (no parent case) using manage-entities
+	pageData := map[string]interface{}{
+		"title":    "Incident Response Runbook",
+		"content":  "## Procedure\n1. Identify scope\n2. Contain threat\n3. Eradicate.",
+		"category": "Default",
+	}
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "create",
+				"entity-type": types.EntityTypePage,
+				"entity-data": pageData,
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError)
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "create", structuredData["operation"])
+	require.Equal(t, types.EntityTypePage, structuredData["entityType"])
+
+	resultData, ok := structuredData["result"].(map[string]any)
+	require.True(t, ok)
+
+	pageID, ok := resultData["_id"].(string)
+	require.True(t, ok)
+	require.NotEmpty(t, pageID)
+	require.Equal(t, "Incident Response Runbook", resultData["title"])
+}
+
+// TestManageUpdatePage tests updating a page via the manage-entities tool
+func TestManageUpdatePage(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+
+	// Create a case and page to update
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	testCase := testutils.MockInputCase()
+	testCase.Title = "Case for Page Update"
+
+	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdCase)
+
+	// Create a page via the TheHive API directly
+	inputPage := thehive.InputCreatePage{
+		Title:    "Original Page Title",
+		Content:  "## Original\nOriginal content.",
+		Category: "Default",
+	}
+	createdPage, _, err := hiveClient.PageAPI.CreateAPageInACase(authContext, createdCase.UnderscoreId).InputCreatePage(inputPage).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdPage)
+
+	// Update the page using manage-entities
+	updateData := map[string]interface{}{
+		"title":   "Updated Page Title",
+		"content": "## Updated\nNew content after update.",
+	}
+
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "update",
+				"entity-type": types.EntityTypePage,
+				"entity-ids":  []string{createdPage.UnderscoreId},
+				"entity-data": updateData,
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError)
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "update", structuredData["operation"])
+	require.Equal(t, types.EntityTypePage, structuredData["entityType"])
+}
+
+// TestManageDeletePage tests deleting a page via the manage-entities tool
+func TestManageDeletePage(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+
+	// Create a case and page to delete
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	testCase := testutils.MockInputCase()
+	testCase.Title = "Case for Page Deletion"
+
+	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdCase)
+
+	// Create a page via the TheHive API directly
+	inputPage := thehive.InputCreatePage{
+		Title:    "Page to Delete",
+		Content:  "This page will be deleted.",
+		Category: "Default",
+	}
+	createdPage, _, err := hiveClient.PageAPI.CreateAPageInACase(authContext, createdCase.UnderscoreId).InputCreatePage(inputPage).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdPage)
+
+	// Delete the page using manage-entities
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "delete",
+				"entity-type": types.EntityTypePage,
+				"entity-ids":  []string{createdPage.UnderscoreId},
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError)
+
+	structuredData, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "delete", structuredData["operation"])
+	require.Equal(t, types.EntityTypePage, structuredData["entityType"])
+}
+
+// TestManagePageWithAnalystPermissions tests that analyst permissions allow page create/update but deny delete
+func TestManagePageWithAnalystPermissions(t *testing.T) {
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "../../../docs/examples/permissions/analyst.yaml")
+
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+
+	// Create should succeed with analyst permissions
+	pageData := map[string]interface{}{
+		"title":    "Analyst Created Page",
+		"content":  "## Content\nPage created by analyst.",
+		"category": "Default",
+	}
+
+	createRequest := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "create",
+				"entity-type": types.EntityTypePage,
+				"entity-data": pageData,
+			},
+		},
+	}
+
+	result, err := mcpClient.CallTool(t.Context(), createRequest)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError, "Page creation should succeed with analyst permissions")
+
+	// Create a page directly via API to test delete permission
+	testCase := testutils.MockInputCase()
+	testCase.Title = "Case for Analyst Page Permission Test"
+
+	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+	require.NoError(t, err)
+
+	inputPage := thehive.InputCreatePage{
+		Title:    "Page for Analyst Delete Test",
+		Content:  "Content",
+		Category: "Default",
+	}
+	createdPage, _, err := hiveClient.PageAPI.CreateAPageInACase(authContext, createdCase.UnderscoreId).InputCreatePage(inputPage).Execute()
+	require.NoError(t, err)
+
+	// Delete should be denied with analyst permissions
+	deleteRequest := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "manage-entities",
+			Arguments: map[string]any{
+				"operation":   "delete",
+				"entity-type": types.EntityTypePage,
+				"entity-ids":  []string{createdPage.UnderscoreId},
+			},
+		},
+	}
+
+	result, err = mcpClient.CallTool(t.Context(), deleteRequest)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.IsError, "Page deletion should be denied with analyst permissions")
+	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
+}
