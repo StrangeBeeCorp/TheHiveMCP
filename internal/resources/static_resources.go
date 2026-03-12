@@ -160,6 +160,19 @@ func GetCaseTemplateUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("case_template/UpdateCaseTemplate")
 }
 
+// Page schema handlers
+func GetPageSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("page/OutputPage")
+}
+
+func GetPageCreateSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("page/CreatePage")
+}
+
+func GetPageUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("page/UpdatePage")
+}
+
 func GetFilterSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("Filter")
 }
@@ -227,6 +240,10 @@ func GetCaseTemplateFactHandler() ([]mcp.ResourceContents, error) {
 	return getFactContent("case-template", nil)
 }
 
+func GetPageFactHandler() ([]mcp.ResourceContents, error) {
+	return getFactContent(types.EntityTypePage, nil)
+}
+
 // Helper to get catalog structure
 func GetCatalogData() map[string]interface{} {
 	return map[string]interface{}{
@@ -259,6 +276,9 @@ func GetCatalogData() map[string]interface{} {
 					"case-template",
 					"case-template/create",
 					"case-template/update",
+					types.EntityTypePage,
+					types.EntityTypePage + "/create",
+					types.EntityTypePage + "/update",
 					"filter",
 				},
 			},
@@ -295,7 +315,7 @@ func GetCatalogData() map[string]interface{} {
 					{
 						"name":        "entities",
 						"description": "Entity-specific guides and best practices",
-						"resources":   []string{types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable, types.EntityTypeProcedure, types.EntityTypePattern, types.EntityTypeCaseTemplate},
+						"resources":   []string{types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable, types.EntityTypeProcedure, types.EntityTypePattern, types.EntityTypeCaseTemplate, types.EntityTypePage},
 					},
 					{
 						"name":        "automation",
@@ -530,6 +550,37 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		return GetCaseTemplateUpdateSchemaHandler()
 	})
 
+	// Page schemas
+	pageSchema := mcp.NewResource(
+		"hive://schema/page",
+		"Page Output Schema",
+		mcp.WithResourceDescription("Output fields, types, and constraints for pages returned from TheHive API"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(pageSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetPageSchemaHandler()
+	})
+
+	pageCreateSchema := mcp.NewResource(
+		"hive://schema/page/create",
+		"Page Create Schema",
+		mcp.WithResourceDescription("Input fields and requirements for creating new pages"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(pageCreateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetPageCreateSchemaHandler()
+	})
+
+	pageUpdateSchema := mcp.NewResource(
+		"hive://schema/page/update",
+		"Page Update Schema",
+		mcp.WithResourceDescription("Partial input fields for updating existing pages"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(pageUpdateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetPageUpdateSchemaHandler()
+	})
+
 	// Filter schema
 	filterSchema := mcp.NewResource(
 		"hive://schema/filter",
@@ -674,6 +725,19 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		caseTemplateDocumentation,
 		func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 			return GetCaseTemplateFactHandler()
+		},
+	)
+
+	pageDocumentation := mcp.NewResource(
+		"hive://docs/entities/page",
+		"Page Documentation",
+		mcp.WithResourceDescription("How pages work, their relationship to cases, and usage patterns"),
+		mcp.WithMIMEType("application/json"),
+	)
+	registry.Register(
+		pageDocumentation,
+		func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+			return GetPageFactHandler()
 		},
 	)
 

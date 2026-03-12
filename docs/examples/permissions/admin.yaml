@@ -55,6 +55,13 @@ permissions:
           comment: false  # Case templates do not support comments
           promote: false  # Case templates cannot be promoted
           merge: false    # Case templates cannot be merged
+        page:
+          create: true
+          update: true
+          delete: true
+          comment: false  # Pages do not support comments
+          promote: false  # Pages cannot be promoted
+          merge: false    # Pages cannot be merged
 
     execute-automation:
       allowed: true

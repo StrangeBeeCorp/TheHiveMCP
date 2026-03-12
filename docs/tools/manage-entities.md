@@ -1,6 +1,6 @@
 # manage-entities
 
-Perform CRUD and workflow operations on TheHive entities (alerts, cases, tasks, observables, procedures).
+Perform CRUD and workflow operations on TheHive entities (alerts, cases, tasks, observables, procedures, pages).
 
 ## Overview
 
@@ -11,7 +11,7 @@ The `manage-entities` tool provides comprehensive Create, Read, Update, Delete, 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `operation` | string | Yes | Operation to perform (`create`, `update`, `delete`, `comment`, `promote`, `merge`) |
-| `entity-type` | string | Yes | Type of entity (`alert`, `case`, `task`, `observable`, `procedure`) |
+| `entity-type` | string | Yes | Type of entity (`alert`, `case`, `task`, `observable`, `procedure`, `page`) |
 | `entity-ids` | array | Conditional | List of entity IDs (usage varies by operation) |
 | `entity-data` | object | Conditional | JSON object with entity data (required for create/update, optional for promote) |
 | `comment` | string | Conditional | Text content (required for comment operations) |
@@ -160,6 +160,44 @@ A procedure maps observed attacker behaviour to a MITRE ATT&CK technique. Use `s
 - `occurDate` is the timestamp when the attacker behaviour was observed
 - Procedures can be attached to cases or alerts
 
+#### Creating pages
+
+Pages can be created within a case or as standalone knowledge base articles.
+
+**Creating a page in a case:**
+```json
+{
+  "operation": "create",
+  "entity-type": "page",
+  "entity-ids": ["case-123"],
+  "entity-data": {
+    "title": "Investigation Notes",
+    "content": "## Summary\nInitial findings from the investigation...",
+    "category": "Default"
+  }
+}
+```
+
+**Creating a standalone page (no parent case):**
+```json
+{
+  "operation": "create",
+  "entity-type": "page",
+  "entity-data": {
+    "title": "Incident Response Runbook",
+    "content": "## Procedure\n1. Identify scope\n2. Contain threat\n3. Eradicate...",
+    "category": "Default"
+  }
+}
+```
+
+**Notes:**
+- `title`, `content`, and `category` are required fields
+- `content` supports Markdown formatting
+- If `entity-ids` is provided with a case ID, the page is created within that case
+- If `entity-ids` is omitted, a standalone organisation-level page is created
+- `order` is optional and controls display position (lower numbers appear first)
+
 ### Update operations
 
 Update existing entities with partial field changes.
@@ -190,6 +228,19 @@ Update an existing procedure (use the procedure's own ID, not the parent case/al
 }
 ```
 
+Update an existing page (use the page ID):
+```json
+{
+  "operation": "update",
+  "entity-type": "page",
+  "entity-ids": ["~789"],
+  "entity-data": {
+    "title": "Updated Investigation Notes",
+    "content": "## Updated Summary\nNew findings added..."
+  }
+}
+```
+
 ### Delete operations
 
 **⚠️ Warning**: Delete operations are irreversible!
@@ -199,6 +250,15 @@ Update an existing procedure (use the procedure's own ID, not the parent case/al
   "operation": "delete",
   "entity-type": "task",
   "entity-ids": ["task-456"]
+}
+```
+
+Delete a page:
+```json
+{
+  "operation": "delete",
+  "entity-type": "page",
+  "entity-ids": ["~789"]
 }
 ```
 

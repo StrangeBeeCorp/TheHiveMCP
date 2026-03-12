@@ -1,0 +1,57 @@
+{
+  "type": "object",
+  "required": ["_id", "_type", "_createdBy", "_createdAt", "title", "content", "order", "category"],
+  "additionalProperties": false,
+  "properties": {
+    "_id": {
+      "type": "string",
+      "description": "Unique identifier for the page. Generated automatically by TheHive using the format '~<number>'."
+    },
+    "_type": {
+      "type": "string",
+      "description": "Entity type identifier. Always 'Page' for page objects."
+    },
+    "_createdBy": {
+      "type": "string",
+      "description": "Email or username of the user who created this page."
+    },
+    "_updatedBy": {
+      "type": "string",
+      "description": "Email or username of the user who last updated this page."
+    },
+    "_createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the page was created. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
+    },
+    "_updatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "example": "01-01-2022T00:00:00",
+      "description": "Date-time string when the page was last updated. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
+    },
+    "title": {
+      "type": "string",
+      "description": "The page title. Used to identify the page within a case or as a standalone knowledge base article."
+    },
+    "content": {
+      "type": "string",
+      "description": "The page content in Markdown format. Supports standard Markdown syntax including headings, links, images, and code blocks."
+    },
+    "order": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Sort order of the page. Lower numbers appear first. Used to control display order in the page list."
+    },
+    "category": {
+      "type": "string",
+      "description": "Category used to group pages. Common values include 'Default'. Used for organizing pages within a case."
+    },
+    "extraData": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Additional data fields that can be requested via extraData query parameter."
+    }
+  }
+}

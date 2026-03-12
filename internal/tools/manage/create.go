@@ -3,6 +3,7 @@ package manage
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
@@ -32,6 +33,12 @@ func (t *ManageTool) handleCreate(ctx context.Context, params *ManageEntityParam
 		return t.createProcedure(ctx, hiveClient, processedData, params.EntityIDs[0])
 	case types.EntityTypeCaseTemplate:
 		return t.createCaseTemplate(ctx, hiveClient, processedData)
+	case types.EntityTypePage:
+		var parentID string
+		if len(params.EntityIDs) > 0 {
+			parentID = params.EntityIDs[0]
+		}
+		return t.createPage(ctx, hiveClient, processedData, parentID)
 	default:
 		return ManageEntityResult{}, tools.NewToolErrorf("unsupported entity type for create: %s", params.EntityType)
 	}
@@ -212,5 +219,42 @@ func (t *ManageTool) createCaseTemplate(ctx context.Context, client *thehive.API
 
 	return ManageEntityResult{
 		CreateCaseTemplateResult: NewCreateCaseTemplateResult(result),
+	}, nil
+}
+
+func (t *ManageTool) createPage(ctx context.Context, client *thehive.APIClient, data map[string]interface{}, parentID string) (ManageEntityResult, error) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return ManageEntityResult{}, tools.NewToolError("failed to marshal page data").Cause(err).
+			Hint("Check that entity-data contains valid JSON fields").
+			Schema("page", "create")
+	}
+
+	var inputPage thehive.InputCreatePage
+	if err := json.Unmarshal(jsonData, &inputPage); err != nil {
+		return ManageEntityResult{}, tools.NewToolError("failed to unmarshal page data").Cause(err).
+			Hint("Ensure entity-data fields match the page schema").
+			Schema("page", "create")
+	}
+
+	var result *thehive.OutputPage
+	var resp *http.Response
+
+	if parentID != "" {
+		result, resp, err = client.PageAPI.CreateAPageInACase(ctx, parentID).InputCreatePage(inputPage).Execute()
+		if err != nil {
+			return ManageEntityResult{}, tools.NewToolErrorf("failed to create page in case %s", parentID).Cause(err).
+				Hint("Check that the case exists and you have permissions").API(resp)
+		}
+	} else {
+		result, resp, err = client.PageAPI.CreateAPage(ctx).InputCreatePage(inputPage).Execute()
+		if err != nil {
+			return ManageEntityResult{}, tools.NewToolError("failed to create standalone page").Cause(err).
+				Hint("Check required fields and permissions").API(resp)
+		}
+	}
+
+	return ManageEntityResult{
+		CreatePageResult: NewCreatePageResult(result),
 	}, nil
 }

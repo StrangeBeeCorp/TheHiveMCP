@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "description": "All fields are optional for updates. Only provide fields you want to change.",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "The page title. Used to identify the page within a case or as a standalone knowledge base article."
+    },
+    "content": {
+      "type": "string",
+      "description": "The page content in Markdown format. Supports standard Markdown syntax including headings, links, images, and code blocks."
+    },
+    "category": {
+      "type": "string",
+      "description": "Category used to group pages. Common values include 'Default'. Used for organizing pages within a case."
+    },
+    "order": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Sort order of the page. Lower numbers appear first. Used to control display order in the page list."
+    }
+  }
+}

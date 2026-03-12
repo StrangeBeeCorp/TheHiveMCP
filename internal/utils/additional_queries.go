@@ -40,6 +40,9 @@ var queryRegistry = map[string]EntityQueryConfig{
 	types.EntityTypeCaseTemplate: {
 		// No additional queries supported yet
 	},
+	types.EntityTypePage: {
+		// No additional queries supported yet
+	},
 }
 
 var queryToEntityType = map[string]string{

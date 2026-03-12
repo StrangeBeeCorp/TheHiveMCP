@@ -108,6 +108,19 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 			EntityID: entityID,
 			Deleted:  true,
 		}
+
+	case types.EntityTypePage:
+		resp, err := client.PageAPI.DeleteAPage(ctx, entityID).Execute()
+		if err != nil {
+			return SingleEntityDeleteResult{
+				EntityID: entityID,
+				Error:    tools.NewToolErrorf("failed to delete page %s: %v. Check that the page exists and you have permissions. This operation is irreversible.", entityID, err).API(resp).ToMap(),
+			}
+		}
+		return SingleEntityDeleteResult{
+			EntityID: entityID,
+			Deleted:  true,
+		}
 	default:
 		return SingleEntityDeleteResult{
 			EntityID: entityID,

@@ -163,6 +163,26 @@ func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient
 			Result:   "updated",
 		}
 
+	case types.EntityTypePage:
+		var inputPage thehive.InputUpdatePage
+		if err := json.Unmarshal(jsonData, &inputPage); err != nil {
+			return SingleEntityUpdateResult{
+				EntityID: entityID,
+				Error:    tools.NewToolError("failed to unmarshal page update data").Cause(err).Hint("Use get-resource 'hive://schema/page/update' to see updatable fields").ToMap(),
+			}
+		}
+		resp, err := client.PageAPI.UpdateAPage(ctx, entityID).InputUpdatePage(inputPage).Execute()
+		if err != nil {
+			return SingleEntityUpdateResult{
+				EntityID: entityID,
+				Error:    tools.NewToolError("failed to update page").Cause(err).Hint(fmt.Sprintf("Check that the page %s exists and you have permissions. API response: %v", entityID, resp)).ToMap(),
+			}
+		}
+		return SingleEntityUpdateResult{
+			EntityID: entityID,
+			Result:   "updated",
+		}
+
 	default:
 		return SingleEntityUpdateResult{
 			EntityID: entityID,

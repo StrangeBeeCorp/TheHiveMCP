@@ -39,6 +39,10 @@ func (t *ManageTool) ValidateParams(params *ManageEntityParams) error {
 		if needsParentID && len(params.EntityIDs) > 1 {
 			return tools.NewToolErrorf("%s creation requires exactly one parent ID in entity-ids parameter, got %d", params.EntityType, len(params.EntityIDs))
 		}
+		// Pages support an optional parent case ID
+		if params.EntityType == types.EntityTypePage && len(params.EntityIDs) > 1 {
+			return tools.NewToolErrorf("page creation accepts at most one parent case ID in entity-ids parameter, got %d", len(params.EntityIDs))
+		}
 	case OperationUpdate:
 		if len(params.EntityIDs) == 0 {
 			return tools.NewToolErrorf("entity-ids are required for update operations. Provide an array of %s IDs to update, e.g., ['id1', 'id2']", params.EntityType)

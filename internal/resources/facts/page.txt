@@ -1,0 +1,8 @@
+A page is a knowledge base article or documentation section in TheHive.
+Pages can be attached to a case to document investigation findings, procedures, or notes.
+Pages can also be standalone (organisation-level) for shared knowledge base content.
+Pages support Markdown content including headings, links, images, and code blocks.
+Pages have a category field (commonly "Default") used to organize them within a case.
+Pages have an order field to control their display position in the page list.
+To create a page in a case, provide the case ID in entity-ids. To create a standalone page, omit entity-ids.
+Pages are commonly used to document investigation timelines, analysis notes, and remediation steps.
