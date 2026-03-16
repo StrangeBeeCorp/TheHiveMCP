@@ -261,6 +261,8 @@ func (t *SearchTool) getExcludedFields(entityType string, keptColumns []string, 
 		baseModel = thehive.OutputPattern{}
 	case types.EntityTypeCaseTemplate:
 		baseModel = thehive.OutputCaseTemplate{}
+	case types.EntityTypePage:
+		baseModel = thehive.OutputPage{}
 	default:
 		return []string{}
 	}

@@ -66,6 +66,13 @@ permissions:
           comment: false # Case templates do not support comments
           promote: false # Case templates cannot be promoted
           merge: false   # Case templates cannot be merged
+        page:
+          create: true   # Analysts can create pages
+          update: true   # Analysts can update pages
+          delete: false  # Analysts cannot delete pages
+          comment: false # Pages do not support comments
+          promote: false # Pages cannot be promoted
+          merge: false   # Pages cannot be merged
 
     # Allow running analyzers and responders
     # Specific analyzers/responders are controlled via global settings below

@@ -6,7 +6,7 @@ import (
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 )
 
-const ManageToolDescription = `Perform CRUD and workflow operations on TheHive entities (alerts, cases, tasks, observables, procedures, case templates).
+const ManageToolDescription = `Perform CRUD and workflow operations on TheHive entities (alerts, cases, tasks, observables, procedures, case templates, pages).
 
 SUPPORTED OPERATIONS:
 - CREATE: Create new entities with complete schema data
@@ -21,6 +21,7 @@ IMPORTANT CONSTRAINTS:
 - Tasks can only be created within a case (provide case ID in entity-ids parameter)
 - Observables can be created in cases OR alerts (provide case or alert ID in entity-ids parameter)
 - Procedures can be created in cases OR alerts (provide case or alert ID in entity-ids parameter)
+- Pages can be created within a case (provide case ID in entity-ids) or as standalone (omit entity-ids)
 - Case templates are top-level entities (no parent ID needed for creation)
 - Comments are only supported on cases and tasks (tasks use 'task logs')
 - DELETE operations are irreversible - use with caution
@@ -51,11 +52,17 @@ CASE TEMPLATE OPERATIONS:
 - Delete: operation="delete", entity-type="case-template", entity-ids=["template-name-or-id"]
 - Creating a case with a template: operation="create", entity-type="case", entity-data={"title":"...", "description":"...", "caseTemplate":"template-name"}
 
+PAGE OPERATIONS:
+- Create in case: operation="create", entity-type="page", entity-ids=["case-id"], entity-data={"title":"...","content":"...","category":"Default"}
+- Create standalone: operation="create", entity-type="page", entity-data={"title":"...","content":"...","category":"Default"}
+- Update: operation="update", entity-type="page", entity-ids=["page-id"], entity-data={"content":"updated"}
+- Delete: operation="delete", entity-type="page", entity-ids=["page-id"]
+
 GETTING SCHEMA INFORMATION:
 Use the get-resource tool to query schemas before creating/updating entities:
-- Output schemas: hive://schema/alert, hive://schema/case, hive://schema/task, hive://schema/observable, hive://schema/procedure, hive://schema/case-template
-- Create schemas: hive://schema/alert/create, hive://schema/case/create, hive://schema/task/create, hive://schema/observable/create, hive://schema/procedure/create, hive://schema/case-template/create
-- Update schemas: hive://schema/alert/update, hive://schema/case/update, hive://schema/task/update, hive://schema/observable/update, hive://schema/procedure/update, hive://schema/case-template/update
+- Output schemas: hive://schema/alert, hive://schema/case, hive://schema/task, hive://schema/observable, hive://schema/procedure, hive://schema/case-template, hive://schema/page
+- Create schemas: hive://schema/alert/create, hive://schema/case/create, hive://schema/task/create, hive://schema/observable/create, hive://schema/procedure/create, hive://schema/case-template/create, hive://schema/page/create
+- Update schemas: hive://schema/alert/update, hive://schema/case/update, hive://schema/task/update, hive://schema/observable/update, hive://schema/procedure/update, hive://schema/case-template/update, hive://schema/page/update
 
 EXAMPLES:
 - Create alert: operation="create", entity-type="alert", entity-data={"type":"...", "source":"...", "title":"..."}
@@ -72,12 +79,16 @@ EXAMPLES:
 - Update case template: operation="update", entity-type="case-template", entity-ids=["Phishing"], entity-data={"description":"Updated procedure"}
 - Delete case template: operation="delete", entity-type="case-template", entity-ids=["Phishing"]
 - Apply template to cases: operation="apply-template", entity-type="case", entity-ids=["~123","~456"], target-id="Phishing", entity-data={"updateDescription":true,"importTasks":["Analyze headers"]}
-- Create case from template: operation="create", entity-type="case", entity-data={"title":"Phishing incident","description":"...","caseTemplate":"Phishing"}`
+- Create case from template: operation="create", entity-type="case", entity-data={"title":"Phishing incident","description":"...","caseTemplate":"Phishing"}
+- Create page in case: operation="create", entity-type="page", entity-ids=["~123"], entity-data={"title":"Investigation Notes","content":"## Summary\nFindings...","category":"Default"}
+- Create standalone page: operation="create", entity-type="page", entity-data={"title":"Runbook","content":"## Procedure\nSteps...","category":"Default"}
+- Update page: operation="update", entity-type="page", entity-ids=["~789"], entity-data={"content":"Updated findings"}
+- Delete page: operation="delete", entity-type="page", entity-ids=["~789"]`
 
 type ManageEntityParams struct {
 	Operation  string                 `json:"operation" jsonschema:"enum=create,enum=update,enum=delete,enum=comment,enum=promote,enum=merge,enum=apply-template,required=true" jsonschema_description:"The operation to perform on the entity."`
-	EntityType string                 `json:"entity-type" jsonschema:"enum=case,enum=alert,enum=task,enum=observable,enum=procedure,enum=case-template,required=true" jsonschema_description:"The type of entity to manage."`
-	EntityIDs  []string               `json:"entity-ids,omitempty" jsonschema_description:"List of entity IDs. Usage varies by operation: UPDATE/DELETE/COMMENT: entities to modify. CREATE (task/observable/procedure): parent case/alert ID. PROMOTE: single alert ID. MERGE (case): case IDs to merge. MERGE (alert): alert IDs to merge into target case. APPLY-TEMPLATE: case IDs to apply template to."`
+	EntityType string                 `json:"entity-type" jsonschema:"enum=case,enum=alert,enum=task,enum=observable,enum=procedure,enum=case-template,enum=page,required=true" jsonschema_description:"The type of entity to manage."`
+	EntityIDs  []string               `json:"entity-ids,omitempty" jsonschema_description:"List of entity IDs. Usage varies by operation: UPDATE/DELETE/COMMENT: entities to modify. CREATE (task/observable/procedure): parent case/alert ID. CREATE (page): optional parent case ID. PROMOTE: single alert ID. MERGE (case): case IDs to merge. MERGE (alert): alert IDs to merge into target case. APPLY-TEMPLATE: case IDs to apply template to."`
 	EntityData map[string]interface{} `json:"entity-data,omitempty" jsonschema_description:"JSON object containing entity data. For CREATE: use get-resource hive://schema/[entity]/create for required fields. For UPDATE: only provide fields to change. For PROMOTE: optional case creation parameters. For APPLY-TEMPLATE: optional flags controlling what to update."`
 	Comment    string                 `json:"comment,omitempty" jsonschema_description:"Text content for COMMENT operations. Required when operation=\"comment\". For cases: adds a comment. For tasks: adds a task log entry."`
 	TargetID   string                 `json:"target-id,omitempty" jsonschema_description:"Target entity ID for MERGE and APPLY-TEMPLATE operations. For alerts: the case ID to merge alerts into. For observables: the case ID containing observables to deduplicate. For apply-template: the case template name or ID."`
@@ -409,6 +420,7 @@ type ManageEntityResult struct {
 	CreateObservableResult   *CreateObservableResult    `json:"createObservableResult,omitempty"`
 	CreateProcedureResult    *CreateProcedureResult     `json:"createProcedureResult,omitempty"`
 	CreateCaseTemplateResult *CreateCaseTemplateResult  `json:"createCaseTemplateResult,omitempty"`
+	CreatePageResult         *CreatePageResult          `json:"createPageResult,omitempty"`
 	UpdateResults            *UpdateEntityResult        `json:"updateResults,omitempty"`
 	DeleteResults            *DeleteEntityResult        `json:"deleteResults,omitempty"`
 	CommentResults           *CommentEntityResult       `json:"commentResults,omitempty"`
@@ -421,6 +433,40 @@ type ManageEntityResult struct {
 
 // Unwrap implements utils.Unwrapper to flatten the union for serialization.
 func (r ManageEntityResult) Unwrap() any { return utils.UnwrapUnion(r) }
+
+type FilteredOutputPage struct {
+	UnderscoreId string `json:"_id"`
+	Title        string `json:"title"`
+	Category     string `json:"category"`
+	Order        int32  `json:"order"`
+	CreatedAt    int64  `json:"_createdAt"`
+}
+
+func NewFilteredOutputPage(page *thehive.OutputPage) *FilteredOutputPage {
+	return &FilteredOutputPage{
+		UnderscoreId: page.UnderscoreId,
+		Title:        page.Title,
+		Category:     page.Category,
+		Order:        page.Order,
+		CreatedAt:    page.UnderscoreCreatedAt,
+	}
+}
+
+type CreatePageResult struct {
+	Operation  string              `json:"operation"`
+	EntityType string              `json:"entityType"`
+	Result     *FilteredOutputPage `json:"result,omitempty"`
+	Message    string              `json:"message,omitempty"`
+}
+
+func NewCreatePageResult(page *thehive.OutputPage) *CreatePageResult {
+	return &CreatePageResult{
+		Operation:  OperationCreate,
+		EntityType: types.EntityTypePage,
+		Result:     NewFilteredOutputPage(page),
+		Message:    "Page created successfully",
+	}
+}
 
 type FilteredOutputCaseTemplate struct {
 	UnderscoreId string  `json:"_id"`

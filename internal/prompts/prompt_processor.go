@@ -21,6 +21,7 @@ var SaticResourceMapping = map[string]func() ([]mcp.ResourceContents, error){
 	"ObservableFacts":  resources.GetObservableFactHandler,
 	"AlertFacts":       resources.GetAlertFactHandler,
 	"CaseFacts":        resources.GetCaseFactHandler,
+	"PageFacts":        resources.GetPageFactHandler,
 	"AnalyzerFacts":    resources.GetAnalyzerFactHandler,
 	"ResponderFacts":   resources.GetResponderFactHandler,
 	"TaskSchema":       resources.GetTaskSchemaHandler,

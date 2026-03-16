@@ -40,6 +40,9 @@ var queryRegistry = map[string]EntityQueryConfig{
 	types.EntityTypeCaseTemplate: {
 		// No additional queries supported yet
 	},
+	types.EntityTypePage: {
+		// No additional queries supported yet
+	},
 }
 
 var queryToEntityType = map[string]string{
@@ -80,6 +83,11 @@ func ExpandEntitiesWithQueries(
 	entities []map[string]interface{},
 	additionalQueries []string,
 ) ([]map[string]interface{}, error) {
+	// Nothing to expand when no additional queries were requested.
+	if len(additionalQueries) == 0 {
+		return entities, nil
+	}
+
 	hiveClient, err := GetHiveClientFromContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get TheHive client: %w", err)
