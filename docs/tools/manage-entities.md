@@ -1,6 +1,6 @@
 # manage-entities
 
-Perform CRUD and workflow operations on TheHive entities (alerts, cases, tasks, observables, procedures, pages).
+Perform CRUD and workflow operations on TheHive entities (alerts, cases, tasks, observables, procedures, case templates, pages).
 
 ## Overview
 
@@ -10,8 +10,8 @@ The `manage-entities` tool provides comprehensive Create, Read, Update, Delete, 
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `operation` | string | Yes | Operation to perform (`create`, `update`, `delete`, `comment`, `promote`, `merge`) |
-| `entity-type` | string | Yes | Type of entity (`alert`, `case`, `task`, `observable`, `procedure`, `page`) |
+| `operation` | string | Yes | Operation to perform (`create`, `update`, `delete`, `comment`, `promote`, `merge`, `apply-template`) |
+| `entity-type` | string | Yes | Type of entity (`alert`, `case`, `task`, `observable`, `procedure`, `case-template`, `page`) |
 | `entity-ids` | array | Conditional | List of entity IDs (usage varies by operation) |
 | `entity-data` | object | Conditional | JSON object with entity data (required for create/update, optional for promote) |
 | `comment` | string | Conditional | Text content (required for comment operations) |
