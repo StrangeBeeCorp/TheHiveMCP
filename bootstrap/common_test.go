@@ -92,7 +92,7 @@ func TestTheHiveCredentials_Validate(t *testing.T) {
 				URL:    "https://thehive.example.com",
 				APIKey: "dummy",
 			},
-			wantErr: ErrMissingAuthentication,
+			wantErr: ErrInvalidAPIKey,
 		},
 	}
 
