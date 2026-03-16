@@ -41,7 +41,7 @@ PERMISSIONS_CONFIG=read_only
 
 Add to your MCP settings:
 
-```json
+```jsonc
 {
   "mcpServers": {
     "thehive": {
