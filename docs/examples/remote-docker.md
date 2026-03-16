@@ -19,7 +19,7 @@ Create `.env` file:
 # TheHive Configuration
 THEHIVE_URL=https://your-thehive.com
 THEHIVE_API_KEY=your-api-key
-THEHIVE_ORGANISATION=your-org
+THEHIVE_ORGANISATION=your-org  # Optional, defaults to user's own organisation
 ```
 
 ### 2. Deploy

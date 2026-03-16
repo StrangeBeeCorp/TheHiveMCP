@@ -167,7 +167,9 @@ func CreateTheHiveConfig(creds *TheHiveCredentials) (*thehive.Configuration, err
 		},
 	}
 
-	clientCfg.AddDefaultHeader("X-Organisation", creds.Organisation)
+	if creds.Organisation != "" {
+		clientCfg.AddDefaultHeader("X-Organisation", creds.Organisation)
+	}
 
 	return clientCfg, nil
 }

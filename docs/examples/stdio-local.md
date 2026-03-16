@@ -7,7 +7,7 @@ This example shows how to run TheHiveMCP in stdio mode for integration with loca
 ## Prerequisites
 
 - TheHive 5.x instance with API access
-- TheHive API key and organisation name
+- TheHive API key (and optionally an organisation name)
 - MCP host that supports stdio transport
 
 ## Setup
@@ -31,7 +31,7 @@ cp .env.template .env
 # Edit with your TheHive details
 THEHIVE_URL=https://your-thehive-instance.com
 THEHIVE_API_KEY=your-api-key-here
-THEHIVE_ORGANISATION=your-org-name
+THEHIVE_ORGANISATION=your-org-name  # Optional, defaults to user's own organisation
 PERMISSIONS_CONFIG=read_only
 ```
 
@@ -50,7 +50,7 @@ Add to your MCP settings:
       "env": {
         "THEHIVE_URL": "https://your-thehive-instance.com",
         "THEHIVE_API_KEY": "your-api-key-here",
-        "THEHIVE_ORGANISATION": "your-org-name",
+        "THEHIVE_ORGANISATION": "your-org-name",  // Optional
         "PERMISSIONS_CONFIG": "read_only"
       }
     }
