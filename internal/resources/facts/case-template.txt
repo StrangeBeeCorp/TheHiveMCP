@@ -27,6 +27,13 @@ Case templates can be used in several ways:
 3. Apply template to existing cases: Use the "apply-template" operation to retroactively apply a template to one or more existing cases, selectively importing tasks, pages, and updating fields.
 4. Search and list templates: Use search-entities with entity-type="case-template" to find available templates.
 
+#Apply-Template: importTasks and importPages
+When using apply-template, you can selectively import tasks and pages by title:
+- importTasks: Array of task titles defined in the template to import into the target cases.
+- importPages: Array of page titles defined in the template to import into the target cases.
+Both fields match by exact title. If a title does not match any task/page in the template, it is silently ignored.
+The template must have tasks or pages defined for these to work — if the template has no tasks/pages, nothing will be imported regardless of the values provided.
+
 #Best Practices
 - Use descriptive names that clearly indicate the incident type (e.g., "Phishing", "Malware-Analysis", "Data-Breach").
 - Include detailed task descriptions with step-by-step investigation instructions.

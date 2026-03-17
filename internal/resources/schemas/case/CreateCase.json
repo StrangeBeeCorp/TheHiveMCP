@@ -90,7 +90,7 @@
     },
     "tasks": {
       "type": "array",
-      "description": "Array of tasks to create with this case. If null and a caseTemplate is specified, tasks from the template will be used."
+      "description": "Array of tasks to create with this case. If provided (non-null), these tasks replace any template tasks — they are NOT merged. To use template tasks, omit this field or set it to null."
     },
     "pages": {
       "type": "array",

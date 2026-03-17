@@ -21,7 +21,7 @@ func (t *ManageTool) handleUpdate(ctx context.Context, params *ManageEntityParam
 	results := make([]SingleEntityUpdateResult, 0, len(params.EntityIDs))
 
 	for _, entityID := range params.EntityIDs {
-		result := t.updateEntity(ctx, hiveClient, params.EntityType, entityID, params.EntityData)
+		result := t.updateEntity(ctx, hiveClient, params.EntityType, entityID, params.TargetID, params.EntityData)
 		results = append(results, result)
 	}
 
@@ -30,7 +30,7 @@ func (t *ManageTool) handleUpdate(ctx context.Context, params *ManageEntityParam
 	}, nil
 }
 
-func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient, entityType, entityID string, data map[string]interface{}) SingleEntityUpdateResult {
+func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient, entityType, entityID, targetID string, data map[string]interface{}) SingleEntityUpdateResult {
 	// Convert ISO date strings to timestamps before marshaling
 	data = utils.TranslateDatesToTimestamps(data)
 
@@ -171,11 +171,21 @@ func (t *ManageTool) updateEntity(ctx context.Context, client *thehive.APIClient
 				Error:    tools.NewToolError("failed to unmarshal page update data").Cause(err).Hint("Use get-resource 'hive://schema/page/update' to see updatable fields").ToMap(),
 			}
 		}
-		resp, err := client.PageAPI.UpdateAPage(ctx, entityID).InputUpdatePage(inputPage).Execute()
-		if err != nil {
-			return SingleEntityUpdateResult{
-				EntityID: entityID,
-				Error:    tools.NewToolError("failed to update page").Cause(err).Hint(fmt.Sprintf("Check that the page %s exists and you have permissions. API response: %v", entityID, resp)).ToMap(),
+		if targetID != "" {
+			resp, err := client.PageAPI.UpdateAPageInACase(ctx, targetID, entityID).InputUpdatePage(inputPage).Execute()
+			if err != nil {
+				return SingleEntityUpdateResult{
+					EntityID: entityID,
+					Error:    tools.NewToolError("failed to update page in case").Cause(err).Hint(fmt.Sprintf("Check that the page %s and case %s exist and you have permissions. API response: %v", entityID, targetID, resp)).ToMap(),
+				}
+			}
+		} else {
+			resp, err := client.PageAPI.UpdateAPage(ctx, entityID).InputUpdatePage(inputPage).Execute()
+			if err != nil {
+				return SingleEntityUpdateResult{
+					EntityID: entityID,
+					Error:    tools.NewToolError("failed to update page").Cause(err).Hint(fmt.Sprintf("Check that the page %s exists and you have permissions. For case-attached pages, provide the parent case ID in target-id. API response: %v", entityID, resp)).ToMap(),
+				}
 			}
 		}
 		return SingleEntityUpdateResult{

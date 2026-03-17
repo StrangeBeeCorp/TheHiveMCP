@@ -4,18 +4,18 @@ Search for entities in TheHive using natural language queries.
 
 ## Overview
 
-The `search-entities` tool allows you to search for TheHive entities (alerts, cases, tasks, observables, procedures, patterns) using natural language queries. The tool uses AI to translate your natural language into TheHive filters, making it easy to find exactly what you're looking for without knowing the complex filter syntax.
+The `search-entities` tool allows you to search for TheHive entities (alerts, cases, tasks, observables, procedures, patterns, case templates, pages) using natural language queries. The tool uses AI to translate your natural language into TheHive filters, making it easy to find exactly what you're looking for without knowing the complex filter syntax.
 
 ## Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `entity-type` | string | Yes | Type of entity to search for (`alert`, `case`, `task`, `observable`, `procedure`, `pattern`) |
+| `entity-type` | string | Yes | Type of entity to search for (`alert`, `case`, `task`, `observable`, `procedure`, `pattern`, `case-template`, `page`) |
 | `query` | string | Yes | Natural language query describing what entities you want to find |
 | `sort-by` | string | No | Column to sort results by (default: `_createdAt`) |
 | `sort-order` | string | No | Sort order `asc` or `desc` (default: `desc`) |
 | `limit` | number | No | Number of results to return (default: 10) |
-| `extra-columns` | array | No | Additional columns to include in output. Entity-specific defaults: alerts `['_id', 'title', '_createdAt', 'severity', 'status']`, cases `['_id', 'title', '_createdAt', 'status', 'severity']`, tasks `['_id', 'title', 'status', '_createdAt', 'assignee']`, observables `['_id', 'dataType', '_createdAt']`, procedures `['_id', 'patternId', 'patternName', 'description', 'occurDate']`, patterns `['_id', 'patternId', 'name', 'tactics', 'platforms']` |
+| `extra-columns` | array | No | Additional columns to include in output. Entity-specific defaults: alerts `['_id', 'title', '_createdAt', 'severity', 'status']`, cases `['_id', 'title', '_createdAt', 'status', 'severity']`, tasks `['_id', 'title', 'status', '_createdAt', 'assignee']`, observables `['_id', 'dataType', '_createdAt']`, procedures `['_id', 'patternId', 'patternName', 'description', 'occurDate']`, patterns `['_id', 'patternId', 'name', 'tactics', 'platforms']`, case-templates `['_id', 'name', 'displayName', '_createdAt']`, pages `['_id', 'title', 'category', '_createdAt']` |
 | `extra-data` | array | No | Additional data fields to include in output (see `Extra Data` in the Api docs) |
 | `additional-queries` | array | No | Additional queries to enrich results with related data (see `Queries available` in the Api docs)|
 | `count` | boolean | No | Return only the count of matching entities instead of the actual entities (default: `false`) |
@@ -65,6 +65,14 @@ The search tool understands various natural language patterns:
 - "procedures related to initial access" (entity-type: procedure)
 - "procedures created this month" (entity-type: procedure)
 
+### Case template queries
+- "case templates with phishing in the name" (entity-type: case-template)
+- "all available templates" (entity-type: case-template)
+
+### Page queries
+- "pages about investigation notes" (entity-type: page)
+- "pages created this week" (entity-type: page)
+
 ## Supported Entity Types
 
 ### Alerts
@@ -111,6 +119,19 @@ Search the MITRE ATT&CK technique catalog loaded in TheHive with filters on:
 - `revoked` status
 
 **Tip**: Search patterns first to find valid `patternId` values before creating procedures.
+
+### Case Templates
+Search for reusable case blueprints with filters on:
+- Name and display name
+- Description content
+- Tags
+- Creation and update dates
+
+### Pages
+Search for documentation pages (standalone or case-attached) with filters on:
+- Title and content
+- Category
+- Creation and update dates
 
 ## Advanced Usage
 

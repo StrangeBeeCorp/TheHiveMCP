@@ -30,14 +30,14 @@
       "format": "int32",
       "enum": [0, 1, 2, 3, 4],
       "default": 2,
-      "description": "Traffic Light Protocol level: 0 (WHITE - unlimited disclosure), 1 (GREEN - community), 2 (AMBER - limited), 3 (AMBER+STRICT - organisation only), 4 (RED - personal for named recipients only). Defaults to 2 (AMBER)."
+      "description": "Traffic Light Protocol level: 0 (CLEAR - unlimited disclosure), 1 (GREEN - community), 2 (AMBER - limited), 3 (AMBER+STRICT - organisation only), 4 (RED - personal for named recipients only). Defaults to 2 (AMBER)."
     },
     "pap": {
       "type": "integer",
       "format": "int32",
       "enum": [0, 1, 2, 3],
       "default": 2,
-      "description": "Permissible Actions Protocol level: 0 (WHITE - any action), 1 (GREEN - passive actions), 2 (AMBER - active actions with notification), 3 (RED - no action without approval). Defaults to 2 (AMBER)."
+      "description": "Permissible Actions Protocol level: 0 (CLEAR - any action), 1 (GREEN - passive actions), 2 (AMBER - active actions with notification), 3 (RED - no action without approval). Defaults to 2 (AMBER)."
     },
     "tags": {
       "type": "array",

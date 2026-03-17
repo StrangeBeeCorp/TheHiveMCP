@@ -16,6 +16,14 @@ Case templates can be used with cases in three ways:
 2. Promote alert with template: Include "caseTemplate" in entity-data when promoting an alert.
 3. Apply template to existing cases: Use the "apply-template" operation with entity-ids=[case IDs] and target-id=template name/ID to retroactively apply a template.
 
+IMPORTANT: When creating a case with both "caseTemplate" and explicit "tasks", the explicit tasks REPLACE the template tasks — they are NOT merged. To use template tasks, omit the "tasks" field entirely.
+
+#Case Number vs ID
+Every case has two identifiers:
+- "_id": Internal identifier in the format "~<number>" (e.g., "~41943040"). Used in API calls.
+- "number": Human-readable incremental case number (e.g., 42). Displayed in the UI as "case #42".
+When the user says "case number 42" or "case #42", always filter on the "number" field (integer), NOT the "_id" field.
+
 # Key components
 In TheHive, a case includes the following elements:
 Observables: Data points such as IP addresses, file hashes, domains, and email addresses that are relevant to an investigation.

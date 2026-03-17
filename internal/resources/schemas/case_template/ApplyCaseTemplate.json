@@ -60,7 +60,7 @@
       "items": {
         "type": "string"
       },
-      "description": "List of page titles from the template to import into the cases."
+      "description": "List of page titles from the template to import into the cases. Titles must match exactly. If the template has no pages defined, this field has no effect."
     }
   }
 }

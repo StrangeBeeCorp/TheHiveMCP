@@ -55,8 +55,10 @@ CASE TEMPLATE OPERATIONS:
 PAGE OPERATIONS:
 - Create in case: operation="create", entity-type="page", entity-ids=["case-id"], entity-data={"title":"...","content":"...","category":"Default"}
 - Create standalone: operation="create", entity-type="page", entity-data={"title":"...","content":"...","category":"Default"}
-- Update: operation="update", entity-type="page", entity-ids=["page-id"], entity-data={"content":"updated"}
-- Delete: operation="delete", entity-type="page", entity-ids=["page-id"]
+- Update standalone page: operation="update", entity-type="page", entity-ids=["page-id"], entity-data={"content":"updated"}
+- Update case-attached page: operation="update", entity-type="page", entity-ids=["page-id"], target-id="case-id", entity-data={"content":"updated"}
+- Delete standalone page: operation="delete", entity-type="page", entity-ids=["page-id"]
+- Delete case-attached page: operation="delete", entity-type="page", entity-ids=["page-id"], target-id="case-id"
 
 GETTING SCHEMA INFORMATION:
 Use the get-resource tool to query schemas before creating/updating entities:
@@ -82,8 +84,11 @@ EXAMPLES:
 - Create case from template: operation="create", entity-type="case", entity-data={"title":"Phishing incident","description":"...","caseTemplate":"Phishing"}
 - Create page in case: operation="create", entity-type="page", entity-ids=["~123"], entity-data={"title":"Investigation Notes","content":"## Summary\nFindings...","category":"Default"}
 - Create standalone page: operation="create", entity-type="page", entity-data={"title":"Runbook","content":"## Procedure\nSteps...","category":"Default"}
-- Update page: operation="update", entity-type="page", entity-ids=["~789"], entity-data={"content":"Updated findings"}
-- Delete page: operation="delete", entity-type="page", entity-ids=["~789"]`
+- Update standalone page: operation="update", entity-type="page", entity-ids=["~789"], entity-data={"content":"Updated findings"}
+- Update case page: operation="update", entity-type="page", entity-ids=["~789"], target-id="~123", entity-data={"content":"Updated findings"}
+- Delete standalone page: operation="delete", entity-type="page", entity-ids=["~789"]
+- Delete case page: operation="delete", entity-type="page", entity-ids=["~789"], target-id="~123"
+- Update procedure: operation="update", entity-type="procedure", entity-ids=["~456"], entity-data={"description":"Updated description"}`
 
 type ManageEntityParams struct {
 	Operation  string                 `json:"operation" jsonschema:"enum=create,enum=update,enum=delete,enum=comment,enum=promote,enum=merge,enum=apply-template,required=true" jsonschema_description:"The operation to perform on the entity."`
@@ -91,7 +96,7 @@ type ManageEntityParams struct {
 	EntityIDs  []string               `json:"entity-ids,omitempty" jsonschema_description:"List of entity IDs. Usage varies by operation: UPDATE/DELETE/COMMENT: entities to modify. CREATE (task/observable/procedure): parent case/alert ID. CREATE (page): optional parent case ID. PROMOTE: single alert ID. MERGE (case): case IDs to merge. MERGE (alert): alert IDs to merge into target case. APPLY-TEMPLATE: case IDs to apply template to."`
 	EntityData map[string]interface{} `json:"entity-data,omitempty" jsonschema_description:"JSON object containing entity data. For CREATE: use get-resource hive://schema/[entity]/create for required fields. For UPDATE: only provide fields to change. For PROMOTE: optional case creation parameters. For APPLY-TEMPLATE: optional flags controlling what to update."`
 	Comment    string                 `json:"comment,omitempty" jsonschema_description:"Text content for COMMENT operations. Required when operation=\"comment\". For cases: adds a comment. For tasks: adds a task log entry."`
-	TargetID   string                 `json:"target-id,omitempty" jsonschema_description:"Target entity ID for MERGE and APPLY-TEMPLATE operations. For alerts: the case ID to merge alerts into. For observables: the case ID containing observables to deduplicate. For apply-template: the case template name or ID."`
+	TargetID   string                 `json:"target-id,omitempty" jsonschema_description:"Target entity ID for MERGE, APPLY-TEMPLATE, and PAGE UPDATE/DELETE operations. For alerts: the case ID to merge alerts into. For observables: the case ID containing observables to deduplicate. For apply-template: the case template name or ID. For pages: the parent case ID when updating or deleting a case-attached page."`
 }
 
 const (

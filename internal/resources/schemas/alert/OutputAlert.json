@@ -250,8 +250,8 @@
           "description": "Array of observable objects linked to the alert. Each observable represents an IOC or artifact related to the security event."
         },
         "pages": {
-          "type": "object",
-          "description": "Pages are documentation/notes added to the alert."
+          "type": "array",
+          "description": "Array of page objects (documentation/notes) added to the alert. Each page includes title, content, category, and order."
         }
       }
     },
