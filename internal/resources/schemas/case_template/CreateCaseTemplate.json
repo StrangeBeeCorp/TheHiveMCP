@@ -44,7 +44,7 @@
     "pap": {
       "type": "integer",
       "format": "int32",
-      "description": "Default Permissible Actions Protocol level (0=CLEAR, 1=GREEN, 2=AMBER, 3=AMBER+STRICT, 4=RED)."
+      "description": "Default Permissible Actions Protocol level (0=CLEAR, 1=GREEN, 2=AMBER, 3=RED)."
     },
     "summary": {
       "type": "string",

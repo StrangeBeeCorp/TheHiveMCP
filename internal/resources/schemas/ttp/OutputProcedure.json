@@ -9,8 +9,8 @@
     "_createdAt": {
       "type": "string",
       "format": "date-time",
-      "example": "2022-01-15T10:30:00",
-      "description": "Date-time string when the procedure was created. Converted from Unix timestamp in YYYY-MM-DDTHH:MM:SS format."
+      "example": "15-01-2022T10:30:00",
+      "description": "Date-time string when the procedure was created. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "_createdBy": {
       "type": "string",
@@ -19,8 +19,8 @@
     "_updatedAt": {
       "type": "string",
       "format": "date-time",
-      "example": "2022-01-15T10:30:00",
-      "description": "Date-time string when the procedure was last updated. Converted from Unix timestamp in YYYY-MM-DDTHH:MM:SS format."
+      "example": "15-01-2022T10:30:00",
+      "description": "Date-time string when the procedure was last updated. Converted from Unix timestamp in DD-MM-YYYYTHH:MM:SS format."
     },
     "_updatedBy": {
       "type": "string",

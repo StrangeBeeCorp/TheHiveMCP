@@ -280,8 +280,8 @@
           "description": "Array of observable objects linked to the case. Each observable represents an IOC or artifact related to the security event."
         },
         "pages": {
-          "type": "object",
-          "description": "Pages are documentation/notes added to the case."
+          "type": "array",
+          "description": "Array of page objects (documentation/notes) added to the case. Each page includes title, content, category, and order."
         },
         "tasks": {
           "type": "array",

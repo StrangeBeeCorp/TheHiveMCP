@@ -19,7 +19,7 @@ func (t *ManageTool) handleDelete(ctx context.Context, params *ManageEntityParam
 	results := make([]SingleEntityDeleteResult, 0, len(params.EntityIDs))
 
 	for _, entityID := range params.EntityIDs {
-		result := t.deleteEntity(ctx, hiveClient, params.EntityType, entityID)
+		result := t.deleteEntity(ctx, hiveClient, params.EntityType, entityID, params.TargetID)
 		results = append(results, result)
 	}
 
@@ -28,7 +28,7 @@ func (t *ManageTool) handleDelete(ctx context.Context, params *ManageEntityParam
 	}, nil
 }
 
-func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient, entityType, entityID string) SingleEntityDeleteResult {
+func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient, entityType, entityID, targetID string) SingleEntityDeleteResult {
 	switch entityType {
 	case types.EntityTypeAlert:
 		resp, err := client.AlertAPI.DeleteAlert(ctx, entityID).Execute()
@@ -110,11 +110,21 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 		}
 
 	case types.EntityTypePage:
-		resp, err := client.PageAPI.DeleteAPage(ctx, entityID).Execute()
-		if err != nil {
-			return SingleEntityDeleteResult{
-				EntityID: entityID,
-				Error:    tools.NewToolErrorf("failed to delete page %s: %v. Check that the page exists and you have permissions. This operation is irreversible.", entityID, err).API(resp).ToMap(),
+		if targetID != "" {
+			resp, err := client.PageAPI.DeleteAPageInACase(ctx, targetID, entityID).Execute()
+			if err != nil {
+				return SingleEntityDeleteResult{
+					EntityID: entityID,
+					Error:    tools.NewToolErrorf("failed to delete page %s in case %s: %v. Check that the page and case exist and you have permissions. This operation is irreversible.", entityID, targetID, err).API(resp).ToMap(),
+				}
+			}
+		} else {
+			resp, err := client.PageAPI.DeleteAPage(ctx, entityID).Execute()
+			if err != nil {
+				return SingleEntityDeleteResult{
+					EntityID: entityID,
+					Error:    tools.NewToolErrorf("failed to delete page %s: %v. Check that the page exists and you have permissions. For case-attached pages, provide the parent case ID in target-id. This operation is irreversible.", entityID, err).API(resp).ToMap(),
+				}
 			}
 		}
 		return SingleEntityDeleteResult{

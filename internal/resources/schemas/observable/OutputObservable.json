@@ -122,20 +122,20 @@
     "tlp": {
       "type": "integer",
       "format": "int32",
-      "description": "Traffic Light Protocol level: 0 (WHITE - unlimited disclosure), 1 (GREEN - community), 2 (AMBER - limited), 3 (RED - personal for named recipients only)"
+      "description": "Traffic Light Protocol level: 0 (CLEAR - unlimited disclosure), 1 (GREEN - community), 2 (AMBER - limited), 3 (AMBER+STRICT - organisation only), 4 (RED - personal for named recipients only)"
     },
     "tlpLabel": {
       "type": "string",
-      "description": "Human-readable TLP label ('WHITE', 'GREEN', 'AMBER', 'RED')"
+      "description": "Human-readable TLP label ('CLEAR', 'GREEN', 'AMBER', 'AMBER+STRICT', 'RED')"
     },
     "pap": {
       "type": "integer",
       "format": "int32",
-      "description": "Permissible Actions Protocol level: 0 (WHITE - any action), 1 (GREEN - passive actions), 2 (AMBER - active actions with notification), 3 (RED - no action without approval)"
+      "description": "Permissible Actions Protocol level: 0 (CLEAR - any action), 1 (GREEN - passive actions), 2 (AMBER - active actions with notification), 3 (RED - no action without approval)"
     },
     "papLabel": {
       "type": "string",
-      "description": "Human-readable PAP label ('WHITE', 'GREEN', 'AMBER', 'RED')"
+      "description": "Human-readable PAP label ('CLEAR', 'GREEN', 'AMBER', 'RED')"
     },
     "tags": {
       "type": "array",
