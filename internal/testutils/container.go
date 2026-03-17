@@ -81,7 +81,7 @@ func StartTheHiveContainer(t *testing.T) (string, error) {
 	}
 
 	if globalNetwork == nil {
-		nw, err := network.New(t.Context())
+		nw, err := network.New(context.Background())
 		if err != nil {
 			return "", fmt.Errorf("failed to create test network: %w", err)
 		}
@@ -89,7 +89,7 @@ func StartTheHiveContainer(t *testing.T) (string, error) {
 	}
 	req.Networks = []string{globalNetwork.Name}
 
-	container, err := testcontainers.GenericContainer(t.Context(), testcontainers.GenericContainerRequest{
+	container, err := testcontainers.GenericContainer(context.Background(), testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
 		Started:          true,
 	})
@@ -97,7 +97,7 @@ func StartTheHiveContainer(t *testing.T) (string, error) {
 		return "", err
 	}
 
-	port, err := container.MappedPort(t.Context(), "9000")
+	port, err := container.MappedPort(context.Background(), "9000")
 	if err != nil {
 		return "", err
 	}

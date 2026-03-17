@@ -57,14 +57,14 @@ func (c *TheHiveCredentials) Validate() error {
 	}
 
 	// Check authentication method
-	hasAPIKey := c.APIKey != "" && strings.ToLower(c.APIKey) != "dummy"
+	hasAPIKey := c.APIKey != ""
 	hasBasicAuth := c.Username != "" && c.Password != ""
 
 	if !hasAPIKey && !hasBasicAuth {
 		return ErrMissingAuthentication
 	}
 
-	if c.APIKey != "" && strings.ToLower(c.APIKey) == "dummy" {
+	if strings.ToLower(c.APIKey) == "dummy" {
 		return ErrInvalidAPIKey
 	}
 
@@ -167,7 +167,9 @@ func CreateTheHiveConfig(creds *TheHiveCredentials) (*thehive.Configuration, err
 		},
 	}
 
-	clientCfg.AddDefaultHeader("X-Organisation", creds.Organisation)
+	if creds.Organisation != "" {
+		clientCfg.AddDefaultHeader("X-Organisation", creds.Organisation)
+	}
 
 	return clientCfg, nil
 }

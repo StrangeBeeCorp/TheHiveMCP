@@ -141,9 +141,9 @@ cat > manifest.json << EOF
     },
     "organisation": {
       "title": "Organisation",
-      "description": "TheHive organisation name",
+      "description": "TheHive organisation name. If not set, defaults to the authenticated user's own organisation.",
       "type": "string",
-      "required": true
+      "required": false
     },
     "permissions_config": {
       "title": "Permissions Config",
