@@ -28,46 +28,6 @@ func MergeFilters(userQuery map[string]interface{}, permissionFilters map[string
 	return merged, true
 }
 
-// ApplyFiltersToQuery applies permission filters to a TheHive query
-// This is used by search and manage tools to ensure queries respect permissions
-func ApplyFiltersToQuery(query map[string]interface{}, permFilters map[string]interface{}) (map[string]interface{}, bool, error) {
-	if len(permFilters) == 0 {
-		return query, false, nil
-	}
-
-	// Extract the existing query filter if present
-	var existingFilter map[string]interface{}
-	if query != nil {
-		if filter, ok := query["query"]; ok {
-			if filterMap, ok := filter.(map[string]interface{}); ok {
-				existingFilter = filterMap
-			}
-		}
-	}
-
-	// Merge filters
-	mergedFilter, applied := MergeFilters(existingFilter, permFilters)
-	if !applied {
-		return query, false, nil
-	}
-
-	// Create new query with merged filter
-	if query == nil {
-		query = make(map[string]interface{})
-	}
-
-	// Make a copy to avoid modifying the original
-	resultQuery := make(map[string]interface{})
-	for k, v := range query {
-		resultQuery[k] = v
-	}
-
-	// Apply the merged filter
-	resultQuery["query"] = mergedFilter
-
-	return resultQuery, true, nil
-}
-
 // PermissionInfo describes how permissions affected a response
 type PermissionInfo struct {
 	Applied       bool     `json:"applied"`

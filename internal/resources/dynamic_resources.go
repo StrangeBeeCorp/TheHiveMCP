@@ -163,11 +163,6 @@ func GetAvailableAnalyzers(ctx context.Context, _ mcp.ReadResourceRequest) ([]mc
 }
 
 func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-	hiveClient, err := utils.GetHiveClientFromContext(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get TheHive client from context: %w. Check authentication and connection settings", err)
-	}
-
 	// Extract entityType and entityId from query parameters and validate that they are strings
 	entityType, ok := req.Params.Arguments["entityType"].(string)
 	if !ok {
@@ -181,6 +176,17 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 
 	if entityType == "" || entityID == "" {
 		return nil, fmt.Errorf("entityType and entityId query parameters are required. Example: hive://metadata/automation/responders?entityType=case&entityId=~123456")
+	}
+
+	// Both values are interpolated into the Cortex endpoint path; reject
+	// anything that is not a well-formed entity reference before any call
+	if err := validateResponderParams(entityType, entityID); err != nil {
+		return nil, err
+	}
+
+	hiveClient, err := utils.GetHiveClientFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get TheHive client from context: %w. Check authentication and connection settings", err)
 	}
 
 	responders, resp, err := hiveClient.CortexAPI.ListResponders(ctx, entityType, entityID).Execute()

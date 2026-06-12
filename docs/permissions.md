@@ -61,9 +61,9 @@ permissions:
 - `execute-automation`: Run analyzers and responders
 - `get-resource`: Access documentation, schemas, and metadata
 
-### Tool filters (search-entities only)
+### Tool filters
 
-Filters are automatically merged with user queries using AND logic:
+Filters restrict which entities a tool can reach. They can be configured per tool:
 
 ```yaml
 tools:
@@ -73,9 +73,35 @@ tools:
       _gte:
         _field: "severity"
         _value: 2
+  manage-entities:
+    allowed: true
+    filters:
+      _eq:
+        _field: "tags"
+        _value: "soc-l1"
+  execute-automation:
+    allowed: true
+    filters:
+      _lte:
+        _field: "tlp"
+        _value: 2
 ```
 
 Uses TheHive's native filter syntax where the operator (for example, `_gte`, `_lte`, `_eq`) is the key, with `_field` and `_value` as properties.
+
+**How filters are enforced per tool:**
+
+- `search-entities`: the filter is AND-merged into every query, so results are scoped server-side. The same applies to additional-query expansion (fetching a case's tasks, observables, comments, etc.): a parent entity outside the filter scope is never expanded.
+- `manage-entities`: before any by-ID operation (update, delete, comment, promote, merge, apply-template, or creating a child entity inside a case/alert), the server verifies that every referenced entity matches the filter. An entity outside the scope is reported as "not found or not within the scope" and nothing is mutated.
+- `execute-automation`: the target entity of `run-analyzer` (the observable), `run-responder`, and `get-action-status` must match the filter before anything is executed. For `get-job-status`, the job's target observable is resolved server-side and must match the filter before the job report is returned.
+
+A filter that **is not configured** for a tool means "no restriction" — that tool behaves exactly as before (backward compatible). Only configured filters constrain reach.
+
+**Known limitations** (fail closed where applicable):
+
+- *Creating top-level entities* (alerts, cases, case templates, standalone pages) is not constrained by filters: filters scope reach to existing entities, and a brand-new top-level entity reaches none. An agent can therefore create an entity that its own filter then hides from it. Use `entity_permissions` to deny `create` if needed.
+- *Case template targets of `apply-template`* are org-level configuration, not row-scoped data; the template itself is not checked against the filter. The cases the template is applied to **are** checked.
+- *Filter fields must exist on the entity types the tool touches.* If a filter references a field that an entity type does not have (for example a `tlp` filter checked against a procedure), the scope query fails and the operation is **denied** (fail closed), not silently allowed.
 
 ### Granular entity permissions (manage-entities only)
 
@@ -334,6 +360,10 @@ Alternatively, users can specify a permissions path when configuring the MCPB in
 **"Analyzer/Responder is not permitted"**
 - Add to `allowed` list or remove from `blocked` list
 
+**"not found or is not within the scope permitted"**
+- The entity is excluded by the tool's configured `filters` (or does not exist)
+- Check active permissions: `get-resource hive://config/permissions`
+
 **Empty search results**
 - Permission filters may be restricting results
 - Check active permissions: `get-resource hive://config/permissions`
@@ -346,7 +376,7 @@ Alternatively, users can specify a permissions path when configuring the MCPB in
 
 - **Default Deny**: All operations denied unless explicitly allowed
 - **No Runtime Changes**: Permissions loaded once at startup
-- **Filter Merging**: Permission filters merged with user queries at query time
+- **Filter Enforcement**: Permission filters are merged into search queries and verified server-side before manage, expansion, and automation operations reach an entity (see "Tool filters" above for the exact guarantees and limitations)
 - **Logged Operations**: Permission denials logged for auditing
 
 ## TheHive Filter Syntax

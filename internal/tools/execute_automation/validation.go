@@ -3,34 +3,81 @@ package execute_automation
 import (
 	"context"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/permissions"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 )
 
 func (t *ExecuteAutomationTool) ValidatePermissions(ctx context.Context, params ExecuteAutomationParams) error {
-	permissions, err := utils.GetPermissionsFromContext(ctx)
+	perms, err := utils.GetPermissionsFromContext(ctx)
 	if err != nil {
 		return tools.NewToolError("failed to get permissions").Cause(err)
 	}
 
-	if !permissions.IsToolAllowed(t.Name()) {
+	if !perms.IsToolAllowed(t.Name()) {
 		return tools.NewToolErrorf("tool %s is not permitted by your permissions configuration", t.Name())
 	}
 
 	switch params.Operation {
 	case OperationRunAnalyzer:
-		if !permissions.IsAnalyzerAllowed(params.AnalyzerID) {
+		if !perms.IsAnalyzerAllowed(params.AnalyzerID) {
 			return tools.NewToolErrorf("Analyzer %s is not permitted by your permissions configuration", params.AnalyzerID)
 		}
+		return t.validateTargetScope(ctx, perms, types.EntityTypeObservable, params.ObservableID)
 	case OperationRunResponder:
-		if !permissions.IsResponderAllowed(params.ResponderID) {
+		if !perms.IsResponderAllowed(params.ResponderID) {
 			return tools.NewToolErrorf("Responder %s is not permitted by your permissions configuration", params.ResponderID)
 		}
-	case OperationGetJobStatus, OperationGetActionStatus:
+		return t.validateTargetScope(ctx, perms, params.EntityType, params.EntityID)
+	case OperationGetActionStatus:
 		// Assuming that if the user can run analyzers/responders, they can check status. Adjust if needed.
-		return nil
+		return t.validateTargetScope(ctx, perms, params.EntityType, params.EntityID)
+	case OperationGetJobStatus:
+		return t.validateJobScope(ctx, perms, params.JobID)
 	default:
 		return tools.NewToolErrorf("unsupported operation: %s", params.Operation)
+	}
+}
+
+// validateJobScope denies job status reads when the job's target observable
+// is excluded by the configured execute-automation permission filters
+// (DL-6004). The observable is resolved server-side from the job itself.
+func (t *ExecuteAutomationTool) validateJobScope(ctx context.Context, perms *permissions.Config, jobID string) error {
+	permFilters := perms.GetToolFilters(t.Name())
+	if len(permFilters) == 0 {
+		return nil
+	}
+
+	inScope, err := utils.IsJobObservableInScope(ctx, jobID, permFilters)
+	if err != nil {
+		return tools.NewToolError("failed to verify entity scope").Cause(err).
+			Hint("The operation was denied because the configured permission filters could not be checked against the job's target entity")
+	}
+	if !inScope {
+		return tools.NewToolErrorf("job %s was not found or its target is not within the scope permitted by your permissions configuration", jobID).
+			Hint("The configured permission filters restrict which entities this tool can reach")
+	}
+	return nil
+}
+
+// validateTargetScope denies automation against entities that the configured
+// execute-automation permission filters exclude (DL-6004). With no configured
+// filters every target is permitted.
+func (t *ExecuteAutomationTool) validateTargetScope(ctx context.Context, perms *permissions.Config, entityType, entityID string) error {
+	permFilters := perms.GetToolFilters(t.Name())
+	if len(permFilters) == 0 {
+		return nil
+	}
+
+	inScope, err := utils.IsEntityInScope(ctx, entityType, entityID, permFilters)
+	if err != nil {
+		return tools.NewToolError("failed to verify entity scope").Cause(err).
+			Hint("The operation was denied because the configured permission filters could not be checked against the target entity")
+	}
+	if !inScope {
+		return tools.NewToolErrorf("%s %s was not found or is not within the scope permitted by your permissions configuration", entityType, entityID).
+			Hint("The configured permission filters restrict which entities this tool can reach")
 	}
 	return nil
 }
