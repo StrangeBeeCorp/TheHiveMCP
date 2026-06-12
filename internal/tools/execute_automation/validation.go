@@ -31,7 +31,8 @@ func (t *ExecuteAutomationTool) ValidatePermissions(ctx context.Context, params 
 		}
 		return t.validateTargetScope(ctx, perms, params.EntityType, params.EntityID)
 	case OperationGetActionStatus:
-		// Assuming that if the user can run analyzers/responders, they can check status. Adjust if needed.
+		// Status reads need no analyzer/responder permission, but the target
+		// entity must still be within the configured filter scope.
 		return t.validateTargetScope(ctx, perms, params.EntityType, params.EntityID)
 	case OperationGetJobStatus:
 		return t.validateJobScope(ctx, perms, params.JobID)

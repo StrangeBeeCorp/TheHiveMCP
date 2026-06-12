@@ -32,7 +32,7 @@ func validateResponderParams(entityType, entityID string) error {
 		return fmt.Errorf("invalid entityType %q: must be one of case, alert, task, observable, case_artifact, log", entityType)
 	}
 	if !entityIDPattern.MatchString(entityID) {
-		return fmt.Errorf("invalid entityId %q: must be an alphanumeric TheHive entity ID (optionally prefixed with '~'), e.g. ~123456", entityID)
+		return fmt.Errorf("invalid entityId %q: must be a TheHive entity ID containing only letters, digits, '-' or '_', optionally prefixed with '~', e.g. ~123456", entityID)
 	}
 	return nil
 }

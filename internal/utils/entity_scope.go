@@ -56,10 +56,15 @@ func GetEntityIDsInScope(ctx context.Context, entityType string, entityIDs []str
 		return inScope, nil
 	}
 
+	getOpName := getOperationName(entityType)
+	if getOpName == "" {
+		return nil, fmt.Errorf("cannot verify scope: missing entity type")
+	}
+
 	filterOp := scopeFilterOperation(permFilters)
 	for _, entityID := range entityIDs {
 		getOp := map[string]interface{}{
-			"_name":    getOperationName(entityType),
+			"_name":    getOpName,
 			"idOrName": entityID,
 		}
 
