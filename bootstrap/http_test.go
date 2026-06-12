@@ -248,6 +248,18 @@ func TestGetHTTPAuthContextFunc_OpenAIHeaders(t *testing.T) {
 	assert.NotNil(t, openAIClient)
 }
 
+// clientHeaders builds request headers carrying a client API key, optionally
+// targeting a specific TheHive URL.
+func clientHeaders(hiveURL string) map[string]string {
+	headers := map[string]string{
+		string(types.HeaderKeyTheHiveAPIKey): "client-key",
+	}
+	if hiveURL != "" {
+		headers[string(types.HeaderKeyTheHiveURL)] = hiveURL
+	}
+	return headers
+}
+
 func TestGetHTTPAuthContextFunc_URLAllowlist(t *testing.T) {
 	t.Run("header URL matching allowlist is allowed", func(t *testing.T) {
 		hive := newFakeTheHive(t)
@@ -255,10 +267,7 @@ func TestGetHTTPAuthContextFunc_URLAllowlist(t *testing.T) {
 			TheHiveURLAllowlist: []string{hive.server.URL},
 		}
 
-		ctx := authContextForRequest(options, map[string]string{
-			string(types.HeaderKeyTheHiveURL):    hive.server.URL,
-			string(types.HeaderKeyTheHiveAPIKey): "client-key",
-		})
+		ctx := authContextForRequest(options, clientHeaders(hive.server.URL))
 
 		assertAuthValidated(t, ctx)
 		assert.Equal(t, int32(1), hive.requests.Load())
@@ -270,10 +279,7 @@ func TestGetHTTPAuthContextFunc_URLAllowlist(t *testing.T) {
 			TheHiveURL: "https://legit.thehive.example.com",
 		}
 
-		ctx := authContextForRequest(options, map[string]string{
-			string(types.HeaderKeyTheHiveURL):    attacker.server.URL,
-			string(types.HeaderKeyTheHiveAPIKey): "client-key",
-		})
+		ctx := authContextForRequest(options, clientHeaders(attacker.server.URL))
 
 		assertAuthRejected(t, ctx)
 		assert.Equal(t, int32(0), attacker.requests.Load(), "attacker-controlled URL must never receive a request")
@@ -286,17 +292,11 @@ func TestGetHTTPAuthContextFunc_URLAllowlist(t *testing.T) {
 			TheHiveURL: hive.server.URL,
 		}
 
-		rejectedCtx := authContextForRequest(options, map[string]string{
-			string(types.HeaderKeyTheHiveURL):    attacker.server.URL,
-			string(types.HeaderKeyTheHiveAPIKey): "client-key",
-		})
+		rejectedCtx := authContextForRequest(options, clientHeaders(attacker.server.URL))
 		assertAuthRejected(t, rejectedCtx)
 		assert.Equal(t, int32(0), attacker.requests.Load())
 
-		allowedCtx := authContextForRequest(options, map[string]string{
-			string(types.HeaderKeyTheHiveURL):    hive.server.URL,
-			string(types.HeaderKeyTheHiveAPIKey): "client-key",
-		})
+		allowedCtx := authContextForRequest(options, clientHeaders(hive.server.URL))
 		assertAuthValidated(t, allowedCtx)
 		assert.Equal(t, int32(1), hive.requests.Load())
 	})
@@ -311,10 +311,7 @@ func TestGetHTTPAuthContextFunc_URLAllowlist(t *testing.T) {
 			"https://evil-thehive.com",
 			"https://thehive.com@evil.test",
 		} {
-			ctx := authContextForRequest(options, map[string]string{
-				string(types.HeaderKeyTheHiveURL):    evil,
-				string(types.HeaderKeyTheHiveAPIKey): "client-key",
-			})
+			ctx := authContextForRequest(options, clientHeaders(evil))
 			assertAuthRejected(t, ctx, "URL %q must be rejected", evil)
 		}
 	})
@@ -358,9 +355,7 @@ func TestGetHTTPAuthContextFunc_EnvCredentialFallback(t *testing.T) {
 			TheHiveAPIKey: "env-secret-key",
 		}
 
-		ctx := authContextForRequest(options, map[string]string{
-			string(types.HeaderKeyTheHiveAPIKey): "client-key",
-		})
+		ctx := authContextForRequest(options, clientHeaders(""))
 
 		assertAuthValidated(t, ctx)
 		assert.Equal(t, "Bearer client-key", hive.lastAuthorization())
@@ -370,9 +365,7 @@ func TestGetHTTPAuthContextFunc_EnvCredentialFallback(t *testing.T) {
 // Regression test for RandoriSec 5.5: an empty X-TheHive-Url with no
 // configured server URL must be denied, not silently allowed.
 func TestGetHTTPAuthContextFunc_EmptyURLFailsClosed(t *testing.T) {
-	options := &types.TheHiveMcpDefaultOptions{}
-
-	ctx := authContextForRequest(options, map[string]string{
+	ctx := authContextForRequest(&types.TheHiveMcpDefaultOptions{}, map[string]string{
 		string(types.HeaderKeyTheHiveURL):    "",
 		string(types.HeaderKeyTheHiveAPIKey): "client-key",
 	})
@@ -389,91 +382,66 @@ func TestGetHTTPAuthContextFunc_EmptyURLFailsClosed(t *testing.T) {
 }
 
 func TestGetHTTPAuthContextFunc_ValidationCache(t *testing.T) {
+	// invoke runs the auth context func for a request authenticated with the
+	// given API key and returns the resulting context
+	invoke := func(authFunc func(context.Context, *http.Request) context.Context, apiKey string) context.Context {
+		req := httptest.NewRequest("POST", "/mcp", nil)
+		req.Header.Set(string(types.HeaderKeyTheHiveAPIKey), apiKey)
+		return authFunc(context.Background(), req)
+	}
+
 	t.Run("identical credentials within TTL validate upstream once", func(t *testing.T) {
 		hive := newFakeTheHive(t)
-		options := &types.TheHiveMcpDefaultOptions{
+		authFunc := GetHTTPAuthContextFunc(&types.TheHiveMcpDefaultOptions{
 			TheHiveURL:             hive.server.URL,
 			AuthValidationCacheTTL: "150ms",
-		}
-		authFunc := GetHTTPAuthContextFunc(options)
+		})
 
-		headers := map[string]string{
-			string(types.HeaderKeyTheHiveAPIKey): "client-key",
-		}
 		for i := 0; i < 2; i++ {
-			req := httptest.NewRequest("POST", "/mcp", nil)
-			for key, value := range headers {
-				req.Header.Set(key, value)
-			}
-			ctx := authFunc(context.Background(), req)
-			assertAuthValidated(t, ctx, "request %d", i)
+			assertAuthValidated(t, invoke(authFunc, "client-key"), "request %d", i)
 		}
 		assert.Equal(t, int32(1), hive.requests.Load(), "second request within TTL must hit the cache")
 
 		// After the TTL the credentials are re-validated upstream
 		time.Sleep(200 * time.Millisecond)
-		req := httptest.NewRequest("POST", "/mcp", nil)
-		req.Header.Set(string(types.HeaderKeyTheHiveAPIKey), "client-key")
-		ctx := authFunc(context.Background(), req)
-		assertAuthValidated(t, ctx)
+		assertAuthValidated(t, invoke(authFunc, "client-key"))
 		assert.Equal(t, int32(2), hive.requests.Load(), "expired cache entry must be re-validated")
 	})
 
 	t.Run("different credentials are validated separately", func(t *testing.T) {
 		hive := newFakeTheHive(t)
-		options := &types.TheHiveMcpDefaultOptions{
-			TheHiveURL: hive.server.URL,
-		}
-		authFunc := GetHTTPAuthContextFunc(options)
+		authFunc := GetHTTPAuthContextFunc(&types.TheHiveMcpDefaultOptions{TheHiveURL: hive.server.URL})
 
 		for _, key := range []string{"key-one", "key-two"} {
-			req := httptest.NewRequest("POST", "/mcp", nil)
-			req.Header.Set(string(types.HeaderKeyTheHiveAPIKey), key)
-			ctx := authFunc(context.Background(), req)
-			assertAuthValidated(t, ctx)
+			assertAuthValidated(t, invoke(authFunc, key))
 		}
 		assert.Equal(t, int32(2), hive.requests.Load(), "each credential set must be validated upstream")
 	})
 
 	t.Run("failed validations are not cached as successes", func(t *testing.T) {
 		hive := newFakeTheHive(t)
-		options := &types.TheHiveMcpDefaultOptions{
-			TheHiveURL: hive.server.URL,
-		}
-		authFunc := GetHTTPAuthContextFunc(options)
+		authFunc := GetHTTPAuthContextFunc(&types.TheHiveMcpDefaultOptions{TheHiveURL: hive.server.URL})
 
 		hive.failNextAuth.Store(true)
-		req := httptest.NewRequest("POST", "/mcp", nil)
-		req.Header.Set(string(types.HeaderKeyTheHiveAPIKey), "client-key")
-		ctx := authFunc(context.Background(), req)
-		assertAuthRejected(t, ctx)
+		assertAuthRejected(t, invoke(authFunc, "client-key"))
 		assert.Equal(t, int32(1), hive.requests.Load())
 
 		// The same credentials must be re-validated upstream, not served from cache
 		hive.failNextAuth.Store(false)
-		req = httptest.NewRequest("POST", "/mcp", nil)
-		req.Header.Set(string(types.HeaderKeyTheHiveAPIKey), "client-key")
-		ctx = authFunc(context.Background(), req)
-		assertAuthValidated(t, ctx)
+		assertAuthValidated(t, invoke(authFunc, "client-key"))
 		assert.Equal(t, int32(2), hive.requests.Load())
 	})
 
 	t.Run("concurrent requests are safe", func(t *testing.T) {
 		hive := newFakeTheHive(t)
-		options := &types.TheHiveMcpDefaultOptions{
-			TheHiveURL: hive.server.URL,
-		}
-		authFunc := GetHTTPAuthContextFunc(options)
+		authFunc := GetHTTPAuthContextFunc(&types.TheHiveMcpDefaultOptions{TheHiveURL: hive.server.URL})
 
 		var wg sync.WaitGroup
 		for i := 0; i < 16; i++ {
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
-				req := httptest.NewRequest("POST", "/mcp", nil)
-				req.Header.Set(string(types.HeaderKeyTheHiveAPIKey), fmt.Sprintf("key-%d", i%4))
-				ctx := authFunc(context.Background(), req)
-				assertAuthValidated(t, ctx)
+				assertAuthValidated(t, invoke(authFunc, fmt.Sprintf("key-%d", i%4)))
 			}(i)
 		}
 		wg.Wait()
