@@ -27,6 +27,7 @@ func makeStdioAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(cont
 				newCtx = context.WithValue(newCtx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: %w", err))
 			} else {
 				slog.Info("TheHive authentication validated successfully")
+				newCtx = context.WithValue(newCtx, types.AuthValidatedCtxKey, true)
 			}
 		}
 
