@@ -2,7 +2,7 @@ module github.com/StrangeBeeCorp/TheHiveMCP
 
 go 1.25.0
 
-toolchain go1.25.10
+toolchain go1.25.11
 
 require (
 	github.com/StrangeBeeCorp/thehive4go v0.56.2
