@@ -6,7 +6,6 @@ import (
 	"log/slog"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
-	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -20,16 +19,7 @@ func makeStdioAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(cont
 		}
 
 		// Validate TheHive client credentials
-		if client, ok := newCtx.Value(types.HiveClientCtxKey).(*thehive.APIClient); ok && client != nil {
-			if err := ValidateTheHiveClient(client, newCtx); err != nil {
-				slog.Error("TheHive authentication failed", "error", err)
-				// Add error marker to context for downstream error handling
-				newCtx = context.WithValue(newCtx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: %w", err))
-			} else {
-				slog.Info("TheHive authentication validated successfully")
-				newCtx = context.WithValue(newCtx, types.AuthValidatedCtxKey, true)
-			}
-		}
+		newCtx = validateTheHiveAuthInContext(newCtx, nil, nil)
 
 		// Add OpenAI client to context from environment variables
 		newCtx, err = AddOpenAIClientToContext(newCtx)

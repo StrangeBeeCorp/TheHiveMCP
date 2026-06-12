@@ -7,92 +7,63 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewTheHiveURLAllowlist(t *testing.T) {
-	t.Run("rejects invalid allowlist entries at construction", func(t *testing.T) {
-		_, err := NewTheHiveURLAllowlist([]string{"ftp://thehive.example.com"}, "")
-		assert.Error(t, err)
-
-		_, err = NewTheHiveURLAllowlist([]string{"not a url"}, "")
-		assert.Error(t, err)
-
-		_, err = NewTheHiveURLAllowlist([]string{"https://"}, "")
-		assert.Error(t, err)
-	})
-
-	t.Run("rejects invalid server URL at construction", func(t *testing.T) {
-		_, err := NewTheHiveURLAllowlist(nil, "gopher://thehive.example.com")
-		assert.Error(t, err)
-	})
-
-	t.Run("empty allowlist with no server URL denies everything", func(t *testing.T) {
-		allowlist, err := NewTheHiveURLAllowlist(nil, "")
-		require.NoError(t, err)
-		assert.False(t, allowlist.Allows("https://thehive.example.com"))
-	})
+func TestNewTheHiveURLAllowlist_RejectsInvalidConfiguration(t *testing.T) {
+	for name, args := range map[string][2]interface{}{
+		"non-http allowlist entry": {[]string{"ftp://thehive.example.com"}, ""},
+		"unparseable entry":        {[]string{"not a url"}, ""},
+		"entry without host":       {[]string{"https://"}, ""},
+		"non-http server URL":      {[]string(nil), "gopher://thehive.example.com"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := NewTheHiveURLAllowlist(args[0].([]string), args[1].(string))
+			assert.Error(t, err)
+		})
+	}
 }
 
 func TestTheHiveURLAllowlist_Allows(t *testing.T) {
-	t.Run("empty allowlist permits only the server's own URL", func(t *testing.T) {
-		allowlist, err := NewTheHiveURLAllowlist(nil, "https://thehive.example.com")
-		require.NoError(t, err)
+	cases := []struct {
+		name      string
+		entries   []string
+		serverURL string
+		url       string
+		allowed   bool
+	}{
+		{name: "empty allowlist with no server URL denies everything", url: "https://thehive.example.com"},
+		{name: "empty allowlist permits the server's own URL", serverURL: "https://thehive.example.com", url: "https://thehive.example.com", allowed: true},
+		{name: "empty allowlist denies other hosts", serverURL: "https://thehive.example.com", url: "https://attacker.example.com"},
+		{name: "exact entry match", entries: []string{"https://thehive.com", "http://hive.internal:9000"}, url: "https://thehive.com", allowed: true},
+		{name: "exact entry match with explicit port", entries: []string{"http://hive.internal:9000"}, url: "http://hive.internal:9000", allowed: true},
+		{name: "subdomain of an entry", entries: []string{"https://thehive.com"}, url: "https://other.thehive.com"},
+		{name: "different port than entry", entries: []string{"http://hive.internal:9000"}, url: "http://hive.internal:9001"},
+		{name: "host suffix bypass attempt", entries: []string{"https://thehive.com"}, url: "https://thehive.com.evil.test"},
+		{name: "host prefix bypass attempt", entries: []string{"https://thehive.com"}, url: "https://evil-thehive.com"},
+		{name: "allowed host in path", entries: []string{"https://thehive.com"}, url: "https://thehive.com.evil.test/thehive.com"},
+		{name: "allowed host in query", entries: []string{"https://thehive.com"}, url: "https://evil.test/?u=thehive.com"},
+		{name: "allowed host as userinfo", entries: []string{"https://thehive.com"}, url: "https://thehive.com@evil.test"},
+		{name: "default https port is normalized", entries: []string{"https://thehive.com"}, url: "https://thehive.com:443", allowed: true},
+		{name: "scheme and host are case-insensitive", entries: []string{"https://thehive.com"}, url: "HTTPS://THEHIVE.COM", allowed: true},
+		{name: "trailing slash is ignored", entries: []string{"https://thehive.com"}, url: "https://thehive.com/", allowed: true},
+		{name: "same host with different scheme", entries: []string{"https://thehive.com"}, url: "http://thehive.com"},
+		{name: "same host with non-default port", entries: []string{"https://thehive.com"}, url: "https://thehive.com:8443"},
+		{name: "empty URL", entries: []string{"https://thehive.com"}, url: ""},
+		{name: "unparseable URL", entries: []string{"https://thehive.com"}, url: "not a url"},
+		{name: "non-http scheme", entries: []string{"https://thehive.com"}, url: "ftp://thehive.com"},
+		{name: "scheme-relative URL", entries: []string{"https://thehive.com"}, url: "//thehive.com"},
+		{name: "explicit allowlist still trusts the server's own URL", entries: []string{"https://other.thehive.com"}, serverURL: "https://thehive.com", url: "https://thehive.com", allowed: true},
+		{name: "explicit allowlist entries are honored alongside the server URL", entries: []string{"https://other.thehive.com"}, serverURL: "https://thehive.com", url: "https://other.thehive.com", allowed: true},
+	}
 
-		assert.True(t, allowlist.Allows("https://thehive.example.com"))
-		assert.False(t, allowlist.Allows("https://attacker.example.com"))
-	})
-
-	t.Run("matches exact entries only", func(t *testing.T) {
-		allowlist, err := NewTheHiveURLAllowlist([]string{"https://thehive.com", "http://hive.internal:9000"}, "")
-		require.NoError(t, err)
-
-		assert.True(t, allowlist.Allows("https://thehive.com"))
-		assert.True(t, allowlist.Allows("http://hive.internal:9000"))
-		assert.False(t, allowlist.Allows("https://other.thehive.com"))
-		assert.False(t, allowlist.Allows("http://hive.internal:9001"))
-	})
-
-	t.Run("no host suffix or substring bypass", func(t *testing.T) {
-		allowlist, err := NewTheHiveURLAllowlist([]string{"https://thehive.com"}, "")
-		require.NoError(t, err)
-
-		assert.False(t, allowlist.Allows("https://thehive.com.evil.test"))
-		assert.False(t, allowlist.Allows("https://evil-thehive.com"))
-		assert.False(t, allowlist.Allows("https://thehive.com.evil.test/thehive.com"))
-		assert.False(t, allowlist.Allows("https://evil.test/?u=thehive.com"))
-		assert.False(t, allowlist.Allows("https://thehive.com@evil.test"))
-	})
-
-	t.Run("normalizes default ports and case", func(t *testing.T) {
-		allowlist, err := NewTheHiveURLAllowlist([]string{"https://thehive.com"}, "")
-		require.NoError(t, err)
-
-		assert.True(t, allowlist.Allows("https://thehive.com:443"))
-		assert.True(t, allowlist.Allows("HTTPS://THEHIVE.COM"))
-		assert.True(t, allowlist.Allows("https://thehive.com/"))
-		// Same host but different scheme or non-default port is a different endpoint
-		assert.False(t, allowlist.Allows("http://thehive.com"))
-		assert.False(t, allowlist.Allows("https://thehive.com:8443"))
-	})
-
-	t.Run("rejects unparseable or non-http URLs", func(t *testing.T) {
-		allowlist, err := NewTheHiveURLAllowlist([]string{"https://thehive.com"}, "")
-		require.NoError(t, err)
-
-		assert.False(t, allowlist.Allows(""))
-		assert.False(t, allowlist.Allows("not a url"))
-		assert.False(t, allowlist.Allows("ftp://thehive.com"))
-		assert.False(t, allowlist.Allows("//thehive.com"))
-	})
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			allowlist, err := NewTheHiveURLAllowlist(tc.entries, tc.serverURL)
+			require.NoError(t, err)
+			assert.Equal(t, tc.allowed, allowlist.Allows(tc.url))
+		})
+	}
 
 	t.Run("nil allowlist denies everything", func(t *testing.T) {
 		var allowlist *TheHiveURLAllowlist
 		assert.False(t, allowlist.Allows("https://thehive.com"))
-	})
-
-	t.Run("explicit allowlist still trusts the server's own URL", func(t *testing.T) {
-		allowlist, err := NewTheHiveURLAllowlist([]string{"https://other.thehive.com"}, "https://thehive.com")
-		require.NoError(t, err)
-
-		assert.True(t, allowlist.Allows("https://other.thehive.com"))
-		assert.True(t, allowlist.Allows("https://thehive.com"))
 	})
 }

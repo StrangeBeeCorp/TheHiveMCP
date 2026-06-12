@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
-	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -121,22 +120,9 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 				slog.Error("Failed to add TheHive client to context", "error", err)
 				ctx = context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: %w", err))
 			} else {
-				ctx = newCtx
 				// Validate TheHive client credentials, skipping the upstream call
 				// when the same credentials were validated recently
-				if client, ok := ctx.Value(types.HiveClientCtxKey).(*thehive.APIClient); ok && client != nil {
-					if cache.IsValid(creds) {
-						ctx = context.WithValue(ctx, types.AuthValidatedCtxKey, true)
-					} else if err := ValidateTheHiveClient(client, ctx); err != nil {
-						slog.Error("TheHive authentication failed", "error", err)
-						// Add error marker to context for downstream error handling
-						ctx = context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: %w", err))
-					} else {
-						slog.Info("TheHive authentication validated successfully")
-						cache.MarkValid(creds)
-						ctx = context.WithValue(ctx, types.AuthValidatedCtxKey, true)
-					}
-				}
+				ctx = validateTheHiveAuthInContext(newCtx, creds, cache)
 			}
 		}
 
