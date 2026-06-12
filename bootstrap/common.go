@@ -257,6 +257,32 @@ func ValidateTheHiveClient(client *thehive.APIClient, ctx context.Context) error
 	return nil
 }
 
+// validateTheHiveAuthInContext validates the TheHive client stored in ctx and
+// records the outcome: types.AuthValidatedCtxKey on success, an auth error
+// otherwise. A non-nil cache skips the upstream call for recently validated
+// credentials; failed validations are never cached.
+func validateTheHiveAuthInContext(ctx context.Context, creds *TheHiveCredentials, cache *validationCache) context.Context {
+	client, ok := ctx.Value(types.HiveClientCtxKey).(*thehive.APIClient)
+	if !ok || client == nil {
+		return ctx
+	}
+
+	if cache != nil && cache.IsValid(creds) {
+		return context.WithValue(ctx, types.AuthValidatedCtxKey, true)
+	}
+
+	if err := ValidateTheHiveClient(client, ctx); err != nil {
+		slog.Error("TheHive authentication failed", "error", err)
+		return context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: %w", err))
+	}
+
+	slog.Info("TheHive authentication validated successfully")
+	if cache != nil {
+		cache.MarkValid(creds)
+	}
+	return context.WithValue(ctx, types.AuthValidatedCtxKey, true)
+}
+
 // CreateOpenAIClient creates an OpenAI client from credentials
 func CreateOpenAIClient(creds *OpenAICredentials) (*openai.Client, error) {
 	if err := creds.Validate(); err != nil {

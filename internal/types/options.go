@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/version"
 )
@@ -19,6 +21,15 @@ type TheHiveMcpDefaultOptions struct {
 	TheHivePassword string
 	// TheHiveOrganisation is the organisation for TheHive (optional)
 	TheHiveOrganisation string
+	// TheHiveURLAllowlist is the list of TheHive base URLs HTTP clients may target via the
+	// X-TheHive-Url header; when empty, only TheHiveURL is permitted
+	TheHiveURLAllowlist []string
+	// AllowEnvCredentialFallback allows HTTP requests without credentials to fall back to the
+	// server's environment credentials (default: false, requests must supply their own credentials)
+	AllowEnvCredentialFallback bool
+	// AuthValidationCacheTTL is how long a successful TheHive credential validation is cached
+	// for the HTTP transport (default: 60s)
+	AuthValidationCacheTTL string
 	// PermissionsConfigPath is the path to the permissions configuration file (optional, defaults to embedded read-only config)
 	PermissionsConfigPath string
 	// MCPServerEndpointPath is the endpoint path for the MCP server (default: /mcp)
@@ -50,6 +61,26 @@ func defaultToEnv(envKey EnvKey, defaultValue string) string {
 	return defaultValue
 }
 
+func defaultToEnvBool(envKey EnvKey, defaultValue bool) bool {
+	if value, exists := os.LookupEnv(string(envKey)); exists {
+		if boolValue, err := strconv.ParseBool(value); err == nil {
+			return boolValue
+		}
+	}
+	return defaultValue
+}
+
+// splitCommaSeparated splits a comma-separated string into trimmed, non-empty entries
+func splitCommaSeparated(value string) []string {
+	var entries []string
+	for _, entry := range strings.Split(value, ",") {
+		if trimmed := strings.TrimSpace(entry); trimmed != "" {
+			entries = append(entries, trimmed)
+		}
+	}
+	return entries
+}
+
 func defaultToEnvInt(envKey EnvKey, defaultValue int) int {
 	if value, exists := os.LookupEnv(string(envKey)); exists {
 		var intValue int
@@ -70,6 +101,9 @@ func NewTheHiveMcpDefaultOptions() (*TheHiveMcpDefaultOptions, error) {
 	var theHiveUsername string
 	var theHivePassword string
 	var theHiveOrganisation string
+	var theHiveURLAllowlist string
+	var allowEnvCredentialFallback bool
+	var authValidationCacheTTL string
 	var permissionsConfigPath string
 	var mcpEndpointPath string
 	var mcpHeartbeatInterval string
@@ -87,6 +121,9 @@ func NewTheHiveMcpDefaultOptions() (*TheHiveMcpDefaultOptions, error) {
 	flag.StringVar(&theHiveUsername, string(FlagVarTheHiveUsername), defaultToEnv(EnvKeyTheHiveUsername, ""), "TheHive username for basic auth (overrides env var THEHIVE_USERNAME)")
 	flag.StringVar(&theHivePassword, string(FlagVarTheHivePassword), defaultToEnv(EnvKeyTheHivePassword, ""), "TheHive password for basic auth (overrides env var THEHIVE_PASSWORD)")
 	flag.StringVar(&theHiveOrganisation, string(FlagVarTheHiveOrganisation), defaultToEnv(EnvKeyTheHiveOrganisation, ""), "TheHive organisation (overrides env var THEHIVE_ORGANISATION)")
+	flag.StringVar(&theHiveURLAllowlist, string(FlagVarTheHiveURLAllowlist), defaultToEnv(EnvKeyTheHiveURLAllowlist, ""), "Comma-separated list of TheHive base URLs HTTP clients may target via the X-TheHive-Url header; defaults to the TheHive URL only (overrides env var THEHIVE_URL_ALLOWLIST)")
+	flag.BoolVar(&allowEnvCredentialFallback, string(FlagVarAllowEnvCredentialFallback), defaultToEnvBool(EnvKeyAllowEnvCredentialFallback, false), "Allow HTTP requests without credentials to fall back to the server's environment credentials (overrides env var ALLOW_ENV_CREDENTIAL_FALLBACK, default false)")
+	flag.StringVar(&authValidationCacheTTL, string(FlagVarAuthValidationCacheTTL), defaultToEnv(EnvKeyAuthValidationCacheTTL, "60s"), "TTL for cached TheHive credential validation results on the HTTP transport (overrides env var AUTH_VALIDATION_CACHE_TTL)")
 	flag.StringVar(&permissionsConfigPath, string(FlagVarPermissionsConfig), defaultToEnv(EnvKeyPermissionsConfig, ""), "Path to permissions config file (overrides env var PERMISSIONS_CONFIG, defaults to read-only)")
 	flag.StringVar(&mcpEndpointPath, string(FlagVarMCPServerEndpointPath), defaultToEnv(EnvKeyMCPServerEndpoint, "/mcp"), "MCP server endpoint path (overrides env var HIVEMIND_MCP_ENDPOINT_PATH)")
 	flag.StringVar(&mcpHeartbeatInterval, string(FlagVarMCPHeartbeatInterval), defaultToEnv(EnvKeyMCPHeartbeatInterval, "30s"), "MCP server heartbeat interval (overrides env var HIVEMIND_MCP_HEARTBEAT_INTERVAL)")
@@ -114,21 +151,24 @@ func NewTheHiveMcpDefaultOptions() (*TheHiveMcpDefaultOptions, error) {
 	}
 
 	return &TheHiveMcpDefaultOptions{
-		TheHiveURL:            theHiveURL,
-		TheHiveAPIKey:         theHiveAPIKey,
-		TheHiveUsername:       theHiveUsername,
-		TheHivePassword:       theHivePassword,
-		TheHiveOrganisation:   theHiveOrganisation,
-		PermissionsConfigPath: permissionsConfigPath,
-		MCPServerEndpointPath: mcpEndpointPath,
-		MCPHeartbeatInterval:  mcpHeartbeatInterval,
-		TransportType:         transport,
-		BindAddr:              bindAddr,
-		LogLevel:              logLevel,
-		OpenAIBaseURL:         openAIBaseURL,
-		OpenAIAPIKey:          openAIAPIKey,
-		OpenAIModel:           openAIModel,
-		OpenAIMaxTokens:       openAIMaxTokens,
-		DefaultCortexID:       cortexID,
+		TheHiveURL:                 theHiveURL,
+		TheHiveAPIKey:              theHiveAPIKey,
+		TheHiveUsername:            theHiveUsername,
+		TheHivePassword:            theHivePassword,
+		TheHiveOrganisation:        theHiveOrganisation,
+		TheHiveURLAllowlist:        splitCommaSeparated(theHiveURLAllowlist),
+		AllowEnvCredentialFallback: allowEnvCredentialFallback,
+		AuthValidationCacheTTL:     authValidationCacheTTL,
+		PermissionsConfigPath:      permissionsConfigPath,
+		MCPServerEndpointPath:      mcpEndpointPath,
+		MCPHeartbeatInterval:       mcpHeartbeatInterval,
+		TransportType:              transport,
+		BindAddr:                   bindAddr,
+		LogLevel:                   logLevel,
+		OpenAIBaseURL:              openAIBaseURL,
+		OpenAIAPIKey:               openAIAPIKey,
+		OpenAIModel:                openAIModel,
+		OpenAIMaxTokens:            openAIMaxTokens,
+		DefaultCortexID:            cortexID,
 	}, nil
 }

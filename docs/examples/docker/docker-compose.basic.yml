@@ -1,3 +1,7 @@
+# SECURITY: this exposes plain, unauthenticated HTTP on port 8082. Deploy it
+# behind a TLS-terminating, authenticating reverse proxy and never publish the
+# port directly to untrusted networks. Clients must send their own TheHive
+# credentials unless ALLOW_ENV_CREDENTIAL_FALLBACK=true is set explicitly.
 services:
   thehive-mcp:
     image: ghcr.io/strangebeecorp/thehivemcp/thehivemcp:latest

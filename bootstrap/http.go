@@ -9,12 +9,45 @@ import (
 	"time"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
-	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/server"
 )
 
+// parseAuthValidationCacheTTL parses the configured validation cache TTL,
+// falling back to the default on empty or invalid values.
+func parseAuthValidationCacheTTL(ttl string) time.Duration {
+	if ttl == "" {
+		return DefaultAuthValidationCacheTTL
+	}
+	duration, err := time.ParseDuration(ttl)
+	if err != nil || duration <= 0 {
+		slog.Warn("Invalid auth validation cache TTL, using default",
+			"ttl", ttl,
+			"default", DefaultAuthValidationCacheTTL)
+		return DefaultAuthValidationCacheTTL
+	}
+	return duration
+}
+
 func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx context.Context, r *http.Request) context.Context {
+	allowlist, allowlistErr := NewTheHiveURLAllowlist(options.TheHiveURLAllowlist, options.TheHiveURL)
+	if allowlistErr != nil {
+		// Fail closed: with a nil allowlist every TheHive URL is rejected
+		slog.Error("Invalid TheHive URL allowlist configuration, all HTTP requests will be rejected", "error", allowlistErr)
+	}
+	cache := newValidationCache(parseAuthValidationCacheTTL(options.AuthValidationCacheTTL))
+
 	return func(ctx context.Context, r *http.Request) context.Context {
+		// Credentials from the server environment are only used as a fallback
+		// for requests that carry none of their own when explicitly opted in
+		envAPIKey := ""
+		envUsername := ""
+		envPassword := ""
+		if options.AllowEnvCredentialFallback {
+			envAPIKey = options.TheHiveAPIKey
+			envUsername = options.TheHiveUsername
+			envPassword = options.TheHivePassword
+		}
+
 		// Map header keys to context keys and environment variables
 		type keyMap struct {
 			header string
@@ -22,8 +55,8 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 			deflt  string
 		}
 		keys := []keyMap{
-			{"Authorization", types.HiveAPIKeyCtxKey, options.TheHiveAPIKey},
-			{string(types.HeaderKeyTheHiveAPIKey), types.HiveAPIKeyCtxKey, options.TheHiveAPIKey},
+			{"Authorization", types.HiveAPIKeyCtxKey, envAPIKey},
+			{string(types.HeaderKeyTheHiveAPIKey), types.HiveAPIKeyCtxKey, envAPIKey},
 			{string(types.HeaderKeyTheHiveOrganisation), types.HiveOrgCtxKey, options.TheHiveOrganisation},
 			{string(types.HeaderKeyTheHiveURL), types.HiveURLCtxKey, options.TheHiveURL},
 			{string(types.HeaderKeyOpenAIAPIKey), types.OpenAIAPIKeyCtxKey, options.OpenAIAPIKey},
@@ -56,17 +89,30 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 		}
 		ctx = context.WithValue(ctx, types.OpenAIMaxTokensCtxKey, maxTokens)
 
-		// Add Hive client to context using extracted credentials
+		// Add Hive client to context using extracted credentials. Authentication
+		// is fail-closed: types.AuthValidatedCtxKey is only set after the TheHive
+		// URL passed the allowlist and the credentials were validated; the
+		// middleware denies any request without that marker.
 		hiveAPIKey, _ := ctx.Value(types.HiveAPIKeyCtxKey).(string)
 		hiveOrganisation, _ := ctx.Value(types.HiveOrgCtxKey).(string)
 		hiveURL, _ := ctx.Value(types.HiveURLCtxKey).(string)
 
-		if hiveURL != "" {
+		switch {
+		case allowlistErr != nil:
+			ctx = context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: invalid TheHive URL allowlist configuration"))
+		case hiveURL == "":
+			ctx = context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: no TheHive URL provided"))
+		case !allowlist.Allows(hiveURL):
+			// Reject before any outbound request so credentials are never sent
+			// to an attacker-controlled destination (SSRF / credential disclosure)
+			slog.Warn("Rejected TheHive URL not in allowlist", "url", hiveURL)
+			ctx = context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: TheHive URL is not in the allowlist"))
+		default:
 			creds := &TheHiveCredentials{
 				URL:          hiveURL,
 				APIKey:       hiveAPIKey,
-				Username:     options.TheHiveUsername,
-				Password:     options.TheHivePassword,
+				Username:     envUsername,
+				Password:     envPassword,
 				Organisation: hiveOrganisation,
 			}
 
@@ -74,17 +120,9 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 				slog.Error("Failed to add TheHive client to context", "error", err)
 				ctx = context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: %w", err))
 			} else {
-				ctx = newCtx
-				// Validate TheHive client credentials
-				if client, ok := ctx.Value(types.HiveClientCtxKey).(*thehive.APIClient); ok && client != nil {
-					if err := ValidateTheHiveClient(client, ctx); err != nil {
-						slog.Error("TheHive authentication failed", "error", err)
-						// Add error marker to context for downstream error handling
-						ctx = context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: %w", err))
-					} else {
-						slog.Info("TheHive authentication validated successfully")
-					}
-				}
+				// Validate TheHive client credentials, skipping the upstream call
+				// when the same credentials were validated recently
+				ctx = validateTheHiveAuthInContext(newCtx, creds, cache)
 			}
 		}
 
@@ -142,6 +180,12 @@ func StartHTTPServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOption
 
 	if options.BindAddr == "" {
 		return fmt.Errorf("bind address cannot be empty")
+	}
+
+	// Reject invalid allowlist configuration at startup rather than denying
+	// every request at runtime
+	if _, err := NewTheHiveURLAllowlist(options.TheHiveURLAllowlist, options.TheHiveURL); err != nil {
+		return fmt.Errorf("invalid TheHive URL allowlist configuration: %w", err)
 	}
 
 	var httpOptions []server.StreamableHTTPOption

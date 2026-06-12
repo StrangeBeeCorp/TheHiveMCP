@@ -146,6 +146,8 @@ After installation, restart Claude Desktop and look for the 🔧 tools icon. Try
 
 #### Step 1: Run TheHiveMCP server
 
+> **⚠️ Security:** TheHiveMCP serves plain HTTP and does not authenticate callers itself. Any HTTP deployment that is reachable beyond localhost **must** sit behind a TLS-terminating, authenticating reverse proxy (nginx, Traefik, Caddy, ...). By default, requests without credentials are rejected and the `X-TheHive-Url` header only accepts the configured `THEHIVE_URL` — see `THEHIVE_URL_ALLOWLIST` and `ALLOW_ENV_CREDENTIAL_FALLBACK` in the configuration reference below before changing this behavior.
+
 #### Quick Docker setup
 
 For immediate testing and development:
@@ -239,12 +241,16 @@ If it does, you can remove the OpenAI key and model from the config.
 
 ```bash
 # Run HTTP server for web clients
+# Binding 0.0.0.0 exposes the server to the network: always front it with a
+# TLS-terminating, authenticating reverse proxy
 ./thehivemcp --transport http \
   --addr "0.0.0.0:8082" \
   --thehive-url "$THEHIVE_URL" \
   --thehive-api-key "$THEHIVE_API_KEY" \
   --thehive-organisation "$THEHIVE_ORGANISATION"
 ```
+
+HTTP requests must carry their own TheHive credentials (`Authorization` or `X-TheHive-Api-Key` header). To let requests without credentials fall back to the server's `THEHIVE_API_KEY` (single-user deployments only), set `ALLOW_ENV_CREDENTIAL_FALLBACK=true`.
 
 **💻 For local MCP host integration:** See [stdio Local Guide](docs/examples/stdio-local.md) for GitHub Copilot, Claude Desktop, and other local MCP clients.
 
@@ -312,6 +318,10 @@ This allows you to set defaults via environment variables while overriding speci
 | Username | `THEHIVE_USERNAME` | `--thehive-username` | - | - | Username for basic auth |
 | Password | `THEHIVE_PASSWORD` | `--thehive-password` | - | - | Password for basic auth |
 | Organisation | `THEHIVE_ORGANISATION` | `--thehive-organisation` | `X-TheHive-Org` | - | TheHive organisation (optional, defaults to user's own) |
+| **HTTP transport security** |
+| URL allowlist | `THEHIVE_URL_ALLOWLIST` | `--thehive-url-allowlist` | - | `THEHIVE_URL` only | Comma-separated TheHive base URLs clients may target via `X-TheHive-Url`; exact scheme/host/port match |
+| Env credential fallback | `ALLOW_ENV_CREDENTIAL_FALLBACK` | `--allow-env-credential-fallback` | - | `false` | Allow HTTP requests without credentials to use the server's `THEHIVE_API_KEY`/username/password (single-user deployments only) |
+| Auth cache TTL | `AUTH_VALIDATION_CACHE_TTL` | `--auth-validation-cache-ttl` | - | `60s` | How long a successful credential validation is cached before re-checking with TheHive |
 | **Permissions** |
 | Permissions config | `PERMISSIONS_CONFIG` | `--permissions-config` | - | `read_only` | Permissions: `read_only`, `admin`, or YAML file path |
 | **MCP server** |
@@ -337,8 +347,12 @@ THEHIVE_URL=https://thehive.example.com
 THEHIVE_API_KEY=<thehive_api_key>
 THEHIVE_ORGANISATION=<thehive_organisation>  # Optional, defaults to user's own organisation
 PERMISSIONS_CONFIG=docs/examples/permissions/analyst.yaml  # Optional, defaults to read-only
-MCP_BIND_HOST=0.0.0.0
+MCP_BIND_HOST=0.0.0.0  # Exposes the server to the network: requires a TLS-terminating, authenticating reverse proxy in front
 MCP_PORT=8082
+# HTTP transport security (defaults shown):
+# THEHIVE_URL_ALLOWLIST=https://thehive-eu.example.com,https://thehive-us.example.com  # X-TheHive-Url targets (defaults to THEHIVE_URL only)
+# ALLOW_ENV_CREDENTIAL_FALLBACK=false  # Set to true ONLY for single-user deployments where requests may omit credentials
+# AUTH_VALIDATION_CACHE_TTL=60s
 OPENAI_API_KEY=<openai_api_key>  # Optional, for fallback LLM
 LOG_LEVEL=INFO
 # Permissions options (choose one):
@@ -363,6 +377,8 @@ curl -X POST http://localhost:8082/mcp \
   -H "X-TheHive-Url: https://other-thehive.com" \
   -d '{"method":"initialize",...}'
 ```
+
+`X-TheHive-Url` is only accepted when it matches the server's `THEHIVE_URL` or an entry in `THEHIVE_URL_ALLOWLIST` — any other destination is rejected before TheHive is contacted. Requests must supply their own credentials unless `ALLOW_ENV_CREDENTIAL_FALLBACK=true`.
 
 ### Built-in Permission Profiles
 

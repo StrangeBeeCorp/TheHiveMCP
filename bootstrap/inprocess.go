@@ -20,6 +20,9 @@ func AuthMiddleware(creds *TheHiveCredentials, openaiCreds *OpenAICredentials, p
 			if err != nil {
 				return nil, fmt.Errorf("failed to add TheHive client to context: %w", err)
 			}
+			// In-process credentials are provided by the host application and
+			// trusted; mark authentication as validated for downstream checks
+			newCtx = context.WithValue(newCtx, types.AuthValidatedCtxKey, true)
 
 			// Add OpenAI client to context if credentials provided
 			if openaiCreds != nil {
