@@ -123,12 +123,16 @@ func (e *ElicitationTransport) handleElicitation(req *http.Request) error {
 	result, err := mcpServer.RequestElicitation(ctx, elicitationRequest)
 
 	if err != nil {
-		// Check if client doesn't support elicitation
+		// The client advertised elicitation support (we only reach here when it
+		// did) but the confirmation prompt could not be completed — e.g. the
+		// server reports elicitation unsupported mid-flight. A client that claims
+		// it can confirm and then cannot is a broken promise, so the operation
+		// fails closed rather than proceeding unconfirmed (DL-6005).
 		if errors.Is(err, server.ErrElicitationNotSupported) {
-			slog.Warn("Client does not support elicitation, allowing request by default",
+			slog.Warn("Refusing modifying operation: client advertised elicitation but the confirmation prompt could not be completed",
 				slog.String("method", req.Method),
 				slog.String("url", req.URL.String()))
-			return nil // Allow the request to proceed
+			return fmt.Errorf("operation refused: this MCP client advertises elicitation support but the confirmation prompt could not be completed, so the %s %s request was not sent. Use an MCP client that can complete elicitation prompts to confirm this operation", req.Method, req.URL.Path)
 		}
 
 		// Other elicitation errors
