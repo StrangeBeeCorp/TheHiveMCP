@@ -76,12 +76,15 @@ func filterAdditionalQueryResults(results []map[string]interface{}, queryType st
 	return filtered, nil
 }
 
-// ExpandEntitiesWithQueries expands each entity with its related data inline
+// ExpandEntitiesWithQueries expands each entity with its related data inline.
+// When permission filters are configured for the calling tool, every parent
+// entity must be within the filtered scope before its children are fetched.
 func ExpandEntitiesWithQueries(
 	ctx context.Context,
 	entityType string,
 	entities []map[string]interface{},
 	additionalQueries []string,
+	permFilters map[string]interface{},
 ) ([]map[string]interface{}, error) {
 	// Nothing to expand when no additional queries were requested.
 	if len(additionalQueries) == 0 {
@@ -103,6 +106,29 @@ func ExpandEntitiesWithQueries(
 	for _, queryName := range additionalQueries {
 		if _, supported := queryConfig[queryName]; !supported {
 			return nil, fmt.Errorf("unsupported additional query '%s' for entity type '%s'", queryName, entityType)
+		}
+	}
+
+	// Deny expansion of any parent entity the permission filters exclude
+	// (DL-6004). Search results are already scoped server-side; this guards
+	// against any caller passing unscoped entity IDs.
+	if len(permFilters) > 0 {
+		entityIDs := make([]string, 0, len(entities))
+		for i, entity := range entities {
+			entityID, ok := entity["_id"].(string)
+			if !ok {
+				return nil, fmt.Errorf("entity at index %d missing _id field", i)
+			}
+			entityIDs = append(entityIDs, entityID)
+		}
+		inScope, err := GetEntityIDsInScope(ctx, entityType, entityIDs, permFilters)
+		if err != nil {
+			return nil, fmt.Errorf("failed to verify entity scope before expansion: %w", err)
+		}
+		for _, entityID := range entityIDs {
+			if !inScope[entityID] {
+				return nil, fmt.Errorf("%s %s was not found or is not within the scope permitted by your permissions configuration", entityType, entityID)
+			}
 		}
 	}
 

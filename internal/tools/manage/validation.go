@@ -2,27 +2,145 @@ package manage
 
 import (
 	"context"
+	"log/slog"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/permissions"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 )
 
 func (t *ManageTool) ValidatePermissions(ctx context.Context, params ManageEntityParams) error {
-	permissions, err := utils.GetPermissionsFromContext(ctx)
+	perms, err := utils.GetPermissionsFromContext(ctx)
 	if err != nil {
 		return tools.NewToolError("failed to get permissions").Cause(err)
 	}
 
-	if !permissions.IsToolAllowed(t.Name()) {
+	if !perms.IsToolAllowed(t.Name()) {
 		return tools.NewToolErrorf("tool %s is not permitted by your permissions configuration", t.Name())
 	}
 
-	if !permissions.IsEntityOperationAllowed(params.EntityType, params.Operation) {
+	if !perms.IsEntityOperationAllowed(params.EntityType, params.Operation) {
 		return tools.NewToolErrorf("operation '%s' on entity type '%s' is not permitted by your permissions configuration", params.Operation, params.EntityType)
 	}
 
+	return t.validateEntityScope(ctx, perms, params)
+}
+
+// scopeCheck identifies entities an operation reaches, so they can be
+// verified against the manage-entities permission filters before anything
+// is mutated.
+type scopeCheck struct {
+	entityType string
+	entityIDs  []string
+}
+
+// validateEntityScope denies by-ID operations on entities that the configured
+// manage-entities permission filters exclude (DL-6004). With no configured
+// filters every operation proceeds unchanged.
+func (t *ManageTool) validateEntityScope(ctx context.Context, perms *permissions.Config, params ManageEntityParams) error {
+	permFilters := perms.GetToolFilters(t.Name())
+	if len(permFilters) == 0 {
+		return nil
+	}
+
+	allOf, anyOf := scopeChecksForOperation(params)
+	if err := checkAllInScope(ctx, allOf, permFilters); err != nil {
+		return err
+	}
+	return checkAnyInScope(ctx, anyOf, permFilters)
+}
+
+// checkAllInScope requires every entity in every check to be within scope.
+func checkAllInScope(ctx context.Context, checks []scopeCheck, permFilters map[string]interface{}) error {
+	for _, check := range checks {
+		inScope, err := utils.GetEntityIDsInScope(ctx, check.entityType, check.entityIDs, permFilters)
+		if err != nil {
+			return tools.NewToolError("failed to verify entity scope").Cause(err).
+				Hint("The operation was denied because the configured permission filters could not be checked against the target entities")
+		}
+		for _, entityID := range check.entityIDs {
+			if !inScope[entityID] {
+				return scopeDeniedError(check.entityType, entityID)
+			}
+		}
+	}
 	return nil
+}
+
+// checkAnyInScope passes when at least one alternative is within scope — used
+// for a parent that may be a case OR an alert. A query error counts as a
+// non-match so a remaining alternative can still pass; if none matches, the
+// operation is denied (fail closed). No alternatives means nothing to check.
+func checkAnyInScope(ctx context.Context, checks []scopeCheck, permFilters map[string]interface{}) error {
+	if len(checks) == 0 {
+		return nil
+	}
+	for _, check := range checks {
+		inScope, err := utils.IsEntityInScope(ctx, check.entityType, check.entityIDs[0], permFilters)
+		if err != nil {
+			slog.Debug("Entity scope alternative check failed", "entityType", check.entityType, "error", err)
+			continue
+		}
+		if inScope {
+			return nil
+		}
+	}
+	return scopeDeniedError("parent entity", checks[0].entityIDs[0])
+}
+
+func scopeDeniedError(entityType, entityID string) error {
+	return tools.NewToolErrorf("%s %s was not found or is not within the scope permitted by your permissions configuration", entityType, entityID).
+		Hint("The configured permission filters restrict which entities this tool can reach")
+}
+
+// scopeChecksForOperation maps an operation to the existing entities it
+// reaches. Every allOf entry must be in scope; anyOf entries (parents that
+// may be a case or an alert) need a single match. Creation of top-level
+// entities reaches no existing entity, so it returns no checks.
+func scopeChecksForOperation(params ManageEntityParams) (allOf, anyOf []scopeCheck) {
+	switch params.Operation {
+	case OperationCreate:
+		if len(params.EntityIDs) == 0 {
+			return nil, nil
+		}
+		parentID := params.EntityIDs[0]
+		switch params.EntityType {
+		case types.EntityTypeTask, types.EntityTypePage:
+			allOf = append(allOf, scopeCheck{types.EntityTypeCase, []string{parentID}})
+		case types.EntityTypeObservable, types.EntityTypeProcedure:
+			anyOf = append(anyOf,
+				scopeCheck{types.EntityTypeCase, []string{parentID}},
+				scopeCheck{types.EntityTypeAlert, []string{parentID}},
+			)
+		}
+	case OperationUpdate, OperationDelete, OperationComment:
+		allOf = append(allOf, scopeCheck{params.EntityType, params.EntityIDs})
+		// Case-attached pages are addressed together with their parent case
+		if params.EntityType == types.EntityTypePage && params.TargetID != "" {
+			allOf = append(allOf, scopeCheck{types.EntityTypeCase, []string{params.TargetID}})
+		}
+	case OperationPromote:
+		allOf = append(allOf, scopeCheck{types.EntityTypeAlert, params.EntityIDs})
+	case OperationMerge:
+		switch params.EntityType {
+		case types.EntityTypeCase:
+			allOf = append(allOf, scopeCheck{types.EntityTypeCase, params.EntityIDs})
+		case types.EntityTypeAlert:
+			allOf = append(allOf,
+				scopeCheck{types.EntityTypeAlert, params.EntityIDs},
+				scopeCheck{types.EntityTypeCase, []string{params.TargetID}},
+			)
+		case types.EntityTypeObservable:
+			allOf = append(allOf, scopeCheck{types.EntityTypeCase, []string{params.TargetID}})
+		}
+	case OperationApplyTemplate:
+		// Only the cases being modified are scoped; the template target is
+		// org-level configuration, not filterable row data (see
+		// docs/permissions.md for this documented limitation).
+		allOf = append(allOf, scopeCheck{types.EntityTypeCase, params.EntityIDs})
+	}
+	return allOf, anyOf
 }
 
 func (t *ManageTool) ValidateParams(params *ManageEntityParams) error {

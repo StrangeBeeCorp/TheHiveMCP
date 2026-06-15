@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
-	"unicode"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/permissions"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/prompts"
@@ -67,7 +66,7 @@ func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest, params
 
 		// Skip additional queries for count-only requests
 		if !params.Count {
-			results, err = utils.ExpandEntitiesWithQueries(ctx, params.EntityType, results, filters.AdditionalQueries)
+			results, err = utils.ExpandEntitiesWithQueries(ctx, params.EntityType, results, filters.AdditionalQueries, permFilters)
 			if err != nil {
 				return SearchEntitiesResult{}, tools.NewToolError("failed to perform additional queries").Cause(err)
 			}
@@ -161,16 +160,7 @@ func (t *SearchTool) buildHiveQuery(params SearchEntitiesParams, filters *Filter
 }
 
 func (t *SearchTool) buildListOperation(entityType string) *thehive.InputQueryGenericOperation {
-	// Handle entity types that don't follow simple capitalization
-	operationNameOverrides := map[string]string{
-		"case-template": "listCaseTemplate",
-	}
-	if override, ok := operationNameOverrides[entityType]; ok {
-		return thehive.NewInputQueryGenericOperation(override)
-	}
-	catpitalizedEntityType := string(unicode.ToUpper(rune(entityType[0]))) + entityType[1:]
-	operationName := fmt.Sprintf("list%s", catpitalizedEntityType)
-	return thehive.NewInputQueryGenericOperation(operationName)
+	return thehive.NewInputQueryGenericOperation(utils.ListOperationName(entityType))
 }
 
 func (t *SearchTool) buildFilterOperation(filters map[string]interface{}) *map[string]interface{} {

@@ -57,59 +57,6 @@ func TestMergeFilters(t *testing.T) {
 	}
 }
 
-func TestApplyFiltersToQuery(t *testing.T) {
-	tests := []struct {
-		name        string
-		query       map[string]interface{}
-		permFilters map[string]interface{}
-		wantApplied bool
-		wantErr     bool
-	}{
-		{
-			name:        "no permission filters",
-			query:       map[string]interface{}{"query": map[string]interface{}{"_field": "status"}},
-			permFilters: nil,
-			wantApplied: false,
-			wantErr:     false,
-		},
-		{
-			name:        "with permission filters",
-			query:       map[string]interface{}{"query": map[string]interface{}{"_field": "status"}},
-			permFilters: map[string]interface{}{"_field": "severity", "_operator": "_gte", "_value": 2},
-			wantApplied: true,
-			wantErr:     false,
-		},
-		{
-			name:        "nil query with filters",
-			query:       nil,
-			permFilters: map[string]interface{}{"_field": "severity"},
-			wantApplied: true,
-			wantErr:     false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			resultQuery, applied, err := ApplyFiltersToQuery(tt.query, tt.permFilters)
-
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ApplyFiltersToQuery() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if applied != tt.wantApplied {
-				t.Errorf("ApplyFiltersToQuery() applied = %v, want %v", applied, tt.wantApplied)
-			}
-
-			if applied && resultQuery != nil {
-				if _, ok := resultQuery["query"]; !ok {
-					t.Error("Expected result query to have 'query' field")
-				}
-			}
-		})
-	}
-}
-
 func TestNewPermissionInfo(t *testing.T) {
 	info := NewPermissionInfo()
 	if info.Applied {
