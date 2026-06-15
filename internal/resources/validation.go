@@ -18,11 +18,12 @@ var allowedResponderEntityTypes = map[string]bool{
 	"log":           true,
 }
 
-// entityIDPattern matches TheHive entity identifiers: an optional "~" prefix
-// followed by an alphanumeric token (with "-" and "_"). IDs never contain
-// path separators, dots, fragments, or whitespace, so traversal sequences
-// such as "../" or "%2e%2e" cannot match.
-var entityIDPattern = regexp.MustCompile(`^~?[A-Za-z0-9_-]+$`)
+// entityIDPattern matches TheHive entity identifiers: a mandatory "~" prefix
+// followed by one or more digits (the JanusGraph vertex ID). The length is
+// not fixed — IDs grow as the database fills — so only the shape is enforced.
+// This shape contains no path separators, dots, fragments, or whitespace, so
+// traversal sequences such as "../" or "%2e%2e" cannot match.
+var entityIDPattern = regexp.MustCompile(`^~[0-9]+$`)
 
 // validateResponderParams rejects entityType/entityId values that could
 // escape the responder endpoint's path boundary. It must run before any
@@ -32,7 +33,7 @@ func validateResponderParams(entityType, entityID string) error {
 		return fmt.Errorf("invalid entityType %q: must be one of case, alert, task, observable, case_artifact, log", entityType)
 	}
 	if !entityIDPattern.MatchString(entityID) {
-		return fmt.Errorf("invalid entityId %q: must be a TheHive entity ID containing only letters, digits, '-' or '_', optionally prefixed with '~', e.g. ~123456", entityID)
+		return fmt.Errorf("invalid entityId %q: must be a TheHive entity ID of the form '~' followed by digits, e.g. ~123456", entityID)
 	}
 	return nil
 }

@@ -91,9 +91,11 @@ Uses TheHive's native filter syntax where the operator (for example, `_gte`, `_l
 
 **How filters are enforced per tool:**
 
-- `search-entities`: the filter is AND-merged into every query, so results are scoped server-side. The same applies to additional-query expansion (fetching a case's tasks, observables, comments, etc.): a parent entity outside the filter scope is never expanded.
-- `manage-entities`: before any by-ID operation (update, delete, comment, promote, merge, apply-template, or creating a child entity inside a case/alert), the server verifies that every referenced entity matches the filter. An entity outside the scope is reported as "not found or not within the scope" and nothing is mutated.
-- `execute-automation`: the target entity of `run-analyzer` (the observable), `run-responder`, and `get-action-status` must match the filter before anything is executed. For `get-job-status`, the job's target observable is resolved server-side and must match the filter before the job report is returned.
+Filters are always evaluated by TheHive itself, using its native query language — the MCP server never reimplements filtering. For tools that act on a raw entity ID, the server issues a *scoped existence check* before doing anything: it asks TheHive for that specific entity with the configured filter appended as a `filter` stage (e.g. `getCase {id} → filter {tlp ≤ 2}`). If TheHive returns the entity, it is in scope; if it returns nothing (filtered out, deleted, or not visible to the caller's API key), the operation is denied. This reuses the exact same filter the deployment configures for search.
+
+- `search-entities`: the filter is AND-merged directly into the search query, so results are scoped server-side. The same applies to additional-query expansion (fetching a case's tasks, observables, comments, etc.): the parent entity is scope-checked before its children are fetched.
+- `manage-entities`: before any by-ID operation (update, delete, comment, promote, merge, apply-template, or creating a child entity inside a case/alert), every referenced entity is scope-checked. An entity outside the filter is reported as "not found or not within the scope" and nothing is mutated.
+- `execute-automation`: the filter applies to the **entity the automation acts on**, not to the analyzer or responder. Before running, the target is scope-checked — the observable for `run-analyzer`, the entity (case/alert/task/observable) for `run-responder` and `get-action-status`. For `get-job-status`, the job's target observable is resolved server-side (`getJob → observable`) and scope-checked before the report is returned. (Analyzers and responders themselves are gated separately by the allow/block lists below, not by these filters.)
 
 A filter that **is not configured** for a tool means "no restriction" — that tool behaves exactly as before (backward compatible). Only configured filters constrain reach.
 

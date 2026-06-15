@@ -17,15 +17,17 @@ func TestValidateResponderParams(t *testing.T) {
 	}{
 		{name: "valid case entity", entityType: "case", entityID: "~123456"},
 		{name: "valid alert entity", entityType: "alert", entityID: "~409640"},
-		{name: "valid task entity", entityType: "task", entityID: "abc123"},
 		{name: "valid observable entity", entityType: "observable", entityID: "~123456"},
 		{name: "valid case_artifact entity", entityType: "case_artifact", entityID: "~123456"},
-		{name: "valid id with dash and underscore", entityType: "case", entityID: "id-with_token"},
+		{name: "valid long id", entityType: "case", entityID: "~40968404128"},
 
 		{name: "entity type not in allowlist", entityType: "user", entityID: "~123456", wantErr: "invalid entityType"},
 		{name: "entity type with traversal", entityType: "../admin", entityID: "~123456", wantErr: "invalid entityType"},
 		{name: "entity type with slash", entityType: "case/extra", entityID: "~123456", wantErr: "invalid entityType"},
 
+		{name: "entity id missing tilde prefix", entityType: "case", entityID: "123456", wantErr: "invalid entityId"},
+		{name: "entity id with letters", entityType: "task", entityID: "abc123", wantErr: "invalid entityId"},
+		{name: "entity id with dash and underscore", entityType: "case", entityID: "id-with_token", wantErr: "invalid entityId"},
 		{name: "entity id with relative traversal", entityType: "case", entityID: "../../../api/v1/user", wantErr: "invalid entityId"},
 		{name: "entity id with slash", entityType: "case", entityID: "~123/456", wantErr: "invalid entityId"},
 		{name: "entity id with dot-dot", entityType: "case", entityID: "..", wantErr: "invalid entityId"},
@@ -34,6 +36,7 @@ func TestValidateResponderParams(t *testing.T) {
 		{name: "entity id with query", entityType: "case", entityID: "~123?x=1", wantErr: "invalid entityId"},
 		{name: "entity id with space", entityType: "case", entityID: "~123 456", wantErr: "invalid entityId"},
 		{name: "entity id with backslash", entityType: "case", entityID: `..\..\admin`, wantErr: "invalid entityId"},
+		{name: "entity id tilde only", entityType: "case", entityID: "~", wantErr: "invalid entityId"},
 		{name: "empty entity id", entityType: "case", entityID: "", wantErr: "invalid entityId"},
 	}
 
