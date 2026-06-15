@@ -113,66 +113,62 @@ var dateFields = []string{
 // the LLM cannot mistake attacker-controlled free text for instructions.
 //
 // Trusting a field is a security assertion: "this value is a structural
-// identifier, an enum/control value, or a date — never free-form human or
-// attacker text." Wrapping such a value would be a functional bug: the model
-// carries the boundary tags into its next tool call and corrupts it (a wrapped
-// _id becomes an invalid lookup, a wrapped status breaks a filter). Conversely,
-// only trust a name once you are confident the field can never carry free text.
+// identifier, an entity reference, a closed status/type/control value, or a
+// user login — never free-form human or attacker text." Wrapping such a value
+// would be a functional bug: the model carries the boundary tags into its next
+// tool call and corrupts it (a wrapped _id becomes an invalid lookup, a wrapped
+// status breaks a filter).
 //
-// Two structural categories are trusted by shape rather than by enumeration so
-// that new SDK reference fields stay safe automatically (see isTrustedField):
-// underscore-prefixed system metadata (_id, _type, _createdBy, …) and entity
-// references whose names end in Id/ID (caseId, commentId, cortexJobId, …).
+// This list is exhaustive by construction, NOT heuristic. It was derived from
+// TheHive's OpenAPI schema (v5.7.3) by classifying every field returned by the
+// agent-facing entities — case, alert, task, observable, comment, log, page,
+// procedure, pattern, case-template, custom-field, attachment, organisation,
+// user, share, job, action, audit — together with the MCP tool-result envelope.
+// Numbers, booleans and dates are handled elsewhere (numbers/bools are never
+// wrapped by wrapUntrustedValue; dates via isDateField), so only string fields
+// that are provably non-free-text appear here. Every other string field —
+// title, description, message, summary, content, name, displayName, data,
+// source, sourceRef, tags, category, type, *Label, url, email, report,
+// analyzer/responder names, etc. — is deliberately omitted and therefore
+// wrapped.
 //
-// Note on user references: login-shaped identifiers the agent uses for lookups
-// and assignment (login, assignee, owner, _createdBy, _updatedBy) are trusted,
-// but human display names (name, displayName) are deliberately NOT — they are
-// free text and a known injection vector, so they are wrapped.
-var trustedFields = []string{
-	// Non-suffixed identifiers (the …Id/…ID and _-prefixed cases are handled by
-	// isTrustedField's shape rules).
-	"id", "login", "assignee", "owner",
-	// Enums and control values: closed, system-defined vocabularies the agent
-	// filters and acts on. (Open, user/ingestion-defined labels such as "type",
-	// "category", "tags" are intentionally absent — they are wrapped.)
-	"status", "stage", "resolutionStatus", "impactStatus",
-	"severity", "tlp", "pap", "dataType",
-	"flag", "ioc", "sighted",
-	// MCP tool-result envelope: server-generated control values that echo the
-	// request, not TheHive data. These are our own stable result structs, not
+// To re-derive after a TheHive upgrade: re-classify the new OpenAPI schema and
+// add ONLY fields you can justify as never carrying free text. When unsure,
+// leave a field out — deny-by-default keeps it safe.
+var trustedFields = map[string]struct{}{
+	// System metadata (underscore-prefixed) and the kind discriminator.
+	"_id": {}, "_type": {}, "_createdBy": {}, "_updatedBy": {}, "_kind": {},
+	// Entity identifiers and references.
+	"id": {}, "caseId": {}, "patternId": {}, "organisationId": {},
+	"attachmentId": {}, "rootId": {}, "requestId": {}, "objectId": {},
+	"analyzerId": {}, "responderId": {}, "cortexId": {}, "cortexJobId": {},
+	// User references — logins, not display names (name/displayName are wrapped).
+	"login": {}, "assignee": {}, "owner": {}, "createdBy": {}, "updatedBy": {},
+	// Closed status/stage/type control values the agent filters and acts on.
+	// dataType is an open vocabulary but is a required tool input (creating and
+	// filtering observables), so wrapping it would break that flow.
+	"status": {}, "stage": {}, "impactStatus": {}, "dataType": {}, "objectType": {},
+	// MCP tool-result envelope: server-generated control values and the ids the
+	// result reports back. These are our own stable result structs, not TheHive
 	// SDK fields, so trusting them by name carries no drift risk.
-	"operation", "entityType",
+	"operation": {}, "entityType": {}, "templateId": {}, "caseIds": {},
+	"commentId": {}, "entityId": {}, "entityIds": {}, "jobId": {}, "actionId": {},
+	"targetId": {},
 }
 
 // isTrustedField reports whether a field's value may be returned to the LLM
-// without [UNTRUSTED_DATA] wrapping.
+// without [UNTRUSTED_DATA] wrapping. Date fields are trusted by definition
+// (converted to fixed-format timestamps, never free text); every other trusted
+// name is enumerated explicitly in trustedFields.
 func isTrustedField(fieldName string) bool {
 	if fieldName == "" {
 		return false
 	}
-	// Date fields are trusted by definition (converted to fixed-format
-	// timestamps, never free text).
 	if isDateField(fieldName) {
 		return true
 	}
-	// Underscore-prefixed names are TheHive system metadata (_id, _type,
-	// _parent, _createdBy, _updatedBy, …) — structural, never free text.
-	if strings.HasPrefix(fieldName, "_") {
-		return true
-	}
-	// Names ending in Id/ID (and the plural Ids/IDs) are entity references
-	// (caseId, commentId, cortexJobId, objectId, caseIds, …) — identifiers the
-	// agent feeds back into tool calls, never free text.
-	if strings.HasSuffix(fieldName, "Id") || strings.HasSuffix(fieldName, "ID") ||
-		strings.HasSuffix(fieldName, "Ids") || strings.HasSuffix(fieldName, "IDs") {
-		return true
-	}
-	for _, f := range trustedFields {
-		if fieldName == f {
-			return true
-		}
-	}
-	return false
+	_, ok := trustedFields[fieldName]
+	return ok
 }
 
 // wrapUntrustedValue wraps a string or slice of strings with boundary tags.

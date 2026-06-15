@@ -114,25 +114,25 @@ func TestWrap_TrustedFieldsAreNotWrapped(t *testing.T) {
 	}
 }
 
-func TestWrap_IdentifierShapesAreNotWrapped(t *testing.T) {
-	// Entity-reference fields (…Id/…ID) and underscore-prefixed system metadata
-	// are trusted by shape, so new SDK reference fields stay safe automatically
-	// and the agent can feed them back into tool calls uncorrupted.
+func TestWrap_IdentifierAndReferenceFieldsAreNotWrapped(t *testing.T) {
+	// Entity identifiers, references and system metadata are explicitly trusted,
+	// so the agent can feed them back into tool calls uncorrupted.
 	in := map[string]interface{}{
 		"commentId":   "~111",
 		"cortexJobId": "~222",
 		"objectId":    "~333",
-		"_parent":     "~444",
+		"_type":       "case",
 		"_createdBy":  "soc@example",
 		"templateId":  "~555",
+		"patternId":   "T1059",
 	}
 	out := processMap(t, in)
 	for k, v := range out {
 		requireNotWrapped(t, v)
-		require.Equal(t, in[k], v, "identifier-shaped field %q changed", k)
+		require.Equal(t, in[k], v, "identifier field %q changed", k)
 	}
 
-	// Plural identifier lists (…Ids/…IDs) are reference lists, not free text.
+	// caseIds is the envelope's identifier list reported by apply-template.
 	listOut := processMap(t, map[string]interface{}{"caseIds": []string{"~1", "~2"}})
 	ids, ok := listOut["caseIds"].([]interface{})
 	require.True(t, ok)
