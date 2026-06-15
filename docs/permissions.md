@@ -379,6 +379,7 @@ Alternatively, users can specify a permissions path when configuring the MCPB in
 - **Default Deny**: All operations denied unless explicitly allowed
 - **No Runtime Changes**: Permissions loaded once at startup
 - **Filter Enforcement**: Permission filters are merged into search queries and verified server-side before manage, expansion, and automation operations reach an entity (see "Tool filters" above for the exact guarantees and limitations)
+- **Untrusted-data wrapping (deny-by-default)**: TheHive field values returned to the LLM are wrapped in `[UNTRUSTED_DATA]...[/UNTRUSTED_DATA]` boundary tags so the model can tell data from instructions. The policy is **deny-by-default**: every string value is wrapped *unless* its field name is on a small trusted allowlist of structural identifiers, enums/control values, and dates (`_id`, `_type`, `status`, `dataType`, date fields, …). This means `customFields` values, attachment names, and any field added to the TheHive SDK in the future are wrapped automatically — there is no longer an allowlist of "untrusted" fields that has to be kept in sync. Embedded boundary markers are escaped so the boundary cannot be broken out of.
 - **Logged Operations**: Permission denials logged for auditing
 
 ## TheHive Filter Syntax

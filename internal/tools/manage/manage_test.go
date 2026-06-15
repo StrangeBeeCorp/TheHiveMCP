@@ -1146,8 +1146,10 @@ func TestManageCreateCaseTemplate(t *testing.T) {
 	templateID, ok := resultData["_id"].(string)
 	require.True(t, ok)
 	require.NotEmpty(t, templateID)
-	require.Equal(t, "Test-MCP-Template", resultData["name"])
-	require.Equal(t, "Test MCP Template", resultData["displayName"])
+	// Deny-by-default (DL-6006): template name/displayName are free text, so
+	// they are wrapped as untrusted; the agent uses the trusted "_id".
+	require.Equal(t, "[UNTRUSTED_DATA]Test-MCP-Template[/UNTRUSTED_DATA]", resultData["name"])
+	require.Equal(t, "[UNTRUSTED_DATA]Test MCP Template[/UNTRUSTED_DATA]", resultData["displayName"])
 
 	// Verify it exists in TheHive
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
@@ -1418,7 +1420,9 @@ func TestManageCreatePageInCase(t *testing.T) {
 	require.True(t, ok)
 	require.NotEmpty(t, pageID)
 	require.Equal(t, "[UNTRUSTED_DATA]Investigation Notes[/UNTRUSTED_DATA]", resultData["title"])
-	require.Equal(t, "Default", resultData["category"])
+	// Deny-by-default (DL-6006): a page "category" is a user-defined label, so
+	// it is wrapped as untrusted.
+	require.Equal(t, "[UNTRUSTED_DATA]Default[/UNTRUSTED_DATA]", resultData["category"])
 }
 
 // TestManageCreateStandalonePage tests creating a standalone (non-case) page via the manage-entities tool

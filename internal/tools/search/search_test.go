@@ -969,7 +969,9 @@ func TestSearchExtraDataAndAdditionalQueries(t *testing.T) {
 	require.Len(t, alertsData, 1)
 
 	alert := alertsData[0].(map[string]any)
-	require.Equal(t, "test", alert["type"])
+	// Deny-by-default (DL-6006): "type" is an open, ingestion-controlled label,
+	// so it is wrapped as untrusted (unlike closed system enums like status).
+	require.Equal(t, "[UNTRUSTED_DATA]test[/UNTRUSTED_DATA]", alert["type"])
 	require.Equal(t, "[UNTRUSTED_DATA]test[/UNTRUSTED_DATA]", alert["source"])
 
 	tasks, ok := firstResult["tasks"].([]any)
@@ -1199,7 +1201,9 @@ func TestSearchCaseTemplates(t *testing.T) {
 
 	template, ok := templatesData[0].(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, "Phishing-Search-Test", template["name"])
+	// Deny-by-default (DL-6006): a template "name" is free text, so it is
+	// wrapped; the agent uses the trusted "_id" for lookups.
+	require.Equal(t, "[UNTRUSTED_DATA]Phishing-Search-Test[/UNTRUSTED_DATA]", template["name"])
 }
 
 // TestSearchPages tests searching page entities via the search-entities tool
@@ -1268,5 +1272,7 @@ func TestSearchPages(t *testing.T) {
 
 	page, ok := pagesData[0].(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, "Default", page["category"])
+	// Deny-by-default (DL-6006): a page "category" is a user-defined label, so
+	// it is wrapped as untrusted.
+	require.Equal(t, "[UNTRUSTED_DATA]Default[/UNTRUSTED_DATA]", page["category"])
 }

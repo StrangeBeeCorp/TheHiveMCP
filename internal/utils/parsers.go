@@ -104,19 +104,70 @@ var dateFields = []string{
 	"includeInTimeline",
 }
 
-// untrustedFields contains field names whose values are user-generated and may contain
-// adversarial content (prompt injection). Values in these fields are wrapped with
-// [UNTRUSTED_DATA]...[/UNTRUSTED_DATA] boundary tags so that LLM clients can
-// distinguish data from instructions.
-var untrustedFields = []string{
-	"title", "description", "message", "data",
-	"tags", "content", "summary", "source",
-	"sourceRef",
+// trustedFields is the explicit allowlist of field names whose values are NOT
+// wrapped with [UNTRUSTED_DATA] boundary tags. The wrapping policy is
+// deny-by-default (DL-6006, RandoriSec 5.4, review M5): every string value is
+// treated as untrusted and wrapped UNLESS isTrustedField reports it trusted.
+// Anything not trusted — including customFields values, attachment names, and
+// fields added to the TheHive SDK in the future — is wrapped automatically, so
+// the LLM cannot mistake attacker-controlled free text for instructions.
+//
+// Trusting a field is a security assertion: "this value is a structural
+// identifier, an enum/control value, or a date — never free-form human or
+// attacker text." Wrapping such a value would be a functional bug: the model
+// carries the boundary tags into its next tool call and corrupts it (a wrapped
+// _id becomes an invalid lookup, a wrapped status breaks a filter). Conversely,
+// only trust a name once you are confident the field can never carry free text.
+//
+// Two structural categories are trusted by shape rather than by enumeration so
+// that new SDK reference fields stay safe automatically (see isTrustedField):
+// underscore-prefixed system metadata (_id, _type, _createdBy, …) and entity
+// references whose names end in Id/ID (caseId, commentId, cortexJobId, …).
+//
+// Note on user references: login-shaped identifiers the agent uses for lookups
+// and assignment (login, assignee, owner, _createdBy, _updatedBy) are trusted,
+// but human display names (name, displayName) are deliberately NOT — they are
+// free text and a known injection vector, so they are wrapped.
+var trustedFields = []string{
+	// Non-suffixed identifiers (the …Id/…ID and _-prefixed cases are handled by
+	// isTrustedField's shape rules).
+	"id", "login", "assignee", "owner",
+	// Enums and control values: closed, system-defined vocabularies the agent
+	// filters and acts on. (Open, user/ingestion-defined labels such as "type",
+	// "category", "tags" are intentionally absent — they are wrapped.)
+	"status", "stage", "resolutionStatus", "impactStatus",
+	"severity", "tlp", "pap", "dataType",
+	"flag", "ioc", "sighted",
+	// MCP tool-result envelope: server-generated control values that echo the
+	// request, not TheHive data. These are our own stable result structs, not
+	// SDK fields, so trusting them by name carries no drift risk.
+	"operation", "entityType",
 }
 
-// isUntrustedField checks if a field name contains user-generated content
-func isUntrustedField(fieldName string) bool {
-	for _, f := range untrustedFields {
+// isTrustedField reports whether a field's value may be returned to the LLM
+// without [UNTRUSTED_DATA] wrapping.
+func isTrustedField(fieldName string) bool {
+	if fieldName == "" {
+		return false
+	}
+	// Date fields are trusted by definition (converted to fixed-format
+	// timestamps, never free text).
+	if isDateField(fieldName) {
+		return true
+	}
+	// Underscore-prefixed names are TheHive system metadata (_id, _type,
+	// _parent, _createdBy, _updatedBy, …) — structural, never free text.
+	if strings.HasPrefix(fieldName, "_") {
+		return true
+	}
+	// Names ending in Id/ID (and the plural Ids/IDs) are entity references
+	// (caseId, commentId, cortexJobId, objectId, caseIds, …) — identifiers the
+	// agent feeds back into tool calls, never free text.
+	if strings.HasSuffix(fieldName, "Id") || strings.HasSuffix(fieldName, "ID") ||
+		strings.HasSuffix(fieldName, "Ids") || strings.HasSuffix(fieldName, "IDs") {
+		return true
+	}
+	for _, f := range trustedFields {
 		if fieldName == f {
 			return true
 		}
@@ -318,7 +369,7 @@ func processDatesStruct(val reflect.Value, wrapUntrusted bool) (map[string]inter
 			}
 		}
 
-		if wrapUntrusted && isUntrustedField(key) {
+		if wrapUntrusted && !isTrustedField(key) {
 			processedValue = wrapUntrustedValue(processedValue)
 		}
 		result[key] = processedValue
@@ -351,7 +402,7 @@ func processDatesMap(val reflect.Value, wrapUntrusted bool) (map[string]interfac
 			}
 		}
 
-		if wrapUntrusted && isUntrustedField(keyStr) {
+		if wrapUntrusted && !isTrustedField(keyStr) {
 			processedValue = wrapUntrustedValue(processedValue)
 		}
 		result[keyStr] = processedValue
