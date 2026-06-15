@@ -45,8 +45,15 @@ func (t *ManageTool) validateEntityScope(ctx context.Context, perms *permissions
 	}
 
 	allOf, anyOf := scopeChecksForOperation(params)
+	if err := checkAllInScope(ctx, allOf, permFilters); err != nil {
+		return err
+	}
+	return checkAnyInScope(ctx, anyOf, permFilters)
+}
 
-	for _, check := range allOf {
+// checkAllInScope requires every entity in every check to be within scope.
+func checkAllInScope(ctx context.Context, checks []scopeCheck, permFilters map[string]interface{}) error {
+	for _, check := range checks {
 		inScope, err := utils.GetEntityIDsInScope(ctx, check.entityType, check.entityIDs, permFilters)
 		if err != nil {
 			return tools.NewToolError("failed to verify entity scope").Cause(err).
@@ -58,26 +65,28 @@ func (t *ManageTool) validateEntityScope(ctx context.Context, perms *permissions
 			}
 		}
 	}
-
-	// anyOf alternatives describe a parent that may be a case OR an alert:
-	// the parent is in scope as soon as one alternative matches. Query errors
-	// only count as a non-match so the remaining alternative can still pass;
-	// if none does, the operation is denied (fail closed).
-	if len(anyOf) > 0 {
-		for _, check := range anyOf {
-			inScope, err := utils.IsEntityInScope(ctx, check.entityType, check.entityIDs[0], permFilters)
-			if err != nil {
-				slog.Debug("Entity scope alternative check failed", "entityType", check.entityType, "error", err)
-				continue
-			}
-			if inScope {
-				return nil
-			}
-		}
-		return scopeDeniedError("parent entity", anyOf[0].entityIDs[0])
-	}
-
 	return nil
+}
+
+// checkAnyInScope passes when at least one alternative is within scope — used
+// for a parent that may be a case OR an alert. A query error counts as a
+// non-match so a remaining alternative can still pass; if none matches, the
+// operation is denied (fail closed). No alternatives means nothing to check.
+func checkAnyInScope(ctx context.Context, checks []scopeCheck, permFilters map[string]interface{}) error {
+	if len(checks) == 0 {
+		return nil
+	}
+	for _, check := range checks {
+		inScope, err := utils.IsEntityInScope(ctx, check.entityType, check.entityIDs[0], permFilters)
+		if err != nil {
+			slog.Debug("Entity scope alternative check failed", "entityType", check.entityType, "error", err)
+			continue
+		}
+		if inScope {
+			return nil
+		}
+	}
+	return scopeDeniedError("parent entity", checks[0].entityIDs[0])
 }
 
 func scopeDeniedError(entityType, entityID string) error {
