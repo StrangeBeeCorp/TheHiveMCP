@@ -333,7 +333,14 @@ func tryEnsureTestOrganisation(client *thehive.APIClient, ctx context.Context, o
 	}
 
 	// Anything else (5xx during startup, transport error) is treated as transient.
-	return "", false, fmt.Errorf("create organisation %q: %w", orgName, createErr)
+	status := 0
+	if httpResp != nil {
+		status = httpResp.StatusCode
+	}
+	if createErr != nil {
+		return "", false, fmt.Errorf("create organisation %q (status %d): %w", orgName, status, createErr)
+	}
+	return "", false, fmt.Errorf("create organisation %q: unexpected status %d", orgName, status)
 }
 
 func setupUserPermissions(t *testing.T, client *thehive.APIClient, ctx context.Context, orgName string) {

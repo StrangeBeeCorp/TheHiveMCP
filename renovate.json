@@ -63,8 +63,8 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Track short-form Docker image tags pinned in Go files (e.g. the TheHive testcontainer image) — anchored to the opening quote of the Go string literal",
-      "managerFilePatterns": ["/\\.go$/"],
+      "description": "Track short-form Docker image tags pinned in the testcontainer helpers (the only Go files that hold image refs) — anchored to the opening quote of the Go string literal. Scoped to internal/testutils to avoid matching address:port literals in unrelated/test files (e.g. \"127.0.0.1:0\").",
+      "managerFilePatterns": ["/^internal/testutils/.+\\.go$/"],
       "matchStrings": [
         "\"(?<depName>(?:[a-z0-9]+(?:[._-][a-z0-9]+)*/)*[a-z0-9]+(?:[._-][a-z0-9]+)*):(?<currentValue>[a-zA-Z0-9][a-zA-Z0-9._-]*)(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?"
       ],
