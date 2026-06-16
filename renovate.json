@@ -68,8 +68,7 @@
       "matchStrings": [
         "\"(?<depName>(?:[a-z0-9]+(?:[._-][a-z0-9]+)*/)*[a-z0-9]+(?:[._-][a-z0-9]+)*):(?<currentValue>[a-zA-Z0-9][a-zA-Z0-9._-]*)(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?"
       ],
-      "datasourceTemplate": "docker",
-      "autoReplaceStringTemplate": "{{depName}}:{{#if newValue}}{{newValue}}{{else}}{{currentValue}}{{/if}}{{#if newDigest}}@{{newDigest}}{{/if}}"
+      "datasourceTemplate": "docker"
     },
     {
       "customType": "regex",
@@ -78,8 +77,7 @@
       "matchStrings": [
         "_IMAGE\\s*[:?]?=\\s*(?<depName>(?:[a-z0-9.-]+/)*[a-z0-9._-]+):(?<currentValue>[a-zA-Z0-9][a-zA-Z0-9._-]*)(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?"
       ],
-      "datasourceTemplate": "docker",
-      "autoReplaceStringTemplate": "{{depName}}:{{#if newValue}}{{newValue}}{{else}}{{currentValue}}{{/if}}{{#if newDigest}}@{{newDigest}}{{/if}}"
+      "datasourceTemplate": "docker"
     }
   ]
 }

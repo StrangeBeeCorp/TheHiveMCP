@@ -295,7 +295,7 @@ func tryEnsureTestOrganisation(client *thehive.APIClient, ctx context.Context, o
 	})
 
 	resp, httpResp, listErr := client.QueryAndExportAPI.QueryAPI(ctx).InputQuery(*query).Execute()
-	if listErr == nil && httpResp.StatusCode == 200 && resp != nil {
+	if listErr == nil && httpResp != nil && httpResp.StatusCode == 200 && resp != nil {
 		var orgs []thehive.OutputOrganisation
 		if jsonBytes, _ := json.Marshal(resp); jsonBytes != nil {
 			if json.Unmarshal(jsonBytes, &orgs) == nil {
