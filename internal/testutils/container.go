@@ -282,6 +282,25 @@ func ensureTestOrganisation(t *testing.T, client *thehive.APIClient, ctx context
 	}
 }
 
+// findOrganisationID returns the id of orgName within a listOrganisation query
+// response, or false if it is absent or the response cannot be decoded.
+func findOrganisationID(resp any, orgName string) (string, bool) {
+	jsonBytes, err := json.Marshal(resp)
+	if err != nil || jsonBytes == nil {
+		return "", false
+	}
+	var orgs []thehive.OutputOrganisation
+	if json.Unmarshal(jsonBytes, &orgs) != nil {
+		return "", false
+	}
+	for _, org := range orgs {
+		if org.GetName() == orgName {
+			return org.GetUnderscoreId(), true
+		}
+	}
+	return "", false
+}
+
 // tryEnsureTestOrganisation performs one lookup-or-create attempt for orgName.
 // done is true once the organisation exists (or already existed). When done is
 // false the call hit a transient startup error (5xx / transport failure) and the
@@ -296,15 +315,8 @@ func tryEnsureTestOrganisation(client *thehive.APIClient, ctx context.Context, o
 
 	resp, httpResp, listErr := client.QueryAndExportAPI.QueryAPI(ctx).InputQuery(*query).Execute()
 	if listErr == nil && httpResp != nil && httpResp.StatusCode == 200 && resp != nil {
-		var orgs []thehive.OutputOrganisation
-		if jsonBytes, _ := json.Marshal(resp); jsonBytes != nil {
-			if json.Unmarshal(jsonBytes, &orgs) == nil {
-				for _, org := range orgs {
-					if org.GetName() == orgName {
-						return org.GetUnderscoreId(), true, nil
-					}
-				}
-			}
+		if id, found := findOrganisationID(resp, orgName); found {
+			return id, true, nil
 		}
 	}
 
