@@ -34,6 +34,21 @@ func extractAndUnmarshalJSON(content string, target interface{}) error {
 		}
 	}
 
+	// Decode the first complete JSON value from the first '{'. json.Decoder reads
+	// exactly one value and ignores the rest, handling trailing prose, multiple
+	// objects (first wins) and braces inside strings — which the first-'{'-to-
+	// last-'}' slice below mishandles.
+	if startIdx := strings.Index(content, "{"); startIdx != -1 {
+		dec := json.NewDecoder(strings.NewReader(content[startIdx:]))
+		var raw json.RawMessage
+		if err := dec.Decode(&raw); err == nil {
+			return json.Unmarshal(raw, target)
+		}
+	}
+
+	// Fallback: slice from the first '{' to the last '}'. Kept for inputs where
+	// the streaming decode above can't isolate a value (e.g. a malformed leading
+	// object followed by a valid one).
 	startIdx := strings.Index(content, "{")
 	endIdx := strings.LastIndex(content, "}")
 

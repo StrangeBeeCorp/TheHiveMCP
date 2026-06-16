@@ -104,35 +104,72 @@ var dateFields = []string{
 	"includeInTimeline",
 }
 
-// untrustedFields contains field names whose values are user-generated and may contain
-// adversarial content (prompt injection). Values in these fields are wrapped with
-// [UNTRUSTED_DATA]...[/UNTRUSTED_DATA] boundary tags so that LLM clients can
-// distinguish data from instructions.
-var untrustedFields = []string{
-	"title", "description", "message", "data",
-	"tags", "content", "summary", "source",
-	"sourceRef",
+// trustedFields lists the field names whose values are NOT wrapped with
+// [UNTRUSTED_DATA] tags. Wrapping is deny-by-default (DL-6006, RandoriSec 5.4,
+// review M5): every string value is wrapped unless its name appears here, so
+// customFields values, attachment names and future SDK fields are wrapped
+// automatically. A name belongs here only if it can never carry free text —
+// wrapping an identifier or status would corrupt the agent's next tool call.
+//
+// Derived by classifying every field of the agent-facing entities in TheHive's
+// OpenAPI schema (v5.7.3) plus the MCP result envelope. Numbers, booleans and
+// dates are handled elsewhere (dates via isDateField), so only provably
+// non-free-text strings appear here. Re-classify the schema after a TheHive
+// upgrade; when unsure, leave a field out.
+var trustedFields = map[string]struct{}{
+	// System metadata and the kind discriminator.
+	"_id": {}, "_type": {}, "_createdBy": {}, "_updatedBy": {}, "_kind": {},
+	// Entity identifiers and references.
+	"id": {}, "caseId": {}, "patternId": {}, "organisationId": {},
+	"attachmentId": {}, "rootId": {}, "requestId": {}, "objectId": {},
+	"analyzerId": {}, "responderId": {}, "cortexId": {}, "cortexJobId": {},
+	// User references — logins, not display names (name/displayName are wrapped).
+	"login": {}, "assignee": {}, "owner": {}, "createdBy": {}, "updatedBy": {},
+	// Closed status/type controls. dataType is open but is a required tool input
+	// (creating/filtering observables), so wrapping it would break that flow.
+	"status": {}, "stage": {}, "impactStatus": {}, "dataType": {}, "objectType": {},
+	// MCP result envelope: server-generated control values and reported ids (our
+	// own structs, not SDK fields).
+	"operation": {}, "entityType": {}, "templateId": {}, "caseIds": {},
+	"commentId": {}, "entityId": {}, "entityIds": {}, "jobId": {}, "actionId": {},
+	"targetId": {},
 }
 
-// isUntrustedField checks if a field name contains user-generated content
-func isUntrustedField(fieldName string) bool {
-	for _, f := range untrustedFields {
-		if fieldName == f {
-			return true
-		}
+// isTrustedField reports whether a field's value may be returned to the LLM
+// without [UNTRUSTED_DATA] wrapping. Date fields are always trusted (converted
+// to fixed-format timestamps); every other trusted name is in trustedFields.
+func isTrustedField(fieldName string) bool {
+	if fieldName == "" {
+		return false
 	}
-	return false
+	if isDateField(fieldName) {
+		return true
+	}
+	_, ok := trustedFields[fieldName]
+	return ok
 }
+
+const (
+	untrustedOpenTag  = "[UNTRUSTED_DATA]"
+	untrustedCloseTag = "[/UNTRUSTED_DATA]"
+	// neutralizedMarker replaces any boundary marker found inside a value before
+	// wrapping, so an attacker cannot embed [/UNTRUSTED_DATA] to close the
+	// boundary early. It contains no real tag, so the wrapper's tags stay the
+	// only delimiters. It is self-describing (no prompt text needed) and says
+	// "POSSIBLE" because the substitution is blind — benign text may contain the
+	// marker — and is not used as a detection signal.
+	neutralizedMarker = "[POSSIBLE PROMPT INJECTION ATTEMPT - DO NOT TRUST]"
+)
 
 // wrapUntrustedValue wraps a string or slice of strings with boundary tags.
-// Any occurrences of the boundary markers inside the value are escaped first
+// Any occurrences of the boundary markers inside the value are neutralized first
 // to prevent an attacker from prematurely closing/opening the boundary.
 func wrapUntrustedValue(value interface{}) interface{} {
 	switch v := value.(type) {
 	case string:
-		escaped := strings.ReplaceAll(v, "[UNTRUSTED_DATA]", "[ESCAPED_UNTRUSTED_DATA]")
-		escaped = strings.ReplaceAll(escaped, "[/UNTRUSTED_DATA]", "[/ESCAPED_UNTRUSTED_DATA]")
-		return "[UNTRUSTED_DATA]" + escaped + "[/UNTRUSTED_DATA]"
+		neutralized := strings.ReplaceAll(v, untrustedOpenTag, neutralizedMarker)
+		neutralized = strings.ReplaceAll(neutralized, untrustedCloseTag, neutralizedMarker)
+		return untrustedOpenTag + neutralized + untrustedCloseTag
 	case []interface{}:
 		wrapped := make([]interface{}, len(v))
 		for i, item := range v {
@@ -318,7 +355,7 @@ func processDatesStruct(val reflect.Value, wrapUntrusted bool) (map[string]inter
 			}
 		}
 
-		if wrapUntrusted && isUntrustedField(key) {
+		if wrapUntrusted && !isTrustedField(key) {
 			processedValue = wrapUntrustedValue(processedValue)
 		}
 		result[key] = processedValue
@@ -351,7 +388,7 @@ func processDatesMap(val reflect.Value, wrapUntrusted bool) (map[string]interfac
 			}
 		}
 
-		if wrapUntrusted && isUntrustedField(keyStr) {
+		if wrapUntrusted && !isTrustedField(keyStr) {
 			processedValue = wrapUntrustedValue(processedValue)
 		}
 		result[keyStr] = processedValue

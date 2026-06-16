@@ -1146,8 +1146,9 @@ func TestManageCreateCaseTemplate(t *testing.T) {
 	templateID, ok := resultData["_id"].(string)
 	require.True(t, ok)
 	require.NotEmpty(t, templateID)
-	require.Equal(t, "Test-MCP-Template", resultData["name"])
-	require.Equal(t, "Test MCP Template", resultData["displayName"])
+	// DL-6006: name/displayName are free text, so they are wrapped.
+	require.Equal(t, "[UNTRUSTED_DATA]Test-MCP-Template[/UNTRUSTED_DATA]", resultData["name"])
+	require.Equal(t, "[UNTRUSTED_DATA]Test MCP Template[/UNTRUSTED_DATA]", resultData["displayName"])
 
 	// Verify it exists in TheHive
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
@@ -1418,7 +1419,8 @@ func TestManageCreatePageInCase(t *testing.T) {
 	require.True(t, ok)
 	require.NotEmpty(t, pageID)
 	require.Equal(t, "[UNTRUSTED_DATA]Investigation Notes[/UNTRUSTED_DATA]", resultData["title"])
-	require.Equal(t, "Default", resultData["category"])
+	// DL-6006: "category" is a user-defined label, so it is wrapped.
+	require.Equal(t, "[UNTRUSTED_DATA]Default[/UNTRUSTED_DATA]", resultData["category"])
 }
 
 // TestManageCreateStandalonePage tests creating a standalone (non-case) page via the manage-entities tool
