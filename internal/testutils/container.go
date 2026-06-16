@@ -74,8 +74,9 @@ func StartTheHiveContainer(t *testing.T) (string, error) {
 		return fmt.Sprintf("http://localhost:%s", globalPort), nil
 	}
 
+	testConfig := NewHiveTestConfig()
 	req := testcontainers.ContainerRequest{
-		Image:        "strangebee/thehive:5.6.3",
+		Image:        testConfig.ImageName,
 		ExposedPorts: []string{"9000/tcp"},
 		WaitingFor:   wait.ForHTTP("/api/status").WithPort("9000/tcp").WithStartupTimeout(5 * time.Minute),
 	}
