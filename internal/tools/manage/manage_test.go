@@ -1146,8 +1146,7 @@ func TestManageCreateCaseTemplate(t *testing.T) {
 	templateID, ok := resultData["_id"].(string)
 	require.True(t, ok)
 	require.NotEmpty(t, templateID)
-	// Deny-by-default (DL-6006): template name/displayName are free text, so
-	// they are wrapped as untrusted; the agent uses the trusted "_id".
+	// DL-6006: name/displayName are free text, so they are wrapped.
 	require.Equal(t, "[UNTRUSTED_DATA]Test-MCP-Template[/UNTRUSTED_DATA]", resultData["name"])
 	require.Equal(t, "[UNTRUSTED_DATA]Test MCP Template[/UNTRUSTED_DATA]", resultData["displayName"])
 
@@ -1420,8 +1419,7 @@ func TestManageCreatePageInCase(t *testing.T) {
 	require.True(t, ok)
 	require.NotEmpty(t, pageID)
 	require.Equal(t, "[UNTRUSTED_DATA]Investigation Notes[/UNTRUSTED_DATA]", resultData["title"])
-	// Deny-by-default (DL-6006): a page "category" is a user-defined label, so
-	// it is wrapped as untrusted.
+	// DL-6006: "category" is a user-defined label, so it is wrapped.
 	require.Equal(t, "[UNTRUSTED_DATA]Default[/UNTRUSTED_DATA]", resultData["category"])
 }
 
