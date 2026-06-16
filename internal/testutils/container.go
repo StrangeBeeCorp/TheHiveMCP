@@ -264,6 +264,29 @@ func createClientAndContext(t *testing.T, cfg *Config) (*thehive.APIClient, cont
 func ensureTestOrganisation(t *testing.T, client *thehive.APIClient, ctx context.Context, orgName string) string {
 	t.Helper()
 
+	// TheHive answers the /api/status readiness probe (used by the container wait
+	// strategy) before its schema migration completes, so the first organisation
+	// setup can transiently fail with 5xx — especially when several containers
+	// boot in parallel. Retry until TheHive can actually serve the write.
+	const readinessTimeout = 4 * time.Minute
+	deadline := time.Now().Add(readinessTimeout)
+	for {
+		id, done, err := tryEnsureTestOrganisation(client, ctx, orgName)
+		if done {
+			return id
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("TheHive not ready to create organisation %q within %s: %v", orgName, readinessTimeout, err)
+		}
+		time.Sleep(3 * time.Second)
+	}
+}
+
+// tryEnsureTestOrganisation performs one lookup-or-create attempt for orgName.
+// done is true once the organisation exists (or already existed). When done is
+// false the call hit a transient startup error (5xx / transport failure) and the
+// caller should retry; err carries the reason for diagnostics.
+func tryEnsureTestOrganisation(client *thehive.APIClient, ctx context.Context, orgName string) (id string, done bool, err error) {
 	// Check if org exists
 	genericOp := thehive.NewInputQueryGenericOperation("listOrganisation")
 	query := thehive.NewInputQuery()
@@ -271,32 +294,34 @@ func ensureTestOrganisation(t *testing.T, client *thehive.APIClient, ctx context
 		thehive.InputQueryGenericOperationAsInputQueryNamedOperation(genericOp),
 	})
 
-	resp, httpResp, err := client.QueryAndExportAPI.QueryAPI(ctx).InputQuery(*query).Execute()
-	if err == nil && httpResp.StatusCode == 200 && resp != nil {
+	resp, httpResp, listErr := client.QueryAndExportAPI.QueryAPI(ctx).InputQuery(*query).Execute()
+	if listErr == nil && httpResp.StatusCode == 200 && resp != nil {
 		var orgs []thehive.OutputOrganisation
 		if jsonBytes, _ := json.Marshal(resp); jsonBytes != nil {
 			if json.Unmarshal(jsonBytes, &orgs) == nil {
 				for _, org := range orgs {
 					if org.GetName() == orgName {
-						return org.GetUnderscoreId()
+						return org.GetUnderscoreId(), true, nil
 					}
 				}
 			}
 		}
 	}
 
-	// Create if doesn't exist
+	// Create if it doesn't exist
 	createOrgInput := thehive.NewInputCreateOrganisation(orgName, "Integration test organisation")
-	createResp, httpResp, err := client.OrganisationAPI.CreateOrganisation(ctx).
+	createResp, httpResp, createErr := client.OrganisationAPI.CreateOrganisation(ctx).
 		InputCreateOrganisation(*createOrgInput).Execute()
-
-	if err != nil && httpResp != nil && (httpResp.StatusCode == 409 || httpResp.StatusCode == 403) {
-		return orgName
+	if createErr == nil && httpResp != nil && httpResp.StatusCode == 201 {
+		return createResp.GetUnderscoreId(), true, nil
 	}
-	require.NoError(t, err)
-	require.Equal(t, 201, httpResp.StatusCode)
+	if httpResp != nil && (httpResp.StatusCode == 409 || httpResp.StatusCode == 403) {
+		// Already exists / created concurrently — good enough for test setup.
+		return orgName, true, nil
+	}
 
-	return createResp.GetUnderscoreId()
+	// Anything else (5xx during startup, transport error) is treated as transient.
+	return "", false, fmt.Errorf("create organisation %q: %w", orgName, createErr)
 }
 
 func setupUserPermissions(t *testing.T, client *thehive.APIClient, ctx context.Context, orgName string) {
