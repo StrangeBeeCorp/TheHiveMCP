@@ -2,7 +2,7 @@ BUILD_DATE := $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 GIT_COMMIT=$(shell git rev-parse HEAD)
 VERSION=$(shell git describe --tags 2> /dev/null || echo "v0.0.0-${GIT_COMMIT}")
 GO := go
-GO_IMAGE := golang:1.25.11-alpine
+GO_IMAGE := golang:1.26.4-alpine
 GOPATH ?= $(shell go env GOPATH)
 DOCKER_CACHE_MOUNTS := -v $(GOPATH)/pkg/mod:/go/pkg/mod -v $(HOME)/.cache/go-build:/root/.cache/go-build
 GOLDFLAGS := -ldflags="-s -w -X 'github.com/StrangeBeeCorp/TheHiveMCP/version.buildDate=${BUILD_DATE}' -X 'github.com/StrangeBeeCorp/TheHiveMCP/version.gitCommit=${GIT_COMMIT}' -X 'github.com/StrangeBeeCorp/TheHiveMCP/version.gitVersion=${VERSION}'"
