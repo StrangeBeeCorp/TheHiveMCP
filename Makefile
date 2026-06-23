@@ -83,7 +83,7 @@ test: pre ## Run tests with coverage
 	@echo $(BGreen)-----------------------$(Color_Off)
 	@echo $(BGreen)-- Running UnitTests --$(Color_Off)
 	@echo $(BGreen)-----------------------$(Color_Off)
-	docker run -i --rm --network host -v $(CURDIR):/app -w /app -v /var/run/docker.sock:/var/run/docker.sock -e THEHIVE_TEST_IMAGE $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go test -coverprofile=coverage.out -covermode=atomic -v ./...
+	docker run -i --rm --network host -v $(CURDIR):/app -w /app -v /var/run/docker.sock:/var/run/docker.sock -e THEHIVE_TEST_IMAGE $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go test -p 1 -coverprofile=coverage.out -covermode=atomic -v ./...
 	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
 
 .PHONY: docker-build
