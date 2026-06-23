@@ -267,13 +267,16 @@ func ensureTestOrganisation(t *testing.T, client *thehive.APIClient, ctx context
 	// TheHive answers the /api/status readiness probe (used by the container wait
 	// strategy) before its schema migration completes, so the first organisation
 	// setup can transiently fail with 5xx — especially when several containers
-	// boot in parallel. Retry until TheHive can actually serve the write.
+	// boot in parallel. Retry those, but fail fast on non-retriable errors.
 	const readinessTimeout = 4 * time.Minute
 	deadline := time.Now().Add(readinessTimeout)
 	for {
-		id, done, err := tryEnsureTestOrganisation(client, ctx, orgName)
-		if done {
+		id, retry, err := tryEnsureTestOrganisation(client, ctx, orgName)
+		if err == nil {
 			return id
+		}
+		if !retry {
+			t.Fatalf("organisation %q setup failed: %v", orgName, err)
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("TheHive not ready to create organisation %q within %s: %v", orgName, readinessTimeout, err)
@@ -302,10 +305,11 @@ func findOrganisationID(resp any, orgName string) (string, bool) {
 }
 
 // tryEnsureTestOrganisation performs one lookup-or-create attempt for orgName.
-// done is true once the organisation exists (or already existed). When done is
-// false the call hit a transient startup error (5xx / transport failure) and the
-// caller should retry; err carries the reason for diagnostics.
-func tryEnsureTestOrganisation(client *thehive.APIClient, ctx context.Context, orgName string) (id string, done bool, err error) {
+// It returns err == nil once the organisation exists (or already existed). On
+// failure, retry is true for transient startup errors (5xx / transport failure)
+// that the caller should wait out, and false for non-retriable errors (e.g. a
+// 4xx misconfiguration) that should fail fast.
+func tryEnsureTestOrganisation(client *thehive.APIClient, ctx context.Context, orgName string) (id string, retry bool, err error) {
 	// Check if org exists
 	genericOp := thehive.NewInputQueryGenericOperation("listOrganisation")
 	query := thehive.NewInputQuery()
@@ -316,7 +320,7 @@ func tryEnsureTestOrganisation(client *thehive.APIClient, ctx context.Context, o
 	resp, httpResp, listErr := client.QueryAndExportAPI.QueryAPI(ctx).InputQuery(*query).Execute()
 	if listErr == nil && httpResp != nil && httpResp.StatusCode == 200 && resp != nil {
 		if id, found := findOrganisationID(resp, orgName); found {
-			return id, true, nil
+			return id, false, nil
 		}
 	}
 
@@ -325,22 +329,24 @@ func tryEnsureTestOrganisation(client *thehive.APIClient, ctx context.Context, o
 	createResp, httpResp, createErr := client.OrganisationAPI.CreateOrganisation(ctx).
 		InputCreateOrganisation(*createOrgInput).Execute()
 	if createErr == nil && httpResp != nil && httpResp.StatusCode == 201 {
-		return createResp.GetUnderscoreId(), true, nil
+		return createResp.GetUnderscoreId(), false, nil
 	}
 	if httpResp != nil && (httpResp.StatusCode == 409 || httpResp.StatusCode == 403) {
 		// Already exists / created concurrently — good enough for test setup.
-		return orgName, true, nil
+		return orgName, false, nil
 	}
 
-	// Anything else (5xx during startup, transport error) is treated as transient.
+	// Retry only while TheHive is still starting: a 5xx, or not yet reachable
+	// (transport error / no response). Other statuses (4xx) are not retriable.
 	status := 0
 	if httpResp != nil {
 		status = httpResp.StatusCode
 	}
+	transient := httpResp == nil || status >= 500
 	if createErr != nil {
-		return "", false, fmt.Errorf("create organisation %q (status %d): %w", orgName, status, createErr)
+		return "", transient, fmt.Errorf("create organisation %q (status %d): %w", orgName, status, createErr)
 	}
-	return "", false, fmt.Errorf("create organisation %q: unexpected status %d", orgName, status)
+	return "", transient, fmt.Errorf("create organisation %q: unexpected status %d", orgName, status)
 }
 
 func setupUserPermissions(t *testing.T, client *thehive.APIClient, ctx context.Context, orgName string) {
