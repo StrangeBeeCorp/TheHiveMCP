@@ -524,6 +524,8 @@ All development operations use Docker containers for consistency and isolation:
 - `make test` - Run tests with Docker network support for integration tests
 - `make dev` - Development server with hot reload (requires local air)
 
+**Integration test TheHive version:** the integration suite boots a live TheHive via testcontainers. CI runs `make test` as a matrix against every supported TheHive version (currently 5.5 and 5.6), so a compatibility break against any of them fails the PR. The image is a single source of truth: set `THEHIVE_TEST_IMAGE` to override it locally (e.g. `THEHIVE_TEST_IMAGE=strangebee/thehive:5.5.2 make test`); unset, it defaults to `strangebee/thehive:5.6.3`.
+
 **Quality and security:**
 - `make fmt` - Format code using Docker
 - `make security` - Run all security checks (vulncheck, sast, vetlint)

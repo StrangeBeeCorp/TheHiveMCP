@@ -1,0 +1,83 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+    "group:allNonMajor"
+  ],
+  "minimumReleaseAge": "3 days",
+  "prHourlyLimit": 0,
+  "branchConcurrentLimit": 0,
+  "postUpdateOptions": ["gomodTidy"],
+  "commitMessagePrefix": "[DL-6007] chore(deps):",
+  "hostRules": [
+    {
+      "hostType": "docker",
+      "abortOnError": true
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Enable Go directive updates in go.mod (disabled by default)",
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["go"],
+      "matchDepTypes": ["golang"],
+      "rangeStrategy": "bump"
+    },
+    {
+      "description": "Group Go directive updates with Docker golang images",
+      "matchDatasources": ["golang-version", "docker"],
+      "matchDepNames": ["go", "golang", "docker.io/library/golang"],
+      "groupName": "go version"
+    },
+    {
+      "description": "Group all digest pins — no stability delay (digest-only updates are idempotent, no version change)",
+      "matchUpdateTypes": ["pin", "pinDigest", "digest"],
+      "groupName": "dependency pins",
+      "minimumReleaseAge": "0 days"
+    },
+    {
+      "description": "Group all major Docker updates",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "major docker updates"
+    },
+    {
+      "description": "Group all major GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "major github-actions updates"
+    },
+    {
+      "description": "Group all major Go updates",
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "major go updates"
+    },
+    {
+      "description": "Pin digests for Docker images tracked by the custom regex manager (Makefile and Go files)",
+      "matchManagers": ["custom.regex"],
+      "matchDatasources": ["docker"],
+      "pinDigests": true
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track short-form Docker image tags pinned in the testcontainer helpers (the only Go files that hold image refs) — anchored to the opening quote of the Go string literal. Scoped to internal/testutils to avoid matching address:port literals in unrelated/test files (e.g. \"127.0.0.1:0\").",
+      "managerFilePatterns": ["/^internal/testutils/.+\\.go$/"],
+      "matchStrings": [
+        "\"(?<depName>(?:[a-z0-9]+(?:[._-][a-z0-9]+)*/)*[a-z0-9]+(?:[._-][a-z0-9]+)*):(?<currentValue>[a-zA-Z0-9][a-zA-Z0-9._-]*)(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Track the Docker build image pinned in the Makefile (e.g. GO_IMAGE := golang:1.25.x-alpine)",
+      "managerFilePatterns": ["/^Makefile$/"],
+      "matchStrings": [
+        "_IMAGE\\s*[:?]?=\\s*(?<depName>(?:[a-z0-9.-]+/)*[a-z0-9._-]+):(?<currentValue>[a-zA-Z0-9][a-zA-Z0-9._-]*)(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ]
+}
