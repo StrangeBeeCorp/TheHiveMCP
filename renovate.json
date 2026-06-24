@@ -72,7 +72,7 @@
     },
     {
       "customType": "regex",
-      "description": "Track the Docker build image pinned in the Makefile (e.g. GO_IMAGE := golang:1.25.x-alpine)",
+      "description": "Track the Docker build image pinned in the Makefile (e.g. GO_IMAGE := golang:1.26.x-alpine)",
       "managerFilePatterns": ["/^Makefile$/"],
       "matchStrings": [
         "_IMAGE\\s*[:?]?=\\s*(?<depName>(?:[a-z0-9.-]+/)*[a-z0-9._-]+):(?<currentValue>[a-zA-Z0-9][a-zA-Z0-9._-]*)(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?"

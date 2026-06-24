@@ -4,7 +4,7 @@
   <img src="https://strangebee.com/wp-content/uploads/2024/07/Icon4Nav_TheHive.png" alt="TheHive Logo" width="400"/>
 </div>
 
-[![Go Version](https://img.shields.io/badge/go-1.25.10+-blue.svg)](https://golang.org/doc/go1.25)
+[![Go Version](https://img.shields.io/badge/go-1.26.4+-blue.svg)](https://golang.org/doc/go1.26)
 
 **Model Context Protocol server for TheHive security platform**
 
