@@ -79,10 +79,23 @@ which exist yet — share one source of truth.
   tied to a specific MCP-server version.
 - Maintainers review; the CTO is final arbiter on adding or removing a model.
 
-> **Draft shortlist (pending sign-off):** Claude Sonnet 4.6, Gemini 3 Flash,
-> and GPT-5.4 — each passes the full hardened security set and scores highly on
-> accuracy. Mistral Small 3.2 is explicitly **not** recommended. This shortlist
-> is pending maintainer and CTO sign-off before it is treated as final.
+### Candidate models for the initial evaluation set
+
+The initial test matrix deliberately spans four segments, so the recommended
+list reflects the real range of how users deploy: frontier hosted models,
+strong open-weight alternatives, a European-sovereign option, and small models
+for on-premise or budget deployments. The recommended list is whichever
+candidates pass; this matrix is the starting point, not the outcome.
+
+| Segment | Models |
+|---------|--------|
+| Frontier / SOTA (common in production) | `anthropic/claude-sonnet-4.6`, `openai/gpt-5.4`, `google/gemini-3.5-flash` |
+| Strong open-weight alternatives | `deepseek/deepseek-v4-pro`, `qwen/qwen3.7-max`, `moonshotai/kimi-k2.6` |
+| European-sovereign (Mistral) | `mistralai/mistral-medium-3-5` |
+| Small — on-premise / budget | `google/gemini-3.1-flash-lite`, `qwen/qwen3.5-9b`, `mistralai/ministral-8b-2512` |
+
+This set is a starting proposal and will evolve as models are released or
+retired; changes follow the recommended-model policy above.
 
 ### Where and how evidence is published
 
