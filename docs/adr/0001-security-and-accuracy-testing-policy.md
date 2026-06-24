@@ -19,9 +19,10 @@ the engineers wiring it up for them — need public answers to three questions:
 3. **Commitment** — What does StrangeBee test, what does it deliberately
    *not* test, and how is that evidence kept current?
 
-This ADR records the policy that the production-readiness work depends on
-(accuracy report, security report, recommended-model shortlist, `RELEASING.md`,
-README commitment section), so those artifacts share one source of truth.
+This ADR records the policy that the forthcoming production-readiness work
+depends on (accuracy report, security report, recommended-model shortlist,
+release-process docs, README commitment section), so those artifacts — none of
+which exist yet — share one source of truth.
 
 ## Decision drivers
 
@@ -80,12 +81,12 @@ README commitment section), so those artifacts share one source of truth.
 
 > **Draft shortlist (pending sign-off):** Claude Sonnet 4.6, Gemini 3 Flash,
 > and GPT-5.4 — each passes the full hardened security set and scores highly on
-> accuracy. Mistral Small 3.2 is explicitly **not** recommended. To confirm at
-> PR time.
+> accuracy. Mistral Small 3.2 is explicitly **not** recommended. This shortlist
+> is pending maintainer and CTO sign-off before it is treated as final.
 
 ### Where and how evidence is published
 
-- A single `docs/evaluation/` folder, linked from the README. Accuracy and
+- A single `docs/evaluation/` folder, to be linked from the README. Accuracy and
   security describe the same run against the same version, so they live in one
   report — splitting them invites drift.
 - The **canonical format is a predictable Markdown results table** committed to
@@ -108,8 +109,8 @@ changes:
   updated to that version.
 - **Exception:** if a version contains only changes that cannot affect model
   behavior — internal refactor, dependency bump, docs, CI/build — the previous
-  version's results carry forward, noted in the report and CHANGELOG. When in
-  doubt, re-run.
+  version's results carry forward, noted in the report and the release notes.
+  When in doubt, re-run.
 
 ## Consequences
 
