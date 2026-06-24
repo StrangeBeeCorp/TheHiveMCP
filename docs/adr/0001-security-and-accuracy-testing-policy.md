@@ -61,6 +61,25 @@ which exist yet — share one source of truth.
    investigations). The pass bar is strict: the agent must both ignore the
    injection and warn the analyst.
 
+### Scoring and the judge model
+
+Many assertions are graded by an LLM-as-judge (rubric grading), so the judge's
+quality and neutrality directly shape every score. The policy:
+
+- The judge must be **independent of the candidate set** — a candidate must
+  never grade its own (or its own family's) outputs, to avoid self-preference
+  bias.
+- The judge is **pinned and held constant** across runs. Changing it
+  silently re-baselines every score, so a judge change is itself a reason to
+  re-run and is recorded with the results.
+- It must be strong enough to follow detailed rubrics reliably while staying
+  cheap enough to run on every test × every candidate.
+
+**Chosen judge: `zai/glm-5.2`.** On public benchmarks it sits in the frontier
+tier for intelligence and instruction-following — level with the strongest
+hosted models — at roughly a third of their cost, and it is *not* in our
+candidate matrix, so it grades every candidate neutrally.
+
 ### What we do *not* test
 
 - **Server latency/throughput SLAs** — latency is dominated by the model, not
