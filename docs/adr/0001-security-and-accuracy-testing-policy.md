@@ -66,27 +66,24 @@ which exist yet — share one source of truth.
 Many assertions are graded by an LLM-as-judge (rubric grading), so the judge is
 the measuring stick. Above all it must be **reproducible**: the same transcript
 must earn the same grade today and in six months, so scores stay comparable
-across time and across candidates. That rules out open-weight models served
-through multi-provider gateways, where requests land on different
-quantizations and hardware and grades drift for reasons unrelated to the
-candidate. The policy:
+across time and across candidates. The pipeline serves **every model —
+candidates and judge alike — through a single pinned provider**, so a model is
+never silently routed to a different quantization or hardware between runs.
+That removes the cross-provider variance that would otherwise rule out
+open-weight models, and lets us choose the judge on quality, cost, and
+neutrality. The policy:
 
-- The judge is a **closed, first-party-hosted model pinned to a dated
-  snapshot**, run deterministically (temperature 0) — one provider, fixed
-  weights, no silent upgrades.
-- It is **held constant** across runs. A judge change — including a snapshot
-  retirement — re-baselines every score, so it is recorded with the results and
-  triggers a re-run.
-- It must follow detailed rubrics reliably; grading quality is the second
-  priority after reproducibility.
+- The judge is **pinned** (model version and provider) and run
+  deterministically (temperature 0) — fixed weights, no silent upgrades.
+- It is **held constant** across runs. A judge change re-baselines every score,
+  so it is recorded with the results and triggers a re-run.
+- It must follow detailed rubrics reliably and be **independent of the
+  candidate set**, so it never grades its own family's outputs.
 
-**Chosen judge: a pinned `openai/gpt-5.5` snapshot.** Closed and first-party
-(reproducible), and at the top of the intelligence / instruction-following
-range. GPT-5.5 also appears in the candidate matrix: when it is itself the
-model under test, that single result is a self-evaluation and is flagged as
-such, since a model can favour its own outputs. We accept that one caveat
-because a single, pinned, high-quality judge buys more consistency than
-removing one self-graded result would.
+**Chosen judge: a pinned `zai/glm-5.2`.** It sits in the frontier tier for
+intelligence and instruction-following — level with the strongest hosted
+models — at roughly a third of their cost, and it is *not* in the candidate
+matrix, so it grades every candidate neutrally.
 
 ### What we do *not* test
 
