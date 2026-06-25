@@ -16,18 +16,10 @@ import (
 )
 
 func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest, params SearchEntitiesParams) (SearchEntitiesResult, error) {
-	// The caller (the model) supplies the TheHive filter DSL directly. There is no
-	// inner-LLM translation step: we map the structured params onto the internal
-	// filter representation and apply it as-is.
-	filters := &FilterResult{
-		RawFilters:        params.Filters,
-		SortBy:            params.SortBy,
-		SortOrder:         params.SortOrder,
-		NumResults:        params.Limit,
-		KeptColumns:       params.ExtraColumns,
-		ExtraData:         params.ExtraData,
-		AdditionalQueries: params.AdditionalQueries,
-	}
+	// The caller (the model) supplies the TheHive filter DSL directly in
+	// params.Filters. There is no inner-LLM translation step — the filter is
+	// applied as-is, after merging any permission-scoping filters.
+	rawFilters := params.Filters
 
 	// Apply permission filters
 	perms, err := utils.GetPermissionsFromContext(ctx)
@@ -36,17 +28,17 @@ func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest, params
 	}
 	permFilters := perms.GetToolFilters(t.Name())
 	if len(permFilters) > 0 {
-		rawFilters, filtersApplied := permissions.MergeFilters(filters.RawFilters, permFilters)
+		merged, filtersApplied := permissions.MergeFilters(rawFilters, permFilters)
 		if filtersApplied {
 			slog.Info("Merged permission filters into search filters", "entityType", params.EntityType)
 		} else {
 			slog.Info("No permission filters applied to search filters", "entityType", params.EntityType)
 		}
-		filters.RawFilters = rawFilters
+		rawFilters = merged
 	}
 
 	// Build TheHive query
-	hiveQuery, err := t.buildHiveQuery(params, filters)
+	hiveQuery, err := t.buildHiveQuery(params, rawFilters)
 	if err != nil {
 		return SearchEntitiesResult{}, tools.NewToolError("failed to build TheHive query").Cause(err).
 			Hint("This may be due to unsupported field names or filter combinations. Consult hive://schema/"+params.EntityType+" for valid fields and hive://schema/filter for the operator grammar.").
@@ -64,24 +56,24 @@ func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest, params
 
 	// Skip additional queries for count-only requests
 	if !params.Count {
-		results, err = utils.ExpandEntitiesWithQueries(ctx, params.EntityType, results, filters.AdditionalQueries, permFilters)
+		results, err = utils.ExpandEntitiesWithQueries(ctx, params.EntityType, results, params.AdditionalQueries, permFilters)
 		if err != nil {
 			return SearchEntitiesResult{}, tools.NewToolError("failed to perform additional queries").Cause(err)
 		}
 	}
 
 	// Process and format results
-	return NewSearchEntitiesResult(results, params, filters.RawFilters)
+	return NewSearchEntitiesResult(results, params, rawFilters)
 }
 
 // Query building
-func (t *SearchTool) buildHiveQuery(params SearchEntitiesParams, filters *FilterResult) (thehive.InputQuery, error) {
+func (t *SearchTool) buildHiveQuery(params SearchEntitiesParams, rawFilters map[string]interface{}) (thehive.InputQuery, error) {
 
 	// Build operations
 	listOp := t.buildListOperation(params.EntityType)
 
 	// Exclude unneeded fields
-	excludedFields := t.getExcludedFields(params.EntityType, filters.KeptColumns, filters.ExtraData)
+	excludedFields := t.getExcludedFields(params.EntityType, params.ExtraColumns, params.ExtraData)
 
 	query := []thehive.InputQueryNamedOperation{
 		thehive.InputQueryGenericOperationAsInputQueryNamedOperation(listOp),
@@ -89,8 +81,8 @@ func (t *SearchTool) buildHiveQuery(params SearchEntitiesParams, filters *Filter
 
 	// Only apply a filter operation when filters were provided. An empty filter
 	// means "match all entities" (within the limit).
-	if len(filters.RawFilters) > 0 {
-		filterOp := t.buildFilterOperation(filters.RawFilters)
+	if len(rawFilters) > 0 {
+		filterOp := t.buildFilterOperation(rawFilters)
 		query = append(query, thehive.MapmapOfStringAnyAsInputQueryNamedOperation(filterOp))
 	}
 
@@ -98,8 +90,8 @@ func (t *SearchTool) buildHiveQuery(params SearchEntitiesParams, filters *Filter
 		countOp := thehive.NewInputQueryGenericOperation("count")
 		query = append(query, thehive.InputQueryGenericOperationAsInputQueryNamedOperation(countOp))
 	} else {
-		sortOp := t.buildSortOperation(filters.SortBy, filters.SortOrder)
-		pageOp := t.buildPagingOperation(filters.NumResults, filters.ExtraData)
+		sortOp := t.buildSortOperation(params.SortBy, params.SortOrder)
+		pageOp := t.buildPagingOperation(params.Limit, params.ExtraData)
 		query = append(query,
 			thehive.InputQuerySortOperationAsInputQueryNamedOperation(sortOp),
 			thehive.InputQueryPagingOperationAsInputQueryNamedOperation(pageOp),

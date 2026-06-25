@@ -199,7 +199,7 @@ func GetFilterDslDocHandler() ([]mcp.ResourceContents, error) {
 	}
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
-			URI:      "hive://docs/filter-dsl",
+			URI:      "hive://docs/overview/filter-dsl",
 			MIMEType: "text/markdown",
 			Text:     string(docBytes),
 		},
@@ -784,7 +784,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 	)
 
 	filterDslDoc := mcp.NewResource(
-		"hive://docs/filter-dsl",
+		"hive://docs/overview/filter-dsl",
 		"Filter DSL Cheatsheet",
 		mcp.WithResourceDescription("Operator grammar and worked examples for building TheHive search filters passed to the search-entities tool"),
 		mcp.WithMIMEType("text/markdown"),

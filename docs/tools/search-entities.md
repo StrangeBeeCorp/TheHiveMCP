@@ -9,7 +9,7 @@ The `search-entities` tool searches TheHive entities (alerts, cases, tasks, obse
 To build a filter you need to know the available fields and the operator grammar:
 
 - **Fields and types** are entity-specific — read `hive://schema/<entity-type>` (e.g. `hive://schema/alert`) before filtering.
-- **Operator grammar** — see the [Filter DSL](#filter-dsl) below, the full JSON schema at `hive://schema/filter`, the filtering rules at `hive://rule/filtering`, and the worked-example cheatsheet at `hive://docs/filter-dsl`.
+- **Operator grammar** — see the [Filter DSL](#filter-dsl) below, the full JSON schema at `hive://schema/filter`, the filtering rules at `hive://rule/filtering`, and the worked-example cheatsheet at `hive://docs/overview/filter-dsl`.
 
 ## Parameters
 
@@ -35,11 +35,12 @@ A filter is a JSON object with exactly **one operator at its root**. Nest `_and`
 | `_ne` | `{"_ne": {"_field": F, "_value": V}}` | field not equal to value |
 | `_gt` / `_gte` | `{"_gt": {"_field": F, "_value": V}}` | greater than / or equal |
 | `_lt` / `_lte` | `{"_lt": {"_field": F, "_value": V}}` | less than / or equal |
-| `_between` | `{"_between": {"_field": F, "_from": A, "_to": B}}` | A ≤ field ≤ B |
-| `_in` | `{"_in": {"_field": F, "_values": [V1, V2]}}` | field is one of values |
-| `_like` | `{"_like": {"_field": F, "_value": "%term%"}}` | substring match (`%` wildcards) |
+| `_between` | `{"_between": {"_field": F, "_from": A, "_to": B}}` | A ≤ field < B (**upper bound exclusive**) |
+| `_in` | `{"_in": {"_field": F, "_values": [V1, V2]}}` | field is one of values (works on multi-valued fields like `tags`) |
+| `_like` | `{"_like": {"_field": F, "_value": "*term*"}}` | wildcard match, case-insensitive (`*` wildcards, **not** `%`) |
 | `_startsWith` / `_endsWith` | `{"_startsWith": {"_field": F, "_value": V}}` | prefix / suffix match |
-| `_match` | `{"_match": {"_field": F, "_value": "regex"}}` | regex match |
+| `_match` | `{"_match": {"_field": F, "_value": V}}` | full-text match: value matches a token of the analyzed text field |
+| `_contains` | `{"_contains": "fieldName"}` | the entity has that field set (presence test; bare field name) |
 | `_id` | `{"_id": "~354"}` | match by internal id |
 | `_any` | `{"_any": {}}` | match everything |
 | `_and` | `{"_and": [filter, filter, ...]}` | all must hold |
@@ -88,8 +89,8 @@ A filter is a JSON object with exactly **one operator at its root**. Nest `_and`
 {
   "entity-type": "observable",
   "filters": {"_or": [
-    {"_like": {"_field": "title", "_value": "%malware%"}},
-    {"_like": {"_field": "title", "_value": "%phishing%"}}
+    {"_like": {"_field": "title", "_value": "*malware*"}},
+    {"_like": {"_field": "title", "_value": "*phishing*"}}
   ]}
 }
 ```
@@ -172,7 +173,7 @@ Include computed extra-data blocks:
 ```json
 {
   "entity-type": "alert",
-  "filters": {"_like": {"_field": "title", "_value": "%phishing%"}},
+  "filters": {"_like": {"_field": "title", "_value": "*phishing*"}},
   "extra-data": ["status", "procedureCount"]
 }
 ```
@@ -190,7 +191,7 @@ Enrich results with related information:
 
 1. **Consult the schema first**: Use `get-resource` with `hive://schema/<entity-type>` to discover valid fields and types before building a filter.
 2. **Start broad, then narrow**: Omit `filters` (or use `{"_any": {}}`) to sample an entity type, then add conditions.
-3. **Review `rawFilters`**: The applied filter is echoed back in the response. If results are unexpected, inspect `rawFilters`, consult `hive://schema/filter` and `hive://docs/filter-dsl`, and call again with a corrected filter.
+3. **Review `rawFilters`**: The applied filter is echoed back in the response. If results are unexpected, inspect `rawFilters`, consult `hive://schema/filter` and `hive://docs/overview/filter-dsl`, and call again with a corrected filter.
 4. **Limit results**: Use an appropriate `limit` for performance.
 5. **Use count for statistics**: When you only need totals, use `count=true`.
 
@@ -220,6 +221,6 @@ For creating or updating entities found through search, use the create/update sc
 
 If results don't match expectations:
 1. Inspect the `rawFilters` echoed in the response.
-2. Review entity schemas using `get-resource` (`hive://schema/<entity-type>`) and the operator grammar (`hive://schema/filter`, `hive://docs/filter-dsl`).
+2. Review entity schemas using `get-resource` (`hive://schema/<entity-type>`) and the operator grammar (`hive://schema/filter`, `hive://docs/overview/filter-dsl`).
 3. Simplify the filter to test individual conditions.
 4. Verify field names and value types match the schema.
