@@ -22,6 +22,9 @@ var rulesFS embed.FS
 //go:embed facts/*.txt
 var factsFS embed.FS
 
+//go:embed docs/*.md
+var docsFS embed.FS
+
 // Update the file reading functions
 func getSchemaContent(schemaName string) ([]mcp.ResourceContents, error) {
 	schemaBytes, err := schemasFS.ReadFile(fmt.Sprintf("schemas/%s.json", schemaName))
@@ -189,6 +192,20 @@ func GetFilteringRuleHandler() ([]mcp.ResourceContents, error) {
 	return getRuleContent("filtering")
 }
 
+func GetFilterDslDocHandler() ([]mcp.ResourceContents, error) {
+	docBytes, err := docsFS.ReadFile("docs/filter-dsl.md")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read filter-dsl doc: %w", err)
+	}
+	return []mcp.ResourceContents{
+		mcp.TextResourceContents{
+			URI:      "hive://docs/filter-dsl",
+			MIMEType: "text/markdown",
+			Text:     string(docBytes),
+		},
+	}, nil
+}
+
 type DateData struct {
 	CurrentDate string
 }
@@ -310,7 +327,7 @@ func GetCatalogData() map[string]interface{} {
 					{
 						"name":        "overview",
 						"description": "Platform-wide documentation and general information",
-						"resources":   []string{"platform"},
+						"resources":   []string{"platform", "filter-dsl"},
 					},
 					{
 						"name":        "entities",
@@ -763,6 +780,19 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		responderDocumentation,
 		func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 			return GetResponderFactHandler()
+		},
+	)
+
+	filterDslDoc := mcp.NewResource(
+		"hive://docs/filter-dsl",
+		"Filter DSL Cheatsheet",
+		mcp.WithResourceDescription("Operator grammar and worked examples for building TheHive search filters passed to the search-entities tool"),
+		mcp.WithMIMEType("text/markdown"),
+	)
+	registry.Register(
+		filterDslDoc,
+		func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+			return GetFilterDslDocHandler()
 		},
 	)
 
