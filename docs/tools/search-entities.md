@@ -84,16 +84,17 @@ A filter is a JSON object with exactly **one operator at its root**. Nest `_and`
 }
 ```
 
-### Text match (observables with malware or phishing in the title)
+### Text match (observables whose message mentions malware or phishing)
 ```json
 {
   "entity-type": "observable",
   "filters": {"_or": [
-    {"_like": {"_field": "title", "_value": "*malware*"}},
-    {"_like": {"_field": "title", "_value": "*phishing*"}}
+    {"_like": {"_field": "message", "_value": "*malware*"}},
+    {"_like": {"_field": "message", "_value": "*phishing*"}}
   ]}
 }
 ```
+> Observables have no `title` field — they use `data`, `dataType`, `message`, `tags`. Always check `hive://schema/observable` for valid fields.
 
 ### Latest N of an entity (no filter)
 ```json

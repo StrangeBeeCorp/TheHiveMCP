@@ -1,6 +1,7 @@
 package search_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
@@ -12,13 +13,14 @@ import (
 // resultText flattens a tool result's text content into a single string.
 func resultText(t *testing.T, result *mcp.CallToolResult) string {
 	t.Helper()
-	var s string
+	var b strings.Builder
 	for _, c := range result.Content {
 		if tc, ok := c.(mcp.TextContent); ok {
-			s += tc.Text + "\n"
+			b.WriteString(tc.Text)
+			b.WriteByte('\n')
 		}
 	}
-	return s
+	return b.String()
 }
 
 // TestFilterOperators exercises every operator of the TheHive filter DSL against

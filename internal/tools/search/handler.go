@@ -19,7 +19,19 @@ func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest, params
 	// The caller (the model) supplies the TheHive filter DSL directly in
 	// params.Filters. There is no inner-LLM translation step — the filter is
 	// applied as-is, after merging any permission-scoping filters.
+	// Normalize to a non-nil map so the echoed rawFilters is always an object
+	// ({} = match-all) rather than JSON null when no filter is provided.
 	rawFilters := params.Filters
+	if rawFilters == nil {
+		rawFilters = map[string]interface{}{}
+	}
+
+	// Migration aid: the legacy natural-language "query" parameter was removed in
+	// favor of "filters". If a stale client still sends it, it is ignored — warn
+	// so the empty-filter match-all behavior is not mistaken for a bug.
+	if _, ok := req.GetArguments()["query"]; ok {
+		slog.Warn("ignoring removed 'query' parameter; build a filter with the TheHive DSL and pass it in 'filters' (see hive://docs/overview/filter-dsl)", "entityType", params.EntityType)
+	}
 
 	// Apply permission filters
 	perms, err := utils.GetPermissionsFromContext(ctx)
