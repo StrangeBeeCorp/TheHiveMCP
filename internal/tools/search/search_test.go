@@ -102,47 +102,28 @@ func TestSearchCasesBySeverityAndStatus(t *testing.T) {
 	createTestCase(t, hiveClient, "Low severity open case", 1, "New", "")
 	createTestCase(t, hiveClient, "High severity in progress case", 3, "InProgress", "")
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		unusedSamplingHandler(t),
-		testutils.DummyElicitationAccept,
-	)
+	mcpClient := newSearchClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeCase,
-				"filters": map[string]any{
-					"_and": []any{
-						map[string]any{
-							"_gte": map[string]any{
-								"_field": "severity",
-								"_value": 3,
-							},
-						},
-						map[string]any{
-							"_eq": map[string]any{
-								"_field": "status",
-								"_value": "New",
-							},
-						},
+	casesData := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeCase,
+		"filters": map[string]any{
+			"_and": []any{
+				map[string]any{
+					"_gte": map[string]any{
+						"_field": "severity",
+						"_value": 3,
 					},
 				},
-				"extra-columns": []string{"_id", "title", "severity", "status"},
+				map[string]any{
+					"_eq": map[string]any{
+						"_field": "status",
+						"_value": "New",
+					},
+				},
 			},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	casesData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+		"extra-columns": []string{"_id", "title", "severity", "status"},
+	})
 	require.Len(t, casesData, 1)
 
 	caseData, ok := casesData[0].(map[string]any)
@@ -164,38 +145,19 @@ func TestSearchAlertsWithDateRange(t *testing.T) {
 	fromTime := now.Add(-1 * time.Hour).UnixMilli()
 	toTime := now.UnixMilli()
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		unusedSamplingHandler(t),
-		testutils.DummyElicitationAccept,
-	)
+	mcpClient := newSearchClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeAlert,
-				"filters": map[string]any{
-					"_between": map[string]any{
-						"_field": "_createdAt",
-						"_from":  fromTime,
-						"_to":    toTime,
-					},
-				},
-				"extra-columns": []string{"_id", "title", "_createdAt"},
+	alertsData := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeAlert,
+		"filters": map[string]any{
+			"_between": map[string]any{
+				"_field": "_createdAt",
+				"_from":  fromTime,
+				"_to":    toTime,
 			},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	alertsData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+		"extra-columns": []string{"_id", "title", "_createdAt"},
+	})
 	require.GreaterOrEqual(t, len(alertsData), 2)
 }
 
@@ -208,42 +170,23 @@ func TestSearchAlertsWithMultipleTags(t *testing.T) {
 	createTestAlert(t, hiveClient, "Malware alert", 3, []string{"malware", "endpoint"})
 	createTestAlert(t, hiveClient, "Network alert", 2, []string{"network", "firewall"})
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		unusedSamplingHandler(t),
-		testutils.DummyElicitationAccept,
-	)
+	mcpClient := newSearchClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeAlert,
-				"filters": map[string]any{
-					"_or": []any{
-						map[string]any{
-							"_in": map[string]any{
-								"_field":  "tags",
-								"_values": []any{"phishing", "malware"},
-							},
-						},
+	alertsData := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeAlert,
+		"filters": map[string]any{
+			"_or": []any{
+				map[string]any{
+					"_in": map[string]any{
+						"_field":  "tags",
+						"_values": []any{"phishing", "malware"},
 					},
 				},
-				"extra-columns": []string{"_id", "title", "tags", "severity"},
-				"sort-by":       "severity",
 			},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	alertsData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+		"extra-columns": []string{"_id", "title", "tags", "severity"},
+		"sort-by":       "severity",
+	})
 	require.Len(t, alertsData, 2)
 }
 
@@ -257,48 +200,29 @@ func TestSearchCasesWithAssigneeAndSorting(t *testing.T) {
 	createTestCase(t, hiveClient, "Admin's case 2", 3, "InProgress", "admin@thehive.local")
 	// Note: TheHive assigns the creator as default assignee even when we set nil, so all cases will show admin as assignee
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		unusedSamplingHandler(t),
-		testutils.DummyElicitationAccept,
-	)
+	mcpClient := newSearchClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeCase,
-				"filters": map[string]any{
-					"_and": []any{
-						map[string]any{
-							"_eq": map[string]any{
-								"_field": "assignee",
-								"_value": "admin@thehive.local",
-							},
-						},
-						map[string]any{
-							"_eq": map[string]any{
-								"_field": "status",
-								"_value": "InProgress",
-							},
-						},
+	casesData := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeCase,
+		"filters": map[string]any{
+			"_and": []any{
+				map[string]any{
+					"_eq": map[string]any{
+						"_field": "assignee",
+						"_value": "admin@thehive.local",
 					},
 				},
-				"extra-columns": []string{"_id", "title", "assignee", "_createdAt"},
-				"sort-order":    "asc",
+				map[string]any{
+					"_eq": map[string]any{
+						"_field": "status",
+						"_value": "InProgress",
+					},
+				},
 			},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	casesData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+		"extra-columns": []string{"_id", "title", "assignee", "_createdAt"},
+		"sort-order":    "asc",
+	})
 	require.Len(t, casesData, 2) // Should match both cases assigned to admin
 
 	// Verify sorting (oldest first with asc order)
@@ -318,48 +242,29 @@ func TestSearchAlertsWithComplexOrConditions(t *testing.T) {
 	createTestAlert(t, hiveClient, "Medium alert", 2, []string{"medium"})
 	createTestAlert(t, hiveClient, "Low alert", 1, []string{"low"})
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		unusedSamplingHandler(t),
-		testutils.DummyElicitationAccept,
-	)
+	mcpClient := newSearchClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeAlert,
-				"filters": map[string]any{
-					"_or": []any{
-						map[string]any{
-							"_eq": map[string]any{
-								"_field": "severity",
-								"_value": 4,
-							},
-						},
-						map[string]any{
-							"_eq": map[string]any{
-								"_field": "severity",
-								"_value": 3,
-							},
-						},
+	alertsData := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeAlert,
+		"filters": map[string]any{
+			"_or": []any{
+				map[string]any{
+					"_eq": map[string]any{
+						"_field": "severity",
+						"_value": 4,
 					},
 				},
-				"extra-columns": []string{"_id", "title", "severity"},
-				"sort-by":       "severity",
+				map[string]any{
+					"_eq": map[string]any{
+						"_field": "severity",
+						"_value": 3,
+					},
+				},
 			},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	alertsData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+		"extra-columns": []string{"_id", "title", "severity"},
+		"sort-by":       "severity",
+	})
 	require.Len(t, alertsData, 2)
 
 	// Verify only high and critical alerts are returned
@@ -390,31 +295,12 @@ func TestSearchTasksWithLimit(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		unusedSamplingHandler(t),
-		testutils.DummyElicitationAccept,
-	)
+	mcpClient := newSearchClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeTask,
-				"limit":       3,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	tasksData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+	tasksData := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeTask,
+		"limit":       3,
+	})
 	require.Len(t, tasksData, 3, "Should return exactly 3 tasks as per limit")
 }
 
@@ -425,31 +311,12 @@ func TestExtraColumnsLimitColumns(t *testing.T) {
 	// Create a test alert
 	createTestAlert(t, hiveClient, "Test alert for column override", 2, []string{"test"})
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		unusedSamplingHandler(t),
-		testutils.DummyElicitationAccept,
-	)
+	mcpClient := newSearchClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type":   types.EntityTypeAlert,
-				"extra-columns": []string{"_id", "title"},
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	alertsData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+	alertsData := searchRows(t, mcpClient, map[string]any{
+		"entity-type":   types.EntityTypeAlert,
+		"extra-columns": []string{"_id", "title"},
+	})
 	require.GreaterOrEqual(t, len(alertsData), 1)
 
 	// Verify that only the columns from kept_columns are returned
@@ -510,24 +377,9 @@ func TestSearchWithAnalystPermissions(t *testing.T) {
 	// Use analyst permissions client
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, unusedSamplingHandler(t), testutils.DummyElicitationAccept, "../../../docs/examples/permissions/analyst.yaml")
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeAlert,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	alertsData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+	alertsData := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeAlert,
+	})
 
 	// Check that only alert1 is visible (TLP<=2 and PAP<=2)
 	visibleIDs := make(map[string]bool)
@@ -559,18 +411,9 @@ func TestSearchWithReadOnlyPermissions(t *testing.T) {
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, unusedSamplingHandler(t), testutils.DummyElicitationAccept, "")
 
 	// Test: Search should succeed with read-only permissions
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeAlert,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	result := callSearch(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeAlert,
+	})
 	require.False(t, result.IsError, "Search should succeed with read-only permissions")
 
 	structuredData, ok := result.StructuredContent.(map[string]any)
@@ -600,34 +443,18 @@ func TestSearchCasesWithCountOnly(t *testing.T) {
 	createTestCase(t, hiveClient, "High severity case 2", 3, "InProgress", "")
 	createTestCase(t, hiveClient, "Low severity case", 1, "New", "")
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		unusedSamplingHandler(t),
-		testutils.DummyElicitationAccept,
-	)
+	mcpClient := newSearchClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeCase,
-				"filters": map[string]any{
-					"_gte": map[string]any{
-						"_field": "severity",
-						"_value": 3,
-					},
-				},
-				"count": true,
+	structuredData := searchStructured(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeCase,
+		"filters": map[string]any{
+			"_gte": map[string]any{
+				"_field": "severity",
+				"_value": 3,
 			},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
+		"count": true,
+	})
 
 	// Check that we got a count-only response
 	countOnly, ok := structuredData["countOnly"].(bool)
@@ -653,34 +480,18 @@ func TestSearchAlertsWithCountOnly(t *testing.T) {
 	createTestAlert(t, hiveClient, "Critical Alert 2", 4, []string{"malware"})
 	createTestAlert(t, hiveClient, "Medium Alert", 2, []string{"suspicious"})
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		unusedSamplingHandler(t),
-		testutils.DummyElicitationAccept,
-	)
+	mcpClient := newSearchClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeAlert,
-				"filters": map[string]any{
-					"_eq": map[string]any{
-						"_field": "severity",
-						"_value": 4,
-					},
-				},
-				"count": true,
+	structuredData := searchStructured(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeAlert,
+		"filters": map[string]any{
+			"_eq": map[string]any{
+				"_field": "severity",
+				"_value": 4,
 			},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
+		"count": true,
+	})
 
 	// Verify count-only response structure
 	require.True(t, structuredData["countOnly"].(bool))
@@ -697,61 +508,32 @@ func TestSearchCountVsRegularSearch(t *testing.T) {
 	createTestCase(t, hiveClient, "Test case 2", 2, "InProgress", "")
 	createTestCase(t, hiveClient, "Test case 3", 2, "New", "")
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		unusedSamplingHandler(t),
-		testutils.DummyElicitationAccept,
-	)
+	mcpClient := newSearchClient(t)
 
 	// First, do a regular search (without explicit count=false)
-	regularRequest := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeCase,
-				"filters": map[string]any{
-					"_eq": map[string]any{
-						"_field": "severity",
-						"_value": 2,
-					},
-				},
-				"count": false,
+	regularResults := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeCase,
+		"filters": map[string]any{
+			"_eq": map[string]any{
+				"_field": "severity",
+				"_value": 2,
 			},
 		},
-	}
-
-	regularResult, err := mcpClient.CallTool(t.Context(), regularRequest)
-	require.NoError(t, err)
-
-	regularData, ok := regularResult.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	regularResults, ok := regularData["results"].([]any)
-	require.True(t, ok)
+		"count": false,
+	})
 	regularCount := len(regularResults)
 
 	// Now do a count-only search
-	countRequest := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeCase,
-				"filters": map[string]any{
-					"_eq": map[string]any{
-						"_field": "severity",
-						"_value": 2,
-					},
-				},
-				"count": true,
+	countData := searchStructured(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeCase,
+		"filters": map[string]any{
+			"_eq": map[string]any{
+				"_field": "severity",
+				"_value": 2,
 			},
 		},
-	}
-
-	countResult, err := mcpClient.CallTool(t.Context(), countRequest)
-	require.NoError(t, err)
-
-	countData, ok := countResult.StructuredContent.(map[string]any)
-	require.True(t, ok)
+		"count": true,
+	})
 
 	countOnlyValue, ok := countData["count"].(float64)
 	require.True(t, ok)
@@ -766,30 +548,14 @@ func TestSearchExtraDataAndAdditionalQueries(t *testing.T) {
 
 	creationResult := createTestCaseWithTaskAndAlert(t, hiveClient)
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		unusedSamplingHandler(t),
-		testutils.DummyElicitationAccept,
-	)
+	mcpClient := newSearchClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type":        types.EntityTypeCase,
-				"extra-columns":      []string{"_id", "title"},
-				"extra-data":         []string{"alerts"},
-				"additional-queries": []string{"tasks"},
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
+	structuredData := searchStructured(t, mcpClient, map[string]any{
+		"entity-type":        types.EntityTypeCase,
+		"extra-columns":      []string{"_id", "title"},
+		"extra-data":         []string{"alerts"},
+		"additional-queries": []string{"tasks"},
+	})
 
 	casesData, ok := structuredData["results"].([]any)
 	require.True(t, ok)
@@ -847,32 +613,13 @@ func TestSearchAdditionalQueriesComments(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	creationResult := createTestCaseWithComment(t, hiveClient)
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		unusedSamplingHandler(t),
-		testutils.DummyElicitationAccept,
-	)
+	mcpClient := newSearchClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type":        types.EntityTypeCase,
-				"extra-columns":      []string{"_id", "title"},
-				"additional-queries": []string{"comments"},
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	casesData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+	casesData := searchRows(t, mcpClient, map[string]any{
+		"entity-type":        types.EntityTypeCase,
+		"extra-columns":      []string{"_id", "title"},
+		"additional-queries": []string{"comments"},
+	})
 	require.Len(t, casesData, 1)
 
 	caseData := casesData[0].(map[string]any)
@@ -916,32 +663,13 @@ func TestSearchTaskTasKLogs(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	creationResult := createTaskWithLog(t, hiveClient)
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		unusedSamplingHandler(t),
-		testutils.DummyElicitationAccept,
-	)
+	mcpClient := newSearchClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type":        types.EntityTypeTask,
-				"extra-columns":      []string{"_id", "title"},
-				"additional-queries": []string{"task-logs"},
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	tasksData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+	tasksData := searchRows(t, mcpClient, map[string]any{
+		"entity-type":        types.EntityTypeTask,
+		"extra-columns":      []string{"_id", "title"},
+		"additional-queries": []string{"task-logs"},
+	})
 	require.Len(t, tasksData, 2)
 
 	for _, taskInterface := range tasksData {
@@ -970,34 +698,18 @@ func TestSearchCaseTemplates(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	mcpClient := testutils.GetMCPTestClient(t, unusedSamplingHandler(t), testutils.DummyElicitationAccept)
+	mcpClient := newSearchClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeCaseTemplate,
-				"filters": map[string]any{
-					"_like": map[string]any{
-						"_field": "name",
-						"_value": "Phishing*",
-					},
-				},
-				"extra-columns": []string{"_id", "name", "displayName"},
+	templatesData := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeCaseTemplate,
+		"filters": map[string]any{
+			"_like": map[string]any{
+				"_field": "name",
+				"_value": "Phishing*",
 			},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	templatesData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+		"extra-columns": []string{"_id", "name", "displayName"},
+	})
 	require.Len(t, templatesData, 1)
 
 	template, ok := templatesData[0].(map[string]any)
@@ -1028,34 +740,18 @@ func TestSearchPages(t *testing.T) {
 	_, _, err = hiveClient.PageAPI.CreateAPageInACase(authContext, createdCase.UnderscoreId).InputCreatePage(inputPage).Execute()
 	require.NoError(t, err)
 
-	mcpClient := testutils.GetMCPTestClient(t, unusedSamplingHandler(t), testutils.DummyElicitationAccept)
+	mcpClient := newSearchClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypePage,
-				"filters": map[string]any{
-					"_eq": map[string]any{
-						"_field": "category",
-						"_value": "Default",
-					},
-				},
-				"extra-columns": []string{"_id", "title", "category"},
+	pagesData := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypePage,
+		"filters": map[string]any{
+			"_eq": map[string]any{
+				"_field": "category",
+				"_value": "Default",
 			},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	pagesData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+		"extra-columns": []string{"_id", "title", "category"},
+	})
 	require.GreaterOrEqual(t, len(pagesData), 1)
 
 	page, ok := pagesData[0].(map[string]any)
