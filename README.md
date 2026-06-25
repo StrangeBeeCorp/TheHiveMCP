@@ -417,7 +417,7 @@ TheHiveMCP uses **MCP Sampling** for natural language processing in the `search-
 
 **Current MCP client support:**
 
-- ✅ **Github Copilot**: Full sampling support
+- ✅ **GitHub Copilot**: Full sampling support
 - ❌ **Most other MCP clients**: Limited or no sampling support (including Claude Desktop)
 - 🔧 **Workaround**: Configure `OPENAI_API_KEY` for server-side processing
 
@@ -444,7 +444,7 @@ TheHiveMCP uses **MCP Elicitation** to request user confirmation before executin
 
 **Current MCP client support:**
 
-- ✅ **Github Copilot**: Full elicitation support with confirmation dialogs
+- ✅ **GitHub Copilot**: Full elicitation support with confirmation dialogs
 - ❌ **Most other MCP clients**: No elicitation support (including Claude Desktop)
 - ⚠️ **Security note**: Use restrictive permissions with clients that don't support elicitation
 
