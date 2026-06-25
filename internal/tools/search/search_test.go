@@ -510,30 +510,21 @@ func TestSearchCountVsRegularSearch(t *testing.T) {
 
 	mcpClient := newSearchClient(t)
 
-	// First, do a regular search (without explicit count=false)
-	regularResults := searchRows(t, mcpClient, map[string]any{
-		"entity-type": types.EntityTypeCase,
-		"filters": map[string]any{
-			"_eq": map[string]any{
-				"_field": "severity",
-				"_value": 2,
-			},
-		},
-		"count": false,
-	})
+	// Same filter, toggling only count, so the count must equal the row count.
+	args := func(count bool) map[string]any {
+		return map[string]any{
+			"entity-type": types.EntityTypeCase,
+			"filters":     map[string]any{"_eq": map[string]any{"_field": "severity", "_value": 2}},
+			"count":       count,
+		}
+	}
+
+	// First, do a regular search
+	regularResults := searchRows(t, mcpClient, args(false))
 	regularCount := len(regularResults)
 
 	// Now do a count-only search
-	countData := searchStructured(t, mcpClient, map[string]any{
-		"entity-type": types.EntityTypeCase,
-		"filters": map[string]any{
-			"_eq": map[string]any{
-				"_field": "severity",
-				"_value": 2,
-			},
-		},
-		"count": true,
-	})
+	countData := searchStructured(t, mcpClient, args(true))
 
 	countOnlyValue, ok := countData["count"].(float64)
 	require.True(t, ok)
