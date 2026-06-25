@@ -63,22 +63,30 @@ which exist yet — share one source of truth.
 
 ### Scoring and the judge model
 
-Many assertions are graded by an LLM-as-judge (rubric grading), so the judge's
-quality and neutrality directly shape every score. The policy:
+Many assertions are graded by an LLM-as-judge (rubric grading), so the judge is
+the measuring stick. Above all it must be **reproducible**: the same transcript
+must earn the same grade today and in six months, so scores stay comparable
+across time and across candidates. That rules out open-weight models served
+through multi-provider gateways, where requests land on different
+quantizations and hardware and grades drift for reasons unrelated to the
+candidate. The policy:
 
-- The judge must be **independent of the candidate set** — a candidate must
-  never grade its own (or its own family's) outputs, to avoid self-preference
-  bias.
-- The judge is **pinned and held constant** across runs. Changing it
-  silently re-baselines every score, so a judge change is itself a reason to
-  re-run and is recorded with the results.
-- It must be strong enough to follow detailed rubrics reliably while staying
-  cheap enough to run on every test × every candidate.
+- The judge is a **closed, first-party-hosted model pinned to a dated
+  snapshot**, run deterministically (temperature 0) — one provider, fixed
+  weights, no silent upgrades.
+- It is **held constant** across runs. A judge change — including a snapshot
+  retirement — re-baselines every score, so it is recorded with the results and
+  triggers a re-run.
+- It must follow detailed rubrics reliably; grading quality is the second
+  priority after reproducibility.
 
-**Chosen judge: `zai/glm-5.2`.** On public benchmarks it sits in the frontier
-tier for intelligence and instruction-following — level with the strongest
-hosted models — at roughly a third of their cost, and it is *not* in our
-candidate matrix, so it grades every candidate neutrally.
+**Chosen judge: a pinned `openai/gpt-5.5` snapshot.** Closed and first-party
+(reproducible), and at the top of the intelligence / instruction-following
+range. GPT-5.5 also appears in the candidate matrix: when it is itself the
+model under test, that single result is a self-evaluation and is flagged as
+such, since a model can favour its own outputs. We accept that one caveat
+because a single, pinned, high-quality judge buys more consistency than
+removing one self-graded result would.
 
 ### What we do *not* test
 
@@ -108,13 +116,15 @@ candidates pass; this matrix is the starting point, not the outcome.
 
 | Segment | Models |
 |---------|--------|
-| Frontier / SOTA (common in production) | `anthropic/claude-sonnet-4.6`, `openai/gpt-5.4`, `google/gemini-3.5-flash` |
+| Frontier / SOTA (common in production) | `anthropic/claude-sonnet-4.6`, `openai/gpt-5.5`, `google/gemini-3.5-flash` |
 | Strong open-weight alternatives | `deepseek/deepseek-v4-pro`, `qwen/qwen3.7-max`, `moonshotai/kimi-k2.6` |
 | European-sovereign (Mistral) | `mistralai/mistral-medium-3-5` |
 | Small — on-premise / budget | `google/gemini-3.1-flash-lite`, `qwen/qwen3.5-9b`, `mistralai/ministral-8b-2512` |
 
-This set is a starting proposal and will evolve as models are released or
-retired; changes follow the recommended-model policy above.
+This set is a **starting proposal, not a fixed benchmark.** It will change as
+models are released and in response to customer demand. We aim to keep it
+somewhat comparable over time, but comparability is a best-effort goal, not the
+main objective; changes follow the recommended-model policy above.
 
 ### Where and how evidence is published
 
