@@ -135,6 +135,19 @@ var trustedFields = map[string]struct{}{
 	"targetId": {},
 }
 
+// structuralSubtrees lists field names whose entire value is MCP/LLM-generated
+// query structure, not TheHive entity data — so neither the subtree's keys nor
+// its values can carry attacker-controlled free text. Wrapping inside such a
+// subtree is disabled (see processDates* below): it would otherwise corrupt the
+// structural element names (e.g. rawFilters._field "title" → "[UNTRUSTED_DATA]
+// title[/UNTRUSTED_DATA]") that the agent reads back to build its next filter.
+// This is narrower than trustedFields: trustedFields exempts a single value by
+// name, whereas this exempts a whole nested structure regardless of its inner
+// key names (_field, _value, _and, _like, ...).
+var structuralSubtrees = map[string]struct{}{
+	"rawFilters": {},
+}
+
 // isTrustedField reports whether a field's value may be returned to the LLM
 // without [UNTRUSTED_DATA] wrapping. Date fields are always trusted (converted
 // to fixed-format timestamps); every other trusted name is in trustedFields.
@@ -146,6 +159,13 @@ func isTrustedField(fieldName string) bool {
 		return true
 	}
 	_, ok := trustedFields[fieldName]
+	return ok
+}
+
+// isStructuralSubtree reports whether a field name introduces an MCP/LLM-generated
+// query-structure subtree (see structuralSubtrees) that must not be wrapped.
+func isStructuralSubtree(fieldName string) bool {
+	_, ok := structuralSubtrees[fieldName]
 	return ok
 }
 
@@ -347,15 +367,21 @@ func processDatesStruct(val reflect.Value, wrapUntrusted bool) (map[string]inter
 				}
 			}
 		} else {
+			// A structural subtree (e.g. rawFilters) is MCP/LLM-generated query
+			// structure, not entity data — disable wrapping for everything under it.
+			childWrap := wrapUntrusted
+			if _, structural := structuralSubtrees[key]; structural {
+				childWrap = false
+			}
 			// Recursively process nested structures
-			processedValue, err = processDatesValue(fieldVal, wrapUntrusted)
+			processedValue, err = processDatesValue(fieldVal, childWrap)
 			if err != nil {
 				slog.Error("Failed to process nested value in struct", "field", key, "error", err)
 				continue // Skip this field but continue processing others
 			}
 		}
 
-		if wrapUntrusted && !isTrustedField(key) {
+		if wrapUntrusted && !isTrustedField(key) && !isStructuralSubtree(key) {
 			processedValue = wrapUntrustedValue(processedValue)
 		}
 		result[key] = processedValue
@@ -369,32 +395,43 @@ func processDatesMap(val reflect.Value, wrapUntrusted bool) (map[string]interfac
 
 	for _, key := range val.MapKeys() {
 		keyStr := fmt.Sprintf("%v", key.Interface())
-		mapVal := val.MapIndex(key)
 
-		var processedValue interface{}
-		var err error
-
-		// Check if this is a date field
-		if isDateField(keyStr) {
-			processedValue, err = processDateField(keyStr, mapVal.Interface())
-			if err != nil {
-				return nil, fmt.Errorf("failed to process date field %s: %w", keyStr, err)
-			}
-		} else {
-			// Recursively process nested structures
-			processedValue, err = processDatesValue(mapVal, wrapUntrusted)
-			if err != nil {
-				return nil, fmt.Errorf("failed to process map value for key %s: %w", keyStr, err)
-			}
+		processedValue, err := processDatesMapEntry(keyStr, val.MapIndex(key), wrapUntrusted)
+		if err != nil {
+			return nil, err
 		}
 
-		if wrapUntrusted && !isTrustedField(keyStr) {
+		if wrapUntrusted && !isTrustedField(keyStr) && !isStructuralSubtree(keyStr) {
 			processedValue = wrapUntrustedValue(processedValue)
 		}
 		result[keyStr] = processedValue
 	}
 
 	return result, nil
+}
+
+// processDatesMapEntry processes a single map entry: date fields are parsed,
+// everything else is recursed into. A structural subtree (e.g. rawFilters) is
+// MCP/LLM-generated query structure, not entity data, so wrapping is disabled
+// for everything under it.
+func processDatesMapEntry(keyStr string, mapVal reflect.Value, wrapUntrusted bool) (interface{}, error) {
+	if isDateField(keyStr) {
+		processedValue, err := processDateField(keyStr, mapVal.Interface())
+		if err != nil {
+			return nil, fmt.Errorf("failed to process date field %s: %w", keyStr, err)
+		}
+		return processedValue, nil
+	}
+
+	childWrap := wrapUntrusted
+	if isStructuralSubtree(keyStr) {
+		childWrap = false
+	}
+	processedValue, err := processDatesValue(mapVal, childWrap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to process map value for key %s: %w", keyStr, err)
+	}
+	return processedValue, nil
 }
 
 func processDatesSlice(val reflect.Value, wrapUntrusted bool) ([]interface{}, error) {
