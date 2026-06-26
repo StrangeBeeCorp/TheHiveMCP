@@ -1,0 +1,16 @@
+{
+  // Repository markdownlint configuration.
+  // The README intentionally uses long lines, inline HTML (centered logos,
+  // <details> sections) and richly formatted tables; the rules below are
+  // disabled so linting reflects the project's actual doc conventions rather
+  // than markdownlint's strict defaults. Genuine issues (broken links, missing
+  // code-fence languages) are still enforced.
+  "default": true,
+
+  "MD013": false, // line length — docs use long prose/URL lines
+  "MD033": false, // inline HTML — <div>, <details>, <summary>, <img>
+  "MD060": false, // table column style — cosmetic pipe spacing/alignment
+  "MD056": false, // table column count — miscounts cells inside <details>
+  "MD036": false, // emphasis used instead of heading — intentional tagline
+  "MD001": false  // heading increment — h2->h3 jumps inside <details>
+}

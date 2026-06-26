@@ -83,7 +83,7 @@ This enables security teams to **leverage existing AI assistants** for security 
 
 ## 🪜 Project Structure
 
-```
+```text
 TheHiveMCP/
 ├── cmd/server/         # Main entrypoint
 ├── bootstrap/          # Server initialization (public API)
@@ -413,7 +413,7 @@ TheHiveMCP uses **MCP Elicitation** to request user confirmation before executin
 
 **Example elicitation prompt:**
 
-```
+```text
 Confirm POST request to TheHive API?
 
 Operation: Create Alert
@@ -510,10 +510,17 @@ All development operations use Docker containers for consistency and isolation:
 - `make all` - Format, security checks, tests, and build
 - `make build` - Build binary using Docker
 - `make run ARGS="arguments"` - Run application with custom arguments
-- `make test` - Run tests with Docker network support for integration tests
+- `make test` - Run fast unit tests only (skips testcontainers-based integration tests via `-short`); results are cached, so a second run is near-instant
+- `make test-integration` - Run the full suite including integration tests (Docker network + socket required)
 - `make dev` - Development server with hot reload (requires local air)
 
-**Integration test TheHive version:** the integration suite boots a live TheHive + Elasticsearch stack via docker compose (`docker-compose.test.yml`, managed by `make test`). CI runs `make test` as a matrix against every supported TheHive version (currently 5.5 and 5.6), so a compatibility break against any of them fails the PR. The image is a single source of truth: set `THEHIVE_TEST_IMAGE` to override it locally (e.g. `THEHIVE_TEST_IMAGE=strangebee/thehive:5.5.2 make test`); unset, it defaults to `strangebee/thehive:5.6.3`.
+**Testing options:**
+
+- Coverage is off by default. Add `COVERAGE=1` to either test target to write `coverage.out` and print a per-function report:
+  - `make test COVERAGE=1`
+  - `make test-integration COVERAGE=1`
+
+**Integration test TheHive version:** the integration suite (`make test-integration`) boots a live TheHive + Elasticsearch stack via docker compose (`docker-compose.test.yml`). CI runs `make test-integration` as a matrix against every supported TheHive version (currently 5.5 and 5.6), so a compatibility break against any of them fails the PR. The image is a single source of truth: set `THEHIVE_TEST_IMAGE` to override it locally (e.g. `THEHIVE_TEST_IMAGE=strangebee/thehive:5.5.2 make test-integration`); unset, it defaults to `strangebee/thehive:5.6.3`.
 
 **Quality and security:**
 
