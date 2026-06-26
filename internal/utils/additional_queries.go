@@ -3,6 +3,9 @@ package utils
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"maps"
+	"slices"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
@@ -11,28 +14,89 @@ import (
 // QueryFunc defines a function that queries data for a single entity
 type QueryFunc func(ctx context.Context, client *thehive.APIClient, entityID string) ([]map[string]interface{}, error)
 
-// EntityQueryConfig maps query names to their corresponding query functions
-type EntityQueryConfig map[string]QueryFunc
+// QueryDescriptor declares everything the expansion pipeline needs to know
+// about one additional query: how to fetch it, what entity type its results
+// are, whether those results are INDEPENDENT top-level entities, and which
+// match-context meta fields to surface alongside the entity.
+//
+// ResultsAreIndependent is the security-critical property. A query is
+// "independent" when its results are top-level entities returned in their own
+// right (e.g. the similarity engine's similar cases/alerts) rather than
+// children of an already-scoped parent. TheHive applies its own .visible org/
+// profile filter to such results but NOT the MCP-level permFilters, so each hit
+// must be re-checked against permFilters before it is surfaced — otherwise a hit
+// the analyst could never reach via a direct search would leak through expansion
+// (DL-6004). Child queries (tasks, observables, ...) traverse from a parent that
+// ExpandEntitiesWithQueries already scoped, so they need no re-check.
+//
+// Modelling this as a per-query property (rather than an out-of-band set lookup)
+// makes re-scoping a DECLARED attribute of each query: a newly added independent
+// query that forgets to set ResultsAreIndependent: true is caught by review at
+// the registry — and by TestEveryRegisteredQueryDeclaresScopeIntent — rather
+// than silently bypassing the scope re-check and failing open.
+type QueryDescriptor struct {
+	// Func fetches the query's results for a single parent entity.
+	Func QueryFunc
+	// EntityType is the entity type of the RESULTS (e.g. similarCases returns
+	// cases). Used to project default fields and to scope independent results.
+	EntityType string
+	// ResultsAreIndependent marks results that must be re-scoped against the
+	// MCP permFilters because they are not children of an already-scoped parent.
+	ResultsAreIndependent bool
+	// MetaFields are match-context fields (e.g. similarObservableCount) carried
+	// FLAT alongside the entity by the *Light ops and surfaced to the LLM so it
+	// has match context without follow-up fetches. Empty for queries with none.
+	MetaFields []string
+}
 
-// queryRegistry maps entity types to their available queries
+// EntityQueryConfig maps query names to their descriptors.
+type EntityQueryConfig map[string]QueryDescriptor
+
+// similarityMetaFields are preserved alongside the entity to give the LLM
+// observable-match context without requiring follow-up fetches. The *Light
+// similarity ops emit a single FLAT object per hit — entity fields and meta
+// side by side, with no {"case"|"alert": {...}} wrapper — so these are lifted
+// onto the projected entity (see projectFields). Shared by the four similarity
+// descriptors below.
+var similarityMetaFields = []string{"similarObservableCount", "observableCount"}
+
+// queryRegistry maps entity types to their available queries. Each descriptor
+// is the single source of truth for that query's fetch func, result entity
+// type, scope-independence, and surfaced meta fields.
 var queryRegistry = map[string]EntityQueryConfig{
 	types.EntityTypeCase: {
-		"tasks":       GetTasksFromCaseID,
-		"observables": GetObservablesFromCaseID,
-		"comments":    GetCommentsFromCaseID,
-		"pages":       GetPagesFromCaseID,
-		"attachments": GetAttachmentsFromCaseID,
-		"procedures":  GetProceduresFromCaseID,
+		"tasks":       {Func: GetTasksFromCaseID, EntityType: types.EntityTypeTask},
+		"observables": {Func: GetObservablesFromCaseID, EntityType: types.EntityTypeObservable},
+		"comments":    {Func: GetCommentsFromCaseID, EntityType: types.EntityTypeComment},
+		"pages":       {Func: GetPagesFromCaseID, EntityType: types.EntityTypePage},
+		"attachments": {Func: GetAttachmentsFromCaseID, EntityType: types.EntityTypeAttachment},
+		"procedures":  {Func: GetProceduresFromCaseID, EntityType: types.EntityTypeProcedure},
+		"similarCases": {
+			Func: GetSimilarCasesFromCaseID, EntityType: types.EntityTypeCase,
+			ResultsAreIndependent: true, MetaFields: similarityMetaFields,
+		},
+		"similarAlerts": {
+			Func: GetSimilarAlertsFromCaseID, EntityType: types.EntityTypeAlert,
+			ResultsAreIndependent: true, MetaFields: similarityMetaFields,
+		},
 	},
 	types.EntityTypeAlert: {
-		"observables": GetObservablesFromAlertID,
-		"comments":    GetCommentsFromAlertID,
-		"pages":       GetPagesFromAlertID,
-		"attachments": GetAttachmentsFromAlertID,
-		"procedures":  GetProceduresFromAlertID,
+		"observables": {Func: GetObservablesFromAlertID, EntityType: types.EntityTypeObservable},
+		"comments":    {Func: GetCommentsFromAlertID, EntityType: types.EntityTypeComment},
+		"pages":       {Func: GetPagesFromAlertID, EntityType: types.EntityTypePage},
+		"attachments": {Func: GetAttachmentsFromAlertID, EntityType: types.EntityTypeAttachment},
+		"procedures":  {Func: GetProceduresFromAlertID, EntityType: types.EntityTypeProcedure},
+		"similarCases": {
+			Func: GetSimilarCasesFromAlertID, EntityType: types.EntityTypeCase,
+			ResultsAreIndependent: true, MetaFields: similarityMetaFields,
+		},
+		"similarAlerts": {
+			Func: GetSimilarAlertsFromAlertID, EntityType: types.EntityTypeAlert,
+			ResultsAreIndependent: true, MetaFields: similarityMetaFields,
+		},
 	},
 	types.EntityTypeTask: {
-		"task-logs": GetTaskLogsFromTaskID,
+		"task-logs": {Func: GetTaskLogsFromTaskID, EntityType: types.EntityTypeTaskLog},
 	},
 	types.EntityTypeObservable: {
 		// No additional queries supported yet
@@ -45,35 +109,97 @@ var queryRegistry = map[string]EntityQueryConfig{
 	},
 }
 
-var queryToEntityType = map[string]string{
-	"tasks":       types.EntityTypeTask,
-	"observables": types.EntityTypeObservable,
-	"comments":    types.EntityTypeComment,
-	"pages":       types.EntityTypePage,
-	"attachments": types.EntityTypeAttachment,
-	"task-logs":   types.EntityTypeTaskLog,
-	"procedures":  types.EntityTypeProcedure,
-}
-
-func filterAdditionalQueryResults(results []map[string]interface{}, queryType string) ([]map[string]interface{}, error) {
-	entityType, exists := queryToEntityType[queryType]
-	if !exists {
-		return nil, fmt.Errorf("unsupported query type: %s", queryType)
+func filterAdditionalQueryResults(results []map[string]interface{}, descriptor QueryDescriptor) ([]map[string]interface{}, error) {
+	if descriptor.EntityType == "" {
+		return nil, fmt.Errorf("query descriptor missing result entity type")
 	}
 
-	fields := types.DefaultFields[entityType]
+	fields := types.DefaultFields[descriptor.EntityType]
+	includeMeta := descriptor.ResultsAreIndependent
 
 	filtered := make([]map[string]interface{}, 0, len(results))
 	for _, item := range results {
-		filteredItem := make(map[string]interface{})
-		for _, field := range fields {
-			if value, exists := item[field]; exists {
-				filteredItem[field] = value
-			}
-		}
-		filtered = append(filtered, filteredItem)
+		filtered = append(filtered, projectFields(item, fields, includeMeta, descriptor.MetaFields))
 	}
 	return filtered, nil
+}
+
+// projectFields copies the default entity fields from item, plus — when
+// includeMeta is set — the given match-context meta fields, into a fresh map.
+// The *Light similarity ops emit a FLAT object — {...richEntity...,
+// "similarObservableCount": N, "linksCount": M} — so the entity and its meta
+// share one source. Non-similarity results have no meta to lift, so callers
+// pass includeMeta=false.
+func projectFields(item map[string]interface{}, fields []string, includeMeta bool, metaFields []string) map[string]interface{} {
+	filteredItem := make(map[string]interface{})
+	for _, field := range fields {
+		if value, exists := item[field]; exists {
+			filteredItem[field] = value
+		}
+	}
+	if !includeMeta {
+		return filteredItem
+	}
+	for _, metaField := range metaFields {
+		if value, exists := item[metaField]; exists {
+			filteredItem[metaField] = value
+		}
+	}
+	return filteredItem
+}
+
+// filterSimilarityHitsByScope keeps only the similarity hits whose resolvable
+// top-level _id is marked in-scope by a precomputed scope map. A hit with no
+// resolvable _id is DROPPED — it cannot be scope-checked, so surfacing it would
+// risk leaking an out-of-scope entity. This is the redistribution half of the
+// old scopeSimilarityResults: the scope check itself is now a single batch call
+// per target entity type made across ALL parents (see ExpandEntitiesWithQueries),
+// so this helper does no I/O. *Light hits are flat, so _id is top-level.
+//
+// A hit dropped because its _id is UNRESOLVABLE (not a top-level string) is the
+// fail-closed branch that is otherwise silent: the drop is correct, but if a
+// future TheHive version nests or retypes _id in the *Light output, EVERY hit
+// would resolve to "" → all dropped → empty similarity results, with no error
+// surfaced. So each such drop is logged at Debug with the query name, target
+// type, and the hit's top-level keys — keys only, never values, to avoid leaking
+// entity data — plus one aggregate Debug line carrying droppedCount/totalHits.
+// This turns a silent shape regression into a diagnosable one. Hits dropped
+// merely for being out-of-scope are expected and are NOT logged (they would be
+// noisy and carry no regression signal). queryName/targetType are passed for the
+// log context only; the scope decision is wholly in inScope.
+func filterSimilarityHitsByScope(ctx context.Context, queryName, targetType string, results []map[string]interface{}, inScope map[string]bool) []map[string]interface{} {
+	kept := make([]map[string]interface{}, 0, len(results))
+	unresolvable := 0
+	for _, item := range results {
+		id := similarityHitID(item)
+		if id == "" {
+			unresolvable++
+			slog.DebugContext(ctx, "Dropping similarity hit with no resolvable _id",
+				slog.String("query", queryName),
+				slog.String("targetType", targetType),
+				slog.Any("hitKeys", slices.Sorted(maps.Keys(item))))
+			continue
+		}
+		if inScope[id] {
+			kept = append(kept, item)
+		}
+	}
+	if unresolvable > 0 {
+		slog.DebugContext(ctx, "Dropped similarity hits with no resolvable _id",
+			slog.String("query", queryName),
+			slog.String("targetType", targetType),
+			slog.Int("droppedCount", unresolvable),
+			slog.Int("totalHits", len(results)))
+	}
+	return kept
+}
+
+// similarityHitID extracts the top-level _id of a flat *Light similarity hit.
+func similarityHitID(item map[string]interface{}) string {
+	if id, ok := item["_id"].(string); ok {
+		return id
+	}
+	return ""
 }
 
 // ExpandEntitiesWithQueries expands each entity with its related data inline.
@@ -132,25 +258,97 @@ func ExpandEntitiesWithQueries(
 		}
 	}
 
-	// Expand each entity with its additional data
+	// Expansion runs in two passes so that similarity hits are scope-checked in
+	// ONE batch per target entity type across ALL parents, instead of one batch
+	// per parent. Similarity queries (similarCases/similarAlerts) return
+	// independent top-level entities straight from TheHive's similarity engine,
+	// not children of the parent. TheHive applies its own .visible org/profile
+	// filter to them, but NOT the MCP-level permFilters (e.g. tlp<=2) — those
+	// are never sent on the similarity query. So each hit must be re-checked
+	// against permFilters before it is surfaced, otherwise a hit the analyst
+	// could never reach via a direct search would leak through expansion
+	// (DL-6004). The per-parent query execution below stays serial; only the
+	// scope re-check is unified into a cross-parent batch (DL-5764).
+
+	// Pass 1: run every query, stash its raw rows, and collect the union of
+	// similarity hit _ids per target entity type (similarCases -> case,
+	// similarAlerts -> alert). A set dedups an _id two parents share, so it is
+	// scope-checked once rather than once per parent.
+	rawResults := make([]map[string][]map[string]interface{}, len(entities))
+	idsByType := make(map[string]map[string]struct{})
+
 	for i, entity := range entities {
 		entityID, ok := entity["_id"].(string)
 		if !ok {
 			return nil, fmt.Errorf("entity at index %d missing _id field", i)
 		}
+		rawResults[i] = make(map[string][]map[string]interface{}, len(additionalQueries))
 
-		// Execute each requested query for this entity
 		for _, queryName := range additionalQueries {
-			queryFunc := queryConfig[queryName]
+			descriptor := queryConfig[queryName]
 
-			data, err := queryFunc(ctx, hiveClient, entityID)
+			data, err := descriptor.Func(ctx, hiveClient, entityID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get %s for %s ID %s: %w", queryName, entityType, entityID, err)
 			}
-			// Add the results directly to the entity
-			filteredData, err := filterAdditionalQueryResults(data, queryName)
+			rawResults[i][queryName] = data
+
+			// Only INDEPENDENT queries need a scope re-check, and only when
+			// permission filters are configured. Everything else passes through.
+			// Whether re-scoping applies is the descriptor's declared property
+			// (ResultsAreIndependent), not a hardcoded query-name set — so a new
+			// independent query is re-scoped as soon as it declares it, and a
+			// query that forgets to declare it is caught by review at the registry
+			// rather than silently leaking.
+			if !descriptor.ResultsAreIndependent || len(permFilters) == 0 {
+				continue
+			}
+			targetType := descriptor.EntityType
+			set := idsByType[targetType]
+			if set == nil {
+				set = make(map[string]struct{})
+				idsByType[targetType] = set
+			}
+			for _, item := range data {
+				if id := similarityHitID(item); id != "" {
+					set[id] = struct{}{}
+				}
+			}
+		}
+	}
+
+	// Pass 1.5: one batch scope call per target entity type over the union of
+	// every parent's hits. Fail closed — return on the first error before any
+	// hit is surfaced.
+	scopeByType := make(map[string]map[string]bool, len(idsByType))
+	for targetType, set := range idsByType {
+		ids := make([]string, 0, len(set))
+		for id := range set {
+			ids = append(ids, id)
+		}
+		inScope, err := GetScopedEntityIDsBatch(ctx, targetType, ids, permFilters)
+		if err != nil {
+			return nil, fmt.Errorf("failed to verify similarity hit scope: %w", err)
+		}
+		scopeByType[targetType] = inScope
+	}
+
+	// Pass 2: drop out-of-scope similarity hits using the precomputed verdicts,
+	// then project the default fields and attach the result to each parent.
+	for i := range entities {
+		for _, queryName := range additionalQueries {
+			descriptor := queryConfig[queryName]
+			data := rawResults[i][queryName]
+
+			// Re-scoping applies only to INDEPENDENT queries (the descriptor's
+			// declared property), using the precomputed cross-parent verdicts.
+			if descriptor.ResultsAreIndependent && len(permFilters) > 0 {
+				data = filterSimilarityHitsByScope(ctx, queryName, descriptor.EntityType, data, scopeByType[descriptor.EntityType])
+			}
+
+			filteredData, err := filterAdditionalQueryResults(data, descriptor)
 			if err != nil {
-				return nil, fmt.Errorf("failed to filter additional query results for %s ID %s: %w", entityType, entityID, err)
+				return nil, fmt.Errorf("failed to filter additional query results for %s ID %s: %w", entityType, entities[i]["_id"], err)
 			}
 			entities[i][queryName] = filteredData
 		}

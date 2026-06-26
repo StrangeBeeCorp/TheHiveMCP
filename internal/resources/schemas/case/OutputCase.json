@@ -290,6 +290,14 @@
         "procedures": {
           "type": "array",
           "description": "Array of procedure objects (TTPs/tactics) associated with the case. Each procedure includes MITRE ATT&CK technique details and usage context."
+        },
+        "similarCases": {
+          "type": "array",
+          "description": "Array of case objects that share one or more observables with this case. Computed server-side by TheHive's similarity engine. Prefer this query over fetching observables and comparing them client-side when answering correlation or similarity questions."
+        },
+        "similarAlerts": {
+          "type": "array",
+          "description": "Array of alert objects that share one or more observables with this case. Computed server-side by TheHive's similarity engine. Prefer this query over fetching observables and comparing them client-side when answering correlation or similarity questions."
         }
       }
     },

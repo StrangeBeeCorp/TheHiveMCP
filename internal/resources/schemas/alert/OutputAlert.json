@@ -252,6 +252,14 @@
         "pages": {
           "type": "array",
           "description": "Array of page objects (documentation/notes) added to the alert. Each page includes title, content, category, and order."
+        },
+        "similarCases": {
+          "type": "array",
+          "description": "Array of case objects that share one or more observables with this alert. Computed server-side by TheHive's similarity engine. Prefer this query over fetching observables and comparing them client-side when answering correlation or similarity questions."
+        },
+        "similarAlerts": {
+          "type": "array",
+          "description": "Array of alert objects that share one or more observables with this alert. Computed server-side by TheHive's similarity engine. Prefer this query over fetching observables and comparing them client-side when answering correlation or similarity questions."
         }
       }
     },

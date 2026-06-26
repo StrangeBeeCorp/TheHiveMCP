@@ -68,6 +68,16 @@ func GetProceduresFromCaseID(ctx context.Context, client *thehive.APIClient, cas
 	return executeQuery(ctx, client, "getCase", caseID, "procedures")
 }
 
+func GetSimilarAlertsFromCaseID(ctx context.Context, client *thehive.APIClient, caseID string) ([]map[string]interface{}, error) {
+	return executeQuery(ctx, client, "getCase", caseID, "similarAlertsLight")
+}
+
+// GetSimilarCasesFromCaseID is the classic "Similar Cases": other cases that
+// share observables with this case.
+func GetSimilarCasesFromCaseID(ctx context.Context, client *thehive.APIClient, caseID string) ([]map[string]interface{}, error) {
+	return executeQuery(ctx, client, "getCase", caseID, "similarCasesLight")
+}
+
 // Alert-related functions
 func GetObservablesFromAlertID(ctx context.Context, client *thehive.APIClient, alertID string) ([]map[string]interface{}, error) {
 	return executeQuery(ctx, client, "getAlert", alertID, "observables")
@@ -87,6 +97,16 @@ func GetAttachmentsFromAlertID(ctx context.Context, client *thehive.APIClient, a
 
 func GetProceduresFromAlertID(ctx context.Context, client *thehive.APIClient, alertID string) ([]map[string]interface{}, error) {
 	return executeQuery(ctx, client, "getAlert", alertID, "procedures")
+}
+
+func GetSimilarCasesFromAlertID(ctx context.Context, client *thehive.APIClient, alertID string) ([]map[string]interface{}, error) {
+	return executeQuery(ctx, client, "getAlert", alertID, "similarCasesLight")
+}
+
+// GetSimilarAlertsFromAlertID returns other alerts that share observables with
+// this alert (alert-to-alert correlation / deduplication).
+func GetSimilarAlertsFromAlertID(ctx context.Context, client *thehive.APIClient, alertID string) ([]map[string]interface{}, error) {
+	return executeQuery(ctx, client, "getAlert", alertID, "similarAlertsLight")
 }
 
 // Task-related functions
