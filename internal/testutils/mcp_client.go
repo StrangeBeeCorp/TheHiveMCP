@@ -2,14 +2,27 @@ package testutils
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/bootstrap"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/logging"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 )
+
+// initTestLoggerOnce installs the test log level on slog's default logger
+// exactly once per test binary. Tests run concurrently, so guard the
+// slog.SetDefault inside InitLogger against a data race.
+var initTestLoggerOnce sync.Once
+
+func initTestLogger(options *types.TheHiveMcpDefaultOptions) {
+	initTestLoggerOnce.Do(func() {
+		logging.InitLogger(options.LogLevel, options.TransportType)
+	})
+}
 
 type functionBasedSamplingHandler struct {
 	createMessageFunc func(context.Context, mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error)
@@ -73,7 +86,7 @@ func GetMCPTestClient(
 // permissionsConfigPath can be:
 // - types.PermissionConfigAdmin for admin permissions
 // - types.PermissionConfigReadOnly for read-only permissions
-// - "docs/examples/permissions/analyst.yaml" for analyst permissions (file path)
+// - testutils.PermissionsFixture(t, "analyst.yaml") for analyst permissions (file path)
 // - "" for default read-only permissions (empty string)
 func GetMCPTestClientWithPermissions(
 	t *testing.T,
@@ -90,6 +103,7 @@ func GetMCPTestClientWithPermissions(
 	}
 
 	options := NewMCPTestConfig()
+	initTestLogger(options)
 	creds := &bootstrap.TheHiveCredentials{
 		URL:          containerURL, // Use actual container URL instead of hardcoded one
 		APIKey:       options.TheHiveAPIKey,

@@ -23,6 +23,17 @@ func TheHiveTestImage() string {
 	return DefaultTheHiveTestImage
 }
 
+// testLogLevel returns the slog level for the in-process test server. It is
+// quiet (warn) by default so a failing test's output shows the assertion, not
+// pages of INFO/HTTP request logs. Set LOG_LEVEL=debug (or info) to get the
+// full request trace back when diagnosing a specific failure.
+func testLogLevel() string {
+	if lvl := os.Getenv("LOG_LEVEL"); lvl != "" {
+		return lvl
+	}
+	return "warn"
+}
+
 type HiveTestConfig struct {
 	ImageName     string
 	ContainerName string
@@ -56,7 +67,7 @@ func NewMCPTestConfig() *types.TheHiveMcpDefaultOptions {
 		MCPHeartbeatInterval:  "30s",
 		TransportType:         "inprocess",
 		BindAddr:              "",
-		LogLevel:              "DEBUG",
+		LogLevel:              testLogLevel(),
 		OpenAIBaseURL:         "",
 		OpenAIAPIKey:          "",
 		OpenAIModel:           "",
