@@ -80,7 +80,7 @@ neutrality. The policy:
 - It must follow detailed rubrics reliably and be **independent of the
   candidate set**, so it never grades its own family's outputs.
 
-**Chosen judge: a pinned `zai/glm-5.2`.** It sits in the frontier tier for
+**Chosen judge: a pinned `z-ai/glm-5.2`.** It sits in the frontier tier for
 intelligence and instruction-following — level with the strongest hosted
 models — at roughly a third of their cost, and it is *not* in the candidate
 matrix, so it grades every candidate neutrally.
@@ -114,7 +114,7 @@ candidates pass; this matrix is the starting point, not the outcome.
 | Segment | Models |
 |---------|--------|
 | Frontier / SOTA (common in production) | `anthropic/claude-sonnet-4.6`, `openai/gpt-5.5`, `google/gemini-3.5-flash` |
-| Strong open-weight alternatives | `deepseek/deepseek-v4-pro`, `qwen/qwen3.7-max`, `moonshotai/kimi-k2.6` |
+| Strong open-weight alternatives | `deepseek/deepseek-v4-pro`, `z-ai/glm-5.2`, `moonshotai/kimi-k2.6` |
 | European-sovereign (Mistral) | `mistralai/mistral-medium-3-5` |
 | Small — on-premise / budget | `google/gemini-3.1-flash-lite`, `qwen/qwen3.5-9b`, `mistralai/ministral-8b-2512` |
 
