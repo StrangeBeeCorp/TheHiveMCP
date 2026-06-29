@@ -1,0 +1,31 @@
+{
+  "type": "bundle",
+  "id": "bundle--test-attck-bundle",
+  "spec_version": "2.0",
+  "objects": [
+    {
+      "type": "attack-pattern",
+      "id": "attack-pattern--7385dfaf-6886-4229-9ecd-6fd678040830",
+      "created": "2017-05-31T21:31:43.540Z",
+      "modified": "2023-01-01T00:00:00.000Z",
+      "name": "Command and Scripting Interpreter",
+      "description": "Adversaries may abuse command and script interpreters to execute commands.",
+      "kill_chain_phases": [
+        {
+          "kill_chain_name": "mitre-attack",
+          "phase_name": "execution"
+        }
+      ],
+      "external_references": [
+        {
+          "source_name": "mitre-attack",
+          "external_id": "T1059",
+          "url": "https://attack.mitre.org/techniques/T1059"
+        }
+      ],
+      "x_mitre_platforms": ["Windows", "macOS", "Linux"],
+      "x_mitre_is_subtechnique": false,
+      "x_mitre_version": "2.1"
+    }
+  ]
+}

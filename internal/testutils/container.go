@@ -1,63 +1,46 @@
 package testutils
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/network"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 // TestMITREPatternID is the patternId available in the test TheHive instance after initHiveInstance
 const TestMITREPatternID = "T1059"
 
-// minimalSTIXBundle is a minimal MITRE ATT&CK STIX 2.0 bundle for testing
-const minimalSTIXBundle = `{
-  "type": "bundle",
-  "id": "bundle--test-attck-bundle",
-  "spec_version": "2.0",
-  "objects": [
-    {
-      "type": "attack-pattern",
-      "id": "attack-pattern--7385dfaf-6886-4229-9ecd-6fd678040830",
-      "created": "2017-05-31T21:31:43.540Z",
-      "modified": "2023-01-01T00:00:00.000Z",
-      "name": "Command and Scripting Interpreter",
-      "description": "Adversaries may abuse command and script interpreters to execute commands.",
-      "kill_chain_phases": [
-        {
-          "kill_chain_name": "mitre-attack",
-          "phase_name": "execution"
-        }
-      ],
-      "external_references": [
-        {
-          "source_name": "mitre-attack",
-          "external_id": "T1059",
-          "url": "https://attack.mitre.org/techniques/T1059"
-        }
-      ],
-      "x_mitre_platforms": ["Windows", "macOS", "Linux"],
-      "x_mitre_is_subtechnique": false,
-      "x_mitre_version": "2.1"
-    }
-  ]
-}`
+// defaultTheHiveTestURL is the published TheHive port from docker-compose.test.yml.
+const defaultTheHiveTestURL = "http://localhost:9000"
+
+// statusReadinessTimeout bounds how long we wait for TheHive to answer
+// /api/status after `docker compose up`. A cold boot of the heavier versions
+// takes several minutes, so this is generous; org setup then has its own
+// (shorter) retry window for the post-status migration phase.
+const statusReadinessTimeout = 8 * time.Minute
 
 var (
-	globalContainer testcontainers.Container
-	globalNetwork   *testcontainers.DockerNetwork
-	globalPort      string
+	initOnce sync.Once
+	initErr  error
+	hiveURL  string
 )
+
+// TheHiveTestURL returns the base URL of the compose-managed TheHive instance,
+// overridable with THEHIVE_TEST_URL (e.g. when the stack runs on another host).
+func TheHiveTestURL() string {
+	if u := os.Getenv("THEHIVE_TEST_URL"); u != "" {
+		return u
+	}
+	return defaultTheHiveTestURL
+}
 
 type Config struct {
 	URL      string
@@ -66,52 +49,61 @@ type Config struct {
 	OrgName  string
 }
 
-// StartTheHiveContainer starts a TheHive container for testing
+// StartTheHiveContainer returns the URL of the TheHive instance the integration
+// suite runs against. The TheHive + Elasticsearch + MITRE stack itself is
+// managed by docker compose (see docker-compose.test.yml), brought up by
+// `make test`; this helper waits for it to become ready and performs the
+// one-time org/permission/ATT&CK bootstrap.
+//
+// Tests relying on a real TheHive instance are integration tests: they are slow
+// and cannot be result-cached by `go test`. Running in `-short` mode skips them
+// so a `-short` run stays fast and fully cacheable.
 func StartTheHiveContainer(t *testing.T) (string, error) {
 	t.Helper()
 
-	if globalContainer != nil {
-		return fmt.Sprintf("http://localhost:%s", globalPort), nil
+	if testing.Short() {
+		t.Skip("skipping integration test requiring a TheHive instance (-short)")
 	}
 
-	testConfig := NewHiveTestConfig()
-	req := testcontainers.ContainerRequest{
-		Image:        testConfig.ImageName,
-		ExposedPorts: []string{"9000/tcp"},
-		WaitingFor:   wait.ForHTTP("/api/status").WithPort("9000/tcp").WithStartupTimeout(5 * time.Minute),
-	}
-
-	if globalNetwork == nil {
-		nw, err := network.New(context.Background())
-		if err != nil {
-			return "", fmt.Errorf("failed to create test network: %w", err)
+	initOnce.Do(func() {
+		hiveURL = TheHiveTestURL()
+		if err := waitForStatus(hiveURL, statusReadinessTimeout); err != nil {
+			initErr = err
+			return
 		}
-		globalNetwork = nw
-	}
-	req.Networks = []string{globalNetwork.Name}
-
-	container, err := testcontainers.GenericContainer(context.Background(), testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
+		initErr = initHiveInstance(t, hiveURL)
 	})
-	if err != nil {
-		return "", err
+	if initErr != nil {
+		return "", fmt.Errorf("failed to initialize hive instance at %s: %w", hiveURL, initErr)
 	}
 
-	port, err := container.MappedPort(context.Background(), "9000")
-	if err != nil {
-		return "", err
+	return hiveURL, nil
+}
+
+// waitForStatus polls TheHive's /api/status until it returns 200 or the timeout
+// elapses. It probes over HTTP from the test process itself, so it needs no
+// in-container tooling (the TheHive/ES images ship no guaranteed HTTP client).
+func waitForStatus(url string, timeout time.Duration) error {
+	client := &http.Client{Timeout: 10 * time.Second}
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for {
+		resp, err := client.Get(url + "/api/status")
+		switch {
+		case err != nil:
+			lastErr = err
+		case resp.StatusCode == http.StatusOK:
+			_ = resp.Body.Close()
+			return nil
+		default:
+			_ = resp.Body.Close()
+			lastErr = fmt.Errorf("unexpected status %d", resp.StatusCode)
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("TheHive at %s not ready within %s: %w", url, timeout, lastErr)
+		}
+		time.Sleep(3 * time.Second)
 	}
-
-	globalContainer = container
-	globalPort = port.Port()
-	url := fmt.Sprintf("http://localhost:%s", globalPort)
-
-	if err := initHiveInstance(t, url); err != nil {
-		return "", fmt.Errorf("failed to initialize hive instance: %w", err)
-	}
-
-	return url, nil
 }
 
 // CreateOrgClient creates a client configured for a specific organisation
@@ -140,28 +132,17 @@ func CreateAuthContext(username, password string) context.Context {
 	return context.WithValue(context.Background(), thehive.ContextBasicAuth, auth)
 }
 
-// TeardownContainers stops the global TheHive container and removes the shared Docker network.
-// Call this from TestMain(m *testing.M) after m.Run() returns to ensure full cleanup:
+// TeardownContainers is retained as the TestMain cleanup hook but is now a
+// no-op: the TheHive + Elasticsearch + MITRE stack is owned by docker compose
+// (see docker-compose.test.yml) and torn down by `make test`, not per test
+// binary. Kept so existing TestMain bodies compile unchanged:
 //
 //	func TestMain(m *testing.M) {
 //	    code := m.Run()
 //	    testutils.TeardownContainers(context.Background())
 //	    os.Exit(code)
 //	}
-func TeardownContainers(ctx context.Context) {
-	if globalContainer != nil {
-		if err := globalContainer.Terminate(ctx); err != nil {
-			fmt.Printf("Warning: failed to terminate TheHive container: %v\n", err)
-		}
-		globalContainer = nil
-	}
-	if globalNetwork != nil {
-		if err := globalNetwork.Remove(ctx); err != nil {
-			fmt.Printf("Warning: failed to remove test Docker network: %v\n", err)
-		}
-		globalNetwork = nil
-	}
-}
+func TeardownContainers(_ context.Context) {}
 
 // ResetHiveInstance clears all data from the test organisations
 func ResetHiveInstance(t *testing.T, hiveUrl string, testConfig *HiveTestConfig) error {
@@ -197,48 +178,21 @@ func initHiveInstance(t *testing.T, url string) error {
 	return nil
 }
 
-// setupAttackPatterns imports a minimal MITRE ATT&CK pattern catalog into TheHive.
-// It serves the STIX bundle from a sidecar container on the same Docker network as TheHive.
+// mitreServerURL is the compose `mitre-server` nginx sidecar serving the
+// minimal STIX bundle (internal/testutils/testdata/mitre.json). TheHive fetches
+// it server-side over the compose network, so the URL is the service name.
+const mitreServerURL = "http://mitre-server/mitre.json"
+
+// setupAttackPatterns imports a minimal MITRE ATT&CK pattern catalog into
+// TheHive from the compose-managed `mitre-server` sidecar.
 func setupAttackPatterns(ctx context.Context, client *thehive.APIClient) error {
-	if globalNetwork == nil {
-		return fmt.Errorf("test network not initialized")
-	}
-
-	const mitreServerAlias = "mitre-server"
-
-	mitreRequest := testcontainers.ContainerRequest{
-		Image:        "nginx:alpine",
-		ExposedPorts: []string{"80/tcp"},
-		Networks:     []string{globalNetwork.Name},
-		NetworkAliases: map[string][]string{
-			globalNetwork.Name: {mitreServerAlias},
-		},
-		Files: []testcontainers.ContainerFile{
-			{
-				Reader:            bytes.NewBufferString(minimalSTIXBundle),
-				ContainerFilePath: "/usr/share/nginx/html/mitre.json",
-				FileMode:          0o644,
-			},
-		},
-		WaitingFor: wait.ForListeningPort("80/tcp").WithStartupTimeout(30 * time.Second),
-	}
-
-	mitreContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: mitreRequest,
-		Started:          true,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to start MITRE sidecar container: %w", err)
-	}
-	defer func() { _ = mitreContainer.Terminate(ctx) }()
-
-	url := fmt.Sprintf("http://%s:80/mitre.json", mitreServerAlias)
-
 	input := thehive.NewInputPatternImportMitre("mitre-attack")
-	input.SetUrl(url)
+	input.SetUrl(mitreServerURL)
 
-	_, _, err = client.AttckAPI.ImportMITREAttckFile(ctx).InputPatternImportMitre(*input).Execute()
-	return err
+	if _, _, err := client.AttckAPI.ImportMITREAttckFile(ctx).InputPatternImportMitre(*input).Execute(); err != nil {
+		return fmt.Errorf("failed to import MITRE ATT&CK patterns from %s: %w", mitreServerURL, err)
+	}
+	return nil
 }
 
 func createClientAndContext(t *testing.T, cfg *Config) (*thehive.APIClient, context.Context) {
@@ -448,14 +402,21 @@ func deleteAllEntities(
 		return fmt.Errorf("error parsing %s: %w", entityName, err)
 	}
 
-	// Delete each entity
+	// Delete each entity. A 404 means the entity is already gone — typically
+	// because deleting a parent case cascade-deleted its tasks before this loop
+	// reaches them. That is the desired end state, so tolerate it rather than
+	// aborting the reset and leaking the remaining entities into the next test.
 	for _, entity := range entities {
 		id, ok := entity["_id"].(string)
 		if !ok {
 			continue
 		}
 
-		if _, err := deleteFunc(client, ctx, id); err != nil {
+		resp, err := deleteFunc(client, ctx, id)
+		if err != nil {
+			if resp != nil && resp.StatusCode == http.StatusNotFound {
+				continue
+			}
 			return fmt.Errorf("error deleting %s %s: %w", entityName, id, err)
 		}
 	}

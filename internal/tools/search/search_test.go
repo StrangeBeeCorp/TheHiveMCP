@@ -1128,19 +1128,27 @@ func TestSearchTaskTasKLogs(t *testing.T) {
 
 	tasksData, ok := structuredData["results"].([]any)
 	require.True(t, ok)
-	require.Len(t, tasksData, 2)
+	require.NotEmpty(t, tasksData)
 
+	// The integration suite shares a single TheHive instance, so the global task
+	// list may contain residue from other tests. Assert on this test's own task
+	// rather than the total count.
+	var found bool
 	for _, taskInterface := range tasksData {
 		task := taskInterface.(map[string]any)
-		if task["_id"].(string) == creationResult["task_id"] {
-			logs, ok := task["task-logs"].([]any)
-			require.True(t, ok)
-			require.Len(t, logs, 1)
-
-			log := logs[0].(map[string]any)
-			require.Equal(t, "[UNTRUSTED_DATA]This is a test log entry[/UNTRUSTED_DATA]", log["message"])
+		if task["_id"].(string) != creationResult["task_id"] {
+			continue
 		}
+		found = true
+
+		logs, ok := task["task-logs"].([]any)
+		require.True(t, ok)
+		require.Len(t, logs, 1)
+
+		log := logs[0].(map[string]any)
+		require.Equal(t, "[UNTRUSTED_DATA]This is a test log entry[/UNTRUSTED_DATA]", log["message"])
 	}
+	require.True(t, found, "search results should include the task created by this test")
 }
 
 // TestSearchCaseTemplates tests searching case templates with the search-entities tool

@@ -79,11 +79,17 @@ build: ## Build binary for current host OS/Arch
 	$(MAKE) build-$$HOST_OS-$$HOST_ARCH
 
 .PHONY: test
-test: pre ## Run tests with coverage
+test: pre ## Run the integration suite against the docker-compose test stack
 	@echo $(BGreen)-----------------------$(Color_Off)
-	@echo $(BGreen)-- Running UnitTests --$(Color_Off)
+	@echo $(BGreen)-- Running Tests --$(Color_Off)
 	@echo $(BGreen)-----------------------$(Color_Off)
-	docker run -i --rm --network host -v $(CURDIR):/app -w /app -v /var/run/docker.sock:/var/run/docker.sock -e THEHIVE_TEST_IMAGE $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go test -p 1 -coverprofile=coverage.out -covermode=atomic -v ./...
+	# Bring up the TheHive + Elasticsearch + MITRE stack (THEHIVE_TEST_IMAGE
+	# selects the version), run the suite against it on the host network, then
+	# tear it down regardless of the test outcome and propagate that outcome.
+	# -p 1 serializes packages: they share one mutable instance, and one TheHive
+	# stack at a time keeps memory in bounds on a 16 GB CI runner.
+	docker compose -f docker-compose.test.yml up -d
+	docker run -i --rm --network host -v $(CURDIR):/app -w /app -e THEHIVE_TEST_URL=http://localhost:9000 -e LOG_LEVEL $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go test -p 1 -coverprofile=coverage.out -covermode=atomic -v ./... ; STATUS=$$? ; docker compose -f docker-compose.test.yml down -v ; exit $$STATUS
 	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
 
 .PHONY: docker-build
