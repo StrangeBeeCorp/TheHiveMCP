@@ -1,114 +1,125 @@
 # search-entities
 
-Search for entities in TheHive using natural language queries.
+Search for entities in TheHive by providing a structured filter built from TheHive's query DSL.
 
 ## Overview
 
-The `search-entities` tool allows you to search for TheHive entities (alerts, cases, tasks, observables, procedures, patterns, case templates, pages) using natural language queries. The tool uses AI to translate your natural language into TheHive filters, making it easy to find exactly what you're looking for without knowing the complex filter syntax.
+The `search-entities` tool searches TheHive entities (alerts, cases, tasks, observables, procedures, patterns, case templates, pages). You build the filter yourself and pass it in the `filters` parameter. There is **no** natural-language translation step and no internal LLM: the filter you provide is applied directly to TheHive, so searches are precise and deterministic.
+
+To build a filter you need to know the available fields and the operator grammar:
+
+- **Fields and types** are entity-specific — read `hive://schema/<entity-type>` (e.g. `hive://schema/alert`) before filtering.
+- **Operator grammar** — see the [Filter DSL](#filter-dsl) below, the full JSON schema at `hive://schema/filter`, the filtering rules at `hive://rule/filtering`, and the worked-example cheatsheet at `hive://docs/overview/filter-dsl`.
 
 ## Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `entity-type` | string | Yes | Type of entity to search for (`alert`, `case`, `task`, `observable`, `procedure`, `pattern`, `case-template`, `page`) |
-| `query` | string | Yes | Natural language query describing what entities you want to find |
+| `filters` | object | No | TheHive filter object built from the query DSL (a single root operator). Omit it (or use `{"_any": {}}`) to match all entities within the limit. |
 | `sort-by` | string | No | Column to sort results by (default: `_createdAt`) |
 | `sort-order` | string | No | Sort order `asc` or `desc` (default: `desc`) |
 | `limit` | number | No | Number of results to return (default: 10) |
-| `extra-columns` | array | No | Additional columns to include in output. Entity-specific defaults: alerts `['_id', 'title', '_createdAt', 'severity', 'status']`, cases `['_id', 'title', '_createdAt', 'status', 'severity']`, tasks `['_id', 'title', 'status', '_createdAt', 'assignee']`, observables `['_id', 'dataType', '_createdAt']`, procedures `['_id', 'patternId', 'patternName', 'description', 'occurDate']`, patterns `['_id', 'patternId', 'name', 'tactics', 'platforms']`, case-templates `['_id', 'name', 'displayName', '_createdAt']`, pages `['_id', 'title', 'category', '_createdAt']` |
-| `extra-data` | array | No | Additional data fields to include in output (see `Extra Data` in the Api docs) |
-| `additional-queries` | array | No | Additional queries to enrich results with related data (see `Queries available` in the Api docs)|
+| `extra-columns` | array | No | Columns to keep in output. Entity-specific defaults: alerts `['_id', 'title', '_createdAt', 'severity', 'status']`, cases `['_id', 'title', '_createdAt', 'status', 'severity']`, tasks `['_id', 'title', 'status', '_createdAt', 'assignee']`, observables `['_id', 'dataType', '_createdAt']`, procedures `['_id', 'patternId', 'patternName', 'description', 'occurDate']`, patterns `['_id', 'patternId', 'name', 'tactics', 'platforms']`, case-templates `['_id', 'name', 'displayName', '_createdAt']`, pages `['_id', 'title', 'category', '_createdAt']` |
+| `extra-data` | array | No | Additional data fields to include in output (see `Extra Data` in the API docs) |
+| `additional-queries` | array | No | Additional queries to enrich results with related data (see `Queries available` in the API docs) |
 | `count` | boolean | No | Return only the count of matching entities instead of the actual entities (default: `false`) |
 
-## Natural Language Query Examples
+## Filter DSL
 
-The search tool understands various natural language patterns:
+A filter is a JSON object with exactly **one operator at its root**. Nest `_and` / `_or` / `_not` to combine conditions.
 
-### Severity and priority
-- "high severity alerts from last week"
-- "critical cases opened today"
-- "medium priority alerts"
+| Operator | Shape | Meaning |
+|----------|-------|---------|
+| `_eq` | `{"_eq": {"_field": F, "_value": V}}` | field equals value |
+| `_ne` | `{"_ne": {"_field": F, "_value": V}}` | field not equal to value |
+| `_gt` / `_gte` | `{"_gt": {"_field": F, "_value": V}}` | greater than / or equal |
+| `_lt` / `_lte` | `{"_lt": {"_field": F, "_value": V}}` | less than / or equal |
+| `_between` | `{"_between": {"_field": F, "_from": A, "_to": B}}` | A ≤ field < B (**upper bound exclusive**) |
+| `_in` | `{"_in": {"_field": F, "_values": [V1, V2]}}` | field is one of values (works on multi-valued fields like `tags`) |
+| `_like` | `{"_like": {"_field": F, "_value": "*term*"}}` | wildcard match, case-insensitive (`*` wildcards, **not** `%`) |
+| `_startsWith` / `_endsWith` | `{"_startsWith": {"_field": F, "_value": V}}` | prefix / suffix match |
+| `_match` | `{"_match": {"_field": F, "_value": V}}` | full-text match: value matches a token of the analyzed text field |
+| `_contains` | `{"_contains": "fieldName"}` | the entity has that field set (presence test; bare field name) |
+| `_id` | `{"_id": "~354"}` | match by internal id |
+| `_any` | `{"_any": {}}` | match everything |
+| `_and` | `{"_and": [filter, filter, ...]}` | all must hold |
+| `_or` | `{"_or": [filter, filter, ...]}` | any may hold |
+| `_not` | `{"_not": filter}` | negation |
 
-### Time-based queries
-- "alerts from the last month"
-- "cases created yesterday"
-- "tasks updated this week"
-- "observables added in the last 24 hours"
+### Fields, values and dates
 
-### Status and assignment
-- "open cases assigned to john@example.com"
-- "closed alerts"
-- "waiting tasks"
-- "in-progress cases"
+- Field names and types are **entity-specific**. Read `hive://schema/<entity-type>` for exact fields before filtering. Never filter on a field that does not exist.
+- **Severity** is numeric. TheHive's default scale is `1=Low, 2=Medium, 3=High, 4=Critical` (configurable per org; `severityLabel` holds the label).
+- **Cases** also have a human-readable `number` field (e.g. 42) distinct from the internal `_id` (`~<number>`). "case #42" → filter on `number`, not `_id`.
+- **Dates**: use ISO strings like `"2024-08-01T00:00:00"`. For relative ranges ("last week"), read `hive://config/server-time` and compute the bound yourself.
 
-### Content and tags
-- "observables containing malware"
-- "phishing alerts"
-- "cases tagged with APT"
-- "tasks with keyword 'investigation'"
+## Examples
 
-### Count queries (use count=true parameter)
-- "how many high severity cases are there"
-- "total number of open alerts"
-- "count of tasks assigned to security team"
-- "number of observables created today"
+### Severity and status (cases)
+```json
+{
+  "entity-type": "case",
+  "filters": {"_and": [
+    {"_gte": {"_field": "severity", "_value": 3}},
+    {"_eq":  {"_field": "status",   "_value": "New"}}
+  ]}
+}
+```
 
-### Complex queries
-- "latest phishing alerts with severity greater than 2"
-- "open cases with unassigned tasks"
-- "malware observables from compromised systems"
+### Date range (alerts created in a window)
+```json
+{
+  "entity-type": "alert",
+  "filters": {"_between": {"_field": "_createdAt", "_from": "2024-08-01T00:00:00", "_to": "2024-08-31T23:59:59"}}
+}
+```
 
-### TTP and pattern queries
-- "PowerShell execution techniques" (entity-type: pattern)
-- "patterns for Windows platforms" (entity-type: pattern)
-- "T1059 technique" (entity-type: pattern)
-- "procedures related to initial access" (entity-type: procedure)
-- "procedures created this month" (entity-type: procedure)
+### Tags via set membership (alerts)
+```json
+{
+  "entity-type": "alert",
+  "filters": {"_in": {"_field": "tags", "_values": ["phishing", "malware"]}},
+  "sort-by": "severity"
+}
+```
 
-### Case template queries
-- "case templates with phishing in the name" (entity-type: case-template)
-- "all available templates" (entity-type: case-template)
+### Text match (observables whose message mentions malware or phishing)
+```json
+{
+  "entity-type": "observable",
+  "filters": {"_or": [
+    {"_like": {"_field": "message", "_value": "*malware*"}},
+    {"_like": {"_field": "message", "_value": "*phishing*"}}
+  ]}
+}
+```
+> Observables have no `title` field — they use `data`, `dataType`, `message`, `tags`. Always check `hive://schema/observable` for valid fields.
 
-### Page queries
-- "pages about investigation notes" (entity-type: page)
-- "pages created this week" (entity-type: page)
+### Latest N of an entity (no filter)
+```json
+{
+  "entity-type": "task",
+  "limit": 3
+}
+```
 
 ## Supported Entity Types
 
 ### Alerts
-Search for security alerts with filters on:
-- Type, source, severity
-- Tags and keywords
-- Creation and update dates
-- Status and assignee
+Search for security alerts with filters on type, source, severity, tags, creation/update dates, status and assignee.
 
 ### Cases
-Search for investigation cases with filters on:
-- Title, description, severity
-- Status, stage, assignee
-- Tags and custom fields
-- Creation and resolution dates
+Search for investigation cases with filters on title, description, severity, status, stage, assignee, tags, custom fields, and creation/resolution dates.
 
 ### Tasks
-Search for case tasks with filters on:
-- Title, description, status
-- Assignee and group
-- Due dates and completion
-- Task logs and updates
+Search for case tasks with filters on title, description, status, assignee, group, due dates and completion.
 
 ### Observables
-Search for artifacts and IOCs with filters on:
-- Data type and value
-- Tags and analysis results
-- Creation and update dates
-- Associated cases or alerts
+Search for artifacts and IOCs with filters on data type, value, tags, analysis results, creation/update dates, and associated cases or alerts.
 
 ### Procedures
-Search for TTP entries (MITRE ATT&CK mappings) attached to cases or alerts with filters on:
-- Pattern ID and pattern name
-- Tactic
-- Occurrence date
-- Description
+Search for TTP entries (MITRE ATT&CK mappings) attached to cases or alerts with filters on pattern ID, pattern name, tactic, occurrence date and description.
 
 ### Patterns
 Search the MITRE ATT&CK technique catalog loaded in TheHive with filters on:
@@ -121,17 +132,10 @@ Search the MITRE ATT&CK technique catalog loaded in TheHive with filters on:
 **Tip**: Search patterns first to find valid `patternId` values before creating procedures.
 
 ### Case Templates
-Search for reusable case blueprints with filters on:
-- Name and display name
-- Description content
-- Tags
-- Creation and update dates
+Search for reusable case blueprints with filters on name, display name, description content, tags, and creation/update dates.
 
 ### Pages
-Search for documentation pages (standalone or case-attached) with filters on:
-- Title and content
-- Category
-- Creation and update dates
+Search for documentation pages (standalone or case-attached) with filters on title, content, category, and creation/update dates.
 
 ## Advanced Usage
 
@@ -140,7 +144,7 @@ Get only the total count of matching entities without returning the actual data:
 ```json
 {
   "entity-type": "case",
-  "query": "high severity cases",
+  "filters": {"_gte": {"_field": "severity", "_value": 3}},
   "count": true
 }
 ```
@@ -151,8 +155,7 @@ Response:
   "count": 42,
   "countOnly": true,
   "entityType": "case",
-  "query": "high severity cases",
-  "filters": {...}
+  "rawFilters": {...}
 }
 ```
 
@@ -161,17 +164,17 @@ Specify which fields to return in the results:
 ```json
 {
   "entity-type": "case",
-  "query": "high severity cases",
+  "filters": {"_gte": {"_field": "severity", "_value": 3}},
   "extra-columns": ["_id", "title", "severity", "assignee", "status"]
 }
 ```
 
 ### Additional data
-Include extra data fields:
+Include computed extra-data blocks:
 ```json
 {
   "entity-type": "alert",
-  "query": "phishing alerts",
+  "filters": {"_like": {"_field": "title", "_value": "*phishing*"}},
   "extra-data": ["status", "procedureCount"]
 }
 ```
@@ -181,23 +184,21 @@ Enrich results with related information:
 ```json
 {
   "entity-type": "case",
-  "query": "open investigations",
   "additional-queries": ["tasks", "observables", "procedures"]
 }
 ```
 
 ## Best Practices
 
-1. **Be specific**: More specific queries yield better results
-2. **Check schemas**: Use `get-resource` with output schemas (for example, `hive://schema/alert`) to understand available fields for searching
-3. **Review filters**: The tool returns the generated filters for transparency
-4. **Iterate**: Refine your query based on results and filter feedback
-5. **Limit results**: Use appropriate limits for performance
-6. **Use count for statistics**: When you only need totals, use `count=true` for better performance
+1. **Consult the schema first**: Use `get-resource` with `hive://schema/<entity-type>` to discover valid fields and types before building a filter.
+2. **Start broad, then narrow**: Omit `filters` (or use `{"_any": {}}`) to sample an entity type, then add conditions.
+3. **Review `rawFilters`**: The applied filter is echoed back in the response. If results are unexpected, inspect `rawFilters`, consult `hive://schema/filter` and `hive://docs/overview/filter-dsl`, and call again with a corrected filter.
+4. **Limit results**: Use an appropriate `limit` for performance.
+5. **Use count for statistics**: When you only need totals, use `count=true`.
 
 ## Understanding Schema Types
 
-When using search-entities, you'll work with output schemas to understand what fields are available for searching and what data will be returned:
+When using search-entities, you'll work with output schemas to understand what fields are available for filtering and what data will be returned:
 
 - Use `hive://schema/alert` to see all fields available in alert search results
 - Use `hive://schema/case` to see all fields available in case search results
@@ -210,27 +211,17 @@ For creating or updating entities found through search, use the create/update sc
 - `hive://schema/{entity}/create` for creating new entities
 - `hive://schema/{entity}/update` for updating existing entities
 
-## Query Understanding
-
-The search tool understands:
-- **Severity levels**: high, medium, low, critical
-- **Status values**: open, closed, waiting, in-progress
-- **Time references**: last week, yesterday, today, last month
-- **Operators**: greater than, less than, contains, equals
-- **Sorting**: latest, oldest, newest
-
 ## Integration Tips
 
-- Start investigations with broad searches, then narrow down
-- Use results to identify patterns and trends
-- Combine with `get-resource` to understand entity relationships
-- Use `manage-entities` to act on search results
-- Export results for reporting and analysis
+- Start investigations with broad searches, then narrow down by adding conditions.
+- Use results to identify patterns and trends.
+- Combine with `get-resource` to understand entity relationships and valid fields.
+- Use `manage-entities` to act on search results.
 
 ## Troubleshooting
 
 If results don't match expectations:
-1. Check the generated filters in the response
-2. Review entity schemas using `get-resource`
-3. Simplify the query to test individual conditions
-4. Use more specific field names and values
+1. Inspect the `rawFilters` echoed in the response.
+2. Review entity schemas using `get-resource` (`hive://schema/<entity-type>`) and the operator grammar (`hive://schema/filter`, `hive://docs/overview/filter-dsl`).
+3. Simplify the filter to test individual conditions.
+4. Verify field names and value types match the schema.

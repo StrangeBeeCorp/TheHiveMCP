@@ -1,6 +1,7 @@
 package search_test
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"testing"
@@ -12,6 +13,16 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
 )
+
+// unusedSamplingHandler is wired into the test MCP client but must never fire:
+// search-entities no longer uses the internal LLM. If it is ever called, the
+// test fails loudly — this asserts the no-sampling invariant.
+func unusedSamplingHandler(t *testing.T) func(context.Context, mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
+	return func(context.Context, mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
+		t.Error("search-entities must not call the sampling/LLM path")
+		return nil, fmt.Errorf("unexpected sampling call")
+	}
+}
 
 // Helper function to create a test alert with specific fields
 func createTestAlert(t *testing.T, hiveClient *thehive.APIClient, title string, severity int32, tags []string) map[string]interface{} {
@@ -91,59 +102,28 @@ func TestSearchCasesBySeverityAndStatus(t *testing.T) {
 	createTestCase(t, hiveClient, "Low severity open case", 1, "New", "")
 	createTestCase(t, hiveClient, "High severity in progress case", 3, "InProgress", "")
 
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
-		`{
-			"raw_filters": {
-				"_and": [
-					{
-						"_gte": {
-							"_field": "severity",
-							"_value": 3
-						}
+	mcpClient := newSearchClient(t)
+
+	casesData := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeCase,
+		"filters": map[string]any{
+			"_and": []any{
+				map[string]any{
+					"_gte": map[string]any{
+						"_field": "severity",
+						"_value": 3,
 					},
-					{
-						"_eq": {
-							"_field": "status",
-							"_value": "New"
-						}
-					}
-				]
-			},
-			"sort_by": "_createdAt",
-			"sort_order": "desc",
-			"num_results": 10,
-			"kept_columns": ["_id", "title", "severity", "status"],
-			"extra_data": [],
-			"additional_queries": []
-		}`,
-	)
-
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		samplingHandler,
-		testutils.DummyElicitationAccept,
-	)
-
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type":   types.EntityTypeCase,
-				"query":         "high severity cases with status New",
-				"extra-columns": []string{"_id", "title", "severity", "status"},
+				},
+				map[string]any{
+					"_eq": map[string]any{
+						"_field": "status",
+						"_value": "New",
+					},
+				},
 			},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	casesData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+		"extra-columns": []string{"_id", "title", "severity", "status"},
+	})
 	require.Len(t, casesData, 1)
 
 	caseData, ok := casesData[0].(map[string]any)
@@ -165,50 +145,19 @@ func TestSearchAlertsWithDateRange(t *testing.T) {
 	fromTime := now.Add(-1 * time.Hour).UnixMilli()
 	toTime := now.UnixMilli()
 
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
-		`{
-			"raw_filters": {
-				"_between": {
-					"_field": "_createdAt",
-					"_from": ` + fmt.Sprintf("%d", fromTime) + `,
-					"_to": ` + fmt.Sprintf("%d", toTime) + `
-				}
-			},
-			"sort_by": "_createdAt",
-			"sort_order": "desc",
-			"num_results": 10,
-			"kept_columns": ["_id", "title", "_createdAt"],
-			"extra_data": [],
-			"additional_queries": []
-		}`,
-	)
+	mcpClient := newSearchClient(t)
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		samplingHandler,
-		testutils.DummyElicitationAccept,
-	)
-
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type":   types.EntityTypeAlert,
-				"query":         "alerts from the last hour",
-				"extra-columns": []string{"_id", "title", "_createdAt"},
+	alertsData := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeAlert,
+		"filters": map[string]any{
+			"_between": map[string]any{
+				"_field": "_createdAt",
+				"_from":  fromTime,
+				"_to":    toTime,
 			},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	alertsData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+		"extra-columns": []string{"_id", "title", "_createdAt"},
+	})
 	require.GreaterOrEqual(t, len(alertsData), 2)
 }
 
@@ -221,54 +170,23 @@ func TestSearchAlertsWithMultipleTags(t *testing.T) {
 	createTestAlert(t, hiveClient, "Malware alert", 3, []string{"malware", "endpoint"})
 	createTestAlert(t, hiveClient, "Network alert", 2, []string{"network", "firewall"})
 
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
-		`{
-			"raw_filters": {
-				"_or": [
-					{
-						"_in": {
-							"_field": "tags",
-							"_values": ["phishing", "malware"]
-						}
-					}
-				]
-			},
-			"sort_by": "severity",
-			"sort_order": "desc",
-			"num_results": 10,
-			"kept_columns": ["_id", "title", "tags", "severity"],
-			"extra_data": [],
-			"additional_queries": []
-		}`,
-	)
+	mcpClient := newSearchClient(t)
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		samplingHandler,
-		testutils.DummyElicitationAccept,
-	)
-
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type":   types.EntityTypeAlert,
-				"query":         "alerts tagged with phishing or malware",
-				"extra-columns": []string{"_id", "title", "tags", "severity"},
-				"sort-by":       "severity",
+	alertsData := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeAlert,
+		"filters": map[string]any{
+			"_or": []any{
+				map[string]any{
+					"_in": map[string]any{
+						"_field":  "tags",
+						"_values": []any{"phishing", "malware"},
+					},
+				},
 			},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	alertsData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+		"extra-columns": []string{"_id", "title", "tags", "severity"},
+		"sort-by":       "severity",
+	})
 	require.Len(t, alertsData, 2)
 }
 
@@ -282,60 +200,29 @@ func TestSearchCasesWithAssigneeAndSorting(t *testing.T) {
 	createTestCase(t, hiveClient, "Admin's case 2", 3, "InProgress", "admin@thehive.local")
 	// Note: TheHive assigns the creator as default assignee even when we set nil, so all cases will show admin as assignee
 
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
-		`{
-			"raw_filters": {
-				"_and": [
-					{
-						"_eq": {
-							"_field": "assignee",
-							"_value": "admin@thehive.local"
-						}
+	mcpClient := newSearchClient(t)
+
+	casesData := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeCase,
+		"filters": map[string]any{
+			"_and": []any{
+				map[string]any{
+					"_eq": map[string]any{
+						"_field": "assignee",
+						"_value": "admin@thehive.local",
 					},
-					{
-						"_eq": {
-							"_field": "status",
-							"_value": "InProgress"
-						}
-					}
-				]
-			},
-			"sort_by": "_createdAt",
-			"sort_order": "asc",
-			"num_results": 10,
-			"kept_columns": ["_id", "title", "assignee", "_createdAt"],
-			"extra_data": [],
-			"additional_queries": []
-		}`,
-	)
-
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		samplingHandler,
-		testutils.DummyElicitationAccept,
-	)
-
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type":   types.EntityTypeCase,
-				"query":         "in progress cases assigned to admin@thehive.local",
-				"extra-columns": []string{"_id", "title", "assignee", "_createdAt"},
-				"sort-order":    "asc",
+				},
+				map[string]any{
+					"_eq": map[string]any{
+						"_field": "status",
+						"_value": "InProgress",
+					},
+				},
 			},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	casesData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+		"extra-columns": []string{"_id", "title", "assignee", "_createdAt"},
+		"sort-order":    "asc",
+	})
 	require.Len(t, casesData, 2) // Should match both cases assigned to admin
 
 	// Verify sorting (oldest first with asc order)
@@ -355,60 +242,29 @@ func TestSearchAlertsWithComplexOrConditions(t *testing.T) {
 	createTestAlert(t, hiveClient, "Medium alert", 2, []string{"medium"})
 	createTestAlert(t, hiveClient, "Low alert", 1, []string{"low"})
 
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
-		`{
-			"raw_filters": {
-				"_or": [
-					{
-						"_eq": {
-							"_field": "severity",
-							"_value": 4
-						}
+	mcpClient := newSearchClient(t)
+
+	alertsData := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeAlert,
+		"filters": map[string]any{
+			"_or": []any{
+				map[string]any{
+					"_eq": map[string]any{
+						"_field": "severity",
+						"_value": 4,
 					},
-					{
-						"_eq": {
-							"_field": "severity",
-							"_value": 3
-						}
-					}
-				]
-			},
-			"sort_by": "severity",
-			"sort_order": "desc",
-			"num_results": 10,
-			"kept_columns": ["_id", "title", "severity"],
-			"extra_data": [],
-			"additional_queries": []
-		}`,
-	)
-
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		samplingHandler,
-		testutils.DummyElicitationAccept,
-	)
-
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type":   types.EntityTypeAlert,
-				"query":         "critical or high severity alerts",
-				"extra-columns": []string{"_id", "title", "severity"},
-				"sort-by":       "severity",
+				},
+				map[string]any{
+					"_eq": map[string]any{
+						"_field": "severity",
+						"_value": 3,
+					},
+				},
 			},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	alertsData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+		"extra-columns": []string{"_id", "title", "severity"},
+		"sort-by":       "severity",
+	})
 	require.Len(t, alertsData, 2)
 
 	// Verify only high and critical alerts are returned
@@ -439,98 +295,28 @@ func TestSearchTasksWithLimit(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
-		`{
-			"raw_filters": {
-				"_any": ""
-			},
-			"sort_by": "_createdAt",
-			"sort_order": "desc",
-			"num_results": 3,
-			"kept_columns": ["_id", "title"],
-			"extra_data": [],
-			"additional_queries": []
-		}`,
-	)
+	mcpClient := newSearchClient(t)
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		samplingHandler,
-		testutils.DummyElicitationAccept,
-	)
-
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeTask,
-				"query":       "show me the latest tasks",
-				"limit":       3,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	tasksData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+	tasksData := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeTask,
+		"limit":       3,
+	})
 	require.Len(t, tasksData, 3, "Should return exactly 3 tasks as per limit")
 }
 
-// TestKeptColumnsOverrideExtraColumns tests that kept_columns from handler takes priority over extra-columns from tool call
-func TestKeptColumnsOverrideExtraColumns(t *testing.T) {
+// TestExtraColumnsLimitColumns tests that extra-columns limits the columns returned
+func TestExtraColumnsLimitColumns(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
 	// Create a test alert
 	createTestAlert(t, hiveClient, "Test alert for column override", 2, []string{"test"})
 
-	// Handler specifies only specific columns in kept_columns
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
-		`{
-			"raw_filters": {
-				"_any": ""
-			},
-			"sort_by": "_createdAt",
-			"sort_order": "desc",
-			"num_results": 10,
-			"kept_columns": ["_id", "title"],
-			"extra_data": [],
-			"additional_queries": []
-		}`,
-	)
+	mcpClient := newSearchClient(t)
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		samplingHandler,
-		testutils.DummyElicitationAccept,
-	)
-
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeAlert,
-				"query":       "show me alerts",
-				// Request additional columns that should be ignored by handler's kept_columns
-				"extra-columns": []string{"_id", "title", "severity", "tags", "_createdAt"},
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	alertsData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+	alertsData := searchRows(t, mcpClient, map[string]any{
+		"entity-type":   types.EntityTypeAlert,
+		"extra-columns": []string{"_id", "title"},
+	})
 	require.GreaterOrEqual(t, len(alertsData), 1)
 
 	// Verify that only the columns from kept_columns are returned
@@ -589,40 +375,11 @@ func TestSearchWithAnalystPermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Use analyst permissions client
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
-		`{
-			"raw_filters": {
-				"_any": ""
-			},
-			"sort_by": "_createdAt",
-			"sort_order": "desc",
-			"num_results": 10,
-			"kept_columns": ["_id", "title"],
-			"extra_data": [],
-			"additional_queries": []
-		}`,
-	)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, samplingHandler, testutils.DummyElicitationAccept, "../../../docs/examples/permissions/analyst.yaml")
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, unusedSamplingHandler(t), testutils.DummyElicitationAccept, "../../../docs/examples/permissions/analyst.yaml")
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeAlert,
-				"query":       "show me all alerts",
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	alertsData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+	alertsData := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeAlert,
+	})
 
 	// Check that only alert1 is visible (TLP<=2 and PAP<=2)
 	visibleIDs := make(map[string]bool)
@@ -651,35 +408,12 @@ func TestSearchWithReadOnlyPermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Use read-only permissions client (default permissions)
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
-		`{
-			"raw_filters": {
-				"_any": ""
-			},
-			"sort_by": "_createdAt",
-			"sort_order": "desc",
-			"num_results": 10,
-			"kept_columns": ["_id", "title"],
-			"extra_data": [],
-			"additional_queries": []
-		}`,
-	)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, samplingHandler, testutils.DummyElicitationAccept, "")
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, unusedSamplingHandler(t), testutils.DummyElicitationAccept, "")
 
 	// Test: Search should succeed with read-only permissions
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeAlert,
-				"query":       "show me alerts",
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	result := callSearch(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeAlert,
+	})
 	require.False(t, result.IsError, "Search should succeed with read-only permissions")
 
 	structuredData, ok := result.StructuredContent.(map[string]any)
@@ -709,46 +443,18 @@ func TestSearchCasesWithCountOnly(t *testing.T) {
 	createTestCase(t, hiveClient, "High severity case 2", 3, "InProgress", "")
 	createTestCase(t, hiveClient, "Low severity case", 1, "New", "")
 
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
-		`{
-			"raw_filters": {
-				"_gte": {
-					"_field": "severity",
-					"_value": 3
-				}
-			},
-			"sort_by": "_createdAt",
-			"sort_order": "desc",
-			"num_results": 10,
-			"kept_columns": ["_id", "title"],
-			"extra_data": [],
-			"additional_queries": []
-		}`,
-	)
+	mcpClient := newSearchClient(t)
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		samplingHandler,
-		testutils.DummyElicitationAccept,
-	)
-
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeCase,
-				"query":       "high severity cases",
-				"count":       true,
+	structuredData := searchStructured(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeCase,
+		"filters": map[string]any{
+			"_gte": map[string]any{
+				"_field": "severity",
+				"_value": 3,
 			},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
+		"count": true,
+	})
 
 	// Check that we got a count-only response
 	countOnly, ok := structuredData["countOnly"].(bool)
@@ -774,46 +480,18 @@ func TestSearchAlertsWithCountOnly(t *testing.T) {
 	createTestAlert(t, hiveClient, "Critical Alert 2", 4, []string{"malware"})
 	createTestAlert(t, hiveClient, "Medium Alert", 2, []string{"suspicious"})
 
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
-		`{
-			"raw_filters": {
-				"_eq": {
-					"_field": "severity",
-					"_value": 4
-				}
-			},
-			"sort_by": "_createdAt",
-			"sort_order": "desc",
-			"num_results": 10,
-			"kept_columns": ["_id", "title"],
-			"extra_data": [],
-			"additional_queries": []
-		}`,
-	)
+	mcpClient := newSearchClient(t)
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		samplingHandler,
-		testutils.DummyElicitationAccept,
-	)
-
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeAlert,
-				"query":       "critical alerts",
-				"count":       true,
+	structuredData := searchStructured(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeAlert,
+		"filters": map[string]any{
+			"_eq": map[string]any{
+				"_field": "severity",
+				"_value": 4,
 			},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
+		"count": true,
+	})
 
 	// Verify count-only response structure
 	require.True(t, structuredData["countOnly"].(bool))
@@ -830,68 +508,23 @@ func TestSearchCountVsRegularSearch(t *testing.T) {
 	createTestCase(t, hiveClient, "Test case 2", 2, "InProgress", "")
 	createTestCase(t, hiveClient, "Test case 3", 2, "New", "")
 
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
-		`{
-			"raw_filters": {
-				"_eq": {
-					"_field": "severity",
-					"_value": 2
-				}
-			},
-			"sort_by": "_createdAt",
-			"sort_order": "desc",
-			"num_results": 10,
-			"kept_columns": ["_id", "title"],
-			"extra_data": [],
-			"additional_queries": []
-		}`,
-	)
+	mcpClient := newSearchClient(t)
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		samplingHandler,
-		testutils.DummyElicitationAccept,
-	)
-
-	// First, do a regular search (without explicit count=false)
-	regularRequest := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeCase,
-				"query":       "medium severity cases",
-				"count":       false,
-			},
-		},
+	// Same filter, toggling only count, so the count must equal the row count.
+	args := func(count bool) map[string]any {
+		return map[string]any{
+			"entity-type": types.EntityTypeCase,
+			"filters":     map[string]any{"_eq": map[string]any{"_field": "severity", "_value": 2}},
+			"count":       count,
+		}
 	}
 
-	regularResult, err := mcpClient.CallTool(t.Context(), regularRequest)
-	require.NoError(t, err)
-
-	regularData, ok := regularResult.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	regularResults, ok := regularData["results"].([]any)
-	require.True(t, ok)
+	// First, do a regular search
+	regularResults := searchRows(t, mcpClient, args(false))
 	regularCount := len(regularResults)
 
 	// Now do a count-only search
-	countRequest := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type": types.EntityTypeCase,
-				"query":       "medium severity cases",
-				"count":       true,
-			},
-		},
-	}
-
-	countResult, err := mcpClient.CallTool(t.Context(), countRequest)
-	require.NoError(t, err)
-
-	countData, ok := countResult.StructuredContent.(map[string]any)
-	require.True(t, ok)
+	countData := searchStructured(t, mcpClient, args(true))
 
 	countOnlyValue, ok := countData["count"].(float64)
 	require.True(t, ok)
@@ -905,47 +538,15 @@ func TestSearchExtraDataAndAdditionalQueries(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
 	creationResult := createTestCaseWithTaskAndAlert(t, hiveClient)
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
-		`{
-			"raw_filters": {
-				"_any": ""
-			},
-			"sort_by": "_createdAt",
-			"sort_order": "desc",
-			"num_results": 10,
-			"kept_columns": ["_id", "title"],
-			"extra_data": [
-				"alerts"
-			],
-			"additional_queries": [
-				"tasks"
-			]
-		}`,
-	)
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		samplingHandler,
-		testutils.DummyElicitationAccept,
-	)
+	mcpClient := newSearchClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type":   types.EntityTypeCase,
-				"query":         "show me cases with extra data",
-				"extra-columns": []string{"_id", "title"},
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
+	structuredData := searchStructured(t, mcpClient, map[string]any{
+		"entity-type":        types.EntityTypeCase,
+		"extra-columns":      []string{"_id", "title"},
+		"extra-data":         []string{"alerts"},
+		"additional-queries": []string{"tasks"},
+	})
 
 	casesData, ok := structuredData["results"].([]any)
 	require.True(t, ok)
@@ -1002,48 +603,14 @@ func createTestCaseWithComment(t *testing.T, hiveClient *thehive.APIClient) map[
 func TestSearchAdditionalQueriesComments(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	creationResult := createTestCaseWithComment(t, hiveClient)
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
-		`{
-			"raw_filters": {
-				"_any": ""
-			},
-			"sort_by": "_createdAt",
-			"sort_order": "desc",
-			"num_results": 10,
-			"kept_columns": ["_id", "title"],
-			"extra_data": [],
-			"additional_queries": [
-				"comments"
-			]
-		}`,
-	)
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		samplingHandler,
-		testutils.DummyElicitationAccept,
-	)
+	mcpClient := newSearchClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type":   types.EntityTypeCase,
-				"query":         "show me cases with comments",
-				"extra-columns": []string{"_id", "title"},
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	casesData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+	casesData := searchRows(t, mcpClient, map[string]any{
+		"entity-type":        types.EntityTypeCase,
+		"extra-columns":      []string{"_id", "title"},
+		"additional-queries": []string{"comments"},
+	})
 	require.Len(t, casesData, 1)
 
 	caseData := casesData[0].(map[string]any)
@@ -1086,48 +653,14 @@ func createTaskWithLog(t *testing.T, hiveClient *thehive.APIClient) map[string]i
 func TestSearchTaskTasKLogs(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	creationResult := createTaskWithLog(t, hiveClient)
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
-		`{
-			"raw_filters": {
-				"_any": ""
-			},
-			"sort_by": "_createdAt",
-			"sort_order": "desc",
-			"num_results": 10,
-			"kept_columns": ["_id", "title"],
-			"extra_data": [],
-			"additional_queries": [
-				"task-logs"
-			]
-		}`,
-	)
 
-	mcpClient := testutils.GetMCPTestClient(
-		t,
-		samplingHandler,
-		testutils.DummyElicitationAccept,
-	)
+	mcpClient := newSearchClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type":   types.EntityTypeTask,
-				"query":         "show me tasks with logs",
-				"extra-columns": []string{"_id", "title"},
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	tasksData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+	tasksData := searchRows(t, mcpClient, map[string]any{
+		"entity-type":        types.EntityTypeTask,
+		"extra-columns":      []string{"_id", "title"},
+		"additional-queries": []string{"task-logs"},
+	})
 	require.Len(t, tasksData, 2)
 
 	for _, taskInterface := range tasksData {
@@ -1156,46 +689,18 @@ func TestSearchCaseTemplates(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
-		`{
-			"raw_filters": {
-				"_like": {
-					"_field": "name",
-					"_value": "Phishing*"
-				}
-			},
-			"sort_by": "_createdAt",
-			"sort_order": "desc",
-			"num_results": 10,
-			"kept_columns": ["_id", "name", "displayName"],
-			"extra_data": [],
-			"additional_queries": []
-		}`,
-	)
+	mcpClient := newSearchClient(t)
 
-	mcpClient := testutils.GetMCPTestClient(t, samplingHandler, testutils.DummyElicitationAccept)
-
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type":   types.EntityTypeCaseTemplate,
-				"query":         "case templates with phishing in the name",
-				"extra-columns": []string{"_id", "name", "displayName"},
+	templatesData := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypeCaseTemplate,
+		"filters": map[string]any{
+			"_like": map[string]any{
+				"_field": "name",
+				"_value": "Phishing*",
 			},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	templatesData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+		"extra-columns": []string{"_id", "name", "displayName"},
+	})
 	require.Len(t, templatesData, 1)
 
 	template, ok := templatesData[0].(map[string]any)
@@ -1226,46 +731,18 @@ func TestSearchPages(t *testing.T) {
 	_, _, err = hiveClient.PageAPI.CreateAPageInACase(authContext, createdCase.UnderscoreId).InputCreatePage(inputPage).Execute()
 	require.NoError(t, err)
 
-	samplingHandler := testutils.SamplingHandlerCreateMessageFromStringResponse(
-		`{
-			"raw_filters": {
-				"_eq": {
-					"_field": "category",
-					"_value": "Default"
-				}
-			},
-			"sort_by": "_createdAt",
-			"sort_order": "desc",
-			"num_results": 10,
-			"kept_columns": ["_id", "title", "category"],
-			"extra_data": [],
-			"additional_queries": []
-		}`,
-	)
+	mcpClient := newSearchClient(t)
 
-	mcpClient := testutils.GetMCPTestClient(t, samplingHandler, testutils.DummyElicitationAccept)
-
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "search-entities",
-			Arguments: map[string]any{
-				"entity-type":   types.EntityTypePage,
-				"query":         "pages in the Default category",
-				"extra-columns": []string{"_id", "title", "category"},
+	pagesData := searchRows(t, mcpClient, map[string]any{
+		"entity-type": types.EntityTypePage,
+		"filters": map[string]any{
+			"_eq": map[string]any{
+				"_field": "category",
+				"_value": "Default",
 			},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	pagesData, ok := structuredData["results"].([]any)
-	require.True(t, ok)
+		"extra-columns": []string{"_id", "title", "category"},
+	})
 	require.GreaterOrEqual(t, len(pagesData), 1)
 
 	page, ok := pagesData[0].(map[string]any)

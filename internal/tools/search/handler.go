@@ -8,7 +8,6 @@ import (
 	"slices"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/permissions"
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/prompts"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
@@ -16,130 +15,95 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-const maxSearchRetries = 3
-
 func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest, params SearchEntitiesParams) (SearchEntitiesResult, error) {
-	additionalMessages := []mcp.PromptMessage{}
-	for attempt := 1; attempt <= maxSearchRetries; attempt++ {
-		// 3. Get filters from natural language query
-		filters, err := t.parseQuery(ctx, params, additionalMessages)
-		if err != nil {
-			return SearchEntitiesResult{}, tools.NewToolError("failed to parse natural language query").Cause(err).
-				Hint("Try rephrasing your query or check that the entity type supports the fields you're searching for").
-				Schema(params.EntityType, "")
-		}
-
-		// 4. Apply permission filters
-		perms, err := utils.GetPermissionsFromContext(ctx)
-		if err != nil {
-			return SearchEntitiesResult{}, tools.NewToolError("failed to get permissions").Cause(err)
-		}
-		permFilters := perms.GetToolFilters(t.Name())
-		if len(permFilters) > 0 {
-			rawFilters, filtersApplied := permissions.MergeFilters(filters.RawFilters, permFilters)
-			if filtersApplied {
-				slog.Info("Merged permission filters into search filters", "entityType", params.EntityType)
-			} else {
-				slog.Info("No permission filters applied to search filters", "entityType", params.EntityType)
-			}
-			filters.RawFilters = rawFilters
-		}
-
-		// 5. Build TheHive query
-		hiveQuery, err := t.buildHiveQuery(params, filters)
-		if err != nil {
-			return SearchEntitiesResult{}, tools.NewToolError("failed to build TheHive query").Cause(err).
-				Hint("This may be due to unsupported field names or filter combinations").
-				Schema(params.EntityType, "")
-		}
-
-		// 6. Execute query
-		results, err := t.executeQuery(ctx, hiveQuery, params.EntityType)
-		if err != nil {
-			slog.Warn("Search attempt failed, retrying", "attempt", attempt, "error", err)
-			additionalMessages, err = expandAdditionalMessages(additionalMessages, filters, err)
-			if err != nil {
-				return SearchEntitiesResult{}, tools.NewToolError("failed to expand messages for retry").Cause(err)
-			}
-			continue
-		}
-
-		// Skip additional queries for count-only requests
-		if !params.Count {
-			results, err = utils.ExpandEntitiesWithQueries(ctx, params.EntityType, results, filters.AdditionalQueries, permFilters)
-			if err != nil {
-				return SearchEntitiesResult{}, tools.NewToolError("failed to perform additional queries").Cause(err)
-			}
-		}
-
-		// 7. Process and format results
-		return NewSearchEntitiesResult(results, params, filters.RawFilters)
+	// The caller (the model) supplies the TheHive filter DSL directly in
+	// params.Filters. There is no inner-LLM translation step — the filter is
+	// applied as-is, after merging any permission-scoping filters.
+	// Normalize to a non-nil map so the echoed rawFilters is always an object
+	// ({} = match-all) rather than JSON null when no filter is provided.
+	rawFilters := params.Filters
+	if rawFilters == nil {
+		rawFilters = map[string]interface{}{}
 	}
 
-	return SearchEntitiesResult{}, tools.NewToolError("maximum search retries exceeded").
-		Hint("The query could not be translated to valid TheHive filters").
-		Hint("Try simplifying your search criteria or using more specific field names")
-}
+	// Migration aid: the legacy natural-language "query" parameter was removed in
+	// favor of "filters". If a stale client still sends it, it is ignored — warn
+	// so the empty-filter match-all behavior is not mistaken for a bug.
+	if _, ok := req.GetArguments()["query"]; ok {
+		slog.Warn("ignoring removed 'query' parameter; build a filter with the TheHive DSL and pass it in 'filters' (see hive://docs/overview/filter-dsl)", "entityType", params.EntityType)
+	}
 
-func expandAdditionalMessages(original []mcp.PromptMessage, filters *FilterResult, execErr error) ([]mcp.PromptMessage, error) {
-	filtersJSON, err := json.MarshalIndent(filters.RawFilters, "", "  ")
+	// Apply permission filters
+	perms, err := utils.GetPermissionsFromContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal filters for retry: %w", err)
+		return SearchEntitiesResult{}, tools.NewToolError("failed to get permissions").Cause(err)
 	}
-	messages := append(original, mcp.PromptMessage{
-		Role:    mcp.RoleAssistant,
-		Content: mcp.NewTextContent(string(filtersJSON)),
-	})
-	messages = append(messages, mcp.PromptMessage{
-		Role:    mcp.RoleUser,
-		Content: mcp.NewTextContent(fmt.Sprintf("The previous filters resulted in an error: %v. Please adjust the filters accordingly.", execErr)),
-	})
-	return messages, nil
-}
-
-func (t *SearchTool) parseQuery(ctx context.Context, params SearchEntitiesParams, additionalMessages []mcp.PromptMessage) (*FilterResult, error) {
-	query, err := json.MarshalIndent(params, "", "  ")
-	slog.Debug("Search parameters for query parsing", "json", string(query))
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal search params: %w", err)
-	}
-	prompt, err := prompts.GetBuildFiltersPrompt(ctx, string(query), params.EntityType)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get search filter prompt: %w. This may indicate missing resources or system configuration issues", err)
-	}
-	messages := append(prompt.Messages, additionalMessages...)
-	var filterResult FilterResult
-	err = utils.GetModelCompletion(ctx, messages, &filterResult)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get AI model completion for query parsing: %w. Check that the AI service is available and configured correctly", err)
+	permFilters := perms.GetToolFilters(t.Name())
+	if len(permFilters) > 0 {
+		merged, filtersApplied := permissions.MergeFilters(rawFilters, permFilters)
+		if filtersApplied {
+			slog.Info("Merged permission filters into search filters", "entityType", params.EntityType)
+		} else {
+			slog.Info("No permission filters applied to search filters", "entityType", params.EntityType)
+		}
+		rawFilters = merged
 	}
 
-	slog.Info("Parsed natural language query", "query", query, "filters", filterResult.RawFilters)
+	// Build TheHive query
+	hiveQuery, err := t.buildHiveQuery(params, rawFilters)
+	if err != nil {
+		return SearchEntitiesResult{}, tools.NewToolError("failed to build TheHive query").Cause(err).
+			Hint("This may be due to unsupported field names or filter combinations. Consult hive://schema/"+params.EntityType+" for valid fields and hive://schema/filter for the operator grammar.").
+			Schema(params.EntityType, "")
+	}
 
-	return &filterResult, nil
+	// Execute query. On failure, return an actionable error so the calling model
+	// can correct the filter and call again — no inner retry loop.
+	results, err := t.executeQuery(ctx, hiveQuery, params.EntityType)
+	if err != nil {
+		return SearchEntitiesResult{}, tools.NewToolError("failed to execute search query").Cause(err).
+			Hint("The filter likely references a non-existent field or an invalid value/operator. Consult hive://schema/"+params.EntityType+" for valid fields and hive://schema/filter for the operator grammar, then retry with corrected filters.").
+			Schema(params.EntityType, "")
+	}
+
+	// Skip additional queries for count-only requests
+	if !params.Count {
+		results, err = utils.ExpandEntitiesWithQueries(ctx, params.EntityType, results, params.AdditionalQueries, permFilters)
+		if err != nil {
+			return SearchEntitiesResult{}, tools.NewToolError("failed to perform additional queries").Cause(err)
+		}
+	}
+
+	// Process and format results
+	return NewSearchEntitiesResult(results, params, rawFilters)
 }
 
 // Query building
-func (t *SearchTool) buildHiveQuery(params SearchEntitiesParams, filters *FilterResult) (thehive.InputQuery, error) {
+func (t *SearchTool) buildHiveQuery(params SearchEntitiesParams, rawFilters map[string]interface{}) (thehive.InputQuery, error) {
 
 	// Build operations
 	listOp := t.buildListOperation(params.EntityType)
-	filterOp := t.buildFilterOperation(filters.RawFilters)
 
 	// Exclude unneeded fields
-	excludedFields := t.getExcludedFields(params.EntityType, filters.KeptColumns, filters.ExtraData)
+	excludedFields := t.getExcludedFields(params.EntityType, params.ExtraColumns, params.ExtraData)
 
 	query := []thehive.InputQueryNamedOperation{
 		thehive.InputQueryGenericOperationAsInputQueryNamedOperation(listOp),
-		thehive.MapmapOfStringAnyAsInputQueryNamedOperation(filterOp),
+	}
+
+	// Only apply a filter operation when filters were provided. An empty filter
+	// means "match all entities" (within the limit).
+	if len(rawFilters) > 0 {
+		filterOp := t.buildFilterOperation(rawFilters)
+		query = append(query, thehive.MapmapOfStringAnyAsInputQueryNamedOperation(filterOp))
 	}
 
 	if params.Count {
 		countOp := thehive.NewInputQueryGenericOperation("count")
 		query = append(query, thehive.InputQueryGenericOperationAsInputQueryNamedOperation(countOp))
 	} else {
-		sortOp := t.buildSortOperation(filters.SortBy, filters.SortOrder)
-		pageOp := t.buildPagingOperation(filters.NumResults, filters.ExtraData)
+		sortOp := t.buildSortOperation(params.SortBy, params.SortOrder)
+		pageOp := t.buildPagingOperation(params.Limit, params.ExtraData)
 		query = append(query,
 			thehive.InputQuerySortOperationAsInputQueryNamedOperation(sortOp),
 			thehive.InputQueryPagingOperationAsInputQueryNamedOperation(pageOp),
