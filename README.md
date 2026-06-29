@@ -57,7 +57,7 @@ TheHiveMCP is an MCP (Model Context Protocol) server that enables AI agents to i
   - 🌐 HTTP - Scalable HTTP transport with SSE support
   - 🪠 Stdio - CLI/pipe operations for local integration
 - **Comprehensive security operations**:
-  - Natural language entity search (alerts, cases, tasks, observables)
+  - Structured entity search via TheHive's query DSL (alerts, cases, tasks, observables)
   - Full CRUD operations on TheHive entities
   - Workflow operations (promote alerts to cases, merge entities)
   - Cortex analyzer and responder execution
@@ -142,7 +142,6 @@ When prompted during installation, provide:
   - `read_only` - Default safe mode (search only, no modifications)
   - `admin` - Full access (for testing/development only)
   - Custom path to your permissions YAML file
-- **OpenAI API Key**: (Optional) For natural language processing fallback when MCP client doesn't support sampling
 
 #### Step 5: Test your setup
 
@@ -233,18 +232,12 @@ In your MCP host MCP config file (like `claude_desktop_settings.json`) add the f
         "THEHIVE_URL": "https://your-thehive-instance.com",
         "THEHIVE_API_KEY": "your-api-key-here",
         "THEHIVE_ORGANISATION": "your-org-name",
-        "PERMISSIONS_CONFIG": "read_only",
-        "OPENAI_API_KEY": "your-api-key-here",
-        "OPENAI_MODEL": "gpt5"
+        "PERMISSIONS_CONFIG": "read_only"
       }
     }
   }
 }
 ```
-
-Most MCP hosts don't support Sampling. Check if yours does [here][https://modelcontextprotocol.io/clients].
-
-If it does, you can remove the OpenAI key and model from the config.
 
 ### Run as HTTP server
 
@@ -371,9 +364,6 @@ LOG_LEVEL=INFO
 
 # Optional Cortex configuration:
 # CORTEX_ID=local               # Default Cortex instance ID (defaults to 'local')
-
-# Optional AI features:
-# OPENAI_API_KEY=sk-your-key    # Fallback when client doesn't support sampling
 ```
 
 ### Multi-tenant & Per-Request Configuration
@@ -401,33 +391,6 @@ See [docs/permissions.md](docs/permissions.md) for detailed permission configura
 </details>
 
 ## 🚀 Advanced features
-
-<details>
-<summary><strong>🤖 MCP sampling</strong></summary>
-
-### 🤖 MCP Sampling (AI-Powered Natural Language)
-
-TheHiveMCP uses **MCP Sampling** for natural language processing in the `search-entities` tool to convert queries like *"high severity alerts from last week"* into TheHive filters.
-
-**How it works:**
-
-1. **Client-side sampling** (preferred): Uses the MCP client's built-in AI model
-2. **Server-side fallback**: Uses OpenAI API when client doesn't support sampling
-3. **Graceful degradation**: Without either, natural language search fails but other tools work normally
-
-**Current MCP client support:**
-
-- ✅ **GitHub Copilot**: Full sampling support
-- ❌ **Most other MCP clients**: Limited or no sampling support (including Claude Desktop)
-- 🔧 **Workaround**: Configure `OPENAI_API_KEY` for server-side processing
-
-```bash
-# Enable server-side fallback for clients without sampling
-export OPENAI_API_KEY=sk-your-openai-key
-export OPENAI_BASE_URL=https://api.openai.com/v1  # Or OpenRouter for more models
-```
-
-</details>
 
 <details>
 <summary><strong>🛡️ MCP Elicitation</strong></summary>
@@ -461,7 +424,7 @@ Entity: {"title": "Security Incident", "severity": 3, ...}
 
 ## 🛠️ MCP Tools
 
-- **search-entities**: Search for entities using natural language (for example, "high severity alerts from last week")
+- **search-entities**: Search for entities with a structured filter built from TheHive's query DSL (for example, `{"_gte": {"_field": "severity", "_value": 3}}`)
 - **manage-entities**: Create, update, delete entities, add comments, promote alerts to cases, merge cases/alerts/observables
 - **execute-automation**: Run Cortex analyzers and responders, check job and action status
 - **get-resource**: Access schemas, docs, and metadata through hierarchical browsing (for example, `uri="hive://schema"` or `uri="hive://metadata/automation"`)
@@ -493,12 +456,11 @@ Access TheHive resources for documentation, schemas, and metadata. The entry poi
 - Get specific alert schema: `uri="hive://schema/alert"`
 
 ### [search-entities](docs/tools/search-entities.md)
-
-Search for entities in TheHive using natural language queries. Uses AI to translate natural language into TheHive filters.
+Search for entities in TheHive by providing a structured filter built from TheHive's query DSL. The filter is applied directly — no natural-language translation step.
 
 **Key features:**
 
-- Natural language query processing
+- Direct filter DSL (`_and`, `_or`, `_eq`, `_gte`, `_between`, `_in`, `_like`, …)
 - Support for all entity types (alerts, cases, tasks, observables)
 - Flexible filtering and sorting options
 - Custom column and data field selection

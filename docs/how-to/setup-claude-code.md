@@ -68,41 +68,11 @@ Edit `~/.claude.json` directly. The file contains other Claude Code state (start
 
 Replace `/path/to/thehivemcp` with the absolute path to your binary (for example, `~/Downloads/thehivemcp-darwin-arm64` or the path where you installed it).
 
-> **Do not use shell variables in `env` values.** JSON does not expand `$VAR` — the literal string `$OPENAI_API_KEY` will be passed to the binary, not the value of the variable. Write credentials directly, or use a wrapper script.
+> **Do not use shell variables in `env` values.** JSON does not expand `$VAR` — the literal string `$THEHIVE_API_KEY` will be passed to the binary, not the value of the variable. Write credentials directly, or use a wrapper script.
 
 ---
 
-## Step 4 — Configure the sampling fallback (if needed)
-
-Claude Code **does not support MCP sampling**. TheHiveMCP uses sampling for natural language query processing when the MCP client doesn't support it natively. To enable this fallback, provide OpenAI-compatible credentials.
-
-You can point this at Anthropic's API using an Anthropic API key and the OpenAI-compatible endpoint:
-
-```json
-"env": {
-  "THEHIVE_URL": "https://your-thehive-instance.com",
-  "THEHIVE_API_KEY": "your-thehive-api-key",
-  "THEHIVE_ORGANISATION": "your-org",
-  "PERMISSIONS_CONFIG": "read_only",
-  "OPENAI_API_KEY": "sk-ant-api03-...",
-  "OPENAI_BASE_URL": "https://api.anthropic.com/v1/",
-  "OPENAI_MODEL": "claude-sonnet-4-6"
-}
-```
-
-Or use an actual OpenAI key and model:
-
-```json
-"OPENAI_API_KEY": "sk-...",
-"OPENAI_BASE_URL": "https://api.openai.com/v1/",
-"OPENAI_MODEL": "gpt-4o"
-```
-
-> **If you set `OPENAI_API_KEY` without `OPENAI_BASE_URL`**, the binary defaults to `https://api.openai.com/v1/`. Using an Anthropic key against that endpoint will fail. Always pair a non-OpenAI key with its matching `OPENAI_BASE_URL`.
-
----
-
-## Step 5 — Restart Claude Code and verify
+## Step 4 — Restart Claude Code and verify
 
 Restart Claude Code completely (exit with `/exit`, then relaunch `claude`). MCP servers are connected at startup — a `/mcp` reload won't pick up config changes made while the session was running.
 
@@ -144,12 +114,6 @@ The binary logs go to stderr. Run it manually to see the error:
 THEHIVE_URL="..." THEHIVE_API_KEY="..." /path/to/thehivemcp --transport stdio 2>&1 | head -20
 ```
 
-### `OPENAI_API_KEY` is not working
-
-Check that `OPENAI_BASE_URL` matches the provider for your key. Anthropic keys require `https://api.anthropic.com/v1/`; OpenAI keys use `https://api.openai.com/v1/`.
-
----
-
 ## Using `claude mcp add` (alternative)
 
 Instead of editing `~/.claude.json` manually, you can use the CLI:
@@ -160,9 +124,6 @@ claude mcp add thehive \
   -e THEHIVE_API_KEY="your-api-key" \
   -e THEHIVE_ORGANISATION="your-org" \
   -e PERMISSIONS_CONFIG="read_only" \
-  -e OPENAI_API_KEY="sk-ant-api03-..." \
-  -e OPENAI_BASE_URL="https://api.anthropic.com/v1/" \
-  -e OPENAI_MODEL="claude-sonnet-4-6" \
   -- /path/to/thehivemcp --transport stdio
 ```
 

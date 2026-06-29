@@ -65,10 +65,8 @@ func (t *SearchTool) ValidateParams(params *SearchEntitiesParams) error {
 		return tools.NewToolErrorf("invalid entity-type '%s'. Must be one of: 'alert', 'case', 'task', 'observable', 'procedure', 'pattern', 'case-template', 'page'", params.EntityType)
 	}
 
-	// Validate query is not empty
-	if params.Query == "" {
-		return tools.NewToolError("query parameter is required. Provide a natural language description of what entities to find, e.g., 'high severity alerts from last week'")
-	}
+	// Filters are optional: an empty filter matches all entities (within the
+	// limit). When provided, the filter DSL is validated by TheHive at query time.
 
 	// Validate sort order
 	if params.SortOrder != "asc" && params.SortOrder != "desc" {

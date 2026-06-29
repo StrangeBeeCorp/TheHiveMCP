@@ -60,8 +60,6 @@ Add to your MCP settings:
 
 ### Claude Desktop
 
-Claude Desktop does not support sampling. So you need to add openAI credentials.
-
 Similar configuration, or use the MCPB package for easier setup.
 
 ## What to expect
