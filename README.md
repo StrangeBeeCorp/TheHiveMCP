@@ -16,12 +16,14 @@
 > <summary><strong>🚨 Current Limitations and Security Risks</strong></summary>
 >
 > ### Security Risks
+>
 > - **Prompt Injection Vulnerabilities**: AI prompts may be exploited to bypass security controls
 > - **Data Exposure**: Beta-level data filtering may not properly restrict sensitive information
 > - **Authentication Bypass**: Security mechanisms are not fully hardened
 > - **Audit Trail Gaps**: Incomplete logging of security-sensitive operations
 >
 > ### Feature Limitations
+>
 > - **No TTP (Tactics, Techniques, Procedures) Support**: MITRE ATT&CK integration not implemented
 > - **Limited Responder Support**: Cortex responder execution has known issues and limitations
 > - **No Alert Comments**: Alert commenting functionality not implemented
@@ -32,6 +34,7 @@
 > - **Basic Permission Model**: Advanced RBAC features incomplete
 >
 > ### Recommended Usage
+>
 > - **Development and Testing Only**: Use with test data and development instances
 > - **Proof of Concept**: Evaluate integration potential with non-sensitive data
 > - **Sandbox Environment**: Deploy in isolated environments with restricted network access
@@ -42,7 +45,6 @@
 ## 🌍 Overview
 
 TheHiveMCP is an MCP (Model Context Protocol) server that enables AI agents to interact with [TheHive](https://strangebee.com/thehive/) security platform through natural language. Built in Go, it provides a structured interface for security operations, case management, and threat intelligence workflows.
-
 
 <div align="center">
   <img src="docs/images/demo-thehivemcp.gif" alt="Demo TheHiveMCP"/>
@@ -68,6 +70,7 @@ TheHiveMCP is an MCP (Model Context Protocol) server that enables AI agents to i
 This project acts as a **translation layer** between AI assistants (like ChatGPT, Claude, or other LLMs) and TheHive API. It doesn't contain AI itself - instead, it provides AI assistants with the tools they need to understand and work with security data.
 
 When you connect an AI assistant to TheHiveMCP, the AI can:
+
 - Understand TheHive data structure and capabilities
 - Translate natural language requests into proper TheHive operations
 - Search for security incidents, cases, and threats
@@ -107,9 +110,11 @@ This guide helps you connect TheHiveMCP to popular AI assistants through MCP hos
 **Claude Desktop** supports MCPB (Model Context Protocol Binary) files for easy one-click installation of MCP servers like TheHiveMCP.
 
 #### Step 1: Install Claude Desktop
+
 Download and install [Claude Desktop](https://claude.ai/download) for your operating system.
 
 #### Step 2: Download TheHiveMCP MCPB package
+
 Download the appropriate MCPB file for your system from the [latest release](https://github.com/StrangeBeeCorp/TheHiveMCP/releases):
 
 - **macOS (Intel)**: `thehivemcp-v0.2.0-darwin-amd64.mcpb`
@@ -119,13 +124,17 @@ Download the appropriate MCPB file for your system from the [latest release](htt
 - **Linux (ARM64)**: `thehivemcp-v0.2.0-linux-arm64.mcpb`
 
 #### Step 3: Install the MCPB package
+
 Double-click the downloaded `.mcpb` file. Claude Desktop automatically:
+
 - Installs TheHiveMCP server
 - Prompts you to configure your TheHive connection settings
 - Adds TheHiveMCP to your available tools
 
 #### Step 4: Configure TheHive connection
+
 When prompted during installation, provide:
+
 - **TheHive URL**: Your TheHive instance URL (for example, `https://thehive.company.com`)
 - **API Key**: Your TheHive API key for authentication
 - **Organisation**: Your TheHive organisation name (optional, defaults to the user's own organisation)
@@ -135,8 +144,8 @@ When prompted during installation, provide:
   - Custom path to your permissions YAML file
 - **OpenAI API Key**: (Optional) For natural language processing fallback when MCP client doesn't support sampling
 
-
 #### Step 5: Test your setup
+
 After installation, restart Claude Desktop and look for the 🔧 tools icon. Try asking: *"Show me recent high-severity alerts from TheHive"* or *"What security cases are currently open?"*
 
 </details>
@@ -163,10 +172,10 @@ docker run -d \
   ghcr.io/strangebeecorp/thehivemcp/thehivemcp:latest
 ```
 
-
 #### Docker Compose (Recommended for teams)
 
 Create `docker-compose.yml`:
+
 ```yaml
 services:
   thehive-mcp:
@@ -370,6 +379,7 @@ LOG_LEVEL=INFO
 ### Multi-tenant & Per-Request Configuration
 
 **HTTP Headers** (HTTP transport only):
+
 ```bash
 curl -X POST http://localhost:8082/mcp \
   -H "Authorization: Bearer different-api-key" \
@@ -400,12 +410,14 @@ See [docs/permissions.md](docs/permissions.md) for detailed permission configura
 TheHiveMCP uses **MCP Sampling** for natural language processing in the `search-entities` tool to convert queries like *"high severity alerts from last week"* into TheHive filters.
 
 **How it works:**
+
 1. **Client-side sampling** (preferred): Uses the MCP client's built-in AI model
 2. **Server-side fallback**: Uses OpenAI API when client doesn't support sampling
 3. **Graceful degradation**: Without either, natural language search fails but other tools work normally
 
 **Current MCP client support:**
-- ✅ **Github Copilot**: Full sampling support
+
+- ✅ **GitHub Copilot**: Full sampling support
 - ❌ **Most other MCP clients**: Limited or no sampling support (including Claude Desktop)
 - 🔧 **Workaround**: Configure `OPENAI_API_KEY` for server-side processing
 
@@ -414,6 +426,7 @@ TheHiveMCP uses **MCP Sampling** for natural language processing in the `search-
 export OPENAI_API_KEY=sk-your-openai-key
 export OPENAI_BASE_URL=https://api.openai.com/v1  # Or OpenRouter for more models
 ```
+
 </details>
 
 <details>
@@ -424,16 +437,19 @@ export OPENAI_BASE_URL=https://api.openai.com/v1  # Or OpenRouter for more model
 TheHiveMCP uses **MCP Elicitation** to request user confirmation before executing potentially dangerous operations (create, update, delete entities).
 
 **How it works:**
+
 1. **Supported clients**: Show confirmation dialog before executing modifications
 2. **Unsupported clients**: Operations proceed automatically (logged with warnings)
 3. **Security layer**: Prevents accidental data modification
 
 **Current MCP client support:**
-- ✅ **Github Copilot**: Full elicitation support with confirmation dialogs
+
+- ✅ **GitHub Copilot**: Full elicitation support with confirmation dialogs
 - ❌ **Most other MCP clients**: No elicitation support (including Claude Desktop)
 - ⚠️ **Security note**: Use restrictive permissions with clients that don't support elicitation
 
 **Example elicitation prompt:**
+
 ```
 Confirm POST request to TheHive API?
 
@@ -454,28 +470,34 @@ Entity: {"title": "Security Incident", "severity": 3, ...}
 <summary><strong>🔧 Detailed tool documentation</strong></summary>
 
 ### [get-resource](docs/tools/get-resource.md)
+
 Access TheHive resources for documentation, schemas, and metadata. The entry point for exploring TheHive capabilities through a hierarchical URI-based resource system.
 
 **Key features:**
+
 - Browse resource catalog and categories with flexible navigation
 - Access entity schemas (output, create, and update variants for each entity type)
 - Query metadata for available options with subcategory support
 - Get comprehensive documentation through hierarchical paths
 
 **Schema organisation:**
+
 - Output schemas: `hive://schema/{entity}` - Fields returned from queries
 - Create schemas: `hive://schema/{entity}/create` - Required fields for creation
 - Update schemas: `hive://schema/{entity}/update` - Available fields for updates
 
 **Navigation examples:**
+
 - Browse automation metadata: `uri="hive://metadata/automation"`
 - List entity schemas: `uri="hive://schema"`
 - Get specific alert schema: `uri="hive://schema/alert"`
 
 ### [search-entities](docs/tools/search-entities.md)
+
 Search for entities in TheHive using natural language queries. Uses AI to translate natural language into TheHive filters.
 
 **Key features:**
+
 - Natural language query processing
 - Support for all entity types (alerts, cases, tasks, observables)
 - Flexible filtering and sorting options
@@ -483,9 +505,11 @@ Search for entities in TheHive using natural language queries. Uses AI to transl
 - Count-only queries for performance optimization
 
 ### [manage-entities](docs/tools/manage-entities.md)
+
 Perform comprehensive CRUD and workflow operations on TheHive entities with full support for relationships and constraints.
 
 **Key features:**
+
 - Create, update, delete operations for all entity types
 - Comment support for cases and task logs
 - Promote alerts to cases
@@ -494,9 +518,11 @@ Perform comprehensive CRUD and workflow operations on TheHive entities with full
 - Batch operations support
 
 ### [execute-automation](docs/tools/execute-automation.md)
+
 Execute Cortex analyzers and responders with comprehensive status monitoring and parameter customization.
 
 **Key features:**
+
 - Run analyzers on observables for threat intelligence
 - Execute responders for automated actions
 - Monitor job and action status
@@ -518,6 +544,7 @@ Static resources include entity schemas (with separate output, create, and updat
 All development operations use Docker containers for consistency and isolation:
 
 **Core commands:**
+
 - `make all` - Format, security checks, tests, and build
 - `make build` - Build binary using Docker
 - `make run ARGS="arguments"` - Run application with custom arguments
@@ -527,6 +554,7 @@ All development operations use Docker containers for consistency and isolation:
 **Integration test TheHive version:** the integration suite boots a live TheHive via testcontainers. CI runs `make test` as a matrix against every supported TheHive version (currently 5.5 and 5.6), so a compatibility break against any of them fails the PR. The image is a single source of truth: set `THEHIVE_TEST_IMAGE` to override it locally (e.g. `THEHIVE_TEST_IMAGE=strangebee/thehive:5.5.2 make test`); unset, it defaults to `strangebee/thehive:5.6.3`.
 
 **Quality and security:**
+
 - `make fmt` - Format code using Docker
 - `make security` - Run all security checks (vulncheck, sast, vetlint)
 - `make sast` - Static application security testing
@@ -534,20 +562,32 @@ All development operations use Docker containers for consistency and isolation:
 - `make vulncheck` - Vulnerability scanning
 
 **Docker operations:**
+
 - `make docker-build` - Build production Docker image
 - `make docker-run` - Run production container
 
 **Dependencies:**
+
 - `make updatedep` - Update Go dependencies
 - `make install-dev-deps` - Install development tools (Docker-based)
 
 **Utilities:**
+
 - `make clean` - Remove build artifacts
 - `make help` - Display all available targets
 
 **Architecture:** Transport (`bootstrap/`), Tools (`internal/tools/`), Resources (`internal/resources/`), Integration (`internal/utils/`), Prompts (`internal/prompts/`)
 
 </details>
+
+## Releases
+
+Releases follow a documented policy so the published accuracy and security
+evidence stays honest as the server evolves. See [RELEASING.md](RELEASING.md)
+for the re-test policy (which changes trigger which test suites), the release
+notes format, and the maintainer release checklist. The reasoning behind the
+policy is recorded in
+[ADR-0001](docs/adr/0001-security-and-accuracy-testing-policy.md).
 
 ## Related Projects
 
