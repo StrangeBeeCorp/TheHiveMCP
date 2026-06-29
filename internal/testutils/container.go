@@ -150,7 +150,10 @@ func CreateAuthContext(username, password string) context.Context {
 //	    testutils.TeardownContainers(context.Background())
 //	    os.Exit(code)
 //	}
-func TeardownContainers(_ context.Context) {}
+func TeardownContainers(_ context.Context) {
+	// Intentionally empty: docker compose owns the stack lifecycle (`make test`
+	// runs `compose down`), so there is nothing to tear down per test binary.
+}
 
 // ResetHiveInstance clears all data from the test organisations
 func ResetHiveInstance(t *testing.T, hiveUrl string, testConfig *HiveTestConfig) error {
