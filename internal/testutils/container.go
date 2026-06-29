@@ -119,6 +119,14 @@ func CreateOrgClient(t *testing.T, cfg *Config) *thehive.APIClient {
 		clientCfg.Scheme = "https"
 	}
 
+	// Cap every request so a server-side stall fails that one call in bounded
+	// time instead of hanging until the package timeout. Under memory pressure
+	// (the heavier 5.6.3 stack on a 16 GB CI runner) TheHive can stop answering
+	// a request mid-flight; without this, a single stalled call took down the
+	// whole internal/tools package (see DL-6007). 90s is far above a healthy
+	// round-trip, so it never trips a slow-but-live server.
+	clientCfg.HTTPClient = &http.Client{Timeout: 90 * time.Second}
+
 	clientCfg.AddDefaultHeader("X-Organisation", cfg.OrgName)
 	return thehive.NewAPIClient(clientCfg)
 }
