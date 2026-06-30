@@ -225,6 +225,52 @@ func TestWrap_RecursesIntoNestedMap(t *testing.T) {
 	require.Equal(t, 3, nested["severity"])
 }
 
+// --- Structural subtrees (rawFilters) are never wrapped ---
+
+func TestWrap_RawFiltersSubtreeIsNotWrapped(t *testing.T) {
+	// rawFilters is MCP/LLM-generated query structure, not entity data. Wrapping
+	// its _field (a schema field name) or _value would corrupt the filter the
+	// agent reads back to build its next call. The whole subtree stays verbatim,
+	// while a real data field at the same level (title) is still wrapped.
+	in := map[string]interface{}{
+		"title": "Suspicious Login Attempt - Spain", // entity data — must wrap
+		"rawFilters": map[string]interface{}{
+			"_like": map[string]interface{}{
+				"_field": "title",
+				"_value": "%Suspicious Login Spain%",
+			},
+		},
+	}
+	out := processMap(t, in)
+
+	requireWrapped(t, out["title"])
+
+	rf, ok := out["rawFilters"].(map[string]interface{})
+	require.True(t, ok, "rawFilters should remain a map")
+	like, ok := rf["_like"].(map[string]interface{})
+	require.True(t, ok, "_like should remain a map")
+	require.Equal(t, "title", like["_field"], "_field must not be wrapped")
+	require.Equal(t, "%Suspicious Login Spain%", like["_value"], "_value must not be wrapped")
+}
+
+func TestWrap_RawFiltersNestedCombinatorsNotWrapped(t *testing.T) {
+	// Logical combinators (_and/_or) and their leaves stay verbatim too.
+	in := map[string]interface{}{
+		"rawFilters": map[string]interface{}{
+			"_and": []interface{}{
+				map[string]interface{}{"_eq": map[string]interface{}{"_field": "status", "_value": "New"}},
+				map[string]interface{}{"_gte": map[string]interface{}{"_field": "severity", "_value": 4}},
+			},
+		},
+	}
+	out := processMap(t, in)
+	rf := out["rawFilters"].(map[string]interface{})
+	and := rf["_and"].([]interface{})
+	first := and[0].(map[string]interface{})["_eq"].(map[string]interface{})
+	require.Equal(t, "status", first["_field"])
+	require.Equal(t, "New", first["_value"], "combinator leaf _value must not be wrapped")
+}
+
 // --- Regression: previously-covered fields still wrap exactly once ---
 
 func TestWrap_LegacyUntrustedFieldsWrapOnce(t *testing.T) {
