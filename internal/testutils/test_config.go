@@ -55,8 +55,6 @@ func NewHiveTestConfig() *HiveTestConfig {
 }
 
 func NewMCPTestConfig() *types.TheHiveMcpDefaultOptions {
-	// Some day we could test the OpenAI integration here too
-	// but for now we keep it simple, only test with sampling handler
 	return &types.TheHiveMcpDefaultOptions{
 		TheHiveURL:            "http://localhost:9000",
 		TheHiveAPIKey:         "",
@@ -68,9 +66,5 @@ func NewMCPTestConfig() *types.TheHiveMcpDefaultOptions {
 		TransportType:         "inprocess",
 		BindAddr:              "",
 		LogLevel:              testLogLevel(),
-		OpenAIBaseURL:         "",
-		OpenAIAPIKey:          "",
-		OpenAIModel:           "",
-		OpenAIMaxTokens:       0,
 	}
 }

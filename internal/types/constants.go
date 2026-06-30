@@ -1,8 +1,6 @@
 package types
 
 import (
-	"time"
-
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 )
 
@@ -16,13 +14,6 @@ const PermissionsCtxKey CtxKey = "permissions"
 const RequestIDCtxKey CtxKey = "request_id"
 const AuthErrorCtxKey CtxKey = "auth_error"
 const AuthValidatedCtxKey CtxKey = "auth_validated"
-const OpenAIRequestStartTimeCtxKey CtxKey = "openai_request_start_time"
-const SamplingModelRequestStartTimeCtxKey CtxKey = "sampling_model_request_start_time"
-const OpenAIClientCtxKey CtxKey = "openai_client"
-const OpenAIAPIKeyCtxKey CtxKey = "openai_api_key"
-const OpenAIBaseURLCtxKey CtxKey = "openai_base_url"
-const OpenAIModelCtxKey CtxKey = "openai_model"
-const OpenAIMaxTokensCtxKey CtxKey = "openai_max_tokens"
 const DefaultCortexIDCtxKey CtxKey = "default_cortex_id"
 
 type EnvKey string
@@ -41,10 +32,6 @@ const EnvKeyMCPHeartbeatInterval EnvKey = "MCP_HEARTBEAT_INTERVAL"
 const EnvKeyMCPPort EnvKey = "MCP_PORT"
 const EnvKeyBindHost EnvKey = "MCP_BIND_HOST"
 const EnvKeyLogLevel EnvKey = "LOG_LEVEL"
-const EnvKeyOpenAIBaseURL EnvKey = "OPENAI_BASE_URL"
-const EnvKeyOpenAIAPIKey EnvKey = "OPENAI_API_KEY"
-const EnvKeyOpenAIModel EnvKey = "OPENAI_MODEL"
-const EnvKeyOpenAIMaxTokens EnvKey = "OPENAI_MAX_TOKENS"
 const EnvKeyCortexID EnvKey = "CORTEX_ID"
 
 type FlagVar string
@@ -62,10 +49,6 @@ const FlagVarMCPServerEndpointPath FlagVar = "mcp-endpoint-path"
 const FlagVarMCPHeartbeatInterval FlagVar = "mcp-heartbeat-interval"
 const FlagVarTransportType FlagVar = "transport"
 const FlagVarLogLevel FlagVar = "log-level"
-const FlagVarOpenAIBaseURL FlagVar = "openai-base-url"
-const FlagVarOpenAIAPIKey FlagVar = "openai-api-key"
-const FlagVarOpenAIModel FlagVar = "openai-model"
-const FlagVarOpenAIMaxTokens FlagVar = "openai-max-tokens"
 const FlagVarBindAddr FlagVar = "addr"
 const FlagVarCortexID FlagVar = "cortex-id"
 
@@ -74,10 +57,6 @@ type HeaderKey string
 const HeaderKeyTheHiveAPIKey HeaderKey = "X-TheHive-Api-Key"
 const HeaderKeyTheHiveOrganisation HeaderKey = "X-TheHive-Org"
 const HeaderKeyTheHiveURL HeaderKey = "X-TheHive-Url"
-const HeaderKeyOpenAIAPIKey HeaderKey = "X-OpenAI-Api-Key"
-const HeaderKeyOpenAIBaseURL HeaderKey = "X-OpenAI-Base-Url"
-const HeaderKeyOpenAIModelName HeaderKey = "X-OpenAI-Model-Name"
-const HeaderKeyOpenAIMaxTokens HeaderKey = "X-OpenAI-Max-Tokens"
 
 type PermissionConfig string
 
@@ -85,9 +64,6 @@ const PermissionConfigReadOnly PermissionConfig = "read_only"
 const PermissionConfigAdmin PermissionConfig = "admin"
 
 const DefaultCortexID = "local"
-
-const DefaultMaxCompletionTime = 60 * time.Second
-const DefaultMaxCompletionRetries = 3
 
 // Entity type constants for TheHive entities
 const (

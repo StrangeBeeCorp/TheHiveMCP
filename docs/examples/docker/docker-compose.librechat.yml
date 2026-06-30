@@ -20,10 +20,6 @@ services:
       - PERMISSIONS_CONFIG=admin
       - MCP_BIND_HOST=0.0.0.0
       - MCP_PORT=8082
-      # Use Anthropic's OpenAI-compatible endpoint for fallback LLM
-      - OPENAI_API_KEY=${ANTHROPIC_API_KEY}
-      - OPENAI_BASE_URL=https://api.anthropic.com/v1
-      - OPENAI_MODEL=claude-haiku-4-5
 
   api:
     image: ghcr.io/strangebeecorp/librechat-thehivemcp:latest

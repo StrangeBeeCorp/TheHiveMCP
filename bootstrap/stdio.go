@@ -21,13 +21,6 @@ func makeStdioAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(cont
 		// Validate TheHive client credentials
 		newCtx = validateTheHiveAuthInContext(newCtx, nil, nil)
 
-		// Add OpenAI client to context from environment variables
-		newCtx, err = AddOpenAIClientToContext(newCtx)
-		if err != nil {
-			slog.Warn("Failed to add OpenAI client to context from environment variables", "error", err)
-			// Don't return early here since OpenAI is optional
-		}
-
 		// Add default Cortex ID to context
 		if options.DefaultCortexID != "" {
 			newCtx = context.WithValue(newCtx, types.DefaultCortexIDCtxKey, options.DefaultCortexID)
