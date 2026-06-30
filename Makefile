@@ -192,7 +192,7 @@ vetlint: ## Run linter checks
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Linter Checks --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
-	docker run -v $(CURDIR):/app -w /app -i --rm golangci/golangci-lint:latest golangci-lint run -v
+	docker run -v $(CURDIR):/app -w /app -i --rm $(DOCKER_CACHE_MOUNTS) -v $(HOME)/.cache/golangci-lint:/root/.cache/golangci-lint golangci/golangci-lint:latest golangci-lint run -v
 	docker build -t ${BINARY_NAME}:latest -f deployment/Dockerfile .
 .PHONY: updatedep
 updatedep: ## Update dependencies
