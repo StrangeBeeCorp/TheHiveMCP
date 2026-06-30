@@ -4,7 +4,7 @@ VERSION=$(shell git describe --tags 2> /dev/null || echo "v0.0.0-${GIT_COMMIT}")
 GO := go
 GO_IMAGE := golang:1.26.4-alpine
 GOPATH ?= $(shell go env GOPATH)
-DOCKER_CACHE_MOUNTS := -v $(GOPATH)/pkg/mod:/go/pkg/mod -v $(HOME)/.cache/go-build:/root/.cache/go-build
+DOCKER_CACHE_MOUNTS := -v $(GOPATH)/pkg/mod:/go/pkg/mod -v $(HOME)/.cache/go-build:/root/.cache/go-build -v $(GOPATH)/bin:/go/bin
 GOLDFLAGS := -ldflags="-s -w -X 'github.com/StrangeBeeCorp/TheHiveMCP/version.buildDate=${BUILD_DATE}' -X 'github.com/StrangeBeeCorp/TheHiveMCP/version.gitCommit=${GIT_COMMIT}' -X 'github.com/StrangeBeeCorp/TheHiveMCP/version.gitVersion=${VERSION}'"
 BUILDDIR := ./build
 DISTDIR := ./dist
@@ -126,7 +126,7 @@ test-integration: pre ## Run the full test suite against the docker-compose test
 	# unconditional `down`, so the stack is always torn down — even if `up`
 	# itself fails (otherwise make would stop before reaching `down`). STATUS
 	# captures the `up && test` outcome and is propagated after teardown.
-	docker compose -f docker-compose.test.yml up -d && docker run -i --rm --network host -v $(CURDIR):/app -w /app -e THEHIVE_TEST_URL -e LOG_LEVEL -e THEHIVE_TEST_IMAGE $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go test $(GO_TEST_COVER) $(GO_TEST_RUN) -timeout 20m -p 1 -v ./... ; STATUS=$$? ; docker compose -f docker-compose.test.yml down -v ; exit $$STATUS
+	docker compose -f docker-compose.test.yml up -d && docker run -i --rm --network host -v $(CURDIR):/app -w /app -e THEHIVE_TEST_URL -e LOG_LEVEL -e THEHIVE_TEST_IMAGE $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) sh -c 'command -v gotestsum >/dev/null 2>&1 || go install gotest.tools/gotestsum@v1.13.0 ; gotestsum --format pkgname --hide-summary=skipped -- $(GO_TEST_COVER) $(GO_TEST_RUN) -timeout 20m -p 1 ./...' ; STATUS=$$? ; docker compose -f docker-compose.test.yml down -v ; exit $$STATUS
 ifeq ($(COVERAGE),1)
 	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
 endif
