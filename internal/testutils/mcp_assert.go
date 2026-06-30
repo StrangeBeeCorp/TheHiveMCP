@@ -52,5 +52,8 @@ func RequirePermissionDenied(t *testing.T, result *mcp.CallToolResult) {
 	t.Helper()
 
 	require.True(t, result.IsError, "operation should be denied")
-	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
+	require.NotEmpty(t, result.Content, "error result should carry content")
+	text, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok, "first content item should be text")
+	require.Contains(t, text.Text, "not permitted")
 }

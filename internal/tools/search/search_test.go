@@ -375,7 +375,7 @@ func TestSearchWithAnalystPermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Use analyst permissions client
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, unusedSamplingHandler(t), testutils.DummyElicitationAccept, "../../../docs/examples/permissions/analyst.yaml")
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, unusedSamplingHandler(t), testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
 	alertsData := searchRows(t, mcpClient, map[string]any{
 		"entity-type": types.EntityTypeAlert,

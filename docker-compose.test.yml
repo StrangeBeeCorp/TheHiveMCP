@@ -1,5 +1,5 @@
 # Test-scope stack for the integration suite, brought up and torn down by
-# `make test`. Replaces the in-Go testcontainers orchestration: the Go tests
+# `make test-integration`. Replaces the in-Go testcontainers orchestration: the Go tests
 # connect to the published TheHive port via THEHIVE_TEST_URL and never touch
 # the Docker socket.
 #

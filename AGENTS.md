@@ -39,12 +39,14 @@ All test commands run in Docker (see the `Makefile`); no local Go install is
 required.
 
 - `make test` — **default; fast unit tests only.** Runs `go test -short`,
-  which skips the testcontainers-based integration tests. Results are cached,
-  so a second consecutive run is near-instant.
+  which skips the integration tests that need a live TheHive. Results are
+  cached, so a second consecutive run is near-instant.
 - `make test-integration` — full suite including integration tests. These
-  boot a real TheHive container (`strangebee/thehive`) via testcontainers, so
-  they are slow (minutes) and cannot be result-cached. Requires Docker network
-  and socket access.
+  boot a live TheHive + Elasticsearch + MITRE stack via docker compose
+  (`docker-compose.test.yml`; `THEHIVE_TEST_IMAGE` selects the version) and run
+  against it at `THEHIVE_TEST_URL` (default `http://localhost:9000`), tearing
+  the stack down afterward. They are slow (minutes) and cannot be
+  result-cached. Requires Docker with compose (no testcontainers).
 - Add `COVERAGE=1` to either target to enable coverage (off by default): it
   writes `coverage.out` and prints a `go tool cover -func` report. For example,
   `make test COVERAGE=1`.

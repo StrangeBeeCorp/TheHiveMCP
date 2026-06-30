@@ -135,12 +135,15 @@ var trustedFields = map[string]struct{}{
 	"targetId": {},
 }
 
-// structuralSubtrees lists field names whose entire value is MCP/LLM-generated
-// query structure, not TheHive entity data — so neither the subtree's keys nor
-// its values can carry attacker-controlled free text. Wrapping inside such a
-// subtree is disabled (see processDates* below): it would otherwise corrupt the
-// structural element names (e.g. rawFilters._field "title" → "[UNTRUSTED_DATA]
-// title[/UNTRUSTED_DATA]") that the agent reads back to build its next filter.
+// structuralSubtrees lists field names whose entire value is request-side query
+// structure (the filter AST the MCP/LLM agent authored), not data returned by
+// TheHive. [UNTRUSTED_DATA] wrapping exists to neutralize adversarial content in
+// *results*; the values here are the caller's own input, so wrapping them adds
+// no safety (it doesn't make untrusted input safe — it just marks it) and would
+// corrupt the structural element names (e.g. rawFilters._field "title" →
+// "[UNTRUSTED_DATA]title[/UNTRUSTED_DATA]") that the agent reads back to build
+// its next filter. Wrapping inside such a subtree is therefore disabled (see
+// processDates* below).
 // This is narrower than trustedFields: trustedFields exempts a single value by
 // name, whereas this exempts a whole nested structure regardless of its inner
 // key names (_field, _value, _and, _like, ...).

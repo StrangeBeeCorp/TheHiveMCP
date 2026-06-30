@@ -119,12 +119,19 @@ func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []st
 		firstID  string
 		firstErr error
 	)
+	// Clamp: a zero or negative concurrency would make a 0-capacity semaphore
+	// and deadlock on the first send. Treat anything < 1 as serial.
+	if concurrency < 1 {
+		concurrency = 1
+	}
 	sem := make(chan struct{}, concurrency)
 
+	dispatchedAll := true
 	for _, entityID := range entityIDs {
 		// Stop dispatching once the parent ctx is cancelled or our own cancel()
 		// has fired after the first error; the partial map is discarded below.
 		if qctx.Err() != nil {
+			dispatchedAll = false
 			break
 		}
 		wg.Add(1)
@@ -160,10 +167,12 @@ func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []st
 	if firstErr != nil {
 		return nil, fmt.Errorf("failed to verify %s %s against permission filters: %w", entityType, firstID, firstErr)
 	}
-	// A mid-batch cancellation of the caller's ctx that produced no per-query
-	// error still leaves a partial map; surface it as an error rather than
-	// returning a silently-truncated result that looks complete.
-	if ctx.Err() != nil {
+	// If the dispatch loop was cut short by a caller-ctx cancellation, the map
+	// is partial; surface that as an error rather than returning a
+	// silently-truncated result that looks complete. A loop that dispatched and
+	// checked every ID (dispatchedAll, firstErr == nil) yields a complete map,
+	// which is returned even if ctx was cancelled after the last check finished.
+	if !dispatchedAll {
 		return nil, fmt.Errorf("scope verification cancelled: %w", ctx.Err())
 	}
 	return inScope, nil

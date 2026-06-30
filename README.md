@@ -510,8 +510,8 @@ All development operations use Docker containers for consistency and isolation:
 - `make all` - Format, security checks, tests, and build
 - `make build` - Build binary using Docker
 - `make run ARGS="arguments"` - Run application with custom arguments
-- `make test` - Run fast unit tests only (skips testcontainers-based integration tests via `-short`); results are cached, so a second run is near-instant
-- `make test-integration` - Run the full suite including integration tests (Docker network + socket required)
+- `make test` - Run fast unit tests only (skips integration tests via `-short`); results are cached, so a second run is near-instant
+- `make test-integration` - Run the full suite against the docker-compose test stack (`docker-compose.test.yml`); requires Docker with compose
 - `make dev` - Development server with hot reload (requires local air)
 
 **Testing options:**

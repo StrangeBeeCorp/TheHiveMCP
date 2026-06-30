@@ -91,6 +91,11 @@ ifdef RUN
 GO_TEST_RUN := -run $(RUN)
 endif
 
+# Where the integration suite reaches the compose stack. Override to run against
+# an external TheHive, e.g. `make test-integration THEHIVE_TEST_URL=http://host:9000`.
+THEHIVE_TEST_URL ?= http://localhost:9000
+export THEHIVE_TEST_URL
+
 .PHONY: test
 test: pre ## Run fast unit tests, skipping integration tests (COVERAGE=1 for coverage, RUN=<regexp> to filter)
 	@echo $(BGreen)-----------------------$(Color_Off)
@@ -117,8 +122,11 @@ test-integration: pre ## Run the full test suite against the docker-compose test
 	# those (each capped at the client's 90s transport timeout), so the headroom
 	# keeps a transient stall from tripping the package timeout. A true deadlock
 	# is still bounded.
-	docker compose -f docker-compose.test.yml up -d
-	docker run -i --rm --network host -v $(CURDIR):/app -w /app -e THEHIVE_TEST_URL=http://localhost:9000 -e LOG_LEVEL -e THEHIVE_TEST_IMAGE $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go test $(GO_TEST_COVER) $(GO_TEST_RUN) -timeout 20m -p 1 -v ./... ; STATUS=$$? ; docker compose -f docker-compose.test.yml down -v ; exit $$STATUS
+	# `up` is chained with && into the same shell line as the test run and an
+	# unconditional `down`, so the stack is always torn down — even if `up`
+	# itself fails (otherwise make would stop before reaching `down`). STATUS
+	# captures the `up && test` outcome and is propagated after teardown.
+	docker compose -f docker-compose.test.yml up -d && docker run -i --rm --network host -v $(CURDIR):/app -w /app -e THEHIVE_TEST_URL -e LOG_LEVEL -e THEHIVE_TEST_IMAGE $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go test $(GO_TEST_COVER) $(GO_TEST_RUN) -timeout 20m -p 1 -v ./... ; STATUS=$$? ; docker compose -f docker-compose.test.yml down -v ; exit $$STATUS
 ifeq ($(COVERAGE),1)
 	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
 endif
