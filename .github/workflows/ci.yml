@@ -28,10 +28,12 @@ jobs:
 
   integration-tests:
     runs-on: ubuntu-latest
-    # Run the testcontainer-backed integration suite against every supported
-    # TheHive version, so a compatibility break against any of them turns the PR
-    # red instead of going unnoticed (see DL-6007). Each leg boots a full
-    # TheHive (~5 min startup); keep this to the versions we actually support.
+    # Run the integration suite against every supported TheHive version, so a
+    # compatibility break against any of them turns the PR red instead of going
+    # unnoticed (see DL-6007). `make test-integration` brings up the docker-compose
+    # test stack (TheHive + Elasticsearch + MITRE) for the selected THEHIVE_TEST_IMAGE
+    # and tears it down after. Each leg boots a full TheHive (~5 min startup);
+    # keep this to the versions we actually support.
     strategy:
       fail-fast: false
       matrix:
@@ -46,7 +48,7 @@ jobs:
         with:
           go-version: '^1.26.4'
 
-      - name: Run tests
-        run: make test
+      - name: Run integration tests
+        run: make test-integration
         env:
           THEHIVE_TEST_IMAGE: ${{ matrix.thehive-image }}

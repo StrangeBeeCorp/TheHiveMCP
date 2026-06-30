@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"sync"
 	"unicode"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
@@ -45,6 +46,47 @@ func entityOperationName(verb, entityType string) string {
 // instead of one batched list query.)
 // With no configured filters every requested ID is in scope.
 func GetEntityIDsInScope(ctx context.Context, entityType string, entityIDs []string, permFilters map[string]interface{}) (map[string]bool, error) {
+	return scopedEntityIDsBatch(ctx, entityType, entityIDs, permFilters, 1)
+}
+
+// scopeCheckConcurrency bounds how many get-by-ID scope checks run at once in
+// GetScopedEntityIDsBatch, so re-scoping a large batch of similarity hits does
+// not open an unbounded number of connections to TheHive.
+const scopeCheckConcurrency = 8
+
+// GetScopedEntityIDsBatch reports which of the given entity IDs match the
+// permission filters. It checks every ID with the same proven get-by-ID
+// pipeline GetEntityIDsInScope uses (getCase/getAlert -> filter(permFilters)),
+// but issues the checks CONCURRENTLY behind a bounded worker pool rather than
+// serially — so re-scoping N similarity hits costs ~one round-trip of latency,
+// not N (DL-5764).
+//
+// This was originally a single list query that combined the IDs with _or and
+// intersected them with the permission filters:
+//
+//	listCase -> filter(_and[ permFilters, _or[ {_id:h1}, ... ] ])
+//
+// That pattern proved unreliable against real TheHive: a list operation does
+// not honour an _id equality filter the way a get-by-ID lookup does, so the
+// batch result disagreed with the proven get-by-ID path (verified against a
+// live container by TestGetScopedEntityIDsBatchHonorsIDFilter). Because this
+// guards a TLP:RED similarity-expansion leak path, correctness wins: we fan out
+// the proven per-ID check and recover the latency with bounded concurrency
+// instead of relying on the unsupported list filter.
+//
+// With no filters every ID is trivially in scope.
+func GetScopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []string, permFilters map[string]interface{}) (map[string]bool, error) {
+	return scopedEntityIDsBatch(ctx, entityType, entityIDs, permFilters, scopeCheckConcurrency)
+}
+
+// scopedEntityIDsBatch is the shared implementation behind both
+// GetEntityIDsInScope and GetScopedEntityIDsBatch. It checks every ID with the
+// proven get-by-ID pipeline (getCase/getAlert -> filter(permFilters)), fanning
+// the checks out behind a bounded worker pool. concurrency caps how many checks
+// run at once: GetEntityIDsInScope passes 1 (serial), GetScopedEntityIDsBatch
+// passes scopeCheckConcurrency. The result is keyed by ID, so it is independent
+// of goroutine scheduling and identical regardless of concurrency.
+func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []string, permFilters map[string]interface{}, concurrency int) (map[string]bool, error) {
 	inScope := make(map[string]bool, len(entityIDs))
 	if len(permFilters) == 0 {
 		for _, id := range entityIDs {
@@ -62,22 +104,77 @@ func GetEntityIDsInScope(ctx context.Context, entityType string, entityIDs []str
 	}
 
 	filterOp := scopeFilterOperation(permFilters)
-	for _, entityID := range entityIDs {
-		getOp := map[string]interface{}{
-			"_name":    getOpName,
-			"idOrName": entityID,
-		}
 
-		matched, err := executeScopeQuery(ctx, []thehive.InputQueryNamedOperation{
-			thehive.MapmapOfStringAnyAsInputQueryNamedOperation(&getOp),
-			thehive.MapmapOfStringAnyAsInputQueryNamedOperation(&filterOp),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to verify %s %s against permission filters: %w", entityType, entityID, err)
-		}
-		inScope[entityID] = matched
+	// Derive a cancelable context so that, once one check fails (or the caller's
+	// ctx is cancelled mid-batch), in-flight workers abort their queries early
+	// and the dispatch loop stops issuing the remaining checks instead of firing
+	// them all for a result that will be discarded.
+	qctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var (
+		mu       sync.Mutex
+		wg       sync.WaitGroup
+		once     sync.Once
+		firstID  string
+		firstErr error
+	)
+	// Clamp: a zero or negative concurrency would make a 0-capacity semaphore
+	// and deadlock on the first send. Treat anything < 1 as serial.
+	if concurrency < 1 {
+		concurrency = 1
 	}
+	sem := make(chan struct{}, concurrency)
 
+	dispatchedAll := true
+	for _, entityID := range entityIDs {
+		// Stop dispatching once the parent ctx is cancelled or our own cancel()
+		// has fired after the first error; the partial map is discarded below.
+		if qctx.Err() != nil {
+			dispatchedAll = false
+			break
+		}
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(entityID string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			getOp := map[string]interface{}{
+				"_name":    getOpName,
+				"idOrName": entityID,
+			}
+			matched, err := executeScopeQuery(qctx, []thehive.InputQueryNamedOperation{
+				thehive.MapmapOfStringAnyAsInputQueryNamedOperation(&getOp),
+				thehive.MapmapOfStringAnyAsInputQueryNamedOperation(&filterOp),
+			})
+			if err != nil {
+				once.Do(func() {
+					firstID = entityID
+					firstErr = err
+					cancel()
+				})
+				return
+			}
+
+			mu.Lock()
+			inScope[entityID] = matched
+			mu.Unlock()
+		}(entityID)
+	}
+	wg.Wait()
+
+	if firstErr != nil {
+		return nil, fmt.Errorf("failed to verify %s %s against permission filters: %w", entityType, firstID, firstErr)
+	}
+	// If the dispatch loop was cut short by a caller-ctx cancellation, the map
+	// is partial; surface that as an error rather than returning a
+	// silently-truncated result that looks complete. A loop that dispatched and
+	// checked every ID (dispatchedAll, firstErr == nil) yields a complete map,
+	// which is returned even if ctx was cancelled after the last check finished.
+	if !dispatchedAll {
+		return nil, fmt.Errorf("scope verification cancelled: %w", ctx.Err())
+	}
 	return inScope, nil
 }
 

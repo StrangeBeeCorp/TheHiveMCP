@@ -485,7 +485,7 @@ func TestManageUpdateMultipleEntities(t *testing.T) {
 // TestManageWithAnalystPermissions tests analyst permissions allow create/update/comment but deny delete
 func TestManageWithAnalystPermissions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "../../../docs/examples/permissions/analyst.yaml")
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
 	// Test 1: Create alert should succeed with analyst permissions
 	alertData := map[string]interface{}{
@@ -538,8 +538,7 @@ func TestManageWithAnalystPermissions(t *testing.T) {
 	result, err = mcpClient.CallTool(t.Context(), deleteRequest)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	require.True(t, result.IsError, "Delete should be denied with analyst permissions")
-	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
+	testutils.RequirePermissionDenied(t, result)
 
 	// Verify alert still exists
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
@@ -579,8 +578,7 @@ func TestManageWithReadOnlyPermissions(t *testing.T) {
 	result, err := mcpClient.CallTool(t.Context(), createRequest)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	require.True(t, result.IsError, "Create should be denied with read-only permissions")
-	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
+	testutils.RequirePermissionDenied(t, result)
 
 	// Test 2: Comment should also fail with read-only permissions
 	commentRequest := mcp.CallToolRequest{
@@ -598,8 +596,7 @@ func TestManageWithReadOnlyPermissions(t *testing.T) {
 	result, err = mcpClient.CallTool(t.Context(), commentRequest)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	require.True(t, result.IsError, "Comment should be denied with read-only permissions")
-	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
+	testutils.RequirePermissionDenied(t, result)
 }
 
 // TestManagePromoteAlert tests promoting an alert to a case via the manage-entities tool
@@ -833,7 +830,7 @@ func TestManageMergeObservables(t *testing.T) {
 // TestManagePromoteWithAnalystPermissions tests promote is allowed with analyst permissions
 func TestManagePromoteWithAnalystPermissions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "../../../docs/examples/permissions/analyst.yaml")
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
 	// Create an alert to promote
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
@@ -870,7 +867,7 @@ func TestManagePromoteWithAnalystPermissions(t *testing.T) {
 // TestManageMergeWithAnalystPermissions tests merge is allowed with analyst permissions
 func TestManageMergeWithAnalystPermissions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "../../../docs/examples/permissions/analyst.yaml")
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 
@@ -926,8 +923,7 @@ func TestManagePromoteWithReadOnlyPermissions(t *testing.T) {
 	result, err := mcpClient.CallTool(t.Context(), request)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	require.True(t, result.IsError, "Promote should be denied with read-only permissions")
-	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
+	testutils.RequirePermissionDenied(t, result)
 }
 
 // TestManageCreateProcedureInCase tests creating a procedure within a case via the manage-entities tool
@@ -1099,8 +1095,7 @@ func TestManageMergeWithReadOnlyPermissions(t *testing.T) {
 	result, err := mcpClient.CallTool(t.Context(), request)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	require.True(t, result.IsError, "Merge should be denied with read-only permissions")
-	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
+	testutils.RequirePermissionDenied(t, result)
 }
 
 // TestManageCreateCaseTemplate tests creating a new case template via the manage-entities tool
@@ -1308,7 +1303,7 @@ func TestManageApplyTemplateToCase(t *testing.T) {
 // TestManageApplyTemplateWithAnalystPermissions tests that apply-template is allowed with analyst permissions
 func TestManageApplyTemplateWithAnalystPermissions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "../../../docs/examples/permissions/analyst.yaml")
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 
@@ -1347,7 +1342,7 @@ func TestManageApplyTemplateWithAnalystPermissions(t *testing.T) {
 // TestManageCaseTemplateCreateDeniedWithAnalystPermissions tests that creating templates is denied for analysts
 func TestManageCaseTemplateCreateDeniedWithAnalystPermissions(t *testing.T) {
 	testutils.SetupTestWithCleanup(t)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "../../../docs/examples/permissions/analyst.yaml")
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
@@ -1365,8 +1360,7 @@ func TestManageCaseTemplateCreateDeniedWithAnalystPermissions(t *testing.T) {
 	result, err := mcpClient.CallTool(t.Context(), request)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	require.True(t, result.IsError, "Case template creation should be denied for analysts")
-	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
+	testutils.RequirePermissionDenied(t, result)
 }
 
 // TestManageCreatePageInCase tests creating a page within a case via the manage-entities tool
@@ -1568,7 +1562,7 @@ func TestManageDeletePage(t *testing.T) {
 // TestManagePageWithAnalystPermissions tests that analyst permissions allow page create/update but deny delete
 func TestManagePageWithAnalystPermissions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "../../../docs/examples/permissions/analyst.yaml")
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 
@@ -1625,6 +1619,5 @@ func TestManagePageWithAnalystPermissions(t *testing.T) {
 	result, err = mcpClient.CallTool(t.Context(), deleteRequest)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	require.True(t, result.IsError, "Page deletion should be denied with analyst permissions")
-	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not permitted")
+	testutils.RequirePermissionDenied(t, result)
 }

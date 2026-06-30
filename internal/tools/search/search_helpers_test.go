@@ -21,23 +21,15 @@ func newSearchClient(t *testing.T) *client.Client {
 // returns the raw tool result, asserting the transport call itself succeeded.
 func callSearch(t *testing.T, c *client.Client, args map[string]any) *mcp.CallToolResult {
 	t.Helper()
-	result, err := c.CallTool(t.Context(), mcp.CallToolRequest{
-		Params: mcp.CallToolParams{Name: "search-entities", Arguments: args},
-	})
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	return result
+	return testutils.CallTool(t, c, "search-entities", args)
 }
 
 // searchStructured invokes search-entities, asserts the tool did not return an
 // error result, and returns the structured content map.
 func searchStructured(t *testing.T, c *client.Client, args map[string]any) map[string]any {
 	t.Helper()
-	result := callSearch(t, c, args)
-	require.False(t, result.IsError, "unexpected tool error: %s", resultText(t, result))
-	data, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	return data
+	result := testutils.CallToolOK(t, c, "search-entities", args)
+	return testutils.StructuredData(t, result)
 }
 
 // searchRows invokes search-entities and returns the "results" rows.

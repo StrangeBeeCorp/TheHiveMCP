@@ -43,6 +43,7 @@ evaluation_results/id_mapping.json
 integration_test/data/test_questions.json
 
 .claude/
+CLAUDE.md
 extension/
 
 mcp-cli.py
