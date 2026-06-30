@@ -212,6 +212,7 @@ func scopeFilterOperation(permFilters map[string]interface{}) map[string]interfa
 	for k, v := range permFilters {
 		filterOp[k] = v
 	}
+	filterOp = NormalizeFilterKeys(filterOp)
 	filterOp = TranslateDatesToTimestamps(filterOp)
 	filterOp["_name"] = "filter"
 	return filterOp

@@ -134,7 +134,10 @@ func (t *SearchTool) buildFilterOperation(filters map[string]interface{}) *map[s
 		filtersCopy[k] = v
 	}
 
-	parsedFilters := utils.TranslateDatesToTimestamps(filtersCopy)
+	// Repair structurally-malformed keys (over-quoting/whitespace from weaker
+	// models) before anything else, so the date pass and TheHive see valid keys.
+	normalizedFilters := utils.NormalizeFilterKeys(filtersCopy)
+	parsedFilters := utils.TranslateDatesToTimestamps(normalizedFilters)
 	parsedFilters["_name"] = "filter"
 	return &parsedFilters
 }
