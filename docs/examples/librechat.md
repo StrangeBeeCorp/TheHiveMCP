@@ -58,7 +58,7 @@ The [`librechat.yaml`](docker/librechat.yaml) configuration enables per-user The
 When you start a conversation, LibreChat will prompt you for these values and send them as headers to TheHiveMCP for each request.
 
 The [`docker-compose.librechat.yml`](docker/docker-compose.librechat.yml) includes:
-- **TheHiveMCP server** with admin permissions and Anthropic fallback
+- **TheHiveMCP server** with admin permissions
 - **LibreChat API** with Anthropic endpoint enabled
 - **MongoDB** and **Meilisearch** for LibreChat's backend
 

@@ -42,14 +42,6 @@ type TheHiveMcpDefaultOptions struct {
 	BindAddr string
 	// LogLevel is the logging level for the application
 	LogLevel string
-	// OpenAIBaseURL is the base URL for OpenAI API (optional)
-	OpenAIBaseURL string
-	// OpenAIAPIKey is the API key for OpenAI
-	OpenAIAPIKey string
-	// OpenAIModel is the model to use for OpenAI
-	OpenAIModel string
-	// OpenAIMaxTokens is the maximum tokens for OpenAI responses (default: 32000)
-	OpenAIMaxTokens int
 	// DefaultCortexID is the default Cortex instance ID used when none is specified (default: local)
 	DefaultCortexID string
 }
@@ -81,17 +73,6 @@ func splitCommaSeparated(value string) []string {
 	return entries
 }
 
-func defaultToEnvInt(envKey EnvKey, defaultValue int) int {
-	if value, exists := os.LookupEnv(string(envKey)); exists {
-		var intValue int
-		_, err := fmt.Sscanf(value, "%d", &intValue)
-		if err == nil {
-			return intValue
-		}
-	}
-	return defaultValue
-}
-
 func NewTheHiveMcpDefaultOptions() (*TheHiveMcpDefaultOptions, error) {
 	var showVersion bool
 	var transport string
@@ -108,10 +89,6 @@ func NewTheHiveMcpDefaultOptions() (*TheHiveMcpDefaultOptions, error) {
 	var mcpEndpointPath string
 	var mcpHeartbeatInterval string
 	var logLevel string
-	var openAIBaseURL string
-	var openAIAPIKey string
-	var openAIModel string
-	var openAIMaxTokens int
 	var cortexID string
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
 	flag.StringVar(&transport, string(FlagVarTransportType), "http", "Transport type (stdio, or http)")
@@ -128,10 +105,6 @@ func NewTheHiveMcpDefaultOptions() (*TheHiveMcpDefaultOptions, error) {
 	flag.StringVar(&mcpEndpointPath, string(FlagVarMCPServerEndpointPath), defaultToEnv(EnvKeyMCPServerEndpoint, "/mcp"), "MCP server endpoint path (overrides env var HIVEMIND_MCP_ENDPOINT_PATH)")
 	flag.StringVar(&mcpHeartbeatInterval, string(FlagVarMCPHeartbeatInterval), defaultToEnv(EnvKeyMCPHeartbeatInterval, "30s"), "MCP server heartbeat interval (overrides env var HIVEMIND_MCP_HEARTBEAT_INTERVAL)")
 	flag.StringVar(&logLevel, string(FlagVarLogLevel), defaultToEnv(EnvKeyLogLevel, "info"), "Logging level (overrides env var LOG_LEVEL)")
-	flag.StringVar(&openAIBaseURL, string(FlagVarOpenAIBaseURL), defaultToEnv(EnvKeyOpenAIBaseURL, "https://api.openai.com/v1"), "OpenAI base URL (overrides env var OPENAI_BASE_URL)")
-	flag.StringVar(&openAIAPIKey, string(FlagVarOpenAIAPIKey), defaultToEnv(EnvKeyOpenAIAPIKey, ""), "OpenAI API key (overrides env var OPENAI_API_KEY)")
-	flag.StringVar(&openAIModel, string(FlagVarOpenAIModel), defaultToEnv(EnvKeyOpenAIModel, "gpt-4"), "OpenAI model (overrides env var OPENAI_MODEL)")
-	flag.IntVar(&openAIMaxTokens, string(FlagVarOpenAIMaxTokens), defaultToEnvInt(EnvKeyOpenAIMaxTokens, 32000), "OpenAI max tokens (overrides env var OPENAI_MAX_TOKENS)")
 	flag.StringVar(&cortexID, string(FlagVarCortexID), defaultToEnv(EnvKeyCortexID, DefaultCortexID), "Default Cortex instance ID (overrides env var CORTEX_ID, defaults to 'local')")
 	flag.Parse()
 
@@ -165,10 +138,6 @@ func NewTheHiveMcpDefaultOptions() (*TheHiveMcpDefaultOptions, error) {
 		TransportType:              transport,
 		BindAddr:                   bindAddr,
 		LogLevel:                   logLevel,
-		OpenAIBaseURL:              openAIBaseURL,
-		OpenAIAPIKey:               openAIAPIKey,
-		OpenAIModel:                openAIModel,
-		OpenAIMaxTokens:            openAIMaxTokens,
 		DefaultCortexID:            cortexID,
 	}, nil
 }

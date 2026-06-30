@@ -3,7 +3,6 @@ package bootstrap
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/logging"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
@@ -12,7 +11,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-func AuthMiddleware(creds *TheHiveCredentials, openaiCreds *OpenAICredentials, permissionsConfigPath string) server.ToolHandlerMiddleware {
+func AuthMiddleware(creds *TheHiveCredentials, permissionsConfigPath string) server.ToolHandlerMiddleware {
 	return func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
 		return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Add TheHive client to context
@@ -23,15 +22,6 @@ func AuthMiddleware(creds *TheHiveCredentials, openaiCreds *OpenAICredentials, p
 			// In-process credentials are provided by the host application and
 			// trusted; mark authentication as validated for downstream checks
 			newCtx = context.WithValue(newCtx, types.AuthValidatedCtxKey, true)
-
-			// Add OpenAI client to context if credentials provided
-			if openaiCreds != nil {
-				newCtx, err = AddOpenAIClientToContextWithCreds(newCtx, openaiCreds)
-				if err != nil {
-					slog.Warn("Failed to add OpenAI client to context", "error", err)
-					// Don't fail since OpenAI is optional
-				}
-			}
 
 			// Add permissions to context
 			permsConfig, err := LoadPermissions(permissionsConfigPath)
@@ -45,7 +35,7 @@ func AuthMiddleware(creds *TheHiveCredentials, openaiCreds *OpenAICredentials, p
 	}
 }
 
-func GetInprocessServer(creds *TheHiveCredentials, openaiCreds *OpenAICredentials, permissionsConfigPath string) *server.MCPServer {
+func GetInprocessServer(creds *TheHiveCredentials, permissionsConfigPath string) *server.MCPServer {
 	mcpServer := server.NewMCPServer(
 		"TheHiveMCP",
 		version.GetVersion(),
@@ -54,8 +44,7 @@ func GetInprocessServer(creds *TheHiveCredentials, openaiCreds *OpenAICredential
 		server.WithResourceCapabilities(true, true),
 		server.WithHooks(logging.GetLoggingHooks()),
 		server.WithElicitation(),
-		server.WithToolHandlerMiddleware(AuthMiddleware(creds, openaiCreds, permissionsConfigPath)),
+		server.WithToolHandlerMiddleware(AuthMiddleware(creds, permissionsConfigPath)),
 	)
-	mcpServer.EnableSampling()
 	return mcpServer
 }

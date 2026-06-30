@@ -25,7 +25,6 @@ func GetMCPServer() *server.MCPServer {
 		server.WithToolHandlerMiddleware(auth.AuthenticationMiddleware()),
 		server.WithResourceHandlerMiddleware(auth.ResourceAuthenticationMiddleware()),
 	)
-	mcpServer.EnableSampling()
 	return mcpServer
 }
 

@@ -331,11 +331,6 @@ This allows you to set defaults via environment variables while overriding speci
 | Bind address | `MCP_BIND_HOST` + `MCP_PORT` | `--addr` | - | - | HTTP server bind address (for example, `0.0.0.0:8082`) |
 | Endpoint path | `MCP_ENDPOINT_PATH` | `--mcp-endpoint-path` | - | `/mcp` | HTTP endpoint path |
 | Heartbeat interval | `MCP_HEARTBEAT_INTERVAL` | `--mcp-heartbeat-interval` | - | `30s` | Heartbeat interval for HTTP connections |
-| **OpenAI Integration** |
-| API key | `OPENAI_API_KEY` | `--openai-api-key` | `X-OpenAI-Api-Key` | - | OpenAI-compatible API key |
-| Base URL | `OPENAI_BASE_URL` | `--openai-base-url` | `X-OpenAI-Base-Url` | `https://api.openai.com/v1` | OpenAI-compatible API base URL |
-| Model | `OPENAI_MODEL` | `--openai-model` | `X-OpenAI-Model-Name` | `gpt-4` | Model name |
-| Max tokens | `OPENAI_MAX_TOKENS` | `--openai-max-tokens` | `X-OpenAI-Max-Tokens` | `32000` | Maximum tokens for completions |
 | **Cortex** |
 | Default Cortex ID | `CORTEX_ID` | `--cortex-id` | - | `local` | Default Cortex instance ID for analyzer/responder execution |
 | **Logging** |
@@ -355,7 +350,6 @@ MCP_PORT=8082
 # THEHIVE_URL_ALLOWLIST=https://thehive-eu.example.com,https://thehive-us.example.com  # X-TheHive-Url targets (defaults to THEHIVE_URL only)
 # ALLOW_ENV_CREDENTIAL_FALLBACK=false  # Set to true ONLY for single-user deployments where requests may omit credentials
 # AUTH_VALIDATION_CACHE_TTL=60s
-OPENAI_API_KEY=<openai_api_key>  # Optional, for fallback LLM
 LOG_LEVEL=INFO
 # Permissions options (choose one):
 # PERMISSIONS_CONFIG=read_only                              # Default: safe read-only access
