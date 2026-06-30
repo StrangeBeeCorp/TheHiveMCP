@@ -661,7 +661,7 @@ func TestSearchTaskTasKLogs(t *testing.T) {
 		"extra-columns":      []string{"_id", "title"},
 		"additional-queries": []string{"task-logs"},
 	})
-	require.Len(t, tasksData, 2)
+	require.NotEmpty(t, tasksData)
 
 	// The integration suite shares a single TheHive instance, so the global task
 	// list may contain residue from other tests. Assert on this test's own task
