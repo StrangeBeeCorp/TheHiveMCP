@@ -6,16 +6,13 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
-// DefaultTheHiveTestImage is the TheHive container image booted by the
-// integration suite when THEHIVE_TEST_IMAGE is unset. CI sets THEHIVE_TEST_IMAGE
-// per version-matrix leg; locally this gives a sensible default.
-//
-// Renovate tracks this tag via the custom Docker manager in renovate.json.
+// DefaultTheHiveTestImage is used when THEHIVE_TEST_IMAGE is unset (CI sets it
+// per version-matrix leg). Renovate tracks this tag via the custom Docker
+// manager in renovate.json.
 const DefaultTheHiveTestImage = "strangebee/thehive:5.6.3"
 
-// TheHiveTestImage returns the TheHive container image for the integration suite.
-// It is the single source of truth for the image: THEHIVE_TEST_IMAGE overrides
-// the default, which is how the CI matrix selects 5.5 vs 5.6.
+// TheHiveTestImage returns the integration-suite image: THEHIVE_TEST_IMAGE
+// overrides the default (how the CI matrix selects 5.5 vs 5.6).
 func TheHiveTestImage() string {
 	if img := os.Getenv("THEHIVE_TEST_IMAGE"); img != "" {
 		return img
@@ -23,10 +20,8 @@ func TheHiveTestImage() string {
 	return DefaultTheHiveTestImage
 }
 
-// testLogLevel returns the slog level for the in-process test server. It is
-// quiet (warn) by default so a failing test's output shows the assertion, not
-// pages of INFO/HTTP request logs. Set LOG_LEVEL=debug (or info) to get the
-// full request trace back when diagnosing a specific failure.
+// testLogLevel: warn by default so a failing test shows the assertion, not
+// pages of request logs. Set LOG_LEVEL=debug (or info) for the full trace.
 func testLogLevel() string {
 	if lvl := os.Getenv("LOG_LEVEL"); lvl != "" {
 		return lvl

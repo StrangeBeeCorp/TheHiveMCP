@@ -14,7 +14,6 @@ type BaseTool interface {
 	Handler() server.ToolHandlerFunc
 }
 
-// Tool represents an MCP tool with typed parameters
 type Tool[TParams, TResult any] interface {
 	BaseTool
 	Handle(ctx context.Context, request mcp.CallToolRequest, params TParams) (TResult, error)
@@ -22,16 +21,13 @@ type Tool[TParams, TResult any] interface {
 	ValidatePermissions(ctx context.Context, params TParams) error
 }
 
-// UntrustedDataSource is an optional interface implemented by tools whose
-// responses contain user-generated data from external systems (e.g. TheHive).
-// When implemented and returning true, the middleware wraps designated fields
-// with [UNTRUSTED_DATA] boundary tags to help LLM clients distinguish data
-// from instructions.
+// UntrustedDataSource marks tools whose responses carry user-generated data. When
+// true, the middleware wraps designated fields in [UNTRUSTED_DATA] tags so LLM
+// clients can distinguish data from instructions.
 type UntrustedDataSource interface {
 	HasUntrustedData() bool
 }
 
-// Registry manages tool registration
 type Registry struct {
 	tools []BaseTool
 }

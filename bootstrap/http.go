@@ -11,8 +11,6 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// parseAuthValidationCacheTTL parses the configured validation cache TTL,
-// falling back to the default on empty or invalid values.
 func parseAuthValidationCacheTTL(ttl string) time.Duration {
 	if ttl == "" {
 		return DefaultAuthValidationCacheTTL
@@ -36,8 +34,8 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 	cache := newValidationCache(parseAuthValidationCacheTTL(options.AuthValidationCacheTTL))
 
 	return func(ctx context.Context, r *http.Request) context.Context {
-		// Credentials from the server environment are only used as a fallback
-		// for requests that carry none of their own when explicitly opted in
+		// Env credentials are a fallback for requests carrying none, and only
+		// when explicitly opted in.
 		envAPIKey := ""
 		envUsername := ""
 		envPassword := ""
@@ -47,7 +45,6 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 			envPassword = options.TheHivePassword
 		}
 
-		// Map header keys to context keys and environment variables
 		type keyMap struct {
 			header string
 			ctxKey types.CtxKey
@@ -60,14 +57,12 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 			{string(types.HeaderKeyTheHiveURL), types.HiveURLCtxKey, options.TheHiveURL},
 		}
 
-		// Extract string values into context
 		for _, km := range keys {
 			val := r.Header.Get(km.header)
 			if val == "" {
 				val = km.deflt
 			}
 			if val != "" {
-				// Special handling for Authorization header
 				if km.header == "Authorization" {
 					val = ExtractBearerToken(val)
 				}
@@ -75,10 +70,8 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 			}
 		}
 
-		// Add Hive client to context using extracted credentials. Authentication
-		// is fail-closed: types.AuthValidatedCtxKey is only set after the TheHive
-		// URL passed the allowlist and the credentials were validated; the
-		// middleware denies any request without that marker.
+		// Fail-closed: AuthValidatedCtxKey is set only after the URL passes the
+		// allowlist and creds validate; the middleware denies requests lacking it.
 		hiveAPIKey, _ := ctx.Value(types.HiveAPIKeyCtxKey).(string)
 		hiveOrganisation, _ := ctx.Value(types.HiveOrgCtxKey).(string)
 		hiveURL, _ := ctx.Value(types.HiveURLCtxKey).(string)
@@ -89,8 +82,8 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 		case hiveURL == "":
 			ctx = context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: no TheHive URL provided"))
 		case !allowlist.Allows(hiveURL):
-			// Reject before any outbound request so credentials are never sent
-			// to an attacker-controlled destination (SSRF / credential disclosure)
+			// Reject before any outbound request: never send creds to an
+			// attacker-controlled destination (SSRF / credential disclosure).
 			slog.Warn("Rejected TheHive URL not in allowlist", "url", hiveURL)
 			ctx = context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: TheHive URL is not in the allowlist"))
 		default:
@@ -106,18 +99,14 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 				slog.Error("Failed to add TheHive client to context", "error", err)
 				ctx = context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: %w", err))
 			} else {
-				// Validate TheHive client credentials, skipping the upstream call
-				// when the same credentials were validated recently
 				ctx = validateTheHiveAuthInContext(newCtx, creds, cache)
 			}
 		}
 
-		// Add default Cortex ID to context
 		if options.DefaultCortexID != "" {
 			ctx = context.WithValue(ctx, types.DefaultCortexIDCtxKey, options.DefaultCortexID)
 		}
 
-		// Add permissions to context
 		if newCtx, err := AddPermissionsToContext(ctx, options); err != nil {
 			slog.Warn("Failed to add permissions to context", "error", err)
 		} else {
@@ -128,7 +117,6 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 	}
 }
 
-// StartHTTPServer starts the HTTP server with production-ready configuration
 func StartHTTPServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOptions) error {
 	if s == nil {
 		return fmt.Errorf("MCP server cannot be nil")
@@ -138,8 +126,7 @@ func StartHTTPServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOption
 		return fmt.Errorf("bind address cannot be empty")
 	}
 
-	// Reject invalid allowlist configuration at startup rather than denying
-	// every request at runtime
+	// Reject a bad allowlist at startup rather than denying every request at runtime.
 	if _, err := NewTheHiveURLAllowlist(options.TheHiveURLAllowlist, options.TheHiveURL); err != nil {
 		return fmt.Errorf("invalid TheHive URL allowlist configuration: %w", err)
 	}
@@ -149,7 +136,6 @@ func StartHTTPServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOption
 	httpOptions = append(httpOptions, server.WithStateLess(false))
 	httpOptions = append(httpOptions, server.WithHTTPContextFunc(GetHTTPAuthContextFunc(options)))
 
-	// Configure heartbeat interval if specified
 	if options.MCPHeartbeatInterval != "" {
 		if duration, err := time.ParseDuration(options.MCPHeartbeatInterval); err != nil {
 			slog.Warn("Invalid heartbeat interval format, using default",

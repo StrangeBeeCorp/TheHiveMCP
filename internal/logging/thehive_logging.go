@@ -10,24 +10,19 @@ import (
 	"time"
 )
 
-// LoggingTransport wraps an http.RoundTripper to add structured logging
 type LoggingTransport struct {
 	Transport http.RoundTripper
 }
 
-// RoundTrip implements http.RoundTripper interface
 func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	start := time.Now()
 
-	// Log the outgoing request
 	t.logRequest(req, start)
 
-	// Execute the request
 	resp, err := t.transport().RoundTrip(req)
 
 	duration := time.Since(start)
 
-	// Log the response
 	t.logResponse(req, resp, err, duration)
 
 	return resp, err
@@ -41,7 +36,7 @@ func (t *LoggingTransport) transport() http.RoundTripper {
 }
 
 func (t *LoggingTransport) logRequest(req *http.Request, start time.Time) {
-	// Read and restore request body for logging
+	// Restore body after reading so the transport can still send it.
 	var bodyBytes []byte
 	if req.Body != nil {
 		bodyBytes, _ = io.ReadAll(req.Body)

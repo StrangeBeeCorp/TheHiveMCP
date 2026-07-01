@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// recordingTransport is a fake http.RoundTripper that records whether it was
-// invoked, so tests can assert a refused request never reaches TheHive.
+// recordingTransport counts invocations so tests can assert a refused request
+// never reaches TheHive.
 type recordingTransport struct {
 	calls int
 }
@@ -28,8 +28,8 @@ func (rt *recordingTransport) RoundTrip(*http.Request) (*http.Response, error) {
 	}, nil
 }
 
-// clientInfoSession implements ClientSession + SessionWithClientInfo. Whether it
-// advertises elicitation is controlled by elicitationCapable.
+// clientInfoSession implements ClientSession + SessionWithClientInfo;
+// elicitationCapable toggles whether it advertises the elicitation capability.
 type clientInfoSession struct {
 	elicitationCapable bool
 }
@@ -49,8 +49,8 @@ func (s *clientInfoSession) GetClientCapabilities() mcp.ClientCapabilities {
 	return caps
 }
 
-// elicitingSession also implements SessionWithElicitation, returning a canned
-// response, so the "user accepts/declines" paths can be exercised.
+// elicitingSession adds SessionWithElicitation, returning a canned response, to
+// exercise the accept/decline paths.
 type elicitingSession struct {
 	clientInfoSession
 	result *mcp.ElicitationResult
@@ -61,9 +61,9 @@ func (s *elicitingSession) RequestElicitation(context.Context, mcp.ElicitationRe
 	return s.result, s.err
 }
 
-// ctxWithSession attaches a client session to the context the way the MCP
-// server does. The server receiver is never dereferenced by WithContext or
-// RequestElicitation, so a freshly constructed server is sufficient.
+// ctxWithSession attaches a client session to the context. WithContext /
+// RequestElicitation never dereference the server, so a freshly constructed one
+// suffices.
 func ctxWithSession(session server.ClientSession) context.Context {
 	srv := server.NewMCPServer("test", "1.0.0", server.WithElicitation())
 	return srv.WithContext(context.Background(), session)
@@ -98,10 +98,9 @@ func TestRequiresElicitation(t *testing.T) {
 	}
 }
 
-// TestRoundTrip_NoCapabilityProceeds documents that a client advertising no
-// elicitation capability is allowed to proceed: elicitation is not the
-// authorization layer (permissions and the API key are), so its absence does
-// not block modifying requests.
+// A client advertising no elicitation capability proceeds: elicitation is not the
+// authorization layer (permissions and the API key are), so its absence must not
+// block modifying requests.
 func TestRoundTrip_NoCapabilityProceeds(t *testing.T) {
 	rt := &recordingTransport{}
 	e := &ElicitationTransport{Transport: rt}
@@ -132,11 +131,9 @@ func TestRoundTrip_QueryEndpointProceeds(t *testing.T) {
 	require.Equal(t, 1, rt.calls)
 }
 
-// TestRoundTrip_AdvertisedButUnsupportedMidflightDenies is the behavior this
-// change adds: the session advertises the elicitation capability (so we enter
-// handleElicitation) but does not implement SessionWithElicitation, so
-// RequestElicitation returns ErrElicitationNotSupported. The request must be
-// refused, not run unconfirmed.
+// Advertises elicitation but doesn't implement SessionWithElicitation, so
+// RequestElicitation fails midflight: the request must be refused, not run
+// unconfirmed.
 func TestRoundTrip_AdvertisedButUnsupportedMidflightDenies(t *testing.T) {
 	rt := &recordingTransport{}
 	e := &ElicitationTransport{Transport: rt}
@@ -150,8 +147,6 @@ func TestRoundTrip_AdvertisedButUnsupportedMidflightDenies(t *testing.T) {
 	require.Contains(t, err.Error(), "operation refused")
 	require.Contains(t, err.Error(), "DELETE")
 }
-
-// --- Confirmation IS available: accept / decline (regression guards) ---
 
 func TestRoundTrip_UserAcceptsProceeds(t *testing.T) {
 	rt := &recordingTransport{}

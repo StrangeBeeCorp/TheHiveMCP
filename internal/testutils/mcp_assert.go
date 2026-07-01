@@ -8,9 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// CallTool builds a CallToolRequest for the given tool and arguments, executes it,
-// and asserts the transport call succeeded and returned a non-nil result. It does
-// not assert on result.IsError, so it can be used for both success and error cases.
+// CallTool asserts the transport call succeeded with a non-nil result. It does
+// not assert result.IsError, so it serves both success and error cases.
 func CallTool(t *testing.T, c *client.Client, name string, args map[string]any) *mcp.CallToolResult {
 	t.Helper()
 

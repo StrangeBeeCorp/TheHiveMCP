@@ -17,7 +17,6 @@ import (
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 )
 
-// Common errors
 var (
 	ErrMissingHiveURL        = errors.New("THEHIVE_URL environment variable is required")
 	ErrInvalidHiveURL        = errors.New("invalid TheHive URL format")
@@ -26,7 +25,6 @@ var (
 	ErrMissingCredentials    = errors.New("both username and password are required for basic auth")
 )
 
-// TheHiveCredentials holds authentication information for TheHive
 type TheHiveCredentials struct {
 	URL          string
 	APIKey       string
@@ -35,18 +33,16 @@ type TheHiveCredentials struct {
 	Organisation string
 }
 
-// Validate validates the credentials
+// Validate requires a valid URL plus either an API key or a username/password pair.
 func (c *TheHiveCredentials) Validate() error {
 	if c.URL == "" {
 		return ErrMissingHiveURL
 	}
 
-	// Validate URL format
 	if _, err := url.ParseRequestURI(c.URL); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidHiveURL, err)
 	}
 
-	// Check authentication method
 	hasAPIKey := c.APIKey != ""
 	hasBasicAuth := c.Username != "" && c.Password != ""
 
@@ -65,7 +61,6 @@ func (c *TheHiveCredentials) Validate() error {
 	return nil
 }
 
-// LoadTheHiveCredentialsFromEnv loads TheHive credentials from environment variables
 func LoadTheHiveCredentialsFromEnv() (*TheHiveCredentials, error) {
 	creds := &TheHiveCredentials{
 		URL:          os.Getenv(string(types.EnvKeyTheHiveURL)),
@@ -82,7 +77,6 @@ func LoadTheHiveCredentialsFromEnv() (*TheHiveCredentials, error) {
 	return creds, nil
 }
 
-// CreateTheHiveConfig creates a TheHive configuration from credentials
 func CreateTheHiveConfig(creds *TheHiveCredentials) (*thehive.Configuration, error) {
 	if err := creds.Validate(); err != nil {
 		return nil, err
@@ -114,7 +108,6 @@ func CreateTheHiveConfig(creds *TheHiveCredentials) (*thehive.Configuration, err
 	return clientCfg, nil
 }
 
-// CreateTheHiveClient creates a TheHive client from credentials
 func CreateTheHiveClient(creds *TheHiveCredentials) (*thehive.APIClient, error) {
 	clientCfg, err := CreateTheHiveConfig(creds)
 	if err != nil {
@@ -141,7 +134,6 @@ func addTheHiveAuthToContext(ctx context.Context, client *thehive.APIClient, cre
 	return ctx
 }
 
-// AddTheHiveClientToContext adds a TheHive client to the context using environment variables
 func AddTheHiveClientToContext(ctx context.Context) (context.Context, error) {
 	creds, err := LoadTheHiveCredentialsFromEnv()
 	if err != nil {
@@ -157,7 +149,6 @@ func AddTheHiveClientToContext(ctx context.Context) (context.Context, error) {
 	return context.WithValue(ctx, types.HiveClientCtxKey, client), nil
 }
 
-// AddTheHiveClientToContextWithCreds adds a TheHive client to the context using provided credentials
 func AddTheHiveClientToContextWithCreds(ctx context.Context, creds *TheHiveCredentials) (context.Context, error) {
 	client, err := CreateTheHiveClient(creds)
 	if err != nil {
@@ -168,7 +159,7 @@ func AddTheHiveClientToContextWithCreds(ctx context.Context, creds *TheHiveCrede
 	return context.WithValue(ctx, types.HiveClientCtxKey, client), nil
 }
 
-// ExtractBearerToken extracts a bearer token from an Authorization header
+// ExtractBearerToken strips a "Bearer " prefix if present, else returns the header unchanged.
 func ExtractBearerToken(authHeader string) string {
 	if authHeader == "" {
 		return ""
@@ -197,10 +188,9 @@ func ValidateTheHiveClient(client *thehive.APIClient, ctx context.Context) error
 	return nil
 }
 
-// validateTheHiveAuthInContext validates the TheHive client stored in ctx and
-// records the outcome: types.AuthValidatedCtxKey on success, an auth error
-// otherwise. A non-nil cache skips the upstream call for recently validated
-// credentials; failed validations are never cached.
+// validateTheHiveAuthInContext validates the client in ctx and records the
+// outcome: AuthValidatedCtxKey on success, AuthErrorCtxKey otherwise. A non-nil
+// cache skips the upstream call for recently validated creds; failures aren't cached.
 func validateTheHiveAuthInContext(ctx context.Context, creds *TheHiveCredentials, cache *validationCache) context.Context {
 	client, ok := ctx.Value(types.HiveClientCtxKey).(*thehive.APIClient)
 	if !ok || client == nil {
@@ -223,7 +213,6 @@ func validateTheHiveAuthInContext(ctx context.Context, creds *TheHiveCredentials
 	return context.WithValue(ctx, types.AuthValidatedCtxKey, true)
 }
 
-// SafeGetEnv gets an environment variable with optional default value
 func SafeGetEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -231,11 +220,9 @@ func SafeGetEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-// LoadPermissions loads permissions configuration from file or uses default
-// Special values: "admin" for full permissions, "read_only" for default read-only permissions
-// Empty string defaults to read-only, otherwise loads from the specified file path
+// LoadPermissions loads permissions config. "admin" grants full permissions,
+// "read_only" or "" defaults to read-only; any other value is a file path.
 func LoadPermissions(configPath string) (*permissions.Config, error) {
-	// Special handling for special config values
 	if configPath == string(types.PermissionConfigAdmin) {
 		slog.Info("Using admin permissions for testing")
 		config := permissions.LoadAdminForTesting()
@@ -262,7 +249,6 @@ func LoadPermissions(configPath string) (*permissions.Config, error) {
 		return config, nil
 	}
 
-	// Use embedded default permissions (empty string case)
 	slog.Info("Using default read-only permissions")
 	config, err := permissions.LoadDefault()
 	if err != nil {
@@ -272,7 +258,6 @@ func LoadPermissions(configPath string) (*permissions.Config, error) {
 	return config, nil
 }
 
-// AddPermissionsToContext loads permissions and adds them to the context
 func AddPermissionsToContext(ctx context.Context, options *types.TheHiveMcpDefaultOptions) (context.Context, error) {
 	config, err := LoadPermissions(options.PermissionsConfigPath)
 	if err != nil {

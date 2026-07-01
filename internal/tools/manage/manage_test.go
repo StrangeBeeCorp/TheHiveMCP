@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestManageCreateAlert tests creating a new alert via the manage-entities tool
 func TestManageCreateAlert(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
@@ -65,12 +64,10 @@ func TestManageCreateAlert(t *testing.T) {
 	require.Equal(t, "Test Alert via MCP", fetchedAlert.Title)
 }
 
-// TestManageUpdateCase tests updating an existing case via the manage-entities tool
 func TestManageUpdateCase(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	// First create a case to update
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Original Case Title"
@@ -82,7 +79,6 @@ func TestManageUpdateCase(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
 
-	// Update the case using manage-entities
 	updateData := map[string]interface{}{
 		"title":       "Updated Case Title",
 		"severity":    4,
@@ -110,7 +106,6 @@ func TestManageUpdateCase(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "update", structuredData["operation"])
 
-	// Verify the update by fetching the case
 	updatedCase, _, err := hiveClient.CaseAPI.GetCase(authContext, createdCase.UnderscoreId).Execute()
 	require.NoError(t, err)
 	require.Equal(t, "Updated Case Title", updatedCase.Title)
@@ -118,12 +113,10 @@ func TestManageUpdateCase(t *testing.T) {
 	require.Contains(t, updatedCase.Tags, "updated")
 }
 
-// TestManageDeleteAlert tests deleting an alert via the manage-entities tool
 func TestManageDeleteAlert(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	// Create an alert to delete
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	testAlert := testutils.MockInputAlert()
 	testAlert.Title = "Alert to Delete"
@@ -133,11 +126,9 @@ func TestManageDeleteAlert(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdAlert)
 
-	// Verify the alert exists
 	_, _, err = hiveClient.AlertAPI.GetAlert(authContext, createdAlert.UnderscoreId).Execute()
 	require.NoError(t, err)
 
-	// Delete the alert using manage-entities
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Name: "manage-entities",
@@ -157,19 +148,16 @@ func TestManageDeleteAlert(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "delete", structuredData["operation"])
 
-	// Verify the alert no longer exists
 	_, resp, err := hiveClient.AlertAPI.GetAlert(authContext, createdAlert.UnderscoreId).Execute()
 	require.Error(t, err)
 	require.NotNil(t, resp)
 	require.Equal(t, 404, resp.StatusCode, "Alert should return 404 after deletion")
 }
 
-// TestManageAddCommentToCase tests adding a comment to a case via the manage-entities tool
 func TestManageAddCommentToCase(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	// Create a case to comment on
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Case for Comment Testing"
@@ -178,7 +166,6 @@ func TestManageAddCommentToCase(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
 
-	// Add a comment using manage-entities
 	commentText := "This is a test comment added via the MCP tool. Investigation is ongoing."
 
 	request := mcp.CallToolRequest{
@@ -202,19 +189,16 @@ func TestManageAddCommentToCase(t *testing.T) {
 	require.Equal(t, "comment", structuredData["operation"])
 	require.Equal(t, types.EntityTypeCase, structuredData["entityType"])
 
-	// Verify the comment response contains our comment data
 	resultsArray, ok := structuredData["results"].([]any)
 	require.True(t, ok)
 	require.NotEmpty(t, resultsArray)
 
-	// Get the first result
 	firstResult, ok := resultsArray[0].(map[string]any)
 	require.True(t, ok)
 
 	commentID, ok := firstResult["commentId"].(string)
 	require.True(t, ok)
 
-	// Verify the comment exists in TheHive
 	listOp := thehive.NewInputQueryGenericOperation("listComment")
 	filterOp := map[string]interface{}{
 		"_name": "filter",
@@ -242,12 +226,10 @@ func TestManageAddCommentToCase(t *testing.T) {
 
 }
 
-// TestManageCreateTaskInCase tests creating a task within a case via the manage-entities tool
 func TestManageCreateTaskInCase(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	// Create a case to add tasks to
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Case for Task Creation"
@@ -256,7 +238,6 @@ func TestManageCreateTaskInCase(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
 
-	// Create a task in the case using manage-entities
 	taskData := map[string]interface{}{
 		"title":       "Investigate suspicious IP address",
 		"description": "Check logs for connections to 192.168.1.100",
@@ -270,7 +251,7 @@ func TestManageCreateTaskInCase(t *testing.T) {
 			Arguments: map[string]any{
 				"operation":   "create",
 				"entity-type": types.EntityTypeTask,
-				"entity-ids":  []string{createdCase.UnderscoreId}, // Parent case ID
+				"entity-ids":  []string{createdCase.UnderscoreId},
 				"entity-data": taskData,
 			},
 		},
@@ -288,13 +269,11 @@ func TestManageCreateTaskInCase(t *testing.T) {
 	resultCase, ok := structuredData["result"].(map[string]any)
 	require.True(t, ok)
 
-	// Verify the task was created
 	taskID, ok := resultCase["_id"].(string)
 	require.True(t, ok)
 	require.NotEmpty(t, taskID)
 	require.Equal(t, "[UNTRUSTED_DATA]Investigate suspicious IP address[/UNTRUSTED_DATA]", resultCase["title"])
 
-	// Verify the task exists in TheHive
 	fetchedTask, _, err := hiveClient.TaskAPI.GetTask(authContext, taskID).Execute()
 	require.NoError(t, err)
 	require.Equal(t, "Investigate suspicious IP address", fetchedTask.Title)
@@ -302,12 +281,10 @@ func TestManageCreateTaskInCase(t *testing.T) {
 	require.True(t, fetchedTask.Mandatory)
 }
 
-// TestManageCreateObservableInCase tests creating an observable within a case
 func TestManageCreateObservableInCase(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	// Create a case to add observables to
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Case for Observable Creation"
@@ -316,7 +293,6 @@ func TestManageCreateObservableInCase(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
 
-	// Create an observable in the case using manage-entities
 	observableData := map[string]interface{}{
 		"dataType": "ip",
 		"data":     "192.168.1.100",
@@ -333,7 +309,7 @@ func TestManageCreateObservableInCase(t *testing.T) {
 			Arguments: map[string]any{
 				"operation":   "create",
 				"entity-type": types.EntityTypeObservable,
-				"entity-ids":  []string{createdCase.UnderscoreId}, // Parent case ID
+				"entity-ids":  []string{createdCase.UnderscoreId},
 				"entity-data": observableData,
 			},
 		},
@@ -355,13 +331,11 @@ func TestManageCreateObservableInCase(t *testing.T) {
 	resultData, ok := resultArray[0].(map[string]any)
 	require.True(t, ok)
 
-	// Verify the observable was created
 	observableID, ok := resultData["_id"].(string)
 	require.True(t, ok)
 	require.NotEmpty(t, observableID)
 	require.Equal(t, "ip", resultData["dataType"])
 
-	// Verify the observable exists in TheHive
 	fetchedObservable, _, err := hiveClient.ObservableAPI.GetObservable(authContext, observableID).Execute()
 	require.NoError(t, err)
 	require.Equal(t, "ip", fetchedObservable.DataType)
@@ -370,15 +344,12 @@ func TestManageCreateObservableInCase(t *testing.T) {
 	require.True(t, fetchedObservable.Sighted)
 }
 
-// TestManageCreateObservableInCaseReportsSuccess verifies that creating an observable
-// in a case returns IsError=false. Regression test for a reported bug where the server
-// would try both case and alert endpoints and return the alert 403 error even though
-// the case creation succeeded with 201.
+// Regression: creating an observable in a case returned the alert-endpoint 403
+// even though case creation succeeded (201). Must report IsError=false.
 func TestManageCreateObservableInCaseReportsSuccess(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	// Create a case to add observables to
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Case for Observable Success Reporting"
@@ -387,7 +358,7 @@ func TestManageCreateObservableInCaseReportsSuccess(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
 
-	// Create an observable using the case ID (not an alert ID)
+	// Parent is a case ID, not an alert ID.
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Name: "manage-entities",
@@ -408,10 +379,8 @@ func TestManageCreateObservableInCaseReportsSuccess(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	// The core assertion: the tool must NOT report an error
 	require.False(t, result.IsError, "Creating an observable in a valid case must not return IsError=true")
 
-	// Verify the result contains the created observable
 	structuredData, ok := result.StructuredContent.(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "create", structuredData["operation"])
@@ -426,12 +395,10 @@ func TestManageCreateObservableInCaseReportsSuccess(t *testing.T) {
 	require.NotEmpty(t, obs["_id"])
 }
 
-// TestManageUpdateMultipleEntities tests batch updating multiple cases
 func TestManageUpdateMultipleEntities(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	// Create multiple cases to update
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	var caseIDs []string
 
@@ -446,7 +413,6 @@ func TestManageUpdateMultipleEntities(t *testing.T) {
 		caseIDs = append(caseIDs, createdCase.UnderscoreId)
 	}
 
-	// Update all cases with the same data
 	updateData := map[string]interface{}{
 		"severity": 4,
 		"tags":     []string{"batch-updated", "urgent"},
@@ -472,7 +438,6 @@ func TestManageUpdateMultipleEntities(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "update", structuredData["operation"])
 
-	// Verify all cases were updated
 	for _, caseID := range caseIDs {
 		updatedCase, _, err := hiveClient.CaseAPI.GetCase(authContext, caseID).Execute()
 		require.NoError(t, err)
@@ -482,12 +447,11 @@ func TestManageUpdateMultipleEntities(t *testing.T) {
 	}
 }
 
-// TestManageWithAnalystPermissions tests analyst permissions allow create/update/comment but deny delete
+// Analyst permissions allow create but deny delete.
 func TestManageWithAnalystPermissions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
-	// Test 1: Create alert should succeed with analyst permissions
 	alertData := map[string]interface{}{
 		"type":        "test-type",
 		"source":      "test-source",
@@ -523,7 +487,6 @@ func TestManageWithAnalystPermissions(t *testing.T) {
 	alertID := resultsAlert["_id"].(string)
 	require.NotEmpty(t, alertID)
 
-	// Test 2: Delete alert should fail with analyst permissions
 	deleteRequest := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Name: "manage-entities",
@@ -540,19 +503,17 @@ func TestManageWithAnalystPermissions(t *testing.T) {
 	require.NotNil(t, result)
 	testutils.RequirePermissionDenied(t, result)
 
-	// Verify alert still exists
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	fetchedAlert, _, err := hiveClient.AlertAPI.GetAlert(authContext, alertID).Execute()
 	require.NoError(t, err)
 	require.Equal(t, alertID, fetchedAlert.UnderscoreId)
 }
 
-// TestManageWithReadOnlyPermissions tests read-only permissions deny all manage operations
+// Read-only permissions deny all manage operations.
 func TestManageWithReadOnlyPermissions(t *testing.T) {
 	testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "")
 
-	// Test 1: Create alert should fail with read-only permissions
 	alertData := map[string]interface{}{
 		"type":        "test-type",
 		"source":      "test-source",
@@ -580,7 +541,6 @@ func TestManageWithReadOnlyPermissions(t *testing.T) {
 	require.NotNil(t, result)
 	testutils.RequirePermissionDenied(t, result)
 
-	// Test 2: Comment should also fail with read-only permissions
 	commentRequest := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Name: "manage-entities",
@@ -599,12 +559,10 @@ func TestManageWithReadOnlyPermissions(t *testing.T) {
 	testutils.RequirePermissionDenied(t, result)
 }
 
-// TestManagePromoteAlert tests promoting an alert to a case via the manage-entities tool
 func TestManagePromoteAlert(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	// Create an alert to promote
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	testAlert := testutils.MockInputAlert()
 	testAlert.Title = "Alert to Promote"
@@ -614,7 +572,6 @@ func TestManagePromoteAlert(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdAlert)
 
-	// Promote the alert to a case using manage-entities
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Name: "manage-entities",
@@ -635,7 +592,6 @@ func TestManagePromoteAlert(t *testing.T) {
 	require.Equal(t, "promote", structuredData["operation"])
 	require.Equal(t, types.EntityTypeCase, structuredData["entityType"])
 
-	// Verify the case was created
 	caseResult, ok := structuredData["result"].(map[string]any)
 	require.True(t, ok)
 
@@ -643,18 +599,15 @@ func TestManagePromoteAlert(t *testing.T) {
 	require.True(t, ok)
 	require.NotEmpty(t, caseID)
 
-	// Verify the case exists in TheHive
 	fetchedCase, _, err := hiveClient.CaseAPI.GetCase(authContext, caseID).Execute()
 	require.NoError(t, err)
 	require.NotNil(t, fetchedCase)
 }
 
-// TestManageMergeCases tests merging multiple cases together
 func TestManageMergeCases(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	// Create multiple cases to merge
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	var caseIDs []string
 
@@ -667,7 +620,6 @@ func TestManageMergeCases(t *testing.T) {
 		caseIDs = append(caseIDs, createdCase.UnderscoreId)
 	}
 
-	// Merge the cases using manage-entities
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Name: "manage-entities",
@@ -688,7 +640,6 @@ func TestManageMergeCases(t *testing.T) {
 	require.Equal(t, "merge", structuredData["operation"])
 	require.Equal(t, types.EntityTypeCase, structuredData["entityType"])
 
-	// Verify the merged case was created
 	caseResult, ok := structuredData["result"].(map[string]any)
 	require.True(t, ok)
 
@@ -696,20 +647,17 @@ func TestManageMergeCases(t *testing.T) {
 	require.True(t, ok)
 	require.NotEmpty(t, mergedCaseID)
 
-	// Verify the merged case exists
 	fetchedCase, _, err := hiveClient.CaseAPI.GetCase(authContext, mergedCaseID).Execute()
 	require.NoError(t, err)
 	require.NotNil(t, fetchedCase)
 }
 
-// TestManageMergeAlertsIntoCase tests merging alerts into an existing case
 func TestManageMergeAlertsIntoCase(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 
-	// Create a target case
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Target Case for Alert Merge"
 
@@ -717,7 +665,6 @@ func TestManageMergeAlertsIntoCase(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
 
-	// Create alerts to merge
 	var alertIDs []string
 	for i := 1; i <= 2; i++ {
 		testAlert := testutils.MockInputAlert()
@@ -729,7 +676,6 @@ func TestManageMergeAlertsIntoCase(t *testing.T) {
 		alertIDs = append(alertIDs, createdAlert.UnderscoreId)
 	}
 
-	// Merge the alerts into the case using manage-entities
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Name: "manage-entities",
@@ -754,20 +700,17 @@ func TestManageMergeAlertsIntoCase(t *testing.T) {
 	resultCase, ok := structuredData["result"].(map[string]any)
 	require.True(t, ok)
 
-	// Verify the target case ID is in the result
 	targetCaseID, ok := resultCase["_id"].(string)
 	require.True(t, ok)
 	require.Equal(t, createdCase.UnderscoreId, targetCaseID)
 }
 
-// TestManageMergeObservables tests deduplicating observables in a case
 func TestManageMergeObservables(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 
-	// Create a case
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Case for Observable Merge"
 
@@ -775,7 +718,7 @@ func TestManageMergeObservables(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
 
-	// Create duplicate observables in the case using the MCP tool
+	// Duplicate observables so the merge has something to deduplicate.
 	for i := 1; i <= 2; i++ {
 		observableData := map[string]interface{}{
 			"dataType": "ip",
@@ -790,7 +733,7 @@ func TestManageMergeObservables(t *testing.T) {
 				Arguments: map[string]any{
 					"operation":   "create",
 					"entity-type": types.EntityTypeObservable,
-					"entity-ids":  []string{createdCase.UnderscoreId}, // Parent case ID
+					"entity-ids":  []string{createdCase.UnderscoreId},
 					"entity-data": observableData,
 				},
 			},
@@ -800,7 +743,6 @@ func TestManageMergeObservables(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Merge/deduplicate the observables using manage-entities
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Name: "manage-entities",
@@ -821,18 +763,16 @@ func TestManageMergeObservables(t *testing.T) {
 	require.Equal(t, "merge", structuredData["operation"])
 	require.Equal(t, types.EntityTypeObservable, structuredData["entityType"])
 
-	// Verify the target case ID is in the result
 	targetCaseID, ok := structuredData["targetId"].(string)
 	require.True(t, ok)
 	require.Equal(t, createdCase.UnderscoreId, targetCaseID)
 }
 
-// TestManagePromoteWithAnalystPermissions tests promote is allowed with analyst permissions
+// Promote is allowed with analyst permissions.
 func TestManagePromoteWithAnalystPermissions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
-	// Create an alert to promote
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	testAlert := testutils.MockInputAlert()
 	testAlert.Title = "Alert for Analyst Promote Test"
@@ -842,7 +782,6 @@ func TestManagePromoteWithAnalystPermissions(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdAlert)
 
-	// Promote should succeed with analyst permissions
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Name: "manage-entities",
@@ -864,14 +803,13 @@ func TestManagePromoteWithAnalystPermissions(t *testing.T) {
 	require.Equal(t, "promote", structuredData["operation"])
 }
 
-// TestManageMergeWithAnalystPermissions tests merge is allowed with analyst permissions
+// Merge is allowed with analyst permissions.
 func TestManageMergeWithAnalystPermissions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 
-	// Create cases to merge
 	var caseIDs []string
 	for i := 1; i <= 2; i++ {
 		testCase := testutils.MockInputCase()
@@ -882,7 +820,6 @@ func TestManageMergeWithAnalystPermissions(t *testing.T) {
 		caseIDs = append(caseIDs, createdCase.UnderscoreId)
 	}
 
-	// Merge should succeed with analyst permissions
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Name: "manage-entities",
@@ -904,7 +841,6 @@ func TestManageMergeWithAnalystPermissions(t *testing.T) {
 	require.Equal(t, "merge", structuredData["operation"])
 }
 
-// TestManagePromoteWithReadOnlyPermissions tests promote is denied with read-only permissions
 func TestManagePromoteWithReadOnlyPermissions(t *testing.T) {
 	testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "")
@@ -926,7 +862,6 @@ func TestManagePromoteWithReadOnlyPermissions(t *testing.T) {
 	testutils.RequirePermissionDenied(t, result)
 }
 
-// TestManageCreateProcedureInCase tests creating a procedure within a case via the manage-entities tool
 func TestManageCreateProcedureInCase(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
@@ -976,7 +911,6 @@ func TestManageCreateProcedureInCase(t *testing.T) {
 	require.NotEmpty(t, procedureID)
 }
 
-// TestManageUpdateProcedure tests updating a procedure via the manage-entities tool
 func TestManageUpdateProcedure(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
@@ -989,7 +923,7 @@ func TestManageUpdateProcedure(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
 
-	// Create a procedure directly via the API
+	// Set up via the raw API; the MCP update is under test.
 	input := thehive.NewInputProcedure(testutils.TestMITREPatternID, int64(1700000000000))
 	input.SetTactic("execution")
 	input.SetDescription("Original description")
@@ -998,7 +932,7 @@ func TestManageUpdateProcedure(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdProcedure)
 
-	// Update it via the MCP tool — use ISO date strings (the MCP handles conversion)
+	// ISO date strings: the MCP converts them to timestamps.
 	updateData := map[string]interface{}{
 		"description": "Updated description via MCP",
 		"occurDate":   "2023-11-15T10:00:00",
@@ -1027,7 +961,6 @@ func TestManageUpdateProcedure(t *testing.T) {
 	require.Equal(t, types.EntityTypeProcedure, structuredData["entityType"])
 }
 
-// TestManageDeleteProcedure tests deleting a procedure via the manage-entities tool
 func TestManageDeleteProcedure(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
@@ -1040,7 +973,7 @@ func TestManageDeleteProcedure(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
 
-	// Create a procedure directly via the API
+	// Set up via the raw API; the MCP delete is under test.
 	input := thehive.NewInputProcedure(testutils.TestMITREPatternID, int64(1700000000000))
 	input.SetTactic("execution")
 
@@ -1048,7 +981,6 @@ func TestManageDeleteProcedure(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdProcedure)
 
-	// Delete it via the MCP tool
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Name: "manage-entities",
@@ -1070,13 +1002,11 @@ func TestManageDeleteProcedure(t *testing.T) {
 	require.Equal(t, "delete", structuredData["operation"])
 	require.Equal(t, types.EntityTypeProcedure, structuredData["entityType"])
 
-	// Verify it's gone
 	resp, err := hiveClient.TTPAPI.DeleteProcedure(authContext, createdProcedure.UnderscoreId).Execute()
 	require.Error(t, err)
 	require.Equal(t, 404, resp.StatusCode)
 }
 
-// TestManageMergeWithReadOnlyPermissions tests merge is denied with read-only permissions
 func TestManageMergeWithReadOnlyPermissions(t *testing.T) {
 	testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "")
@@ -1098,7 +1028,6 @@ func TestManageMergeWithReadOnlyPermissions(t *testing.T) {
 	testutils.RequirePermissionDenied(t, result)
 }
 
-// TestManageCreateCaseTemplate tests creating a new case template via the manage-entities tool
 func TestManageCreateCaseTemplate(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
@@ -1145,19 +1074,16 @@ func TestManageCreateCaseTemplate(t *testing.T) {
 	require.Equal(t, "[UNTRUSTED_DATA]Test-MCP-Template[/UNTRUSTED_DATA]", resultData["name"])
 	require.Equal(t, "[UNTRUSTED_DATA]Test MCP Template[/UNTRUSTED_DATA]", resultData["displayName"])
 
-	// Verify it exists in TheHive
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	fetchedTemplate, _, err := hiveClient.CaseTemplateAPI.GetCaseTemplate(authContext, templateID).Execute()
 	require.NoError(t, err)
 	require.Equal(t, "Test-MCP-Template", fetchedTemplate.Name)
 }
 
-// TestManageUpdateCaseTemplate tests updating an existing case template via the manage-entities tool
 func TestManageUpdateCaseTemplate(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	// Create a template to update
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	input := testutils.MockInputCaseTemplate()
 	input.Name = "Update-Test-Template"
@@ -1193,19 +1119,16 @@ func TestManageUpdateCaseTemplate(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "update", structuredData["operation"])
 
-	// Verify the update in TheHive
 	fetchedTemplate, _, err := hiveClient.CaseTemplateAPI.GetCaseTemplate(authContext, createdTemplate.UnderscoreId).Execute()
 	require.NoError(t, err)
 	require.Equal(t, "Updated Display Name", fetchedTemplate.DisplayName)
 	require.Equal(t, int32(3), *fetchedTemplate.Severity)
 }
 
-// TestManageDeleteCaseTemplate tests deleting a case template via the manage-entities tool
 func TestManageDeleteCaseTemplate(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	// Create a template to delete
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	input := testutils.MockInputCaseTemplate()
 	input.Name = "Delete-Test-Template"
@@ -1234,20 +1157,17 @@ func TestManageDeleteCaseTemplate(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "delete", structuredData["operation"])
 
-	// Verify it no longer exists
 	_, resp, err := hiveClient.CaseTemplateAPI.GetCaseTemplate(authContext, createdTemplate.UnderscoreId).Execute()
 	require.Error(t, err)
 	require.Equal(t, 404, resp.StatusCode)
 }
 
-// TestManageApplyTemplateToCase tests applying a case template to existing cases
 func TestManageApplyTemplateToCase(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 
-	// Create a template with a task to import
 	input := testutils.MockInputCaseTemplate()
 	input.Name = "Apply-Test-Template"
 	severity := int32(3)
@@ -1260,7 +1180,6 @@ func TestManageApplyTemplateToCase(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdTemplate)
 
-	// Create a case to apply the template to
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Case for Template Application"
 
@@ -1268,7 +1187,6 @@ func TestManageApplyTemplateToCase(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
 
-	// Apply the template using manage-entities
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Name: "manage-entities",
@@ -1300,21 +1218,19 @@ func TestManageApplyTemplateToCase(t *testing.T) {
 	require.Contains(t, caseIDs, createdCase.UnderscoreId)
 }
 
-// TestManageApplyTemplateWithAnalystPermissions tests that apply-template is allowed with analyst permissions
+// Apply-template is allowed with analyst permissions.
 func TestManageApplyTemplateWithAnalystPermissions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 
-	// Create a template
 	input := testutils.MockInputCaseTemplate()
 	input.Name = "Analyst-Apply-Template"
 
 	createdTemplate, _, err := hiveClient.CaseTemplateAPI.CreateCaseTemplate(authContext).InputCreateCaseTemplate(*input).Execute()
 	require.NoError(t, err)
 
-	// Create a case to apply the template to
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Case for Analyst Apply Template Test"
 
@@ -1339,7 +1255,7 @@ func TestManageApplyTemplateWithAnalystPermissions(t *testing.T) {
 	require.False(t, result.IsError, "Apply template should succeed with analyst permissions")
 }
 
-// TestManageCaseTemplateCreateDeniedWithAnalystPermissions tests that creating templates is denied for analysts
+// Creating case templates is denied for analysts.
 func TestManageCaseTemplateCreateDeniedWithAnalystPermissions(t *testing.T) {
 	testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
@@ -1363,12 +1279,10 @@ func TestManageCaseTemplateCreateDeniedWithAnalystPermissions(t *testing.T) {
 	testutils.RequirePermissionDenied(t, result)
 }
 
-// TestManageCreatePageInCase tests creating a page within a case via the manage-entities tool
 func TestManageCreatePageInCase(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	// Create a parent case
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Case for Page Creation"
@@ -1377,7 +1291,6 @@ func TestManageCreatePageInCase(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
 
-	// Create a page in the case using manage-entities
 	pageData := map[string]interface{}{
 		"title":    "Investigation Notes",
 		"content":  "## Summary\nInitial findings from the investigation.",
@@ -1417,12 +1330,10 @@ func TestManageCreatePageInCase(t *testing.T) {
 	require.Equal(t, "[UNTRUSTED_DATA]Default[/UNTRUSTED_DATA]", resultData["category"])
 }
 
-// TestManageCreateStandalonePage tests creating a standalone (non-case) page via the manage-entities tool
 func TestManageCreateStandalonePage(t *testing.T) {
 	testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	// Create a standalone page (no parent case) using manage-entities
 	pageData := map[string]interface{}{
 		"title":    "Incident Response Runbook",
 		"content":  "## Procedure\n1. Identify scope\n2. Contain threat\n3. Eradicate.",
@@ -1459,12 +1370,10 @@ func TestManageCreateStandalonePage(t *testing.T) {
 	require.Equal(t, "[UNTRUSTED_DATA]Incident Response Runbook[/UNTRUSTED_DATA]", resultData["title"])
 }
 
-// TestManageUpdatePage tests updating a page via the manage-entities tool
 func TestManageUpdatePage(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	// Create a case and page to update
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Case for Page Update"
@@ -1473,7 +1382,6 @@ func TestManageUpdatePage(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
 
-	// Create a page via the TheHive API directly
 	inputPage := thehive.InputCreatePage{
 		Title:    "Original Page Title",
 		Content:  "## Original\nOriginal content.",
@@ -1483,7 +1391,6 @@ func TestManageUpdatePage(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdPage)
 
-	// Update the page using manage-entities
 	updateData := map[string]interface{}{
 		"title":   "Updated Page Title",
 		"content": "## Updated\nNew content after update.",
@@ -1512,12 +1419,10 @@ func TestManageUpdatePage(t *testing.T) {
 	require.Equal(t, types.EntityTypePage, structuredData["entityType"])
 }
 
-// TestManageDeletePage tests deleting a page via the manage-entities tool
 func TestManageDeletePage(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	// Create a case and page to delete
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Case for Page Deletion"
@@ -1526,7 +1431,6 @@ func TestManageDeletePage(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
 
-	// Create a page via the TheHive API directly
 	inputPage := thehive.InputCreatePage{
 		Title:    "Page to Delete",
 		Content:  "This page will be deleted.",
@@ -1536,7 +1440,6 @@ func TestManageDeletePage(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdPage)
 
-	// Delete the page using manage-entities
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Name: "manage-entities",
@@ -1559,14 +1462,13 @@ func TestManageDeletePage(t *testing.T) {
 	require.Equal(t, types.EntityTypePage, structuredData["entityType"])
 }
 
-// TestManagePageWithAnalystPermissions tests that analyst permissions allow page create/update but deny delete
+// Analyst permissions allow page create but deny delete.
 func TestManagePageWithAnalystPermissions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 
-	// Create should succeed with analyst permissions
 	pageData := map[string]interface{}{
 		"title":    "Analyst Created Page",
 		"content":  "## Content\nPage created by analyst.",
@@ -1589,7 +1491,6 @@ func TestManagePageWithAnalystPermissions(t *testing.T) {
 	require.NotNil(t, result)
 	require.False(t, result.IsError, "Page creation should succeed with analyst permissions")
 
-	// Create a page directly via API to test delete permission
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Case for Analyst Page Permission Test"
 
@@ -1604,7 +1505,6 @@ func TestManagePageWithAnalystPermissions(t *testing.T) {
 	createdPage, _, err := hiveClient.PageAPI.CreateAPageInACase(authContext, createdCase.UnderscoreId).InputCreatePage(inputPage).Execute()
 	require.NoError(t, err)
 
-	// Delete should be denied with analyst permissions
 	deleteRequest := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Name: "manage-entities",

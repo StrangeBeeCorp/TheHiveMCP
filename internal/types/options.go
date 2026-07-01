@@ -11,39 +11,27 @@ import (
 )
 
 type TheHiveMcpDefaultOptions struct {
-	// TheHiveURL is the URL of TheHive instance
-	TheHiveURL string
-	// TheHiveAPIKey is the API key for TheHive
-	TheHiveAPIKey string
-	// TheHiveUsername is the username for TheHive (for basic auth)
-	TheHiveUsername string
-	// TheHivePassword is the password for TheHive (for basic auth)
-	TheHivePassword string
-	// TheHiveOrganisation is the organisation for TheHive (optional)
+	TheHiveURL          string
+	TheHiveAPIKey       string
+	TheHiveUsername     string
+	TheHivePassword     string
 	TheHiveOrganisation string
-	// TheHiveURLAllowlist is the list of TheHive base URLs HTTP clients may target via the
-	// X-TheHive-Url header; when empty, only TheHiveURL is permitted
+	// TheHiveURLAllowlist is the base URLs clients may target via the X-TheHive-Url
+	// header; when empty, only TheHiveURL is permitted.
 	TheHiveURLAllowlist []string
 	// AllowEnvCredentialFallback allows HTTP requests without credentials to fall back to the
 	// server's environment credentials (default: false, requests must supply their own credentials)
 	AllowEnvCredentialFallback bool
-	// AuthValidationCacheTTL is how long a successful TheHive credential validation is cached
-	// for the HTTP transport (default: 60s)
+	// AuthValidationCacheTTL is how long a successful TheHive credential validation is cached (HTTP transport).
 	AuthValidationCacheTTL string
-	// PermissionsConfigPath is the path to the permissions configuration file (optional, defaults to embedded read-only config)
+	// PermissionsConfigPath is the permissions config file path; empty uses the embedded read-only config.
 	PermissionsConfigPath string
-	// MCPServerEndpointPath is the endpoint path for the MCP server (default: /mcp)
 	MCPServerEndpointPath string
-	// MCPHeartbeatInterval is the heartbeat interval for the MCP server (default: 30s)
-	MCPHeartbeatInterval string
-	// TransportType is the transport type for the MCP server (default: http)
-	TransportType string
-	// BindAddr is the address to bind the HTTP server to (if using HTTP transport)
-	BindAddr string
-	// LogLevel is the logging level for the application
-	LogLevel string
-	// DefaultCortexID is the default Cortex instance ID used when none is specified (default: local)
-	DefaultCortexID string
+	MCPHeartbeatInterval  string
+	TransportType         string
+	BindAddr              string
+	LogLevel              string
+	DefaultCortexID       string
 }
 
 func defaultToEnv(envKey EnvKey, defaultValue string) string {
@@ -62,7 +50,6 @@ func defaultToEnvBool(envKey EnvKey, defaultValue bool) bool {
 	return defaultValue
 }
 
-// splitCommaSeparated splits a comma-separated string into trimmed, non-empty entries
 func splitCommaSeparated(value string) []string {
 	var entries []string
 	for _, entry := range strings.Split(value, ",") {
@@ -108,7 +95,6 @@ func NewTheHiveMcpDefaultOptions() (*TheHiveMcpDefaultOptions, error) {
 	flag.StringVar(&cortexID, string(FlagVarCortexID), defaultToEnv(EnvKeyCortexID, DefaultCortexID), "Default Cortex instance ID (overrides env var CORTEX_ID, defaults to 'local')")
 	flag.Parse()
 
-	// Handle version flag
 	if showVersion {
 		fmt.Printf("TheHiveMCP %s\n", version.Info())
 		os.Exit(0)

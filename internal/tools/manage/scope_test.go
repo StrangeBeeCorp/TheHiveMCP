@@ -75,9 +75,7 @@ func requireScopeDenied(t *testing.T, result *mcp.CallToolResult) {
 	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not within the scope")
 }
 
-// TestManageScopeUpdateDeniedOutOfScope verifies that with a configured
-// manage-entities filter, updating an out-of-scope entity is denied without
-// mutating it, while updating an in-scope entity succeeds.
+// Out-of-scope update is denied without mutating; in-scope update succeeds.
 func TestManageScopeUpdateDeniedOutOfScope(t *testing.T) {
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
@@ -101,7 +99,6 @@ func TestManageScopeUpdateDeniedOutOfScope(t *testing.T) {
 		}
 	}
 
-	// Out-of-scope case: denied, no mutation
 	result, err := mcpClient.CallTool(t.Context(), updateRequest(outOfScopeCase.UnderscoreId))
 	require.NoError(t, err)
 	requireScopeDenied(t, result)
@@ -110,7 +107,6 @@ func TestManageScopeUpdateDeniedOutOfScope(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "Out of scope case", fetchedCase.Title, "out-of-scope case must not be mutated")
 
-	// In-scope case: succeeds
 	result, err = mcpClient.CallTool(t.Context(), updateRequest(inScopeCase.UnderscoreId))
 	require.NoError(t, err)
 	require.False(t, result.IsError, "update of an in-scope entity must succeed")
@@ -120,8 +116,7 @@ func TestManageScopeUpdateDeniedOutOfScope(t *testing.T) {
 	require.Equal(t, "Title changed by MCP", fetchedCase.Title)
 }
 
-// TestManageScopeBatchUpdateDeniedWhenAnyOutOfScope verifies a batch update is
-// denied entirely when one of the entities is out of scope.
+// A batch update is denied entirely if any entity is out of scope.
 func TestManageScopeBatchUpdateDeniedWhenAnyOutOfScope(t *testing.T) {
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
@@ -155,8 +150,7 @@ func TestManageScopeBatchUpdateDeniedWhenAnyOutOfScope(t *testing.T) {
 	}
 }
 
-// TestManageScopeDeleteDeniedOutOfScope verifies deletes outside the filter
-// scope are denied and the entity survives.
+// Out-of-scope deletes are denied and the entity survives.
 func TestManageScopeDeleteDeniedOutOfScope(t *testing.T) {
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
@@ -180,14 +174,12 @@ func TestManageScopeDeleteDeniedOutOfScope(t *testing.T) {
 	require.NoError(t, err)
 	requireScopeDenied(t, result)
 
-	// The alert still exists
 	fetchedAlert, _, err := hiveClient.AlertAPI.GetAlert(authContext, outOfScopeAlert.UnderscoreId).Execute()
 	require.NoError(t, err)
 	require.Equal(t, outOfScopeAlert.UnderscoreId, fetchedAlert.UnderscoreId)
 }
 
-// TestManageScopeCommentDeniedOutOfScope verifies comments on out-of-scope
-// entities are denied while in-scope comments succeed.
+// Out-of-scope comments are denied; in-scope comments succeed.
 func TestManageScopeCommentDeniedOutOfScope(t *testing.T) {
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
@@ -219,8 +211,7 @@ func TestManageScopeCommentDeniedOutOfScope(t *testing.T) {
 	require.False(t, result.IsError, "comment on an in-scope entity must succeed")
 }
 
-// TestManageScopeCreateChildDeniedOutOfScopeParent verifies that child
-// creation (task) inside an out-of-scope parent case is denied.
+// Child creation (task) inside an out-of-scope parent case is denied.
 func TestManageScopeCreateChildDeniedOutOfScopeParent(t *testing.T) {
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
@@ -252,9 +243,8 @@ func TestManageScopeCreateChildDeniedOutOfScopeParent(t *testing.T) {
 	require.False(t, result.IsError, "task creation in an in-scope case must succeed")
 }
 
-// TestManageScopeCreateObservableInScopeAlertParent verifies the case-or-alert
-// parent resolution: an observable created in an in-scope alert succeeds and
-// one in an out-of-scope alert is denied.
+// Case-or-alert parent resolution: observable in an in-scope alert succeeds,
+// in an out-of-scope alert is denied.
 func TestManageScopeCreateObservableInScopeAlertParent(t *testing.T) {
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
@@ -290,8 +280,7 @@ func TestManageScopeCreateObservableInScopeAlertParent(t *testing.T) {
 	requireScopeDenied(t, result)
 }
 
-// TestManageScopePromoteDeniedOutOfScope verifies promoting an out-of-scope
-// alert is denied.
+// Promoting an out-of-scope alert is denied.
 func TestManageScopePromoteDeniedOutOfScope(t *testing.T) {
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
@@ -315,8 +304,7 @@ func TestManageScopePromoteDeniedOutOfScope(t *testing.T) {
 	requireScopeDenied(t, result)
 }
 
-// TestManageScopeMergeDeniedWhenAnyCaseOutOfScope verifies merges spanning an
-// out-of-scope entity are denied.
+// A merge spanning an out-of-scope entity is denied.
 func TestManageScopeMergeDeniedWhenAnyCaseOutOfScope(t *testing.T) {
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
@@ -341,9 +329,7 @@ func TestManageScopeMergeDeniedWhenAnyCaseOutOfScope(t *testing.T) {
 	requireScopeDenied(t, result)
 }
 
-// TestManageScopeNoFiltersBackwardCompatible verifies that without configured
-// filters (admin permissions), operations on entities that a filter would
-// exclude proceed unchanged.
+// Without configured filters (admin), operations a filter would exclude proceed.
 func TestManageScopeNoFiltersBackwardCompatible(t *testing.T) {
 	hiveClient := scopedManageClient(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)

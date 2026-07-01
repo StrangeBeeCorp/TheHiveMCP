@@ -16,15 +16,12 @@ func (t *ManageTool) handleApplyTemplate(ctx context.Context, params *ManageEnti
 			Hint("Check your authentication and connection settings")
 	}
 
-	// Build the apply template input
 	input := thehive.InputApplyCaseTemplateWithIds{
 		Ids:          params.EntityIDs,
 		CaseTemplate: params.TargetID,
 	}
 
-	// If entity-data is provided, unmarshal the optional fields.
-	// The struct's UnmarshalJSON requires "ids" and "caseTemplate" to be present,
-	// so we merge them into the entity-data map before unmarshalling.
+	// UnmarshalJSON requires "ids" and "caseTemplate" present, so merge them in first.
 	if params.EntityData != nil {
 		merged := make(map[string]interface{}, len(params.EntityData)+2)
 		for k, v := range params.EntityData {

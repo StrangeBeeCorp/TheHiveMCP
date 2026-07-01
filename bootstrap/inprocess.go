@@ -14,16 +14,13 @@ import (
 func AuthMiddleware(creds *TheHiveCredentials, permissionsConfigPath string) server.ToolHandlerMiddleware {
 	return func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
 		return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			// Add TheHive client to context
 			newCtx, err := AddTheHiveClientToContextWithCreds(ctx, creds)
 			if err != nil {
 				return nil, fmt.Errorf("failed to add TheHive client to context: %w", err)
 			}
-			// In-process credentials are provided by the host application and
-			// trusted; mark authentication as validated for downstream checks
+			// In-process creds come from the trusted host app; mark auth validated.
 			newCtx = context.WithValue(newCtx, types.AuthValidatedCtxKey, true)
 
-			// Add permissions to context
 			permsConfig, err := LoadPermissions(permissionsConfigPath)
 			if err != nil {
 				return nil, fmt.Errorf("failed to load permissions: %w", err)

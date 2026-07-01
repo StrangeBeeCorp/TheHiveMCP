@@ -11,22 +11,18 @@ import (
 
 func makeStdioAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(context.Context) context.Context {
 	return func(ctx context.Context) context.Context {
-		// Add TheHive client to context from environment variables
 		newCtx, err := AddTheHiveClientToContext(ctx)
 		if err != nil {
 			slog.Error("Failed to add TheHive client to context from environment variables", "error", err)
 			return context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: %w", err))
 		}
 
-		// Validate TheHive client credentials
 		newCtx = validateTheHiveAuthInContext(newCtx, nil, nil)
 
-		// Add default Cortex ID to context
 		if options.DefaultCortexID != "" {
 			newCtx = context.WithValue(newCtx, types.DefaultCortexIDCtxKey, options.DefaultCortexID)
 		}
 
-		// Add permissions to context
 		newCtx, err = AddPermissionsToContext(newCtx, options)
 		if err != nil {
 			slog.Warn("Failed to add permissions to context", "error", err)
@@ -37,7 +33,6 @@ func makeStdioAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(cont
 	}
 }
 
-// StartStdioServer starts the STDIO server with production-ready configuration and error handling
 func StartStdioServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOptions) error {
 	if s == nil {
 		return fmt.Errorf("MCP server cannot be nil")

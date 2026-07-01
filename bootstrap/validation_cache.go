@@ -11,9 +11,8 @@ import (
 // is cached when no TTL is configured.
 const DefaultAuthValidationCacheTTL = 60 * time.Second
 
-// validationCache remembers recent successful TheHive credential validations
-// so the HTTP transport does not round-trip to TheHive on every request. Only
-// successes are cached; failed validations are always retried upstream.
+// validationCache caches recent successful credential validations to avoid a
+// round-trip per request. Only successes are cached; failures always retry upstream.
 type validationCache struct {
 	mu      sync.Mutex
 	ttl     time.Duration
@@ -30,8 +29,7 @@ func newValidationCache(ttl time.Duration) *validationCache {
 	}
 }
 
-// key derives the cache key from the credentials. The raw API key is hashed so
-// it is not kept in memory longer than necessary.
+// key hashes the credentials so the raw API key isn't retained in memory.
 func (c *validationCache) key(creds *TheHiveCredentials) [sha256.Size]byte {
 	return sha256.Sum256([]byte(fmt.Sprintf("%s\x00%s\x00%s", creds.URL, creds.APIKey, creds.Organisation)))
 }
@@ -55,7 +53,6 @@ func (c *validationCache) IsValid(creds *TheHiveCredentials) bool {
 	return true
 }
 
-// MarkValid records a successful validation for the credentials.
 func (c *validationCache) MarkValid(creds *TheHiveCredentials) {
 	key := c.key(creds)
 

@@ -13,9 +13,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// initTestLoggerOnce installs the test log level on slog's default logger
-// exactly once per test binary. Tests run concurrently, so guard the
-// slog.SetDefault inside InitLogger against a data race.
+// initTestLoggerOnce guards slog.SetDefault against a data race, since tests
+// run concurrently.
 var initTestLoggerOnce sync.Once
 
 func initTestLogger(options *types.TheHiveMcpDefaultOptions) {
@@ -82,12 +81,11 @@ func GetMCPTestClient(
 	return GetMCPTestClientWithPermissions(t, samplingHandlerCreateMessage, elicitationHandlerElicit, string(types.PermissionConfigAdmin))
 }
 
-// GetMCPTestClientWithPermissions creates a test client with specific permissions configuration
-// permissionsConfigPath can be:
-// - types.PermissionConfigAdmin for admin permissions
-// - types.PermissionConfigReadOnly for read-only permissions
-// - testutils.PermissionsFixture(t, "analyst.yaml") for analyst permissions (file path)
-// - "" for default read-only permissions (empty string)
+// GetMCPTestClientWithPermissions creates a test client. permissionsConfigPath:
+// - types.PermissionConfigAdmin — admin
+// - types.PermissionConfigReadOnly — read-only
+// - testutils.PermissionsFixture(t, "analyst.yaml") — file path
+// - "" — default read-only
 func GetMCPTestClientWithPermissions(
 	t *testing.T,
 	samplingHandlerCreateMessage func(ctx context.Context, request mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error),
@@ -96,7 +94,6 @@ func GetMCPTestClientWithPermissions(
 ) *client.Client {
 	t.Helper()
 
-	// Get the actual container URL to use for MCP server
 	containerURL, err := StartTheHiveContainer(t)
 	if err != nil {
 		t.Fatalf("Failed to get container URL: %v", err)
@@ -105,7 +102,7 @@ func GetMCPTestClientWithPermissions(
 	options := NewMCPTestConfig()
 	initTestLogger(options)
 	creds := &bootstrap.TheHiveCredentials{
-		URL:          containerURL, // Use actual container URL instead of hardcoded one
+		URL:          containerURL,
 		APIKey:       options.TheHiveAPIKey,
 		Username:     options.TheHiveUsername,
 		Password:     options.TheHivePassword,
@@ -114,7 +111,6 @@ func GetMCPTestClientWithPermissions(
 	mcpServer := bootstrap.GetInprocessServer(creds, permissionsConfigPath)
 	bootstrap.RegisterToolsToMCPServer(mcpServer)
 
-	// Create wrappers that implement server.SamplingHandler and server.ElicitationHandler
 	serverSamplingHandler := &functionBasedSamplingHandler{createMessageFunc: samplingHandlerCreateMessage}
 	serverElicitationHandler := &functionBasedElicitationHandler{elicitFunc: elicitationHandlerElicit}
 

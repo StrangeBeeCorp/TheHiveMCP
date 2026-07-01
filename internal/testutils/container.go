@@ -18,13 +18,10 @@ import (
 // TestMITREPatternID is the patternId available in the test TheHive instance after initHiveInstance
 const TestMITREPatternID = "T1059"
 
-// defaultTheHiveTestURL is the published TheHive port from docker-compose.test.yml.
+// defaultTheHiveTestURL: published port from docker-compose.test.yml.
 const defaultTheHiveTestURL = "http://localhost:9000"
 
-// statusReadinessTimeout bounds how long we wait for TheHive to answer
-// /api/status after `docker compose up`. A cold boot of the heavier versions
-// takes several minutes, so this is generous; org setup then has its own
-// (shorter) retry window for the post-status migration phase.
+// statusReadinessTimeout: cold boot of heavier versions takes several minutes.
 const statusReadinessTimeout = 8 * time.Minute
 
 var (
@@ -49,15 +46,10 @@ type Config struct {
 	OrgName  string
 }
 
-// StartTheHiveContainer returns the URL of the TheHive instance the integration
-// suite runs against. The TheHive + Elasticsearch + MITRE stack itself is
-// managed by docker compose (see docker-compose.test.yml), brought up by
-// `make test`; this helper waits for it to become ready and performs the
-// one-time org/permission/ATT&CK bootstrap.
-//
-// Tests relying on a real TheHive instance are integration tests: they are slow
-// and cannot be result-cached by `go test`. Running in `-short` mode skips them
-// so a `-short` run stays fast and fully cacheable.
+// StartTheHiveContainer returns the URL of the compose-managed TheHive instance
+// (see docker-compose.test.yml, brought up by `make test`), after waiting for
+// readiness and performing the one-time org/permission/ATT&CK bootstrap.
+// Skips under `-short`, since these integration tests are slow and uncacheable.
 func StartTheHiveContainer(t *testing.T) (string, error) {
 	t.Helper()
 
@@ -80,9 +72,8 @@ func StartTheHiveContainer(t *testing.T) (string, error) {
 	return hiveURL, nil
 }
 
-// waitForStatus polls TheHive's /api/status until it returns 200 or the timeout
-// elapses. It probes over HTTP from the test process itself, so it needs no
-// in-container tooling (the TheHive/ES images ship no guaranteed HTTP client).
+// waitForStatus probes /api/status over HTTP from the test process, so it needs
+// no in-container tooling (the images ship no guaranteed HTTP client).
 func waitForStatus(url string, timeout time.Duration) error {
 	client := &http.Client{Timeout: 10 * time.Second}
 	deadline := time.Now().Add(timeout)
@@ -106,7 +97,6 @@ func waitForStatus(url string, timeout time.Duration) error {
 	}
 }
 
-// CreateOrgClient creates a client configured for a specific organisation
 func CreateOrgClient(t *testing.T, cfg *Config) *thehive.APIClient {
 	if t != nil {
 		t.Helper()
@@ -119,19 +109,15 @@ func CreateOrgClient(t *testing.T, cfg *Config) *thehive.APIClient {
 		clientCfg.Scheme = "https"
 	}
 
-	// Cap every request so a server-side stall fails that one call in bounded
-	// time instead of hanging until the package timeout. Under memory pressure
-	// (the heavier 5.6.3 stack on a 16 GB CI runner) TheHive can stop answering
-	// a request mid-flight; without this, a single stalled call took down the
-	// whole internal/tools package (see DL-6007). 90s is far above a healthy
-	// round-trip, so it never trips a slow-but-live server.
+	// Per-request cap: a mid-flight stall (TheHive under memory pressure) once
+	// hung the whole internal/tools package until the package timeout (DL-6007).
+	// 90s is well above a healthy round-trip, so it never trips a live server.
 	clientCfg.HTTPClient = &http.Client{Timeout: 90 * time.Second}
 
 	clientCfg.AddDefaultHeader("X-Organisation", cfg.OrgName)
 	return thehive.NewAPIClient(clientCfg)
 }
 
-// CreateAuthContext creates an authentication context for API calls
 func CreateAuthContext(username, password string) context.Context {
 	auth := thehive.BasicAuth{
 		UserName: username,
@@ -140,22 +126,10 @@ func CreateAuthContext(username, password string) context.Context {
 	return context.WithValue(context.Background(), thehive.ContextBasicAuth, auth)
 }
 
-// TeardownContainers is retained as the TestMain cleanup hook but is now a
-// no-op: the TheHive + Elasticsearch + MITRE stack is owned by docker compose
-// (see docker-compose.test.yml) and torn down by `make test`, not per test
-// binary. Kept so existing TestMain bodies compile unchanged:
-//
-//	func TestMain(m *testing.M) {
-//	    code := m.Run()
-//	    testutils.TeardownContainers(context.Background())
-//	    os.Exit(code)
-//	}
-func TeardownContainers(_ context.Context) {
-	// Intentionally empty: docker compose owns the stack lifecycle (`make test`
-	// runs `compose down`), so there is nothing to tear down per test binary.
-}
+// TeardownContainers is a no-op kept so existing TestMain bodies compile:
+// docker compose owns the stack lifecycle (`make test` runs `compose down`).
+func TeardownContainers(_ context.Context) {}
 
-// ResetHiveInstance clears all data from the test organisations
 func ResetHiveInstance(t *testing.T, hiveUrl string, testConfig *HiveTestConfig) error {
 	t.Helper()
 
@@ -167,7 +141,6 @@ func ResetHiveInstance(t *testing.T, hiveUrl string, testConfig *HiveTestConfig)
 	return nil
 }
 
-// Internal helpers
 func initHiveInstance(t *testing.T, url string) error {
 	adminConfig := &Config{
 		URL:      url,
@@ -189,13 +162,10 @@ func initHiveInstance(t *testing.T, url string) error {
 	return nil
 }
 
-// mitreServerURL is the compose `mitre-server` nginx sidecar serving the
-// minimal STIX bundle (internal/testutils/testdata/mitre.json). TheHive fetches
-// it server-side over the compose network, so the URL is the service name.
+// mitreServerURL uses the compose service name because TheHive fetches it
+// server-side over the compose network (sidecar serves testdata/mitre.json).
 const mitreServerURL = "http://mitre-server/mitre.json"
 
-// setupAttackPatterns imports a minimal MITRE ATT&CK pattern catalog into
-// TheHive from the compose-managed `mitre-server` sidecar.
 func setupAttackPatterns(ctx context.Context, client *thehive.APIClient) error {
 	input := thehive.NewInputPatternImportMitre("mitre-attack")
 	input.SetUrl(mitreServerURL)
@@ -229,10 +199,9 @@ func createClientAndContext(t *testing.T, cfg *Config) (*thehive.APIClient, cont
 func ensureTestOrganisation(t *testing.T, client *thehive.APIClient, ctx context.Context, orgName string) string {
 	t.Helper()
 
-	// TheHive answers the /api/status readiness probe (used by the container wait
-	// strategy) before its schema migration completes, so the first organisation
-	// setup can transiently fail with 5xx — especially when several containers
-	// boot in parallel. Retry those, but fail fast on non-retriable errors.
+	// /api/status returns 200 before schema migration completes, so early org
+	// setup can transiently 5xx (worse when several containers boot in parallel).
+	// Retry those; fail fast on non-retriable errors.
 	const readinessTimeout = 4 * time.Minute
 	deadline := time.Now().Add(readinessTimeout)
 	for {
@@ -250,8 +219,6 @@ func ensureTestOrganisation(t *testing.T, client *thehive.APIClient, ctx context
 	}
 }
 
-// findOrganisationID returns the id of orgName within a listOrganisation query
-// response, or false if it is absent or the response cannot be decoded.
 func findOrganisationID(resp any, orgName string) (string, bool) {
 	jsonBytes, err := json.Marshal(resp)
 	if err != nil || jsonBytes == nil {
@@ -269,13 +236,9 @@ func findOrganisationID(resp any, orgName string) (string, bool) {
 	return "", false
 }
 
-// tryEnsureTestOrganisation performs one lookup-or-create attempt for orgName.
-// It returns err == nil once the organisation exists (or already existed). On
-// failure, retry is true for transient startup errors (5xx / transport failure)
-// that the caller should wait out, and false for non-retriable errors (e.g. a
-// 4xx misconfiguration) that should fail fast.
+// tryEnsureTestOrganisation makes one lookup-or-create attempt. retry is true
+// for transient startup errors (5xx / transport failure), false for 4xx.
 func tryEnsureTestOrganisation(client *thehive.APIClient, ctx context.Context, orgName string) (id string, retry bool, err error) {
-	// Check if org exists
 	genericOp := thehive.NewInputQueryGenericOperation("listOrganisation")
 	query := thehive.NewInputQuery()
 	query.SetQuery([]thehive.InputQueryNamedOperation{
@@ -289,7 +252,6 @@ func tryEnsureTestOrganisation(client *thehive.APIClient, ctx context.Context, o
 		}
 	}
 
-	// Create if it doesn't exist
 	createOrgInput := thehive.NewInputCreateOrganisation(orgName, "Integration test organisation")
 	createResp, httpResp, createErr := client.OrganisationAPI.CreateOrganisation(ctx).
 		InputCreateOrganisation(*createOrgInput).Execute()
@@ -301,8 +263,6 @@ func tryEnsureTestOrganisation(client *thehive.APIClient, ctx context.Context, o
 		return orgName, false, nil
 	}
 
-	// Retry only while TheHive is still starting: a 5xx, or not yet reachable
-	// (transport error / no response). Other statuses (4xx) are not retriable.
 	status := 0
 	if httpResp != nil {
 		status = httpResp.StatusCode
@@ -351,7 +311,6 @@ func resetOrganisation(t *testing.T, hiveUrl string, org string) error {
 
 	client, ctx := createClientAndContext(t, cfg)
 
-	// Delete all entities in order
 	entityTypes := []struct {
 		name      string
 		operation string
@@ -390,7 +349,6 @@ func deleteAllEntities(
 ) error {
 	t.Helper()
 
-	// Query for entities
 	query := thehive.InputQuery{
 		Query: []thehive.InputQueryNamedOperation{
 			thehive.InputQueryGenericOperationAsInputQueryNamedOperation(
@@ -404,7 +362,6 @@ func deleteAllEntities(
 		return fmt.Errorf("error listing %s: %w", entityName, err)
 	}
 
-	// Parse response
 	respBytes, err := json.Marshal(resp)
 	require.NoError(t, err)
 
@@ -413,10 +370,8 @@ func deleteAllEntities(
 		return fmt.Errorf("error parsing %s: %w", entityName, err)
 	}
 
-	// Delete each entity. A 404 means the entity is already gone — typically
-	// because deleting a parent case cascade-deleted its tasks before this loop
-	// reaches them. That is the desired end state, so tolerate it rather than
-	// aborting the reset and leaking the remaining entities into the next test.
+	// Tolerate 404: the entity is already gone (e.g. a parent case cascade-deleted
+	// its tasks), which is the desired end state. Aborting would leak the rest.
 	for _, entity := range entities {
 		id, ok := entity["_id"].(string)
 		if !ok {

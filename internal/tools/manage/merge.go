@@ -52,16 +52,13 @@ func (t *ManageTool) mergeCases(ctx context.Context, client *thehive.APIClient, 
 }
 
 func (t *ManageTool) mergeAlertsIntoCase(ctx context.Context, client *thehive.APIClient, alertIDs []string, targetCaseID string) (ManageEntityResult, error) {
-	// Use bulk merge if multiple alerts, otherwise single merge
 	var result *thehive.OutputCase
 	var resp *http.Response
 	var err error
 
 	if len(alertIDs) == 1 {
-		// Single alert merge
 		result, resp, err = client.AlertAPI.MergeAlertWithCase(ctx, alertIDs[0], targetCaseID).Execute()
 	} else {
-		// Bulk merge
 		inputMerge := thehive.InputAlertsMergeWithCase{
 			AlertIds: alertIDs,
 			CaseId:   targetCaseID,
@@ -86,11 +83,8 @@ func (t *ManageTool) mergeObservables(ctx context.Context, client *thehive.APICl
 			Hint("Check that the case exists and you have permissions").API(resp)
 	}
 
-	// The API returns summary information about the merge operation
-	// Convert result to a string representation
 	var resultData string
 	if result != nil {
-		// Convert the result to JSON string for serialization
 		jsonBytes, marshalErr := json.Marshal(result)
 		if marshalErr == nil {
 			resultData = string(jsonBytes)

@@ -1,16 +1,10 @@
-// Command healthcheck is a tiny, self-contained liveness probe for the
-// TheHiveMCP HTTP server, intended to be invoked by a container HEALTHCHECK.
+// Command healthcheck is a liveness probe for the TheHiveMCP HTTP server,
+// invoked by the container HEALTHCHECK. A static binary rather than a shell
+// command because the runtime image is distroless. Reads the same MCP env vars
+// as the server so the probe target cannot drift.
 //
-// The runtime image is distroless (no shell, no curl/wget), so the probe is a
-// standalone static binary rather than a shell command. It reads the same
-// MCP_BIND_HOST / MCP_PORT / MCP_SERVER_ENDPOINT environment variables the
-// server uses, so the probe target can never drift from where the server
-// actually listens.
-//
-// The MCP endpoint is served as a long-lived Server-Sent Events stream: a GET
-// returns the response headers (HTTP 200) and then holds the connection open.
-// This probe therefore reads only the status line and closes the connection
-// immediately without draining the body — it must never block on the stream.
+// The MCP endpoint is a long-lived SSE stream, so the probe reads only the
+// status line and closes without draining the body — it must never block.
 package main
 
 import (
@@ -64,8 +58,7 @@ func run() int {
 		fmt.Fprintf(os.Stderr, "healthcheck: request to %s failed: %v\n", url, err)
 		return 1
 	}
-	// Close immediately without reading the body: the endpoint is an SSE stream
-	// that never ends, so draining it would block until the timeout.
+	// Close without draining: the SSE body never ends (see package doc).
 	_ = resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

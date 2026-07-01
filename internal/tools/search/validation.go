@@ -22,7 +22,6 @@ func (t *SearchTool) ValidatePermissions(ctx context.Context, params SearchEntit
 }
 
 func (t *SearchTool) ValidateParams(params *SearchEntitiesParams) error {
-	// Apply defaults first
 	if params.SortBy == "" {
 		params.SortBy = "_createdAt"
 	}
@@ -36,7 +35,6 @@ func (t *SearchTool) ValidateParams(params *SearchEntitiesParams) error {
 	}
 
 	if len(params.ExtraColumns) == 0 {
-		// Use entity-specific default fields
 		if defaultFields, exists := types.DefaultFields[params.EntityType]; exists {
 			params.ExtraColumns = defaultFields
 		} else {
@@ -52,7 +50,6 @@ func (t *SearchTool) ValidateParams(params *SearchEntitiesParams) error {
 		params.AdditionalQueries = []string{}
 	}
 
-	// Validate entity type
 	validEntityTypes := []string{types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable, types.EntityTypeProcedure, types.EntityTypePattern, types.EntityTypeCaseTemplate, types.EntityTypePage}
 	var isValidEntityType bool
 	for _, validType := range validEntityTypes {
@@ -65,15 +62,12 @@ func (t *SearchTool) ValidateParams(params *SearchEntitiesParams) error {
 		return tools.NewToolErrorf("invalid entity-type '%s'. Must be one of: 'alert', 'case', 'task', 'observable', 'procedure', 'pattern', 'case-template', 'page'", params.EntityType)
 	}
 
-	// Filters are optional: an empty filter matches all entities (within the
-	// limit). When provided, the filter DSL is validated by TheHive at query time.
+	// Filters are optional (empty = match-all) and validated by TheHive at query time, not here.
 
-	// Validate sort order
 	if params.SortOrder != "asc" && params.SortOrder != "desc" {
 		return tools.NewToolErrorf("invalid sort-order '%s'. Must be 'asc' or 'desc'", params.SortOrder)
 	}
 
-	// Validate limit
 	if params.Limit < 0 {
 		return tools.NewToolError("limit must be a non-negative integer")
 	}

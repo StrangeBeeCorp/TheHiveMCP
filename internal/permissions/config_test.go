@@ -16,7 +16,6 @@ func TestLoadDefault(t *testing.T) {
 		t.Errorf("Expected version 1.0, got %s", config.Version)
 	}
 
-	// Default should have read-only permissions
 	if !config.IsToolAllowed("search-entities") {
 		t.Error("Default should allow search-entities")
 	}
@@ -74,7 +73,6 @@ permissions:
 }
 
 func TestLoadFromFile(t *testing.T) {
-	// Create a temporary file
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "permissions.yaml")
 

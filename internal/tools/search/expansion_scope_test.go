@@ -10,10 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestExpandEntitiesWithQueriesScopeEnforcement verifies that additional-query
-// expansion refuses to fetch children of a parent entity excluded by the
-// configured permission filters, and proceeds unchanged when no filters are
-// configured (DL-6004).
+// Additional-query expansion must not fetch children of a parent excluded by permission
+// filters, and must proceed unchanged when no filters are configured (DL-6004).
 func TestExpandEntitiesWithQueriesScopeEnforcement(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
@@ -36,13 +34,11 @@ func TestExpandEntitiesWithQueriesScopeEnforcement(t *testing.T) {
 		"_lte": map[string]interface{}{"_field": "tlp", "_value": 2},
 	}
 
-	// Out-of-scope parent: expansion denied, no children fetched
 	_, err = utils.ExpandEntitiesWithQueries(ctx, types.EntityTypeCase,
 		[]map[string]interface{}{{"_id": outOfScopeCase.UnderscoreId}},
 		[]string{"tasks"}, permFilters)
 	require.ErrorContains(t, err, "not within the scope")
 
-	// In-scope parent: expansion succeeds and returns the case's tasks
 	expanded, err := utils.ExpandEntitiesWithQueries(ctx, types.EntityTypeCase,
 		[]map[string]interface{}{{"_id": inScopeCase.UnderscoreId}},
 		[]string{"tasks"}, permFilters)
@@ -51,7 +47,7 @@ func TestExpandEntitiesWithQueriesScopeEnforcement(t *testing.T) {
 	require.Contains(t, expanded[0], "tasks")
 	require.NotEmpty(t, expanded[0]["tasks"])
 
-	// Without configured filters the same out-of-scope parent expands fine
+	// No filters configured: the same out-of-scope parent expands (fail-open).
 	expanded, err = utils.ExpandEntitiesWithQueries(ctx, types.EntityTypeCase,
 		[]map[string]interface{}{{"_id": outOfScopeCase.UnderscoreId}},
 		[]string{"tasks"}, nil)

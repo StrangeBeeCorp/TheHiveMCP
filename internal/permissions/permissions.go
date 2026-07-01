@@ -17,27 +17,23 @@ func GetDefaultPermissions() ([]byte, error) {
 	return data, nil
 }
 
-// Config represents the complete permissions configuration
 type Config struct {
 	Version     string             `yaml:"version"`
 	Permissions PermissionsSection `yaml:"permissions"`
 }
 
-// PermissionsSection contains all permission categories
 type PermissionsSection struct {
 	Tools      map[string]ToolPermission `yaml:"tools"`
 	Analyzers  AutomationPermissions     `yaml:"analyzers"`
 	Responders AutomationPermissions     `yaml:"responders"`
 }
 
-// ToolPermission defines access and filtering for a specific tool
 type ToolPermission struct {
 	Allowed           bool                       `yaml:"allowed"`
 	Filters           map[string]interface{}     `yaml:"filters,omitempty"`
 	EntityPermissions map[string]EntityOperation `yaml:"entity_permissions,omitempty"` // For manage-entities tool
 }
 
-// EntityOperation defines which operations are allowed for an entity type
 type EntityOperation struct {
 	Create        bool `yaml:"create"`
 	Update        bool `yaml:"update"`
@@ -48,14 +44,13 @@ type EntityOperation struct {
 	ApplyTemplate bool `yaml:"apply-template"`
 }
 
-// AutomationPermissions defines analyzer or responder access
 type AutomationPermissions struct {
 	Mode    string   `yaml:"mode"` // "allow_list" or "block_list"
 	Allowed []string `yaml:"allowed"`
 	Blocked []string `yaml:"blocked"`
 }
 
-// IsToolAllowed checks if a tool is permitted
+// IsToolAllowed reports whether toolName is permitted; unknown tools and a nil config deny.
 func (c *Config) IsToolAllowed(toolName string) bool {
 	if c == nil || c.Permissions.Tools == nil {
 		return false
@@ -67,8 +62,8 @@ func (c *Config) IsToolAllowed(toolName string) bool {
 	return perm.Allowed
 }
 
-// IsEntityOperationAllowed checks if a specific operation on an entity type is permitted
-// If no entity-specific permissions are configured, defaults to the tool's general allowed setting
+// IsEntityOperationAllowed reports whether operation is permitted on entityType.
+// With no entity-specific permissions configured, defaults to the tool's general allowed setting.
 func (c *Config) IsEntityOperationAllowed(entityType, operation string) bool {
 	if c == nil || c.Permissions.Tools == nil {
 		return false
@@ -79,19 +74,16 @@ func (c *Config) IsEntityOperationAllowed(entityType, operation string) bool {
 		return false
 	}
 
-	// If no entity permissions configured, allow all operations (backward compatibility)
+	// No entity permissions configured: allow all (backward compatibility).
 	if len(toolPerm.EntityPermissions) == 0 {
 		return true
 	}
 
-	// Check entity-specific permissions
 	entityPerm, exists := toolPerm.EntityPermissions[entityType]
 	if !exists {
-		// If entity type not specified, deny by default
-		return false
+		return false // unlisted entity type: deny by default
 	}
 
-	// Check operation permission
 	switch operation {
 	case "create":
 		return entityPerm.Create
@@ -112,7 +104,6 @@ func (c *Config) IsEntityOperationAllowed(entityType, operation string) bool {
 	}
 }
 
-// GetToolFilters returns the filters for a specific tool
 func (c *Config) GetToolFilters(toolName string) map[string]interface{} {
 	if c == nil || c.Permissions.Tools == nil {
 		return nil
@@ -124,7 +115,6 @@ func (c *Config) GetToolFilters(toolName string) map[string]interface{} {
 	return perm.Filters
 }
 
-// IsAnalyzerAllowed checks if an analyzer is permitted based on global rules
 func (c *Config) IsAnalyzerAllowed(analyzerName string) bool {
 	if c == nil {
 		return false
@@ -132,7 +122,6 @@ func (c *Config) IsAnalyzerAllowed(analyzerName string) bool {
 	return isAutomationAllowed(analyzerName, c.Permissions.Analyzers.Mode, c.Permissions.Analyzers.Allowed, c.Permissions.Analyzers.Blocked)
 }
 
-// IsResponderAllowed checks if a responder is permitted based on global rules
 func (c *Config) IsResponderAllowed(responderName string) bool {
 	if c == nil {
 		return false
@@ -140,7 +129,6 @@ func (c *Config) IsResponderAllowed(responderName string) bool {
 	return isAutomationAllowed(responderName, c.Permissions.Responders.Mode, c.Permissions.Responders.Allowed, c.Permissions.Responders.Blocked)
 }
 
-// GetAllowedAnalyzers returns list of allowed analyzer names
 func (c *Config) GetAllowedAnalyzers(allAnalyzers []string) []string {
 	if c == nil {
 		return []string{}
@@ -155,7 +143,6 @@ func (c *Config) GetAllowedAnalyzers(allAnalyzers []string) []string {
 	return allowed
 }
 
-// GetAllowedResponders returns list of allowed responder names
 func (c *Config) GetAllowedResponders(allResponders []string) []string {
 	if c == nil {
 		return []string{}
@@ -170,20 +157,17 @@ func (c *Config) GetAllowedResponders(allResponders []string) []string {
 	return allowed
 }
 
-// isAutomationAllowed checks if an automation item is allowed based on mode and lists
 func isAutomationAllowed(name, mode string, allowed, blocked []string) bool {
 	switch mode {
 	case "allow_list":
 		if len(allowed) == 0 {
 			return false
 		}
-		// Check for wildcard
 		for _, a := range allowed {
 			if a == "*" {
 				return true
 			}
 		}
-		// Check if explicitly allowed
 		for _, a := range allowed {
 			if a == name {
 				return true
@@ -192,7 +176,6 @@ func isAutomationAllowed(name, mode string, allowed, blocked []string) bool {
 		return false
 
 	case "block_list":
-		// Check if explicitly blocked
 		for _, b := range blocked {
 			if b == name {
 				return false

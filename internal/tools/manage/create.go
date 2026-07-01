@@ -91,7 +91,6 @@ func (t *ManageTool) createCase(ctx context.Context, client *thehive.APIClient, 
 			Hint("Check required fields and permissions").API(resp)
 	}
 
-	// For create operations, return the single entity, not an array
 	return ManageEntityResult{
 		CreateCaseResult: NewCreateCaseResult(result),
 	}, nil
@@ -118,7 +117,6 @@ func (t *ManageTool) createTask(ctx context.Context, client *thehive.APIClient, 
 		return ManageEntityResult{}, tools.NewToolErrorf("failed to create task in case %s", parentID).Cause(err).
 			Hint("Check that the case exists and you have permissions").API(resp)
 	}
-	// For create operations, return the single entity, not an array
 	return ManageEntityResult{
 		CreateTaskResult: NewCreateTaskResult(result),
 	}, nil
@@ -139,13 +137,11 @@ func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APICl
 			Schema("observable", "create")
 	}
 
-	// Try to create in case first, then alert if that fails
+	// parentID may be a case or an alert; try case, fall back to alert.
 	var result []thehive.OutputObservable
 
-	// First attempt with case
 	caseResult, _, caseErr := client.ObservableAPI.CreateObservableInCase(ctx, parentID).InputCreateObservable(inputObservable).Execute()
 	if caseErr != nil {
-		// If case creation fails, try alert
 		alertResult, _, alertErr := client.ObservableAPI.CreateObservableInAlert(ctx, parentID).InputCreateObservable(inputObservable).Execute()
 		if alertErr != nil {
 			return ManageEntityResult{}, tools.NewToolError("failed to create observable").Cause(alertErr).
@@ -177,10 +173,9 @@ func (t *ManageTool) createProcedure(ctx context.Context, client *thehive.APICli
 			Schema("procedure", "create")
 	}
 
-	// First attempt with case
+	// parentID may be a case or an alert; try case, fall back to alert.
 	caseResult, _, caseErr := client.TTPAPI.CreateProcedureForCase(ctx, parentID).InputProcedure(inputProcedure).Execute()
 	if caseErr != nil {
-		// If case creation fails, try alert
 		alertResult, _, alertErr := client.TTPAPI.CreateProcedureForAlert(ctx, parentID).InputProcedure(inputProcedure).Execute()
 		if alertErr != nil {
 			return ManageEntityResult{}, tools.NewToolError("failed to create procedure").Cause(alertErr).

@@ -27,9 +27,8 @@ func (t *ManageTool) ValidatePermissions(ctx context.Context, params ManageEntit
 	return t.validateEntityScope(ctx, perms, params)
 }
 
-// scopeCheck identifies entities an operation reaches, so they can be
-// verified against the manage-entities permission filters before anything
-// is mutated.
+// scopeCheck names entities an operation reaches, to verify against the
+// manage-entities permission filters before any mutation.
 type scopeCheck struct {
 	entityType string
 	entityIDs  []string
@@ -51,7 +50,6 @@ func (t *ManageTool) validateEntityScope(ctx context.Context, perms *permissions
 	return checkAnyInScope(ctx, anyOf, permFilters)
 }
 
-// checkAllInScope requires every entity in every check to be within scope.
 func checkAllInScope(ctx context.Context, checks []scopeCheck, permFilters map[string]interface{}) error {
 	for _, check := range checks {
 		inScope, err := utils.GetEntityIDsInScope(ctx, check.entityType, check.entityIDs, permFilters)
@@ -68,10 +66,9 @@ func checkAllInScope(ctx context.Context, checks []scopeCheck, permFilters map[s
 	return nil
 }
 
-// checkAnyInScope passes when at least one alternative is within scope — used
-// for a parent that may be a case OR an alert. A query error counts as a
-// non-match so a remaining alternative can still pass; if none matches, the
-// operation is denied (fail closed). No alternatives means nothing to check.
+// checkAnyInScope passes if at least one alternative is in scope (parent may be
+// a case OR an alert). Query error counts as non-match; none matching denies
+// (fail closed). No alternatives passes.
 func checkAnyInScope(ctx context.Context, checks []scopeCheck, permFilters map[string]interface{}) error {
 	if len(checks) == 0 {
 		return nil
@@ -94,10 +91,9 @@ func scopeDeniedError(entityType, entityID string) error {
 		Hint("The configured permission filters restrict which entities this tool can reach")
 }
 
-// scopeChecksForOperation maps an operation to the existing entities it
-// reaches. Every allOf entry must be in scope; anyOf entries (parents that
-// may be a case or an alert) need a single match. Creation of top-level
-// entities reaches no existing entity, so it returns no checks.
+// scopeChecksForOperation maps an operation to the existing entities it reaches.
+// Every allOf entry must be in scope; anyOf entries (case-or-alert parents) need
+// one match. Top-level creation reaches no existing entity: no checks.
 func scopeChecksForOperation(params ManageEntityParams) (allOf, anyOf []scopeCheck) {
 	switch params.Operation {
 	case OperationCreate:

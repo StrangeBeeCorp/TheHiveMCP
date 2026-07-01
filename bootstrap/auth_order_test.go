@@ -15,14 +15,12 @@ import (
 
 func TestAuthenticationExecutionOrder(t *testing.T) {
 	t.Run("middleware runs after context function and catches auth error", func(t *testing.T) {
-		// Create options that will fail TheHive validation (invalid URL)
 		options := &types.TheHiveMcpDefaultOptions{
-			TheHiveURL:          "https://invalid-thehive-server-that-does-not-exist.com", // Will fail validation
+			TheHiveURL:          "https://invalid-thehive-server-that-does-not-exist.com",
 			TheHiveAPIKey:       "test-key",
 			TheHiveOrganisation: "test-org",
 		}
 
-		// Create a simple test tool
 		mcpServer := server.NewMCPServer("test", "1.0.0",
 			server.WithToolHandlerMiddleware(auth.AuthenticationMiddleware()),
 		)
@@ -33,12 +31,10 @@ func TestAuthenticationExecutionOrder(t *testing.T) {
 			return &mcp.CallToolResult{}, nil
 		})
 
-		// Create HTTP server with context function
 		httpServer := server.NewStreamableHTTPServer(mcpServer,
 			server.WithHTTPContextFunc(GetHTTPAuthContextFunc(options)),
 		)
 
-		// Create test HTTP request for tool call
 		reqBody := strings.NewReader(`{
 			"jsonrpc": "2.0",
 			"id": 1,
@@ -57,21 +53,14 @@ func TestAuthenticationExecutionOrder(t *testing.T) {
 
 		w := httptest.NewRecorder()
 
-		// This should trigger:
-		// 1. Context function (which will fail validation and store auth error)
-		// 2. Middleware (which should catch the auth error and return it)
-		// 3. Tool should NOT be called
+		// Order under test: context func fails validation and stores the auth
+		// error, then middleware catches it and blocks the tool.
 		httpServer.ServeHTTP(w, req)
 
-		// Debug: print actual response
 		response := w.Body.String()
 		t.Logf("Response: %s", response)
 
-		// Verify that:
-		// 1. The test tool was NOT called (middleware blocked it)
 		assert.False(t, testToolCalled, "Tool should not be called when authentication fails")
-
-		// 2. We got an authentication error response
 		assert.Contains(t, response, "Invalid session ID", "Response should contain authentication error")
 	})
 }

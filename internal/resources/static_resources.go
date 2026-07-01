@@ -25,7 +25,6 @@ var factsFS embed.FS
 //go:embed docs/*.md
 var docsFS embed.FS
 
-// Update the file reading functions
 func getSchemaContent(schemaName string) ([]mcp.ResourceContents, error) {
 	schemaBytes, err := schemasFS.ReadFile(fmt.Sprintf("schemas/%s.json", schemaName))
 	if err != nil {
@@ -60,13 +59,11 @@ func getFactContent(factName string, data interface{}) ([]mcp.ResourceContents, 
 		return nil, fmt.Errorf("failed to read %s fact: %w", factName, err)
 	}
 
-	// Create a new template
 	tmpl, err := template.New(factName).Parse(string(factBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse template: %w", err)
 	}
 
-	// Execute template with data
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return nil, fmt.Errorf("failed to execute template: %w", err)
@@ -81,7 +78,6 @@ func getFactContent(factName string, data interface{}) ([]mcp.ResourceContents, 
 	}, nil
 }
 
-// Alert schema handlers
 func GetAlertSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("alert/OutputAlert")
 }
@@ -94,7 +90,6 @@ func GetAlertUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("alert/UpdateAlert")
 }
 
-// Case schema handlers
 func GetCaseSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("case/OutputCase")
 }
@@ -107,7 +102,6 @@ func GetCaseUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("case/UpdateCase")
 }
 
-// Task schema handlers
 func GetTaskSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("task/OutputTask")
 }
@@ -120,7 +114,6 @@ func GetTaskUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("task/UpdateTask")
 }
 
-// Observable schema handlers
 func GetObservableSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("observable/OutputObservable")
 }
@@ -133,7 +126,6 @@ func GetObservableUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("observable/UpdateObservable")
 }
 
-// Procedure schema handlers
 func GetProcedureSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("ttp/OutputProcedure")
 }
@@ -150,7 +142,6 @@ func GetPatternSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("ttp/OutputPattern")
 }
 
-// Case template schema handler
 func GetCaseTemplateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("case_template/OutputCaseTemplate")
 }
@@ -163,7 +154,6 @@ func GetCaseTemplateUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("case_template/UpdateCaseTemplate")
 }
 
-// Page schema handlers
 func GetPageSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("page/OutputPage")
 }
@@ -261,7 +251,6 @@ func GetPageFactHandler() ([]mcp.ResourceContents, error) {
 	return getFactContent(types.EntityTypePage, nil)
 }
 
-// Helper to get catalog structure
 func GetCatalogData() map[string]interface{} {
 	return map[string]interface{}{
 		"categories": []map[string]interface{}{
@@ -345,7 +334,6 @@ func GetCatalogData() map[string]interface{} {
 	}
 }
 
-// GetResourceCatalog returns the catalog (uses the same GetCatalogData)
 func GetResourceCatalog(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	catalog := GetCatalogData()
 	catalog["usage"] = map[string]interface{}{
@@ -369,7 +357,6 @@ func GetResourceCatalog(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp
 }
 
 func RegisterSchemaResources(registry *ResourceRegistry) {
-	// Alert schemas
 	alertSchema := mcp.NewResource(
 		"hive://schema/alert",
 		"Alert Output Schema",
@@ -400,7 +387,6 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		return GetAlertUpdateSchemaHandler()
 	})
 
-	// Case schemas
 	caseSchema := mcp.NewResource(
 		"hive://schema/case",
 		"Case Output Schema",
@@ -431,7 +417,6 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		return GetCaseUpdateSchemaHandler()
 	})
 
-	// Task schemas
 	taskSchema := mcp.NewResource(
 		"hive://schema/task",
 		"Task Output Schema",
@@ -462,7 +447,6 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		return GetTaskUpdateSchemaHandler()
 	})
 
-	// Observable schemas
 	observableSchema := mcp.NewResource(
 		"hive://schema/observable",
 		"Observable Output Schema",
@@ -536,7 +520,6 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		return GetPatternSchemaHandler()
 	})
 
-	// Case template schema
 	caseTemplateSchema := mcp.NewResource(
 		"hive://schema/case-template",
 		"Case Template Schema",
@@ -567,7 +550,6 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		return GetCaseTemplateUpdateSchemaHandler()
 	})
 
-	// Page schemas
 	pageSchema := mcp.NewResource(
 		"hive://schema/page",
 		"Page Output Schema",
@@ -598,7 +580,6 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		return GetPageUpdateSchemaHandler()
 	})
 
-	// Filter schema
 	filterSchema := mcp.NewResource(
 		"hive://schema/filter",
 		"Filter Schema",
@@ -796,7 +777,6 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		},
 	)
 
-	// Register resource catalog
 	catalogResource := mcp.NewResource(
 		"hive://catalog",
 		"Resource Catalog",

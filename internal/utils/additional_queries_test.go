@@ -10,18 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestFilterAdditionalQueryResultsSimilarityShapes pins the projection contract
-// for the *Light similarity operations, whose output is FLAT and uniform across
-// all four source↔hit pairs (CaseRenderer.lightSimilarCasesWrites /
-// AlertRenderer.lightSimilarAlertsWrites): the entity fields and the
-// match-context meta (similarObservableCount, observableCount) live side by side
-// in one object, with no {"case"|"alert": {...}} wrapper.
-//
-// We assert the default entity fields and the stats both survive projection for
-// every pair, and that linkedWith — dropped from the surfaced meta when we
-// migrated to Light — does NOT leak through even when present in the input. Each
-// pair resolves its real descriptor from the registry, so the projection is
-// driven by the same QueryDescriptor.MetaFields the production path uses.
+// Flat *Light similarity output: entity fields + meta side by side, no
+// {"case"|"alert"} wrapper. Meta stats survive projection for all four
+// source↔hit pairs; dropped linkedWith does not leak through.
 func TestFilterAdditionalQueryResultsSimilarityShapes(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -68,12 +59,8 @@ func TestFilterAdditionalQueryResultsSimilarityShapes(t *testing.T) {
 	}
 }
 
-// TestEveryRegisteredQueryDeclaresScopeIntent is the structural fail-closed
-// guard. Every descriptor in the registry must declare a fetch Func and a result
-// EntityType — a query added with a zero-value descriptor (e.g. forgetting
-// EntityType, or whose results are independent but ResultsAreIndependent was left
-// false) would slip past projection or scope re-checking. Asserting the shape of
-// every entry catches that at test time rather than as a runtime leak.
+// Fail-closed guard: a zero-value descriptor (missing Func/EntityType) would slip
+// past projection or scope re-checking. Catch it at test time, not as a runtime leak.
 func TestEveryRegisteredQueryDeclaresScopeIntent(t *testing.T) {
 	for entityType, config := range queryRegistry {
 		for queryName, descriptor := range config {
@@ -88,11 +75,8 @@ func TestEveryRegisteredQueryDeclaresScopeIntent(t *testing.T) {
 	}
 }
 
-// TestFilterAdditionalQueryResultsNonSimilarityDropsMeta pins the
-// non-similarity branch: a normal additional query (e.g. tasks) projects only
-// the default entity fields and never lifts match-context meta fields, even
-// when an input map happens to carry them. The tasks descriptor declares no
-// MetaFields and ResultsAreIndependent=false, so includeMeta is false.
+// Tasks declares no MetaFields and ResultsAreIndependent=false, so includeMeta is
+// false: meta fields in the input must not survive projection.
 func TestFilterAdditionalQueryResultsNonSimilarityDropsMeta(t *testing.T) {
 	descriptor, ok := queryRegistry[types.EntityTypeCase]["tasks"]
 	require.True(t, ok, "tasks must be registered for case")
@@ -102,9 +86,8 @@ func TestFilterAdditionalQueryResultsNonSimilarityDropsMeta(t *testing.T) {
 
 	in := []map[string]interface{}{
 		{
-			"_id":   "~10",
-			"title": "Investigate",
-			// Meta fields must NOT survive for a non-similarity query.
+			"_id":                    "~10",
+			"title":                  "Investigate",
 			"similarObservableCount": float64(3),
 			"observableCount":        float64(5),
 		},
@@ -120,13 +103,9 @@ func TestFilterAdditionalQueryResultsNonSimilarityDropsMeta(t *testing.T) {
 		"non-similarity queries must not surface similarity meta fields")
 }
 
-// TestFilterSimilarityHitsByScopeLogsUnresolvableDrops proves the fail-closed
-// drop path in filterSimilarityHitsByScope is no longer silent: a hit with no
-// resolvable string _id is dropped AND emits a Debug log (per-hit line +
-// aggregate droppedCount/totalHits), so a future _id shape regression in the
-// *Light output is diagnosable instead of silently producing empty similarity
-// results. In-scope hits are kept; legitimate out-of-scope drops and all-in-scope
-// input stay quiet (no regression signal to surface).
+// An unresolvable-_id drop is Debug-logged so a future *Light _id shape regression
+// is diagnosable rather than silently emptying results; expected out-of-scope and
+// all-in-scope drops stay quiet, carrying no regression signal.
 func TestFilterSimilarityHitsByScopeLogsUnresolvableDrops(t *testing.T) {
 	t.Run("unresolvable _id is dropped and logged", func(t *testing.T) {
 		buf := captureDebugLogs(t)
@@ -188,8 +167,6 @@ func TestFilterSimilarityHitsByScopeLogsUnresolvableDrops(t *testing.T) {
 	})
 }
 
-// captureDebugLogs redirects the default slog logger to an in-memory buffer at
-// Debug level for the duration of the test, restoring the previous logger after.
 func captureDebugLogs(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	buf := &bytes.Buffer{}
