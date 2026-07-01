@@ -123,6 +123,10 @@ Download the appropriate MCPB file for your system from the [latest release](htt
 - **Linux (64-bit)**: `thehivemcp-v0.2.0-linux-amd64.mcpb`
 - **Linux (ARM64)**: `thehivemcp-v0.2.0-linux-arm64.mcpb`
 
+> **On Windows and hitting a SmartScreen "unknown publisher" prompt?** You can
+> compile the server locally instead — see
+> [How to run on Windows from source](docs/how-to/run-on-windows-from-source.md).
+
 #### Step 3: Install the MCPB package
 
 Double-click the downloaded `.mcpb` file. Claude Desktop automatically:
@@ -450,6 +454,7 @@ Access TheHive resources for documentation, schemas, and metadata. The entry poi
 - Get specific alert schema: `uri="hive://schema/alert"`
 
 ### [search-entities](docs/tools/search-entities.md)
+
 Search for entities in TheHive by providing a structured filter built from TheHive's query DSL. The filter is applied directly — no natural-language translation step.
 
 **Key features:**
