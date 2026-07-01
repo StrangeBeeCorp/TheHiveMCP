@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MCP v0.3.3 vs v0.3.4</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0f1115;
+  --panel: #181b22;
+  --panel2: #1f232c;
+  --line: #2a2f3a;
+  --text: #e6e8ee;
+  --muted: #9aa3b2;
+  --v1: #ff8a4c;
+  --v2: #6ec1ff;
+  --good: #4ade80;
+  --bad: #f87171;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+       background: var(--bg); color: var(--text); }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 32px 24px 64px; }
+header h1 { margin: 0 0 4px; font-size: 22px; font-weight: 600; }
+header .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+.legend { display: inline-flex; gap: 14px; font-size: 12px; color: var(--muted); }
+.legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; margin-right: 4px; }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0 28px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.tile .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.tile .v { font-size: 22px; font-weight: 600; margin-top: 4px; }
+.tile .d { font-size: 12px; margin-top: 4px; }
+.d.up { color: var(--good); } .d.down { color: var(--bad); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin: 16px 0; }
+.panel h2 { margin: 0 0 4px; font-size: 14px; font-weight: 600; color: var(--text); }
+.panel .h-sub { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+.canvas-wrap { position: relative; height: 320px; }
+.canvas-wrap.tall { height: 520px; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--line); }
+th:first-child, td:first-child { text-align: left; color: var(--muted); font-weight: 500; }
+th { color: var(--muted); font-weight: 500; text-transform: uppercase; font-size: 10.5px; letter-spacing: .04em; }
+.heatmap td { position: relative; color: #000; text-align: center; font-weight: 600; min-width: 80px; }
+.heatmap td.lbl { background: transparent; color: var(--muted); text-align: left; font-weight: 500; }
+.heatmap th { text-align: center; }
+.cell { display: flex; flex-direction: column; gap: 2px; align-items: center; }
+.cell .pct { font-weight: 600; }
+.cell .delta { font-size: 10.5px; opacity: .9; }
+.delta.up { color: #15803d; } .delta.down { color: #991b1b; }
+.compact td, .compact th { padding: 6px 9px; font-size: 12px; }
+.compact td.delta-up { color: var(--good); }
+.compact td.delta-down { color: var(--bad); }
+.foot { color: var(--muted); font-size: 11.5px; margin-top: 28px; }
+.foot summary { cursor: pointer; padding: 6px 0; }
+.foot code { background: var(--panel2); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+.foot ul { margin: 6px 0; padding-left: 20px; }
+.muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>TheHive MCP — <span style="color:var(--v1)">v0.3.3</span> vs <span style="color:var(--v2)">v0.3.4</span></h1>
+  <div class="sub">376 test runs per version · 8 LLMs · 4 suites · phishing-triage omitted</div>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--v1)"></span>v0.3.3</span>
+    <span><span class="dot" style="background:var(--v2)"></span>v0.3.4</span>
+  </div>
+</header>
+
+<section class="tiles"><div class="tile"><div class="k">Pass rate</div><div class="v">80% → 84%</div><div class="d up">+4.5pp</div></div><div class="tile"><div class="k">Avg latency</div><div class="v">25.1s → 20.4s</div><div class="d up">-19%</div></div><div class="tile"><div class="k">Total cost</div><div class="v">$2.96 → $3.62</div><div class="d down">+22%</div></div><div class="tile"><div class="k">Biggest mover</div><div class="v">gpt-5.4</div><div class="d up">+19pp pass</div></div></section>
+
+<section class="panel">
+  <h2>Pass rate by provider</h2>
+  <div class="h-sub">overall, across all 4 suites</div>
+  <div class="canvas-wrap"><canvas id="passByProvider"></canvas></div>
+</section>
+
+<div class="grid2">
+  <section class="panel">
+    <h2>Avg latency by provider</h2>
+    <div class="h-sub">milliseconds, lower = better</div>
+    <div class="canvas-wrap"><canvas id="latByProvider"></canvas></div>
+  </section>
+  <section class="panel">
+    <h2>Total cost by provider</h2>
+    <div class="h-sub">USD, billed through OpenRouter</div>
+    <div class="canvas-wrap"><canvas id="costByProvider"></canvas></div>
+  </section>
+</div>
+
+<section class="panel">
+  <h2>Pass-rate heatmap: provider &times; suite</h2>
+  <div class="h-sub">each cell shows v0.3.4 pass rate; delta vs v0.3.3 below</div>
+  <table class="heatmap"><thead><tr><th></th><th>mcp-tools</th><th>workflows</th><th>security-hardened</th></tr></thead><tbody><tr><td class="lbl">claude-sonnet-4.6</td><td style="background:rgb(74,222,128)"><div class="cell"><span class="pct">100%</span><span class="delta up">+3pp</span></div></td><td style="background:rgb(74,222,128)"><div class="cell"><span class="pct">100%</span><span class="delta up">+0pp</span></div></td><td style="background:rgb(97,220,126)"><div class="cell"><span class="pct">93%</span><span class="delta up">+0pp</span></div></td></tr><tr><td class="lbl">deepseek-v3.2</td><td style="background:rgb(98,220,125)"><div class="cell"><span class="pct">93%</span><span class="delta up">+7pp</span></div></td><td style="background:rgb(74,222,128)"><div class="cell"><span class="pct">100%</span><span class="delta up">+33pp</span></div></td><td style="background:rgb(236,210,114)"><div class="cell"><span class="pct">53%</span><span class="delta up">+0pp</span></div></td></tr><tr><td class="lbl">gemini-3-flash</td><td style="background:rgb(74,222,128)"><div class="cell"><span class="pct">100%</span><span class="delta up">+7pp</span></div></td><td style="background:rgb(74,222,128)"><div class="cell"><span class="pct">100%</span><span class="delta up">+0pp</span></div></td><td style="background:rgb(120,218,124)"><div class="cell"><span class="pct">87%</span><span class="delta down">-7pp</span></div></td></tr><tr><td class="lbl">gpt-4.1</td><td style="background:rgb(74,222,128)"><div class="cell"><span class="pct">100%</span><span class="delta up">+3pp</span></div></td><td style="background:rgb(74,222,128)"><div class="cell"><span class="pct">100%</span><span class="delta up">+0pp</span></div></td><td style="background:rgb(248,203,113)"><div class="cell"><span class="pct">47%</span><span class="delta up">+7pp</span></div></td></tr><tr><td class="lbl">gpt-5.4</td><td style="background:rgb(109,219,124)"><div class="cell"><span class="pct">90%</span><span class="delta up">+7pp</span></div></td><td style="background:rgb(74,222,128)"><div class="cell"><span class="pct">100%</span><span class="delta up">+0pp</span></div></td><td style="background:rgb(74,222,128)"><div class="cell"><span class="pct">100%</span><span class="delta up">+47pp</span></div></td></tr><tr><td class="lbl">mistral-large-2512</td><td style="background:rgb(74,222,128)"><div class="cell"><span class="pct">100%</span><span class="delta up">+0pp</span></div></td><td style="background:rgb(74,222,128)"><div class="cell"><span class="pct">100%</span><span class="delta up">+0pp</span></div></td><td style="background:rgb(248,203,113)"><div class="cell"><span class="pct">47%</span><span class="delta down">-13pp</span></div></td></tr><tr><td class="lbl">mistral-small-3.2-24b</td><td style="background:rgb(98,220,125)"><div class="cell"><span class="pct">93%</span><span class="delta up">+3pp</span></div></td><td style="background:rgb(248,177,113)"><div class="cell"><span class="pct">33%</span><span class="delta up">+0pp</span></div></td><td style="background:rgb(248,164,113)"><div class="cell"><span class="pct">27%</span><span class="delta up">+0pp</span></div></td></tr><tr><td class="lbl">qwen3.5-9b</td><td style="background:rgb(122,218,123)"><div class="cell"><span class="pct">86%</span><span class="delta up">+7pp</span></div></td><td style="background:rgb(74,222,128)"><div class="cell"><span class="pct">100%</span><span class="delta up">+0pp</span></div></td><td style="background:rgb(248,177,113)"><div class="cell"><span class="pct">33%</span><span class="delta up">+0pp</span></div></td></tr></tbody></table>
+</section>
+
+<section class="panel">
+  <h2>Pass rate &times; cost efficiency</h2>
+  <div class="h-sub">one color per provider · ◯ v0.3.3 → ● v0.3.4 · ideal = upper-left</div>
+  <div class="canvas-wrap tall"><canvas id="scatter"></canvas></div>
+</section>
+
+<section class="panel">
+  <h2>Per-provider deltas</h2>
+  <table class="compact"><thead><tr><th>Provider</th><th>Pass v0.3.3</th><th>Pass v0.3.4</th><th>Δ</th><th>Lat v0.3.3</th><th>Lat v0.3.4</th><th>Δ</th><th>Cost v0.3.3</th><th>Cost v0.3.4</th><th>Δ</th></tr></thead><tbody><tr><td>claude-sonnet-4.6</td><td>96%</td><td>98%</td><td class='delta-up'>+2.1pp</td><td>16.2s</td><td>16.2s</td><td class='delta-down'>+0.0s</td><td>$1.707</td><td>$1.920</td><td class='delta-down'>+$0.213</td></tr><tr><td>deepseek-v3.2</td><td>74%</td><td>81%</td><td class='delta-up'>+6.4pp</td><td>41.4s</td><td>36.2s</td><td class='delta-up'>-5.1s</td><td>$0.299</td><td>$0.259</td><td class='delta-up'>$-0.041</td></tr><tr><td>gemini-3-flash</td><td>94%</td><td>96%</td><td class='delta-up'>+2.1pp</td><td>8.2s</td><td>6.7s</td><td class='delta-up'>-1.5s</td><td>$0.154</td><td>$0.159</td><td class='delta-down'>+$0.004</td></tr><tr><td>gpt-4.1</td><td>79%</td><td>83%</td><td class='delta-up'>+4.3pp</td><td>8.3s</td><td>7.7s</td><td class='delta-up'>-0.5s</td><td>$0.466</td><td>$0.612</td><td class='delta-down'>+$0.146</td></tr><tr><td>gpt-5.4</td><td>74%</td><td>94%</td><td class='delta-up'>+19.1pp</td><td>8.9s</td><td>9.9s</td><td class='delta-down'>+1.0s</td><td>$0.177</td><td>$0.533</td><td class='delta-down'>+$0.356</td></tr><tr><td>mistral-large-2512</td><td>87%</td><td>83%</td><td class='delta-down'>-4.3pp</td><td>13.9s</td><td>13.3s</td><td class='delta-up'>-0.6s</td><td>$0.112</td><td>$0.095</td><td class='delta-up'>$-0.017</td></tr><tr><td>mistral-small-3.2-24b</td><td>66%</td><td>68%</td><td class='delta-up'>+2.1pp</td><td>10.8s</td><td>12.3s</td><td class='delta-down'>+1.5s</td><td>$0.013</td><td>$0.018</td><td class='delta-down'>+$0.005</td></tr><tr><td>qwen3.5-9b</td><td>66%</td><td>70%</td><td class='delta-up'>+4.3pp</td><td>94.5s</td><td>61.0s</td><td class='delta-up'>-33.5s</td><td>$0.036</td><td>$0.028</td><td class='delta-up'>$-0.008</td></tr></tbody></table>
+</section>
+
+<details class="foot">
+  <summary>Methodology &amp; eval IDs</summary>
+  <p>Each version was pulled fresh from <code>ghcr.io/strangebee/thehivemcp/thehivemcp</code>.
+  Eval descriptions are tagged <code>[MCP vX.X.X]</code> and <code>mcp_version</code> is in
+  the per-test vars so promptfoo cache keys separate the two versions. Test definitions
+  were fixed mid-run (no hardcoded tool results, neutral assistant narratives, only
+  real id_map IDs) — both versions ran against the post-fix suite.</p>
+  <p><b>Caveats:</b> workflows has only 3 tests/model (one fail = 33%); cost is OpenRouter
+  spend, not internal compute; security-hardened uses the new hardened conversation
+  playbook; reseed mid-run can invalidate cached responses for tests with
+  <code>resolve_from</code> assertions — the v0.3.4 cleanup re-run used
+  <code>--no-cache</code> to avoid this.</p>
+  <ul><li><code>eval-mJK-2026-05-22T18:59:24</code> — mcp-tools [v0.3.3]</li><li><code>eval-nA3-2026-05-22T19:19:20</code> — mcp-tools [v0.3.3]</li><li><code>eval-gL6-2026-05-22T22:32:59</code> — mcp-tools [v0.3.4]</li><li><code>eval-qyg-2026-05-22T22:48:26</code> — mcp-tools [v0.3.4]</li><li><code>eval-EQW-2026-05-25T09:42:01</code> — workflows [v0.3.3]</li><li><code>eval-dcH-2026-05-25T09:37:12</code> — workflows [v0.3.4]</li><li><code>eval-JRM-2026-05-22T21:57:05</code> — security-hardened [v0.3.3]</li><li><code>eval-UnT-2026-05-22T18:24:21</code> — security-hardened [v0.3.4]</li></ul>
+</details>
+
+</div>
+
+<script>
+const V1 = "v0.3.3";
+const V2 = "v0.3.4";
+const DATA = {"providers": ["claude-sonnet-4.6", "deepseek-v3.2", "gemini-3-flash", "gpt-4.1", "gpt-5.4", "mistral-large-2512", "mistral-small-3.2-24b", "qwen3.5-9b"], "pass_v1": [95.74468085106383, 74.46808510638297, 93.61702127659575, 78.72340425531915, 74.46808510638297, 87.2340425531915, 65.95744680851064, 65.95744680851064], "pass_v2": [97.87234042553192, 80.85106382978722, 95.74468085106383, 82.97872340425532, 93.61702127659575, 82.97872340425532, 68.08510638297872, 70.2127659574468], "lat_v1": [16213.72340425532, 41358.68085106383, 8211.31914893617, 8274.553191489362, 8947.63829787234, 13934.744680851063, 10781.297872340425, 94535.21739130435], "lat_v2": [16214.404255319148, 36220.085106382976, 6667.723404255319, 7747.553191489362, 9945.148936170213, 13308.063829787234, 12325.744680851063, 61006.46808510638], "cost_v1": [1.706823, 0.2992960524, 0.15446665, 0.46594, 0.176554, 0.1116974, 0.01290056, 0.0363685], "cost_v2": [1.92003, 0.258578071, 0.1587091, 0.612214, 0.5330065, 0.0945503, 0.017997175, 0.02798252]};
+
+const COL = { v1: "#ff8a4c", v2: "#6ec1ff", v1soft: "#ff8a4c66", v2soft: "#6ec1ff66" };
+const FONT = { family: "-apple-system, BlinkMacSystemFont, system-ui, sans-serif", color: "#e6e8ee" };
+Chart.defaults.color = "#e6e8ee";
+Chart.defaults.borderColor = "#2a2f3a";
+Chart.defaults.font.family = FONT.family;
+
+function gridY(max) { return { grid: { color: "#2a2f3a" }, ticks: { color: "#9aa3b2" }, suggestedMax: max }; }
+function gridX() { return { grid: { display: false }, ticks: { color: "#9aa3b2" } }; }
+
+// Pass rate by provider
+new Chart(document.getElementById("passByProvider"), {
+  type: "bar",
+  data: {
+    labels: DATA.providers,
+    datasets: [
+      { label: V1, data: DATA.pass_v1, backgroundColor: COL.v1, borderRadius: 4 },
+      { label: V2, data: DATA.pass_v2, backgroundColor: COL.v2, borderRadius: 4 },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false },
+                tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y.toFixed(0)}%` } } },
+    scales: { y: { ...gridY(100), ticks: { callback: v => v + "%", color: "#9aa3b2" } }, x: gridX() }
+  }
+});
+
+// Latency by provider (avg ms)
+new Chart(document.getElementById("latByProvider"), {
+  type: "bar",
+  data: {
+    labels: DATA.providers,
+    datasets: [
+      { label: V1, data: DATA.lat_v1, backgroundColor: COL.v1, borderRadius: 4 },
+      { label: V2, data: DATA.lat_v2, backgroundColor: COL.v2, borderRadius: 4 },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, indexAxis: "y",
+    plugins: { legend: { display: false },
+                tooltip: { callbacks: { label: c => `${c.dataset.label}: ${Math.round(c.parsed.x).toLocaleString()}ms` } } },
+    scales: { x: { ...gridY(null), ticks: { callback: v => (v/1000).toFixed(0) + "s", color: "#9aa3b2" } }, y: gridX() }
+  }
+});
+
+// Cost by provider
+new Chart(document.getElementById("costByProvider"), {
+  type: "bar",
+  data: {
+    labels: DATA.providers,
+    datasets: [
+      { label: V1, data: DATA.cost_v1, backgroundColor: COL.v1, borderRadius: 4 },
+      { label: V2, data: DATA.cost_v2, backgroundColor: COL.v2, borderRadius: 4 },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, indexAxis: "y",
+    plugins: { legend: { display: false },
+                tooltip: { callbacks: { label: c => `${c.dataset.label}: $${c.parsed.x.toFixed(4)}` } } },
+    scales: { x: { ...gridY(null), ticks: { callback: v => "$" + v.toFixed(2), color: "#9aa3b2" } }, y: gridX() }
+  }
+});
+
+// Scatter: pass% (y) vs cost (x). Each provider gets its own color so
+// "which dot belongs to whom" is obvious at a glance. v0.3.3 is an open
+// ring, v0.3.4 is a filled disc. A thick colored arrow connects them.
+// Labels are placed *next* to the v0.3.4 disc with greedy collision
+// avoidance — no leader lines, no right-side column.
+const PROV_COL = {
+  "claude-sonnet-4.6":     "#f87171",
+  "deepseek-v3.2":         "#fbbf24",
+  "gemini-3-flash":        "#a3e635",
+  "gpt-4.1":               "#22d3ee",
+  "gpt-5.4":               "#60a5fa",
+  "gpt-5":                 "#60a5fa",
+  "mistral-large-2512":    "#c084fc",
+  "mistral-large":         "#c084fc",
+  "mistral-small-3.2-24b": "#f472b6",
+  "qwen3.5-9b":            "#2dd4bf",
+};
+const FALLBACK_COL = "#9aa3b2";
+function provColor(name) { return PROV_COL[name] || FALLBACK_COL; }
+
+const scatterPlugin = {
+  id: "scatterPlugin",
+  beforeDatasetsDraw(chart) {
+    const {ctx, chartArea, scales: {x, y}} = chart;
+    const FS = 13;
+    ctx.font = `600 ${FS}px ${FONT.family}`;
+
+    const points = DATA.providers.map((p, i) => {
+      const c = provColor(p);
+      return {
+        name: p, color: c,
+        delta: DATA.pass_v2[i] - DATA.pass_v1[i],
+        x1: x.getPixelForValue(DATA.cost_v1[i]),
+        y1: y.getPixelForValue(DATA.pass_v1[i]),
+        x2: x.getPixelForValue(DATA.cost_v2[i]),
+        y2: y.getPixelForValue(DATA.pass_v2[i]),
+      };
+    });
+
+    // 1) Draw arrows first (so dots and labels overlay them)
+    points.forEach(pt => {
+      ctx.save();
+      ctx.strokeStyle = pt.color;
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+
+      // Shorten line to just before the arrowhead, so the arrowhead fully
+      // sits on top of the v2 disc edge instead of inside it.
+      const ang = Math.atan2(pt.y2 - pt.y1, pt.x2 - pt.x1);
+      const r = 7;             // v2 disc radius
+      const tipX = pt.x2 - r * Math.cos(ang);
+      const tipY = pt.y2 - r * Math.sin(ang);
+
+      ctx.beginPath();
+      ctx.moveTo(pt.x1, pt.y1);
+      ctx.lineTo(tipX, tipY);
+      ctx.stroke();
+
+      // Arrowhead (filled triangle in provider color)
+      const ah = 11;
+      ctx.fillStyle = pt.color;
+      ctx.beginPath();
+      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(tipX - ah * Math.cos(ang - Math.PI / 7), tipY - ah * Math.sin(ang - Math.PI / 7));
+      ctx.lineTo(tipX - ah * Math.cos(ang + Math.PI / 7), tipY - ah * Math.sin(ang + Math.PI / 7));
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    });
+
+    // 2) Draw dots: v1 = hollow ring, v2 = filled disc, both in provider color
+    points.forEach(pt => {
+      // v1: open ring
+      ctx.save();
+      ctx.strokeStyle = pt.color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(pt.x1, pt.y1, 5.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // v2: filled disc with subtle white outline for contrast on dark bg
+      ctx.save();
+      ctx.fillStyle = pt.color;
+      ctx.beginPath();
+      ctx.arc(pt.x2, pt.y2, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,.18)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+    });
+
+    // 3) Place labels with greedy collision avoidance
+    // Each label is "name +Xpp" — width measured at runtime.
+    ctx.font = `600 ${FS}px ${FONT.family}`;
+    const PAD_X = 6, PAD_Y = 3, GAP = 10;
+    const HALF_H = FS / 2 + PAD_Y;
+
+    const labels = points.map(pt => {
+      const dtxt = (pt.delta >= 0 ? "+" : "") + pt.delta.toFixed(0) + "pp";
+      const fullText = `${pt.name}  ${dtxt}`;
+      const w = ctx.measureText(fullText).width + PAD_X * 2;
+      return { pt, dtxt, fullText, w, h: FS + PAD_Y * 2 };
+    });
+
+    // Candidate offsets (dx, dy) tried in order. Right-of-disc preferred.
+    const offsets = [
+      [GAP,  0],   // right
+      [-GAP, 0],   // left  (dy=0 → label right-aligned to v2 minus GAP)
+      [0,   -GAP - HALF_H], // above
+      [0,    GAP + HALF_H], // below
+      [GAP,  GAP + HALF_H],
+      [GAP, -GAP - HALF_H],
+      [-GAP, GAP + HALF_H],
+      [-GAP,-GAP - HALF_H],
+      [GAP * 2,  0],
+      [-GAP * 2, 0],
+      [GAP * 2,  GAP + HALF_H],
+      [GAP * 2, -GAP - HALF_H],
+    ];
+
+    const placed = [];          // bounding boxes already taken
+    const cb = chartArea;
+
+    function bbox(label, dx, dy) {
+      const pt = label.pt;
+      let cx, cy;
+      if (dx >= 0) {
+        // Anchored at left edge of box
+        cx = pt.x2 + dx + label.w / 2;
+      } else {
+        // Anchored at right edge of box
+        cx = pt.x2 + dx - label.w / 2;
+      }
+      cy = pt.y2 + dy;
+      return {
+        x: cx - label.w / 2, y: cy - label.h / 2,
+        x2: cx + label.w / 2, y2: cy + label.h / 2,
+        cx, cy,
+      };
+    }
+
+    function overlapsAny(b) {
+      // Check against placed labels
+      for (const o of placed) {
+        if (!(b.x2 < o.x || b.x > o.x2 || b.y2 < o.y || b.y > o.y2)) return true;
+      }
+      // Check against any dot (v1 or v2) — leave 4px margin
+      for (const pt of points) {
+        if (b.x2 + 4 < pt.x2 - 7 || b.x > pt.x2 + 7 + 4 || b.y2 + 4 < pt.y2 - 7 || b.y > pt.y2 + 7 + 4) continue;
+        return true;
+      }
+      // Inside chart area?
+      if (b.x < cb.left || b.x2 > cb.right || b.y < cb.top || b.y2 > cb.bottom) return true;
+      return false;
+    }
+
+    // Place biggest-delta movers first so they get the prime spot
+    labels.sort((a, b) => Math.abs(b.pt.delta) - Math.abs(a.pt.delta));
+
+    labels.forEach(label => {
+      for (const [dx, dy] of offsets) {
+        const b = bbox(label, dx, dy);
+        if (!overlapsAny(b)) { label.box = b; placed.push(b); return; }
+      }
+      // Fallback — place at default even if overlapping
+      label.box = bbox(label, GAP, 0);
+      placed.push(label.box);
+    });
+
+    // 4) Draw labels: rounded background pill + bold provider name + colored delta
+    labels.forEach(label => {
+      const b = label.box;
+      const pt = label.pt;
+
+      // Background pill — semi-transparent dark with provider-color border
+      ctx.save();
+      ctx.fillStyle = "rgba(15, 17, 21, .85)";
+      ctx.strokeStyle = pt.color;
+      ctx.lineWidth = 1;
+      const r = 5;
+      ctx.beginPath();
+      ctx.moveTo(b.x + r, b.y);
+      ctx.lineTo(b.x2 - r, b.y);
+      ctx.quadraticCurveTo(b.x2, b.y, b.x2, b.y + r);
+      ctx.lineTo(b.x2, b.y2 - r);
+      ctx.quadraticCurveTo(b.x2, b.y2, b.x2 - r, b.y2);
+      ctx.lineTo(b.x + r, b.y2);
+      ctx.quadraticCurveTo(b.x, b.y2, b.x, b.y2 - r);
+      ctx.lineTo(b.x, b.y + r);
+      ctx.quadraticCurveTo(b.x, b.y, b.x + r, b.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Text
+      ctx.textBaseline = "middle";
+      ctx.font = `600 ${FS}px ${FONT.family}`;
+      const tx = b.x + PAD_X;
+      const ty = b.cy;
+      ctx.fillStyle = "#e6e8ee";
+      ctx.fillText(pt.name, tx, ty);
+      const nameW = ctx.measureText(pt.name).width;
+      ctx.fillStyle = pt.delta >= 0 ? "#4ade80" : "#f87171";
+      ctx.fillText("  " + label.dtxt, tx + nameW, ty);
+
+      ctx.restore();
+    });
+  }
+};
+
+new Chart(document.getElementById("scatter"), {
+  type: "scatter",
+  data: {
+    // Single empty dataset — drawing is done by the plugin so tooltips
+    // need real point data too.
+    datasets: [
+      {
+        label: V1,
+        data: DATA.providers.map((p, i) => ({x: DATA.cost_v1[i], y: DATA.pass_v1[i], prov: p})),
+        pointRadius: 0, pointHoverRadius: 8,
+        pointHoverBackgroundColor: ctx => provColor(ctx.raw.prov),
+      },
+      {
+        label: V2,
+        data: DATA.providers.map((p, i) => ({x: DATA.cost_v2[i], y: DATA.pass_v2[i], prov: p})),
+        pointRadius: 0, pointHoverRadius: 8,
+        pointHoverBackgroundColor: ctx => provColor(ctx.raw.prov),
+      },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    layout: { padding: { right: 24, top: 12, bottom: 8, left: 4 } },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: c => {
+            const r = c.raw;
+            const isV2 = c.datasetIndex === 1;
+            return `${r.prov} (${isV2 ? V2 : V1}): ${r.y.toFixed(0)}% @ $${r.x.toFixed(3)}`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        type: "logarithmic",
+        title: { display: true, text: "total cost USD (log scale)", color: "#9aa3b2", font: { size: 12 } },
+        ticks: { color: "#9aa3b2", callback: v => "$" + v.toFixed(2), font: { size: 11 } },
+        grid: { color: "#2a2f3a" }
+      },
+      y: {
+        title: { display: true, text: "pass rate", color: "#9aa3b2", font: { size: 12 } },
+        min: 40, max: 100,
+        ticks: { color: "#9aa3b2", callback: v => v + "%", font: { size: 11 } },
+        grid: { color: "#2a2f3a" }
+      }
+    }
+  },
+  plugins: [scatterPlugin]
+});
+</script>
+</body>
+</html>

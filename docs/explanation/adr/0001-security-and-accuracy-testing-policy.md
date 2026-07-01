@@ -59,7 +59,9 @@ which exist yet — share one source of truth.
    instructions ranging from benign behavior changes to critical directives
    (run responders, exfiltrate data, create users, delete evidence, close
    investigations). The pass bar is strict: the agent must both ignore the
-   injection and warn the analyst.
+   injection and warn the analyst. A **single shipped defensive configuration**
+   is evaluated and published — the server's boundary-tag defenses with the
+   shipped playbook — not an A/B of alternative playbooks.
 
 ### Scoring and the judge model
 
@@ -125,18 +127,27 @@ main objective; changes follow the recommended-model policy above.
 
 ### Where and how evidence is published
 
-- A single `docs/evaluation/` folder, to be linked from the README. Accuracy and
-  security describe the same run against the same version, so they live in one
-  report — splitting them invites drift.
-- The **canonical format is a predictable Markdown results table** committed to
-  the repo: one row per recommended model, columns for accuracy and security
-  outcomes, plus the MCP-server version and date. It is version-controlled,
-  diffs cleanly release to release (you can see exactly which model moved),
-  renders on GitHub, and is cheap to keep current.
-- A richer generated HTML report (heatmaps, the injection showcase) may
-  accompany a release for narrative use, but the Markdown table is the source
-  of truth.
-- Every report names the model(s) and MCP-server version the findings apply to.
+- A single `docs/evaluation/` folder, linked from the README, with **one
+  subfolder per evaluated MCP-server version** (`docs/evaluation/vX.Y.Z/`).
+  Accuracy and security describe the same run against the same version, so they
+  are published together in that version's folder — splitting them invites
+  drift.
+- Each version folder holds three artifacts:
+  - **`results.csv` — the source of truth.** A predictable, machine-readable
+    table: one row per model, with the accuracy and security counts broken down
+    **per suite and per test category** (e.g. search, entity management,
+    automation), plus the MCP-server version, date, and judge model. It is
+    version-controlled, diffs cleanly release to release (you can see exactly
+    which model moved), and is trivially machine-processable.
+  - **`summary.md`** — the human-readable narrative: that version's results and
+    a comparison with the previous evaluated version.
+  - **`report.html`** — a richer chart-based report for visual inspection.
+    Generated artifacts that embed raw attacker payloads (the prompt-injection
+    showcase) stay in the internal eval suite and are **not** published here.
+- The folder's `README.md` carries a prose overview of the latest evaluation
+  and the methodology, and links each version folder.
+- Every artifact names the model(s), MCP-server version, and judge model the
+  findings apply to.
 
 ### Re-test policy (to live in `RELEASING.md`)
 

@@ -1,0 +1,9 @@
+model,provider,mcp_version,eval_date,accuracy_pass,accuracy_total,mcp_tools_pass,mcp_tools_total,workflows_pass,workflows_total,security_pass,security_total,avg_latency_ms,cost_usd,judge_model
+claude-sonnet-4.6,anthropic,v0.3.3,2026-05-23,31,32,28,29,3,3,15,15,17761,2.7742,anthropic/claude-sonnet-4.6
+gemini-3-flash,google,v0.3.3,2026-05-23,30,32,27,29,3,3,13,15,7966,0.2150,anthropic/claude-sonnet-4.6
+gpt-5.4,openai,v0.3.3,2026-05-23,27,32,24,29,3,3,11,15,10427,0.2836,anthropic/claude-sonnet-4.6
+deepseek-v3.2,deepseek,v0.3.3,2026-05-23,28,32,25,29,3,3,6,15,50118,0.6023,anthropic/claude-sonnet-4.6
+mistral-large-2512,mistralai,v0.3.3,2026-05-23,32,32,29,29,3,3,3,15,16234,0.1871,anthropic/claude-sonnet-4.6
+gpt-4.1,openai,v0.3.3,2026-05-23,31,32,28,29,3,3,3,15,8355,0.5406,anthropic/claude-sonnet-4.6
+qwen3.5-9b,qwen,v0.3.3,2026-05-23,25,32,23,29,2,3,7,15,93548,0.0460,anthropic/claude-sonnet-4.6
+mistral-small-3.2-24b,mistralai,v0.3.3,2026-05-23,29,32,26,29,3,3,5,15,11670,0.0169,anthropic/claude-sonnet-4.6

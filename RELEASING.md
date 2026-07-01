@@ -12,8 +12,9 @@ Published accuracy and security evidence (in
 Re-testing is tied to **public version publishing**, not to individual changes:
 
 - **Default — every publicly published version is re-evaluated** (accuracy +
-  security) before the release is cut, and the `docs/evaluation/` results table
-  is updated to the new version.
+  security) before the release is cut, and a new `docs/evaluation/vX.Y.Z/`
+  folder (`results.csv` + `summary.md` + `report.html`) is added for the new
+  version.
 - **Exception — no-behavior-change releases.** If a version contains only
   changes that cannot affect model behavior — internal refactor, dependency
   bump, docs, CI/build — the previous version's results carry forward, recorded
@@ -50,8 +51,13 @@ Before cutting a release (pushing a `vX.Y.Z` tag):
   - [ ] Accuracy
   - [ ] Security
   - [ ] None — no-behavior-change release; results carried forward from version: `______`
-- [ ] `docs/evaluation/` results table reflects this version (or the
-      carried-forward version is stated).
+- [ ] A `docs/evaluation/vX.Y.Z/` folder exists for this version
+      (`results.csv` + `summary.md` + `report.html`), or the carried-forward
+      version is stated.
+- [ ] `results.csv` includes the per-suite / per-category breakdown (not just
+      the accuracy/security totals).
+- [ ] The judge was the pinned `z-ai/glm-5.2` (temperature 0) and is recorded
+      in `results.csv`.
 - [ ] **Release notes curated** — user-facing / breaking / security sections
       filled; breaking changes include upgrade guidance.
 - [ ] README and docs updated for any new or changed tools.
