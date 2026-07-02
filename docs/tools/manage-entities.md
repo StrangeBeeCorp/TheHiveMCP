@@ -4,18 +4,19 @@ Perform CRUD and workflow operations on TheHive entities (alerts, cases, tasks, 
 
 ## Overview
 
-The `manage-entities` tool provides comprehensive Create, Read, Update, Delete, Comment, Promote, and Merge operations for all TheHive entity types. It allows you to manipulate entities programmatically while respecting TheHive's data integrity and relationship constraints.
+The `manage-entities` tool provides comprehensive Create, Read, Update, Delete, Comment, Promote, and Merge operations for all TheHive entity types. It allows
+you to manipulate entities programmatically while respecting TheHive's data integrity and relationship constraints.
 
 ## Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `operation` | string | Yes | Operation to perform (`create`, `update`, `delete`, `comment`, `promote`, `merge`, `apply-template`) |
-| `entity-type` | string | Yes | Type of entity (`alert`, `case`, `task`, `observable`, `procedure`, `case-template`, `page`) |
-| `entity-ids` | array | Conditional | List of entity IDs (usage varies by operation) |
-| `entity-data` | object | Conditional | JSON object with entity data (required for create/update, optional for promote) |
-| `comment` | string | Conditional | Text content (required for comment operations) |
-| `target-id` | string | Conditional | Target entity ID (required for merge operations on alerts/observables) |
+| Parameter     | Type   | Required    | Description                                                                                          |
+| ------------- | ------ | ----------- | ---------------------------------------------------------------------------------------------------- |
+| `operation`   | string | Yes         | Operation to perform (`create`, `update`, `delete`, `comment`, `promote`, `merge`, `apply-template`) |
+| `entity-type` | string | Yes         | Type of entity (`alert`, `case`, `task`, `observable`, `procedure`, `case-template`, `page`)         |
+| `entity-ids`  | array  | Conditional | List of entity IDs (usage varies by operation)                                                       |
+| `entity-data` | object | Conditional | JSON object with entity data (required for create/update, optional for promote)                      |
+| `comment`     | string | Conditional | Text content (required for comment operations)                                                       |
+| `target-id`   | string | Conditional | Target entity ID (required for merge operations on alerts/observables)                               |
 
 ## Operations
 
@@ -26,6 +27,7 @@ Create new entities with complete schema data.
 #### Creating alerts
 
 **Minimal example (required fields only):**
+
 ```json
 {
   "operation": "create",
@@ -41,6 +43,7 @@ Create new entities with complete schema data.
 ```
 
 **Recommended example (with common fields):**
+
 ```json
 {
   "operation": "create",
@@ -58,6 +61,7 @@ Create new entities with complete schema data.
 ```
 
 **Complete example with optional fields:**
+
 ```json
 {
   "operation": "create",
@@ -79,6 +83,7 @@ Create new entities with complete schema data.
 ```
 
 #### Creating cases
+
 ```json
 {
   "operation": "create",
@@ -94,6 +99,7 @@ Create new entities with complete schema data.
 ```
 
 #### Creating tasks (requires parent case)
+
 ```json
 {
   "operation": "create",
@@ -108,6 +114,7 @@ Create new entities with complete schema data.
 ```
 
 #### Creating observables (requires parent case/alert)
+
 ```json
 {
   "operation": "create",
@@ -124,9 +131,11 @@ Create new entities with complete schema data.
 
 #### Creating procedures (requires parent case/alert)
 
-A procedure maps observed attacker behaviour to a MITRE ATT&CK technique. Use `search-entities` with `entity-type="pattern"` to find the `patternId` before creating a procedure.
+A procedure maps observed attacker behaviour to a MITRE ATT&CK technique. Use `search-entities` with `entity-type="pattern"` to find the `patternId` before
+creating a procedure.
 
 **Minimal example (required fields only):**
+
 ```json
 {
   "operation": "create",
@@ -140,6 +149,7 @@ A procedure maps observed attacker behaviour to a MITRE ATT&CK technique. Use `s
 ```
 
 **Recommended example (with tactic and description):**
+
 ```json
 {
   "operation": "create",
@@ -155,6 +165,7 @@ A procedure maps observed attacker behaviour to a MITRE ATT&CK technique. Use `s
 ```
 
 **Notes:**
+
 - `patternId` must reference a valid MITRE ATT&CK technique loaded in TheHive (use `search-entities` with `entity-type="pattern"` to find valid IDs)
 - `tactic` must be one of the tactics listed on the pattern (only required if the technique belongs to multiple tactics)
 - `occurDate` is the timestamp when the attacker behaviour was observed
@@ -165,6 +176,7 @@ A procedure maps observed attacker behaviour to a MITRE ATT&CK technique. Use `s
 Pages can be created within a case or as standalone knowledge base articles.
 
 **Creating a page in a case:**
+
 ```json
 {
   "operation": "create",
@@ -179,6 +191,7 @@ Pages can be created within a case or as standalone knowledge base articles.
 ```
 
 **Creating a standalone page (no parent case):**
+
 ```json
 {
   "operation": "create",
@@ -192,6 +205,7 @@ Pages can be created within a case or as standalone knowledge base articles.
 ```
 
 **Notes:**
+
 - `title`, `content`, and `category` are required fields
 - `content` supports Markdown formatting
 - If `entity-ids` is provided with a case ID, the page is created within that case
@@ -216,6 +230,7 @@ Update existing entities with partial field changes.
 ```
 
 Update an existing procedure (use the procedure's own ID, not the parent case/alert ID):
+
 ```json
 {
   "operation": "update",
@@ -229,6 +244,7 @@ Update an existing procedure (use the procedure's own ID, not the parent case/al
 ```
 
 Update an existing page (use the page ID):
+
 ```json
 {
   "operation": "update",
@@ -254,6 +270,7 @@ Update an existing page (use the page ID):
 ```
 
 Delete a page:
+
 ```json
 {
   "operation": "delete",
@@ -267,6 +284,7 @@ Delete a page:
 Add comments to cases or task logs to tasks.
 
 #### Adding case comments
+
 ```json
 {
   "operation": "comment",
@@ -277,6 +295,7 @@ Add comments to cases or task logs to tasks.
 ```
 
 #### Adding task logs
+
 ```json
 {
   "operation": "comment",
@@ -291,6 +310,7 @@ Add comments to cases or task logs to tasks.
 Convert an alert into a new case. The alert's observables, TTPs, and other data are transferred to the newly created case.
 
 #### Promoting an alert to a case
+
 ```json
 {
   "operation": "promote",
@@ -300,6 +320,7 @@ Convert an alert into a new case. The alert's observables, TTPs, and other data 
 ```
 
 #### Promoting with case creation parameters
+
 ```json
 {
   "operation": "promote",
@@ -313,6 +334,7 @@ Convert an alert into a new case. The alert's observables, TTPs, and other data 
 ```
 
 **Notes:**
+
 - Only alerts can be promoted
 - Requires exactly one alert ID
 - Optional `entity-data` can specify case creation parameters like `caseTemplate`
@@ -323,6 +345,7 @@ Convert an alert into a new case. The alert's observables, TTPs, and other data 
 Merge entities together. Behavior varies by entity type.
 
 #### Merging cases together
+
 Merges multiple cases into a single new case. All tasks, observables, and other data from the source cases are combined.
 
 ```json
@@ -334,10 +357,12 @@ Merges multiple cases into a single new case. All tasks, observables, and other 
 ```
 
 **Requirements:**
+
 - Requires at least 2 case IDs in `entity-ids`
 - Returns a single merged case containing all data from source cases
 
 #### Merging alerts into a case
+
 Merges one or more alerts into an existing case. The alerts' observables and data are added to the target case.
 
 ```json
@@ -350,11 +375,13 @@ Merges one or more alerts into an existing case. The alerts' observables and dat
 ```
 
 **Requirements:**
+
 - Requires alert IDs in `entity-ids`
 - Requires `target-id` specifying the case to merge alerts into
 - The target case must exist
 
 #### Deduplicating observables in a case
+
 Merges similar observables within a case (deduplication). This finds and merges observables with identical data values.
 
 ```json
@@ -366,12 +393,14 @@ Merges similar observables within a case (deduplication). This finds and merges 
 ```
 
 **Requirements:**
+
 - Requires `target-id` specifying the case containing observables to deduplicate
 - No `entity-ids` needed - operates on all similar observables in the case
 
 ## Entity Relationships and Constraints
 
 ### Hierarchical structure
+
 - **Cases** are top-level entities
 - **Tasks** belong to cases
 - **Observables** can belong to cases OR alerts
@@ -379,6 +408,7 @@ Merges similar observables within a case (deduplication). This finds and merges 
 - **Alerts** are independent but can be promoted to cases
 
 ### Creation constraints
+
 - **Tasks**: Must specify parent case ID in `entity-ids`
 - **Observables**: Must specify parent case or alert ID in `entity-ids`
 - **Procedures**: Must specify parent case or alert ID in `entity-ids`
@@ -386,6 +416,7 @@ Merges similar observables within a case (deduplication). This finds and merges 
 - **Cases**: Can be created independently
 
 ### Comment constraints
+
 - **Cases**: Support standard comments
 - **Tasks**: Use "task logs" instead of comments
 - **Alerts**: Not supported for comments
@@ -393,11 +424,13 @@ Merges similar observables within a case (deduplication). This finds and merges 
 - **Procedures**: Not supported for comments
 
 ### Promote constraints
+
 - **Alerts**: Can be promoted to cases
 - **Cases, Tasks, Observables**: Not supported for promotion
 - Requires exactly one alert ID
 
 ### Merge constraints
+
 - **Cases**: Can be merged together (requires 2+ case IDs)
 - **Alerts**: Can be merged into an existing case (requires target case ID)
 - **Observables**: Can be deduplicated within a case (requires target case ID)
@@ -408,6 +441,7 @@ Merges similar observables within a case (deduplication). This finds and merges 
 Before creating or updating entities, always check the appropriate schema:
 
 ### For CREATE operations:
+
 ```json
 {
   "tool": "get-resource",
@@ -416,6 +450,7 @@ Before creating or updating entities, always check the appropriate schema:
 ```
 
 Available create schemas:
+
 - `hive://schema/alert/create` - Required and optional fields for creating alerts
 - `hive://schema/case/create` - Required and optional fields for creating cases
 - `hive://schema/task/create` - Required and optional fields for creating tasks
@@ -423,6 +458,7 @@ Available create schemas:
 - `hive://schema/procedure/create` - Required and optional fields for creating procedures
 
 ### For UPDATE operations:
+
 ```json
 {
   "tool": "get-resource",
@@ -431,6 +467,7 @@ Available create schemas:
 ```
 
 Available update schemas:
+
 - `hive://schema/alert/update` - Fields available for updating alerts
 - `hive://schema/case/update` - Fields available for updating cases
 - `hive://schema/task/update` - Fields available for updating tasks
@@ -438,7 +475,9 @@ Available update schemas:
 - `hive://schema/procedure/update` - Fields available for updating procedures
 
 ### For understanding OUTPUT:
+
 Available output schemas (for understanding query results):
+
 - `hive://schema/alert` - Fields returned when querying alerts
 - `hive://schema/case` - Fields returned when querying cases
 - `hive://schema/task` - Fields returned when querying tasks
@@ -449,12 +488,15 @@ Available output schemas (for understanding query results):
 ## Best Practices
 
 ### Before creating entities
+
 1. **Query schemas**: Use `get-resource` to understand required fields
 2. **Check metadata**: Verify valid values for enums and choices
 3. **Validate relationships**: Ensure parent entities exist
 
 ### Alert-specific requirements
+
 When creating alerts, the following fields are **required**:
+
 - `type`: Alert category (for example, "external", "malware", "phishing")
 - `source`: Source system name (for example, "SIEM", "EDR", "Email Gateway")
 - `sourceRef`: Unique reference from source system (for example, "SIEM-2024-001234")
@@ -462,9 +504,11 @@ When creating alerts, the following fields are **required**:
 - `description`: Detailed alert description
 
 **Highly recommended fields** (may have system defaults but should be explicitly set):
+
 - `severity`: Numeric severity level (1-4, where 4 is most critical)
 
 **Optional but commonly used fields**:
+
 - `tlp`: Traffic Light Protocol (0-4, default varies by organisation)
 - `pap`: Permissible Actions Protocol (0-3, default varies by organisation)
 - `tags`: Array of classification tags
@@ -474,17 +518,20 @@ When creating alerts, the following fields are **required**:
 - `summary`: Brief triage notes or summary
 
 ### Data integrity
+
 1. **Required fields**: Always include mandatory schema fields
 2. **Data types**: Match expected types (string, number, array, etc.)
 3. **Enum values**: Use valid enumeration values
 4. **Relationships**: Maintain proper parent-child relationships
 
 ### Update operations
+
 1. **Partial updates**: Only include fields that need to change
 2. **Field validation**: Ensure new values meet schema constraints
 3. **State transitions**: Follow valid status/stage transitions
 
 ### Security considerations
+
 1. **Permissions**: Ensure user has appropriate permissions
 2. **Data sensitivity**: Handle sensitive data appropriately
 3. **Audit trail**: All operations are logged in TheHive
@@ -492,6 +539,7 @@ When creating alerts, the following fields are **required**:
 ## Common Patterns
 
 ### Investigation workflow
+
 1. Create case for investigation
 2. Create tasks for specific activities
 3. Create observables as evidence is collected
@@ -500,12 +548,14 @@ When creating alerts, the following fields are **required**:
 6. Add comments to document findings
 
 ### TTP workflow
+
 1. Search for relevant MITRE ATT&CK techniques: `search-entities` with `entity-type="pattern"` and a keyword query
 2. Note the `patternId` and available `tactics` from the pattern
 3. Create a procedure on the case or alert with the `patternId`, `occurDate`, and optionally `tactic` and `description`
 4. Update or delete the procedure if details change during investigation
 
 ### Alert processing
+
 1. Create alert from external source
 2. Analyze alert content and create observables
 3. Promote alert to case if investigation needed (use `promote` operation)
@@ -513,7 +563,9 @@ When creating alerts, the following fields are **required**:
 5. Merge related alerts into the case if more alerts arrive (use `merge` operation with alerts)
 
 ### Batch operations
+
 Use multiple `entity-ids` for bulk operations:
+
 ```json
 {
   "operation": "update",
@@ -526,14 +578,18 @@ Use multiple `entity-ids` for bulk operations:
 ```
 
 ### Case consolidation
+
 When multiple cases are related to the same incident:
+
 1. Identify related cases through search or analysis
 2. Merge cases together to consolidate all data (use `merge` operation with cases)
 3. The merged case contains all tasks, observables, and comments from source cases
 4. Continue investigation in the merged case
 
 ### Observable deduplication
+
 After importing data or merging alerts:
+
 1. Check for duplicate observables in a case
 2. Use merge operation on observables to deduplicate (use `merge` operation with observable entity-type)
 3. Identical observables are merged, keeping all relevant metadata

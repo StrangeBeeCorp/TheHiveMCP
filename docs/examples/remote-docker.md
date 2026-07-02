@@ -6,9 +6,13 @@ This example shows how to deploy TheHiveMCP as a remote HTTP service using Docke
 
 TheHiveMCP serves plain HTTP and does not authenticate callers itself. Before exposing it beyond localhost:
 
-- **Always place a TLS-terminating, authenticating reverse proxy** (nginx, Traefik, Caddy, ...) in front of the MCP port. Never expose port 8082 directly to untrusted networks.
-- **Clients must send their own TheHive credentials** (`Authorization` or `X-TheHive-Api-Key` header). Requests without credentials are rejected unless you explicitly set `ALLOW_ENV_CREDENTIAL_FALLBACK=true`, which makes every request fall back to the server's `THEHIVE_API_KEY` — only do this for single-user deployments behind an authenticating proxy.
-- **The `X-TheHive-Url` header is restricted** to the configured `THEHIVE_URL`. To allow additional TheHive instances (multi-tenant), list them explicitly in `THEHIVE_URL_ALLOWLIST` (comma-separated, exact scheme/host/port match). Any other destination is rejected before TheHive is contacted.
+- **Always place a TLS-terminating, authenticating reverse proxy** (nginx, Traefik, Caddy, ...) in front of the MCP port. Never expose port 8082 directly to
+  untrusted networks.
+- **Clients must send their own TheHive credentials** (`Authorization` or `X-TheHive-Api-Key` header). Requests without credentials are rejected unless you
+  explicitly set `ALLOW_ENV_CREDENTIAL_FALLBACK=true`, which makes every request fall back to the server's `THEHIVE_API_KEY` — only do this for single-user
+  deployments behind an authenticating proxy.
+- **The `X-TheHive-Url` header is restricted** to the configured `THEHIVE_URL`. To allow additional TheHive instances (multi-tenant), list them explicitly in
+  `THEHIVE_URL_ALLOWLIST` (comma-separated, exact scheme/host/port match). Any other destination is rejected before TheHive is contacted.
 
 ## Prerequisites
 
@@ -46,6 +50,7 @@ docker-compose -f docs/examples/docker/docker-compose.basic.yml ps
 ## How it works
 
 The [`docker-compose.basic.yml`](docker/docker-compose.basic.yml) provides:
+
 - **HTTP server** on port 8082
 - **Read-only permissions** by default
 - **Environment or header configuration**
@@ -54,6 +59,7 @@ The [`docker-compose.basic.yml`](docker/docker-compose.basic.yml) provides:
 ## Usage
 
 MCP clients connect to `http://your-server:8082/mcp` and can:
+
 - Use environment variables for TheHive connection
 - Override with HTTP headers per request
 - Access all MCP tools (search, manage, execute, resources)

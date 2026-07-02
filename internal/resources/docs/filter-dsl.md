@@ -1,8 +1,6 @@
 # TheHive Filter DSL — cheatsheet
 
-This is everything needed to build a filter for the `search-entities` tool. The
-filter you provide is sent **directly** to TheHive's Query API — there is no
-natural-language translation step. Build it precisely.
+This is everything needed to build a filter for the `search-entities` tool. The filter you provide is sent **directly** to TheHive's Query API — there is no natural-language translation step. Build it precisely.
 
 ## How a filter is shaped
 
@@ -12,9 +10,7 @@ A filter is a JSON object with **exactly one operator at its root**:
 {"_eq": {"_field": "status", "_value": "New"}}
 ```
 
-Combine conditions by nesting `_and` / `_or` / `_not`, each of which takes other
-filters. Omit the `filters` parameter entirely (or pass `{"_any": {}}`) to match
-every entity within the limit.
+Combine conditions by nesting `_and` / `_or` / `_not`, each of which takes other filters. Omit the `filters` parameter entirely (or pass `{"_any": {}}`) to match every entity within the limit.
 
 ## Operators
 
@@ -121,6 +117,4 @@ These are separate `search-entities` parameters, not filter operators:
 - `additional-queries` — related entities to fetch (e.g. `["tasks", "observables"]` for cases).
 - `count=true` — return only the number of matches.
 
-The applied filter is echoed back as `rawFilters` in the response. If results
-are unexpected, inspect `rawFilters`, re-check the field names against
-`hive://schema/<entity-type>`, and call again with a corrected filter.
+The applied filter is echoed back as `rawFilters` in the response. If results are unexpected, inspect `rawFilters`, re-check the field names against `hive://schema/<entity-type>`, and call again with a corrected filter.

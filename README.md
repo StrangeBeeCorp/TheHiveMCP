@@ -10,7 +10,8 @@
 
 ## 🌍 Overview
 
-TheHiveMCP is an MCP (Model Context Protocol) server that enables AI agents to interact with [TheHive](https://strangebee.com/thehive/) security platform through natural language. Built in Go, it provides a structured interface for security operations, case management, and threat intelligence workflows.
+TheHiveMCP is an MCP (Model Context Protocol) server that enables AI agents to interact with [TheHive](https://strangebee.com/thehive/) security platform
+through natural language. Built in Go, it provides a structured interface for security operations, case management, and threat intelligence workflows.
 
 <div align="center">
   <img src="docs/images/demo-thehivemcp.gif" alt="Demo TheHiveMCP"/>
@@ -33,7 +34,8 @@ TheHiveMCP is an MCP (Model Context Protocol) server that enables AI agents to i
 
 **TheHiveMCP is a connector that enables AI assistants to interact with TheHive security platform.**
 
-This project acts as a **translation layer** between AI assistants (like ChatGPT, Claude, or other LLMs) and TheHive API. It doesn't contain AI itself - instead, it provides AI assistants with the tools they need to understand and work with security data.
+This project acts as a **translation layer** between AI assistants (like ChatGPT, Claude, or other LLMs) and TheHive API. It doesn't contain AI itself -
+instead, it provides AI assistants with the tools they need to understand and work with security data.
 
 When you connect an AI assistant to TheHiveMCP, the AI can:
 
@@ -43,89 +45,71 @@ When you connect an AI assistant to TheHiveMCP, the AI can:
 - Create and manage investigations
 - Execute automated analysis and response actions
 
-**Real-world example:** An analyst using ChatGPT with TheHiveMCP can say *"Show me high-severity phishing alerts from last week"* and ChatGPT will use TheHiveMCP to query TheHive database and present the results in an organized, actionable format.
+**Real-world example:** An analyst using ChatGPT with TheHiveMCP can say _"Show me high-severity phishing alerts from last week"_ and ChatGPT will use
+TheHiveMCP to query TheHive database and present the results in an organized, actionable format.
 
-This enables security teams to **leverage existing AI assistants** for security operations without replacing their current tools or workflows. TheHiveMCP handles the technical complexity of integrating with TheHive, so AI assistants can focus on understanding security context and providing intelligent insights.
+This enables security teams to **leverage existing AI assistants** for security operations without replacing their current tools or workflows. TheHiveMCP
+handles the technical complexity of integrating with TheHive, so AI assistants can focus on understanding security context and providing intelligent insights.
 
 ## ✅ Production-ready: what we commit to
 
 TheHiveMCP is production-ready. Two things to know before you point it at real data:
 
-- **Use a recommended model.** Our accuracy and security commitments hold only for the recommended models: **`anthropic/claude-sonnet-4.6`**, **`google/gemini-3-flash`**, and **`openai/gpt-5.4`**. These are the models that clear both bars on the published evidence — see [`docs/evaluation/`](docs/evaluation/).
-- **Security has a boundary.** The server tags all TheHive-sourced data as untrusted to resist prompt injection, but this **reduces, not eliminates** the risk and resilience varies by model — the `read_only` default is your enforced backstop.
+- **Use a recommended model.** Our accuracy and security commitments hold only for the recommended models: **`anthropic/claude-sonnet-4.6`**,
+  **`google/gemini-3-flash`**, and **`openai/gpt-5.4`**. These are the models that clear both bars on the published evidence — see
+  [`docs/evaluation/`](docs/evaluation/).
+- **Security has a boundary.** The server tags all TheHive-sourced data as untrusted to resist prompt injection, but this **reduces, not eliminates** the risk
+  and resilience varies by model — the `read_only` default is your enforced backstop.
 
-The full contract — supported deployment shape, security and accuracy envelopes, and what we explicitly *don't* commit to — is below and grounded in [ADR-0001](docs/adr/0001-security-and-accuracy-testing-policy.md) and [RELEASING.md](RELEASING.md).
+The full contract — supported deployment shape, security and accuracy envelopes, and what we explicitly _don't_ commit to — is below and grounded in
+[ADR-0001](docs/adr/0001-security-and-accuracy-testing-policy.md) and [RELEASING.md](RELEASING.md).
 
 <details>
 <summary><strong>📜 The full contract — what we vouch for, and what we don't</strong></summary>
 
 ### What we vouch for
 
-- **Supported deployment shape.** A single Go server (Docker image or native
-  binary) speaking MCP over **stdio** (local, single-user) or **HTTP**. HTTP is
-  supported only **behind a TLS-terminating, authenticating reverse proxy** —
-  the server serves plain HTTP and does not authenticate callers itself. Per
-  request, callers supply their own TheHive credentials, and the target TheHive
-  URL is restricted to `THEHIVE_URL` / `THEHIVE_URL_ALLOWLIST`. This is the
-  shape we test and support; see the Get Started and Configuration sections
-  below.
+- **Supported deployment shape.** A single Go server (Docker image or native binary) speaking MCP over **stdio** (local, single-user) or **HTTP**. HTTP is
+  supported only **behind a TLS-terminating, authenticating reverse proxy** — the server serves plain HTTP and does not authenticate callers itself. Per
+  request, callers supply their own TheHive credentials, and the target TheHive URL is restricted to `THEHIVE_URL` / `THEHIVE_URL_ALLOWLIST`. This is the shape
+  we test and support; see the Get Started and Configuration sections below.
 
-- **Recommended models only.** Accuracy is uniformly strong across models
-  (88–100%); prompt-injection resilience is what separates them (20–100%), so
-  it is the deciding bar. On the v0.3.4 evidence, the recommended list is the
-  models that clear **both** high accuracy **and** ≥90% injection resilience:
+- **Recommended models only.** Accuracy is uniformly strong across models (88–100%); prompt-injection resilience is what separates them (20–100%), so it is the
+  deciding bar. On the v0.3.4 evidence, the recommended list is the models that clear **both** high accuracy **and** ≥90% injection resilience:
 
-  | Recommended model | Accuracy | Injection resilience |
-  |---|---|---|
-  | `anthropic/claude-sonnet-4.6` | 100% | 93% |
-  | `google/gemini-3-flash` | 100% | 93% |
-  | `openai/gpt-5.4` | 91% | 100% |
+  | Recommended model             | Accuracy | Injection resilience |
+  | ----------------------------- | -------- | -------------------- |
+  | `anthropic/claude-sonnet-4.6` | 100%     | 93%                  |
+  | `google/gemini-3-flash`       | 100%     | 93%                  |
+  | `openai/gpt-5.4`              | 91%      | 100%                 |
 
-  Other evaluated models may work but are **not recommended** — most fall short
-  on injection resilience (e.g. `mistralai/mistral-large-2512` 53%,
-  `openai/gpt-4.1` 33%, `mistralai/mistral-small-3.2-24b` 20%) and should not
-  drive write-capable or automation tools on attacker-reachable data. Per-model
-  results and the full field are in [`docs/evaluation/`](docs/evaluation/); a
-  model earns its place only with published accuracy **and** security evidence
-  tied to a server version.
+  Other evaluated models may work but are **not recommended** — most fall short on injection resilience (e.g. `mistralai/mistral-large-2512` 53%,
+  `openai/gpt-4.1` 33%, `mistralai/mistral-small-3.2-24b` 20%) and should not drive write-capable or automation tools on attacker-reachable data. Per-model
+  results and the full field are in [`docs/evaluation/`](docs/evaluation/); a model earns its place only with published accuracy **and** security evidence tied
+  to a server version.
 
-- **Security posture, and its boundary.** Every user-generated field the server
-  returns (titles, descriptions, comments, observable values, tags) is wrapped
-  in `[UNTRUSTED_DATA]…[/UNTRUSTED_DATA]` boundary tags, and every tool tells the
-  model never to follow instructions found inside them. We publish
-  prompt-injection resilience per recommended model — the pass bar is strict:
-  the agent must **both** ignore the injection **and** warn the analyst.
-  *Boundary:* this defense **reduces but does not eliminate** injection risk, and
-  resilience still varies by model. Weaker models should not drive
-  write-capable or automation tools on attacker-reachable data. The permission
-  model (`read_only` default) is your enforced backstop — see
-  [docs/permissions.md](docs/permissions.md).
+- **Security posture, and its boundary.** Every user-generated field the server returns (titles, descriptions, comments, observable values, tags) is wrapped in
+  `[UNTRUSTED_DATA]…[/UNTRUSTED_DATA]` boundary tags, and every tool tells the model never to follow instructions found inside them. We publish prompt-injection
+  resilience per recommended model — the pass bar is strict: the agent must **both** ignore the injection **and** warn the analyst. _Boundary:_ this defense
+  **reduces but does not eliminate** injection risk, and resilience still varies by model. Weaker models should not drive write-capable or automation tools on
+  attacker-reachable data. The permission model (`read_only` default) is your enforced backstop — see [docs/permissions.md](docs/permissions.md).
 
-- **Accuracy envelope, and its boundary.** We measure correct tool use across
-  realistic, multi-step investigations — entity search, schema/resource
-  discovery, case and observable management, and automation — end-to-end against
-  a real TheHive instance with the real MCP server, no mocked tools. Per-model
-  results are published in [`docs/evaluation/`](docs/evaluation/). *Boundary:*
-  the envelope is the tested surface at a named server version; it is not a
-  guarantee of correctness on every prompt, and the model — not the server — is
-  the dominant factor.
+- **Accuracy envelope, and its boundary.** We measure correct tool use across realistic, multi-step investigations — entity search, schema/resource discovery,
+  case and observable management, and automation — end-to-end against a real TheHive instance with the real MCP server, no mocked tools. Per-model results are
+  published in [`docs/evaluation/`](docs/evaluation/). _Boundary:_ the envelope is the tested surface at a named server version; it is not a guarantee of
+  correctness on every prompt, and the model — not the server — is the dominant factor.
 
-### What we explicitly do *not* commit to
+### What we explicitly do _not_ commit to
 
-- **Arbitrary models.** Models not on the recommended list may work but are
-  neither recommended nor evidenced. You run them at your own risk.
-- **Untested workloads.** Feature areas and usage patterns outside the published
-  evaluation surface are not part of the commitment.
-- **Latency / throughput SLAs.** End-to-end latency is dominated by the model,
-  not the thin Go layer, so we do not publish or commit to latency or throughput
+- **Arbitrary models.** Models not on the recommended list may work but are neither recommended nor evidenced. You run them at your own risk.
+- **Untested workloads.** Feature areas and usage patterns outside the published evaluation surface are not part of the commitment.
+- **Latency / throughput SLAs.** End-to-end latency is dominated by the model, not the thin Go layer, so we do not publish or commit to latency or throughput
   numbers.
-- **Provider-side regressions between runs.** A vendor can change a model under a
-  stable ID; we do not continuously detect this.
+- **Provider-side regressions between runs.** A vendor can change a model under a stable ID; we do not continuously detect this.
 
-Evidence is kept current on a change-triggered basis: every publicly published
-server version is re-evaluated before release (or previous results are carried
-forward for no-behavior-change releases). The full policy is in
-[RELEASING.md](RELEASING.md) and [ADR-0001](docs/adr/0001-security-and-accuracy-testing-policy.md).
+Evidence is kept current on a change-triggered basis: every publicly published server version is re-evaluated before release (or previous results are carried
+forward for no-behavior-change releases). The full policy is in [RELEASING.md](RELEASING.md) and
+[ADR-0001](docs/adr/0001-security-and-accuracy-testing-policy.md).
 
 </details>
 
@@ -142,7 +126,8 @@ TheHiveMCP/
 
 ## 🎮 Get Started
 
-This guide helps you connect TheHiveMCP to popular AI assistants through MCP hosts. Choose your preferred AI assistant below for step-by-step setup instructions.
+This guide helps you connect TheHiveMCP to popular AI assistants through MCP hosts. Choose your preferred AI assistant below for step-by-step setup
+instructions.
 
 ### What you'll need
 
@@ -172,16 +157,11 @@ Download the appropriate MCPB file for your system from the [latest release](htt
 - **Linux (64-bit)**: `thehivemcp-v0.2.0-linux-amd64.mcpb`
 - **Linux (ARM64)**: `thehivemcp-v0.2.0-linux-arm64.mcpb`
 
-> **⚠️ Windows users — unsigned interim binaries.** The current Windows
-> artifacts are **not code-signed** yet (signing is in progress). Expect a
-> Windows SmartScreen **"unknown publisher"** warning on download/run — click
-> **More info → Run anyway** to proceed. On hardened enterprise machines,
-> **Smart App Control / WDAC** may block an unsigned `.exe` outright with no
-> "Run anyway" escape; if that happens, use the `.mcpb` install path (Claude
-> Desktop launches the binary as a child process), compile the server locally
-> (see [How to run on Windows from source](docs/how-to/run-on-windows-from-source.md)),
-> or contact your Windows administrator. Signed binaries will replace these in a
-> later release.
+> **⚠️ Windows users — unsigned interim binaries.** The current Windows artifacts are **not code-signed** yet (signing is in progress). Expect a Windows
+> SmartScreen **"unknown publisher"** warning on download/run — click **More info → Run anyway** to proceed. On hardened enterprise machines, **Smart App
+> Control / WDAC** may block an unsigned `.exe` outright with no "Run anyway" escape; if that happens, use the `.mcpb` install path (Claude Desktop launches the
+> binary as a child process), compile the server locally (see [How to run on Windows from source](docs/how-to/run-on-windows-from-source.md)), or contact your
+> Windows administrator. Signed binaries will replace these in a later release.
 
 #### Step 3: Install the MCPB package
 
@@ -205,7 +185,8 @@ When prompted during installation, provide:
 
 #### Step 5: Test your setup
 
-After installation, restart Claude Desktop and look for the 🔧 tools icon. Try asking: *"Show me recent high-severity alerts from TheHive"* or *"What security cases are currently open?"*
+After installation, restart Claude Desktop and look for the 🔧 tools icon. Try asking: _"Show me recent high-severity alerts from TheHive"_ or _"What security
+cases are currently open?"_
 
 </details>
 
@@ -214,7 +195,10 @@ After installation, restart Claude Desktop and look for the 🔧 tools icon. Try
 
 #### Step 1: Run TheHiveMCP server
 
-> **⚠️ Security:** TheHiveMCP serves plain HTTP and does not authenticate callers itself. Any HTTP deployment that is reachable beyond localhost **must** sit behind a TLS-terminating, authenticating reverse proxy (nginx, Traefik, Caddy, ...). By default, requests without credentials are rejected and the `X-TheHive-Url` header only accepts the configured `THEHIVE_URL` — see `THEHIVE_URL_ALLOWLIST` and `ALLOW_ENV_CREDENTIAL_FALLBACK` in the configuration reference below before changing this behavior.
+> **⚠️ Security:** TheHiveMCP serves plain HTTP and does not authenticate callers itself. Any HTTP deployment that is reachable beyond localhost **must** sit
+> behind a TLS-terminating, authenticating reverse proxy (nginx, Traefik, Caddy, ...). By default, requests without credentials are rejected and the
+> `X-TheHive-Url` header only accepts the configured `THEHIVE_URL` — see `THEHIVE_URL_ALLOWLIST` and `ALLOW_ENV_CREDENTIAL_FALLBACK` in the configuration
+> reference below before changing this behavior.
 
 #### Quick Docker setup
 
@@ -281,7 +265,7 @@ chmod +x thehivemcp
 
 In your MCP host MCP config file (like `claude_desktop_settings.json`) add the following configuration:
 
-```bash
+````bash
 ```json
 {
   "mcpServers": {
@@ -297,7 +281,7 @@ In your MCP host MCP config file (like `claude_desktop_settings.json`) add the f
     }
   }
 }
-```
+````
 
 ### Run as HTTP server
 
@@ -312,7 +296,8 @@ In your MCP host MCP config file (like `claude_desktop_settings.json`) add the f
   --thehive-organisation "$THEHIVE_ORGANISATION"
 ```
 
-HTTP requests must carry their own TheHive credentials (`Authorization` or `X-TheHive-Api-Key` header). To let requests without credentials fall back to the server's `THEHIVE_API_KEY` (single-user deployments only), set `ALLOW_ENV_CREDENTIAL_FALLBACK=true`.
+HTTP requests must carry their own TheHive credentials (`Authorization` or `X-TheHive-Api-Key` header). To let requests without credentials fall back to the
+server's `THEHIVE_API_KEY` (single-user deployments only), set `ALLOW_ENV_CREDENTIAL_FALLBACK=true`.
 
 **💻 For local MCP host integration:** See [stdio Local Guide](docs/examples/stdio-local.md) for GitHub Copilot, Claude Desktop, and other local MCP clients.
 
@@ -345,12 +330,12 @@ bootstrap.RegisterToolsToMCPServer(mcpServer)
 
 ### � Deployment quick reference
 
-| Deployment Type         | Use Case                         | Complexity    | Guide                                                 |
-|-------------------------|----------------------------------|---------------|-------------------------------------------------------|
-| **Claude Desktop MCPB** | Personal use, quick start        | ⭐ Easy        | Above ⬆️                                              |
-| **Claude Code**         | Anthropic CLI (terminal)         | ⭐⭐ Simple     | [Claude Code Guide](docs/how-to/setup-claude-code.md) |
-| **stdio Local**         | Local MCP hosts (GitHub Copilot) | ⭐⭐ Simple     | [stdio Guide](docs/examples/stdio-local.md)           |
-| **Remote Docker**       | Team/cloud deployment            | ⭐⭐⭐ Medium    | [Remote Guide](docs/examples/remote-docker.md)        |
+| Deployment Type         | Use Case                         | Complexity        | Guide                                                 |
+| ----------------------- | -------------------------------- | ----------------- | ----------------------------------------------------- |
+| **Claude Desktop MCPB** | Personal use, quick start        | ⭐ Easy           | Above ⬆️                                              |
+| **Claude Code**         | Anthropic CLI (terminal)         | ⭐⭐ Simple       | [Claude Code Guide](docs/how-to/setup-claude-code.md) |
+| **stdio Local**         | Local MCP hosts (GitHub Copilot) | ⭐⭐ Simple       | [stdio Guide](docs/examples/stdio-local.md)           |
+| **Remote Docker**       | Team/cloud deployment            | ⭐⭐⭐ Medium     | [Remote Guide](docs/examples/remote-docker.md)        |
 | **LibreChat**           | Complete AI assistant setup      | ⭐⭐⭐⭐ Advanced | [LibreChat Guide](docs/examples/librechat.md)         |
 
 ---
@@ -372,29 +357,29 @@ This allows you to set defaults via environment variables while overriding speci
 
 ### Configuration parameters
 
-| Parameter | Environment variable | Command-line flag | HTTP header | Default | Description |
-|-----------|---------------------|-------------------|-------------|---------|-------------|
-| **TheHive connection** |
-| TheHive URL | `THEHIVE_URL` | `--thehive-url` | `X-TheHive-Url` | - | TheHive instance URL (required) |
-| API key | `THEHIVE_API_KEY` | `--thehive-api-key` | `Authorization` or `X-TheHive-Api-Key` | - | TheHive API key |
-| Username | `THEHIVE_USERNAME` | `--thehive-username` | - | - | Username for basic auth |
-| Password | `THEHIVE_PASSWORD` | `--thehive-password` | - | - | Password for basic auth |
-| Organisation | `THEHIVE_ORGANISATION` | `--thehive-organisation` | `X-TheHive-Org` | - | TheHive organisation (optional, defaults to user's own) |
+| Parameter                   | Environment variable            | Command-line flag                 | HTTP header                            | Default            | Description                                                                                                                    |
+| --------------------------- | ------------------------------- | --------------------------------- | -------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| **TheHive connection**      |
+| TheHive URL                 | `THEHIVE_URL`                   | `--thehive-url`                   | `X-TheHive-Url`                        | -                  | TheHive instance URL (required)                                                                                                |
+| API key                     | `THEHIVE_API_KEY`               | `--thehive-api-key`               | `Authorization` or `X-TheHive-Api-Key` | -                  | TheHive API key                                                                                                                |
+| Username                    | `THEHIVE_USERNAME`              | `--thehive-username`              | -                                      | -                  | Username for basic auth                                                                                                        |
+| Password                    | `THEHIVE_PASSWORD`              | `--thehive-password`              | -                                      | -                  | Password for basic auth                                                                                                        |
+| Organisation                | `THEHIVE_ORGANISATION`          | `--thehive-organisation`          | `X-TheHive-Org`                        | -                  | TheHive organisation (optional, defaults to user's own)                                                                        |
 | **HTTP transport security** |
-| URL allowlist | `THEHIVE_URL_ALLOWLIST` | `--thehive-url-allowlist` | - | `THEHIVE_URL` only | Comma-separated TheHive base URLs clients may target via `X-TheHive-Url`; exact scheme/host/port match |
-| Env credential fallback | `ALLOW_ENV_CREDENTIAL_FALLBACK` | `--allow-env-credential-fallback` | - | `false` | Allow HTTP requests without credentials to use the server's `THEHIVE_API_KEY`/username/password (single-user deployments only) |
-| Auth cache TTL | `AUTH_VALIDATION_CACHE_TTL` | `--auth-validation-cache-ttl` | - | `60s` | How long a successful credential validation is cached before re-checking with TheHive |
-| **Permissions** |
-| Permissions config | `PERMISSIONS_CONFIG` | `--permissions-config` | - | `read_only` | Permissions: `read_only`, `admin`, or YAML file path |
-| **MCP server** |
-| Transport type | - | `--transport` | - | `http` | Transport mode: `http` or `stdio` |
-| Bind address | `MCP_BIND_HOST` + `MCP_PORT` | `--addr` | - | - | HTTP server bind address (for example, `0.0.0.0:8082`) |
-| Endpoint path | `MCP_ENDPOINT_PATH` | `--mcp-endpoint-path` | - | `/mcp` | HTTP endpoint path |
-| Heartbeat interval | `MCP_HEARTBEAT_INTERVAL` | `--mcp-heartbeat-interval` | - | `30s` | Heartbeat interval for HTTP connections |
-| **Cortex** |
-| Default Cortex ID | `CORTEX_ID` | `--cortex-id` | - | `local` | Default Cortex instance ID for analyzer/responder execution |
-| **Logging** |
-| Log level | `LOG_LEVEL` | `--log-level` | - | `info` | Logging level |
+| URL allowlist               | `THEHIVE_URL_ALLOWLIST`         | `--thehive-url-allowlist`         | -                                      | `THEHIVE_URL` only | Comma-separated TheHive base URLs clients may target via `X-TheHive-Url`; exact scheme/host/port match                         |
+| Env credential fallback     | `ALLOW_ENV_CREDENTIAL_FALLBACK` | `--allow-env-credential-fallback` | -                                      | `false`            | Allow HTTP requests without credentials to use the server's `THEHIVE_API_KEY`/username/password (single-user deployments only) |
+| Auth cache TTL              | `AUTH_VALIDATION_CACHE_TTL`     | `--auth-validation-cache-ttl`     | -                                      | `60s`              | How long a successful credential validation is cached before re-checking with TheHive                                          |
+| **Permissions**             |
+| Permissions config          | `PERMISSIONS_CONFIG`            | `--permissions-config`            | -                                      | `read_only`        | Permissions: `read_only`, `admin`, or YAML file path                                                                           |
+| **MCP server**              |
+| Transport type              | -                               | `--transport`                     | -                                      | `http`             | Transport mode: `http` or `stdio`                                                                                              |
+| Bind address                | `MCP_BIND_HOST` + `MCP_PORT`    | `--addr`                          | -                                      | -                  | HTTP server bind address (for example, `0.0.0.0:8082`)                                                                         |
+| Endpoint path               | `MCP_ENDPOINT_PATH`             | `--mcp-endpoint-path`             | -                                      | `/mcp`             | HTTP endpoint path                                                                                                             |
+| Heartbeat interval          | `MCP_HEARTBEAT_INTERVAL`        | `--mcp-heartbeat-interval`        | -                                      | `30s`              | Heartbeat interval for HTTP connections                                                                                        |
+| **Cortex**                  |
+| Default Cortex ID           | `CORTEX_ID`                     | `--cortex-id`                     | -                                      | `local`            | Default Cortex instance ID for analyzer/responder execution                                                                    |
+| **Logging**                 |
+| Log level                   | `LOG_LEVEL`                     | `--log-level`                     | -                                      | `info`             | Logging level                                                                                                                  |
 
 ### Example configuration
 
@@ -432,7 +417,8 @@ curl -X POST http://localhost:8082/mcp \
   -d '{"method":"initialize",...}'
 ```
 
-`X-TheHive-Url` is only accepted when it matches the server's `THEHIVE_URL` or an entry in `THEHIVE_URL_ALLOWLIST` — any other destination is rejected before TheHive is contacted. Requests must supply their own credentials unless `ALLOW_ENV_CREDENTIAL_FALLBACK=true`.
+`X-TheHive-Url` is only accepted when it matches the server's `THEHIVE_URL` or an entry in `THEHIVE_URL_ALLOWLIST` — any other destination is rejected before
+TheHive is contacted. Requests must supply their own credentials unless `ALLOW_ENV_CREDENTIAL_FALLBACK=true`.
 
 ### Built-in Permission Profiles
 
@@ -478,7 +464,8 @@ Entity: {"title": "Security Incident", "severity": 3, ...}
 
 ## 🛠️ MCP Tools
 
-- **search-entities**: Search for entities with a structured filter built from TheHive's query DSL (for example, `{"_gte": {"_field": "severity", "_value": 3}}`)
+- **search-entities**: Search for entities with a structured filter built from TheHive's query DSL (for example,
+  `{"_gte": {"_field": "severity", "_value": 3}}`)
 - **manage-entities**: Create, update, delete entities, add comments, promote alerts to cases, merge cases/alerts/observables
 - **execute-automation**: Run Cortex analyzers and responders, check job and action status
 - **get-resource**: Access schemas, docs, and metadata through hierarchical browsing (for example, `uri="hive://schema"` or `uri="hive://metadata/automation"`)
@@ -488,7 +475,8 @@ Entity: {"title": "Security Incident", "severity": 3, ...}
 
 ### [get-resource](docs/tools/get-resource.md)
 
-Access TheHive resources for documentation, schemas, and metadata. The entry point for exploring TheHive capabilities through a hierarchical URI-based resource system.
+Access TheHive resources for documentation, schemas, and metadata. The entry point for exploring TheHive capabilities through a hierarchical URI-based resource
+system.
 
 **Key features:**
 
@@ -511,7 +499,8 @@ Access TheHive resources for documentation, schemas, and metadata. The entry poi
 
 ### [search-entities](docs/tools/search-entities.md)
 
-Search for entities in TheHive by providing a structured filter built from TheHive's query DSL. The filter is applied directly — no natural-language translation step.
+Search for entities in TheHive by providing a structured filter built from TheHive's query DSL. The filter is applied directly — no natural-language translation
+step.
 
 **Key features:**
 
@@ -549,7 +538,8 @@ Execute Cortex analyzers and responders with comprehensive status monitoring and
 
 ## 🪵 MCP Resources
 
-Static resources include entity schemas (with separate output, create, and update variants) and documentation. Dynamic resources provide live data (users, templates, analyzers, responders, observable types).
+Static resources include entity schemas (with separate output, create, and update variants) and documentation. Dynamic resources provide live data (users,
+templates, analyzers, responders, observable types).
 
 <details>
 <summary><strong>🔨 Development</strong></summary>
@@ -575,7 +565,10 @@ All development operations use Docker containers for consistency and isolation:
   - `make test COVERAGE=1`
   - `make test-integration COVERAGE=1`
 
-**Integration test TheHive version:** the integration suite (`make test-integration`) boots a live TheHive + Elasticsearch stack via docker compose (`docker-compose.test.yml`). CI runs `make test-integration` as a matrix against every supported TheHive version (currently 5.5 and 5.6), so a compatibility break against any of them fails the PR. The image is a single source of truth: set `THEHIVE_TEST_IMAGE` to override it locally (e.g. `THEHIVE_TEST_IMAGE=strangebee/thehive:5.5.2 make test-integration`); unset, it defaults to `strangebee/thehive:5.6.3`.
+**Integration test TheHive version:** the integration suite (`make test-integration`) boots a live TheHive + Elasticsearch stack via docker compose
+(`docker-compose.test.yml`). CI runs `make test-integration` as a matrix against every supported TheHive version (currently 5.5 and 5.6), so a compatibility
+break against any of them fails the PR. The image is a single source of truth: set `THEHIVE_TEST_IMAGE` to override it locally (e.g.
+`THEHIVE_TEST_IMAGE=strangebee/thehive:5.5.2 make test-integration`); unset, it defaults to `strangebee/thehive:5.6.3`.
 
 **Quality and security:**
 
@@ -600,18 +593,16 @@ All development operations use Docker containers for consistency and isolation:
 - `make clean` - Remove build artifacts
 - `make help` - Display all available targets
 
-**Architecture:** Transport (`bootstrap/`), Tools (`internal/tools/`), Resources (`internal/resources/`), Integration (`internal/utils/`), Prompts (`internal/prompts/`)
+**Architecture:** Transport (`bootstrap/`), Tools (`internal/tools/`), Resources (`internal/resources/`), Integration (`internal/utils/`), Prompts
+(`internal/prompts/`)
 
 </details>
 
 ## Releases
 
-Releases follow a documented policy so the published accuracy and security
-evidence stays honest as the server evolves. See [RELEASING.md](RELEASING.md)
-for the re-test policy (which changes trigger which test suites), the release
-notes format, and the maintainer release checklist. The reasoning behind the
-policy is recorded in
-[ADR-0001](docs/explanation/adr/0001-security-and-accuracy-testing-policy.md).
+Releases follow a documented policy so the published accuracy and security evidence stays honest as the server evolves. See [RELEASING.md](RELEASING.md) for the
+re-test policy (which changes trigger which test suites), the release notes format, and the maintainer release checklist. The reasoning behind the policy is
+recorded in [ADR-0001](docs/explanation/adr/0001-security-and-accuracy-testing-policy.md).
 
 ## Related Projects
 
@@ -621,10 +612,8 @@ policy is recorded in
 
 ## License
 
-Licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE)
-for attribution. The Apache 2.0 license includes an explicit patent grant and
-patent-retaliation clause, giving adopters clear protection when evaluating
-TheHiveMCP for production use.
+Licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE) for attribution. The Apache 2.0 license includes an explicit patent grant and
+patent-retaliation clause, giving adopters clear protection when evaluating TheHiveMCP for production use.
 
 ---
 

@@ -10,10 +10,8 @@ This directory contains comprehensive documentation for TheHiveMCP.
 
 ## How-to guides
 
-- **[Set up TheHiveMCP with Claude Code](how-to/setup-claude-code.md)** — connect
-  the server to the Anthropic CLI, with config precedence and troubleshooting.
-- **[Run on Windows from source](how-to/run-on-windows-from-source.md)** — compile
-  the server locally to sidestep the SmartScreen "unknown publisher" prompt. A
+- **[Set up TheHiveMCP with Claude Code](how-to/setup-claude-code.md)** — connect the server to the Anthropic CLI, with config precedence and troubleshooting.
+- **[Run on Windows from source](how-to/run-on-windows-from-source.md)** — compile the server locally to sidestep the SmartScreen "unknown publisher" prompt. A
   fallback for when the signed release binary is not an option.
 
 ## Release Documentation

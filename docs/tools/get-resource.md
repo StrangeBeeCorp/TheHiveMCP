@@ -4,7 +4,8 @@ Access TheHive resources for documentation, schemas, and metadata.
 
 ## Overview
 
-The `get-resource` tool is the entry point for exploring TheHive's capabilities. It provides hierarchical access to documentation, schemas, and metadata through a URI-based resource system.
+The `get-resource` tool is the entry point for exploring TheHive's capabilities. It provides hierarchical access to documentation, schemas, and metadata through
+a URI-based resource system.
 
 ## Resource Structure
 
@@ -18,31 +19,37 @@ Resources are organized hierarchically:
 
 ## Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `uri` | string | No | Resource URI to query (for example, 'hive://schema/alert', 'hive://metadata/automation'). Omit to list all categories. |
+| Parameter | Type   | Required | Description                                                                                                            |
+| --------- | ------ | -------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `uri`     | string | No       | Resource URI to query (for example, 'hive://schema/alert', 'hive://metadata/automation'). Omit to list all categories. |
 
 ## Usage
 
 The tool automatically determines whether you're requesting a specific resource or browsing a category based on the URI provided.
 
 **URI flexibility:**
+
 - URIs work with or without the `hive://` prefix (for example, `"schema"` or `"hive://schema"`)
 - Trailing slashes are handled automatically (for example, `"hive://schema/"` or `"hive://schema"`)
 
 **Behavior:**
+
 - If the URI points to a specific resource, the resource content is returned
 - If the URI is a path, all resources and subcategories under that path are returned
 - If the URI doesn't exist, an error is returned
 
 ### Discovery mode
+
 Call without parameters to list all available categories:
+
 ```
 get-resource()
 ```
 
 ### Browse mode
+
 Provide a URI to browse resources and subcategories at that path:
+
 ```
 get-resource(uri="hive://schema")
 get-resource(uri="hive://metadata")
@@ -51,7 +58,9 @@ get-resource(uri="hive://docs/entities")
 ```
 
 ### Fetch mode
+
 Provide a URI to get a specific resource:
+
 ```
 get-resource(uri="hive://schema/alert")
 get-resource(uri="hive://docs/entities/case")
@@ -61,12 +70,14 @@ get-resource(uri="hive://metadata/automation/analyzers")
 ## Examples
 
 ### Discovery and browsing
+
 - **List all categories**: `get-resource()`
 - **List schemas**: `get-resource(uri="hive://schema")`
 - **Browse automation metadata**: `get-resource(uri="hive://metadata/automation")`
 - **Browse entity docs**: `get-resource(uri="hive://docs/entities")`
 
 ### Specific resource fetching
+
 - **Get alert output schema**: `get-resource(uri="hive://schema/alert")`
 - **Get alert create schema**: `get-resource(uri="hive://schema/alert/create")`
 - **Get alert update schema**: `get-resource(uri="hive://schema/alert/update")`
@@ -85,6 +96,7 @@ Entity schemas are organized into three variants:
 Available entities: `alert`, `case`, `task`, `observable`
 
 Example:
+
 - `hive://schema/task` - Output schema for tasks (what you get from queries)
 - `hive://schema/task/create` - Input schema for creating tasks
 - `hive://schema/task/update` - Partial input schema for updating tasks

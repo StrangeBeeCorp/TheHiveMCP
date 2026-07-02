@@ -48,11 +48,11 @@ Add to your MCP settings:
       "env": {
         "THEHIVE_URL": "https://your-thehive-instance.com",
         "THEHIVE_API_KEY": "your-api-key-here",
-        "THEHIVE_ORGANISATION": "your-org-name",  // Optional
-        "PERMISSIONS_CONFIG": "read_only"
-      }
-    }
-  }
+        "THEHIVE_ORGANISATION": "your-org-name", // Optional
+        "PERMISSIONS_CONFIG": "read_only",
+      },
+    },
+  },
 }
 ```
 
@@ -63,6 +63,7 @@ Similar configuration, or use the MCPB package for easier setup.
 ## What to expect
 
 Once configured, your MCP host can:
+
 - **Search entities**: "Find critical alerts from last week"
 - **Access resources**: Browse TheHive schemas and documentation
 - **Create/modify**: Depends on permissions configuration

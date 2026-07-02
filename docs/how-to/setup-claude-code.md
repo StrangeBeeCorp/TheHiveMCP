@@ -1,6 +1,7 @@
 # How to Set Up TheHiveMCP with Claude Code
 
-This guide walks you through connecting TheHiveMCP to **Claude Code** (the Anthropic CLI tool). Claude Code is distinct from Claude Desktop — it runs in your terminal and has its own MCP configuration system with a few non-obvious pitfalls.
+This guide walks you through connecting TheHiveMCP to **Claude Code** (the Anthropic CLI tool). Claude Code is distinct from Claude Desktop — it runs in your
+terminal and has its own MCP configuration system with a few non-obvious pitfalls.
 
 ## Prerequisites
 
@@ -25,7 +26,8 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
 
 You should see a JSON-RPC `initialize` response on stdout. If you get an authentication error, fix your credentials before continuing.
 
-> **Why `--transport stdio`?** TheHiveMCP defaults to HTTP transport. Without this flag, it starts an HTTP server instead of reading from stdin — and Claude Code will never get a response.
+> **Why `--transport stdio`?** TheHiveMCP defaults to HTTP transport. Without this flag, it starts an HTTP server instead of reading from stdin — and Claude
+> Code will never get a response.
 
 ---
 
@@ -34,7 +36,7 @@ You should see a JSON-RPC `initialize` response on stdout. If you get an authent
 Claude Code reads MCP server configuration from two locations, in order of precedence:
 
 | File             | Scope                             | Written by                   |
-|------------------|-----------------------------------|------------------------------|
+| ---------------- | --------------------------------- | ---------------------------- |
 | `~/.claude.json` | Global user-level                 | `claude mcp add` CLI command |
 | `.mcp.json`      | Project-level (current directory) | You, manually                |
 
@@ -68,13 +70,15 @@ Edit `~/.claude.json` directly. The file contains other Claude Code state (start
 
 Replace `/path/to/thehivemcp` with the absolute path to your binary (for example, `~/Downloads/thehivemcp-darwin-arm64` or the path where you installed it).
 
-> **Do not use shell variables in `env` values.** JSON does not expand `$VAR` — the literal string `$THEHIVE_API_KEY` will be passed to the binary, not the value of the variable. Write credentials directly, or use a wrapper script.
+> **Do not use shell variables in `env` values.** JSON does not expand `$VAR` — the literal string `$THEHIVE_API_KEY` will be passed to the binary, not the
+> value of the variable. Write credentials directly, or use a wrapper script.
 
 ---
 
 ## Step 4 — Restart Claude Code and verify
 
-Restart Claude Code completely (exit with `/exit`, then relaunch `claude`). MCP servers are connected at startup — a `/mcp` reload won't pick up config changes made while the session was running.
+Restart Claude Code completely (exit with `/exit`, then relaunch `claude`). MCP servers are connected at startup — a `/mcp` reload won't pick up config changes
+made while the session was running.
 
 After restart, run:
 
@@ -88,7 +92,8 @@ You should see `thehive` listed with status `connected`. If it shows as disconne
 ls ~/Library/Caches/claude-cli-nodejs/*/mcp-logs-thehive/
 ```
 
-Look for a file containing `Successfully connected (transport: stdio)`. If instead you see an error, the most common causes are listed in the troubleshooting section below.
+Look for a file containing `Successfully connected (transport: stdio)`. If instead you see an error, the most common causes are listed in the troubleshooting
+section below.
 
 ---
 
@@ -104,7 +109,8 @@ python3 -c "import json; json.load(open('/Users/$USER/.claude.json')); print('OK
 
 ### `Executable not found` or `command: " "`
 
-You previously ran `claude mcp add` with incorrect arguments, which wrote an entry with a space as the command. Check `~/.claude.json` for entries with `"command": " "` and fix or remove them. Entries in `~/.claude.json` take precedence over everything else.
+You previously ran `claude mcp add` with incorrect arguments, which wrote an entry with a space as the command. Check `~/.claude.json` for entries with
+`"command": " "` and fix or remove them. Entries in `~/.claude.json` take precedence over everything else.
 
 ### Authentication error on startup
 

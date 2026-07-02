@@ -51,11 +51,13 @@ docker-compose -f docs/examples/docker/docker-compose.librechat.yml ps
 
 ## How it works
 
-The [`librechat.yaml`](docker/librechat.yaml) configuration enables per-user TheHive credentials. It defines custom user variables that LibreChat will prompt for and pass as headers to TheHiveMCP.
+The [`librechat.yaml`](docker/librechat.yaml) configuration enables per-user TheHive credentials. It defines custom user variables that LibreChat will prompt
+for and pass as headers to TheHiveMCP.
 
 When you start a conversation, LibreChat will prompt you for these values and send them as headers to TheHiveMCP for each request.
 
 The [`docker-compose.librechat.yml`](docker/docker-compose.librechat.yml) includes:
+
 - **TheHiveMCP server** with admin permissions
 - **LibreChat API** with Anthropic endpoint enabled
 - **MongoDB** and **Meilisearch** for LibreChat's backend
@@ -74,6 +76,7 @@ The AI assistant will use TheHiveMCP tools to interact with your TheHive instanc
 ## Services
 
 The stack includes:
+
 - **LibreChat API** (port 3080) - Web interface
 - **TheHiveMCP** (port 8082) - MCP server
 - **MongoDB** (port 27017) - Database
