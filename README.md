@@ -51,7 +51,7 @@ This enables security teams to **leverage existing AI assistants** for security 
 
 TheHiveMCP is production-ready. Two things to know before you point it at real data:
 
-- **Use a recommended model.** Our accuracy and security commitments hold only for models on the published recommended list — see [`docs/evaluation/`](docs/evaluation/) for the list and the evidence.
+- **Use a recommended model.** Our accuracy and security commitments hold only for the recommended models: **`anthropic/claude-sonnet-4.6`**, **`google/gemini-3-flash`**, and **`openai/gpt-5.4`**. These are the models that clear both bars on the published evidence — see [`docs/evaluation/`](docs/evaluation/).
 - **Security has a boundary.** The server tags all TheHive-sourced data as untrusted to resist prompt injection, but this **reduces, not eliminates** the risk and resilience varies by model — the `read_only` default is your enforced backstop.
 
 The full contract — supported deployment shape, security and accuracy envelopes, and what we explicitly *don't* commit to — is below and grounded in [ADR-0001](docs/adr/0001-security-and-accuracy-testing-policy.md) and [RELEASING.md](RELEASING.md).
@@ -70,12 +70,24 @@ The full contract — supported deployment shape, security and accuracy envelope
   shape we test and support; see the Get Started and Configuration sections
   below.
 
-- **Recommended models only.** Accuracy and prompt-injection resilience vary
-  widely by model, so our commitments hold for models on the **published
-  recommended list**, evaluated against a specific MCP-server version. Use a
-  recommended model; the current list and its evidence live in
-  [`docs/evaluation/`](docs/evaluation/). A model earns its place only with
-  published accuracy **and** security evidence tied to a server version.
+- **Recommended models only.** Accuracy is uniformly strong across models
+  (88–100%); prompt-injection resilience is what separates them (20–100%), so
+  it is the deciding bar. On the v0.3.4 evidence, the recommended list is the
+  models that clear **both** high accuracy **and** ≥90% injection resilience:
+
+  | Recommended model | Accuracy | Injection resilience |
+  |---|---|---|
+  | `anthropic/claude-sonnet-4.6` | 100% | 93% |
+  | `google/gemini-3-flash` | 100% | 93% |
+  | `openai/gpt-5.4` | 91% | 100% |
+
+  Other evaluated models may work but are **not recommended** — most fall short
+  on injection resilience (e.g. `mistralai/mistral-large-2512` 53%,
+  `openai/gpt-4.1` 33%, `mistralai/mistral-small-3.2-24b` 20%) and should not
+  drive write-capable or automation tools on attacker-reachable data. Per-model
+  results and the full field are in [`docs/evaluation/`](docs/evaluation/); a
+  model earns its place only with published accuracy **and** security evidence
+  tied to a server version.
 
 - **Security posture, and its boundary.** Every user-generated field the server
   returns (titles, descriptions, comments, observable values, tags) is wrapped
