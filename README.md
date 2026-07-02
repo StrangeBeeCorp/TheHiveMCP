@@ -120,12 +120,20 @@ Download the appropriate MCPB file for your system from the [latest release](htt
 - **macOS (Intel)**: `thehivemcp-v0.2.0-darwin-amd64.mcpb`
 - **macOS (Apple Silicon)**: `thehivemcp-v0.2.0-darwin-arm64.mcpb`
 - **Windows (64-bit)**: `thehivemcp-v0.2.0-windows-amd64.mcpb`
+- **Windows (ARM64)**: `thehivemcp-v0.2.0-windows-arm64.mcpb`
 - **Linux (64-bit)**: `thehivemcp-v0.2.0-linux-amd64.mcpb`
 - **Linux (ARM64)**: `thehivemcp-v0.2.0-linux-arm64.mcpb`
 
-> **On Windows and hitting a SmartScreen "unknown publisher" prompt?** You can
-> compile the server locally instead — see
-> [How to run on Windows from source](docs/how-to/run-on-windows-from-source.md).
+> **⚠️ Windows users — unsigned interim binaries.** The current Windows
+> artifacts are **not code-signed** yet (signing is in progress). Expect a
+> Windows SmartScreen **"unknown publisher"** warning on download/run — click
+> **More info → Run anyway** to proceed. On hardened enterprise machines,
+> **Smart App Control / WDAC** may block an unsigned `.exe` outright with no
+> "Run anyway" escape; if that happens, use the `.mcpb` install path (Claude
+> Desktop launches the binary as a child process), compile the server locally
+> (see [How to run on Windows from source](docs/how-to/run-on-windows-from-source.md)),
+> or contact your Windows administrator. Signed binaries will replace these in a
+> later release.
 
 #### Step 3: Install the MCPB package
 

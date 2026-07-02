@@ -11,14 +11,73 @@ jobs:
   build:
     name: Build and package release binaries
     runs-on: ubuntu-latest
+    # Permissions needed by the SignPath provider (id-token for the GitHub
+    # connector); harmless for the azure / none providers.
+    permissions:
+      contents: read
+      id-token: write
+    # Pick the Windows signing backend without touching this file: set the repo/org
+    # variable SIGNING_PROVIDER to "signpath" or "azure". Defaults to "none" (unsigned).
+    # The interim release (DL-6329) ships UNSIGNED with "none" while the signing
+    # identity reviews are pending; per ADR 0002 the signed end state is still the
+    # target, so set a real provider once one clears.
+    env:
+      SIGNING_PROVIDER: ${{ vars.SIGNING_PROVIDER || 'none' }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Package release via Makefile
-        run: make package-release
+
+      # 1. Build every release binary (produces build/thehivemcp-windows-*.exe).
+      - name: Build all release binaries
+        run: make build-all
+
+      # 2a. Sign the Windows .exe in place — Azure Artifact Signing path.
+      #     Runs only when SIGNING_PROVIDER=azure; needs the AZURE_* secrets/vars.
+      - name: Sign Windows binaries (Azure Artifact Signing)
+        if: env.SIGNING_PROVIDER == 'azure'
+        run: make sign-windows
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
+
+      # 2b. Sign the Windows .exe — SignPath Foundation path.
+      #     First upload the unsigned .exe as a GitHub artifact (SignPath pulls from
+      #     there), then the SignPath Action submits them to the configured signing
+      #     policy (manual approval) and writes signed files back over the originals
+      #     in build/. Both steps run only when SIGNING_PROVIDER=signpath.
+      - name: Upload unsigned Windows binaries for SignPath
+        id: upload-unsigned
+        if: env.SIGNING_PROVIDER == 'signpath'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-windows-binaries
+          path: build/thehivemcp-windows-*.exe
+          if-no-files-found: error
+
+      - name: Sign Windows binaries (SignPath Foundation)
+        if: env.SIGNING_PROVIDER == 'signpath'
+        uses: signpath/github-action-submit-signing-request@ced31329c0317e779dad2eec2a7c3bb46ea1343e # v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: thehivemcp
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: windows-binaries
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: build/
+
+      # 3. Package the (now-signed) binaries + MCPB without rebuilding.
+      - name: Package release from built binaries
+        run: make package-from-built
+
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:

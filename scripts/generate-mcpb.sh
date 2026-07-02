@@ -59,14 +59,22 @@ elif [ -n "$PERMISSIONS_CONFIG" ]; then
     PERMISSIONS_DEFAULT="$PERMISSIONS_CONFIG"
 fi
 
+# Windows binaries carry a .exe suffix; the entry_point in the manifest must
+# match. BIN_EXT is set per target and reused when writing manifest.json below.
+BIN_EXT=""
+
 # Handle binary selection - in CI we'll build for all platforms
 if [ "$CI_MODE" = "true" ]; then
     # In CI, expect binaries to be provided in /workspace/binaries/
     # Use TARGET_ARCH if specified, otherwise default to linux-amd64
     TARGET_ARCH=${TARGET_ARCH:-linux-amd64}
-    BINARY_NAME="thehivemcp-${TARGET_ARCH}"
+    case "$TARGET_ARCH" in
+        windows-*) BIN_EXT=".exe" ;;
+        *) BIN_EXT="" ;;
+    esac
+    BINARY_NAME="thehivemcp-${TARGET_ARCH}${BIN_EXT}"
     if [ -f "/workspace/binaries/$BINARY_NAME" ]; then
-        cp /workspace/binaries/$BINARY_NAME server/thehivemcp
+        cp /workspace/binaries/$BINARY_NAME server/thehivemcp${BIN_EXT}
     else
         echo "Error: Binary $BINARY_NAME not found in /workspace/binaries/" >&2
         exit 1
@@ -78,11 +86,17 @@ else
     if [ "$ARCH" = "x86_64" ]; then
         ARCH="amd64"
     fi
-    BINARY_NAME="thehivemcp-${PLATFORM}-${ARCH}"
-    cp ../build/$BINARY_NAME server/thehivemcp
+    case "$PLATFORM" in
+        windows*|mingw*|msys*|cygwin*) BIN_EXT=".exe"; PLATFORM="windows" ;;
+        *) BIN_EXT="" ;;
+    esac
+    BINARY_NAME="thehivemcp-${PLATFORM}-${ARCH}${BIN_EXT}"
+    cp ../build/$BINARY_NAME server/thehivemcp${BIN_EXT}
 fi
 
-chmod +x server/thehivemcp
+# chmod is a no-op for Windows binaries but harmless; only run it for the
+# non-Windows artifacts to keep intent clear.
+[[ -z "$BIN_EXT" ]] && chmod +x server/thehivemcp
 
 # Extract version - handle both CI and local modes
 if [ "$CI_MODE" = "true" ]; then
@@ -109,9 +123,9 @@ cat > manifest.json << EOF
   "icon": "icon.png",
   "server": {
     "type": "binary",
-    "entry_point": "server/thehivemcp",
+    "entry_point": "server/thehivemcp${BIN_EXT}",
     "mcp_config": {
-      "command": "\${__dirname}/server/thehivemcp",
+      "command": "\${__dirname}/server/thehivemcp${BIN_EXT}",
       "args": ["-transport", "stdio"],
       "env": {
         "MCP_PORT": "8082",

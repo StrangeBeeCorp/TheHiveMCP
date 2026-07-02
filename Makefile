@@ -20,7 +20,12 @@ BGreen="\033[1;32m"       # Green
 Color_Off="\033[0m"       # Text Reset
 
 # Release matrix
-RELEASE_TARGETS := linux-amd64 linux-arm64 darwin-amd64 darwin-arm64
+RELEASE_TARGETS := linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64 windows-arm64
+
+# Windows targets need a .exe suffix on the produced binary. bin_ext returns
+# ".exe" for any windows-* target and "" otherwise, so the rest of the build /
+# packaging logic can stay platform-agnostic.
+bin_ext = $(if $(filter windows-%,$(1)),.exe,)
 
 .PHONY: all
 all: fmt security test build ## Format, run security checks, test, and build
@@ -221,7 +226,7 @@ build-%: pre
 	@echo "Building for $*..."
 	@OS=$$(echo $* | cut -d- -f1); \
 	ARCH=$$(echo $* | cut -d- -f2); \
-	docker run -i --rm -v $(CURDIR):/app -w /app -e GOOS=$$OS -e GOARCH=$$ARCH $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go build $(GOLDFLAGS) -o $(BUILDDIR)/$(BINARY_NAME)-$* ./cmd/server/main.go
+	docker run -i --rm -v $(CURDIR):/app -w /app -e GOOS=$$OS -e GOARCH=$$ARCH $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go build $(GOLDFLAGS) -o $(BUILDDIR)/$(BINARY_NAME)-$*$(call bin_ext,$*) ./cmd/server/main.go
 
 .PHONY: pre-dist
 pre-dist: ## Create distribution directory
@@ -234,16 +239,24 @@ build-current: build ## Alias for build (builds for current host platform)
 build-all: $(addprefix build-,$(RELEASE_TARGETS)) ## Build binaries for all release targets
 
 .PHONY: package-release
-package-release: pre-dist build-all mcpb-ci ## Package all binaries and MCPB for release
+package-release: build-all package-from-built ## Build, then package all binaries and MCPB for release (local: no signing)
+
+# package-from-built packages whatever binaries already exist in $(BUILDDIR) — it
+# does NOT (re)build. This is the seam the release CI needs: build-all -> sign the
+# windows .exe in place -> package-from-built, so packaging consumes the *signed*
+# binaries instead of clobbering them with a fresh build-all.
+.PHONY: package-from-built
+package-from-built: pre-dist mcpb-ci-nobuild ## Package pre-built (already-signed) binaries + MCPB
 	@echo $(BGreen)--------------------------------$(Color_Off)
 	@echo $(BGreen)-- Packaging release binaries --$(Color_Off)
 	@echo $(BGreen)--------------------------------$(Color_Off)
 	@for target in $(RELEASE_TARGETS); do \
 		echo "Packaging $$target..."; \
-		cp $(BUILDDIR)/$(BINARY_NAME)-$$target $(DISTDIR)/$(BINARY_NAME)-$$target; \
-		(cd $(DISTDIR) && tar -czf $(BINARY_NAME)-$(VERSION)-$$target.tar.gz $(BINARY_NAME)-$$target); \
+		case "$$target" in windows-*) ext=".exe";; *) ext="";; esac; \
+		cp $(BUILDDIR)/$(BINARY_NAME)-$$target$$ext $(DISTDIR)/$(BINARY_NAME)-$$target$$ext; \
+		(cd $(DISTDIR) && tar -czf $(BINARY_NAME)-$(VERSION)-$$target.tar.gz $(BINARY_NAME)-$$target$$ext); \
 		shasum -a 256 $(DISTDIR)/$(BINARY_NAME)-$(VERSION)-$$target.tar.gz > $(DISTDIR)/$(BINARY_NAME)-$(VERSION)-$$target.tar.gz.sha256; \
-		rm $(DISTDIR)/$(BINARY_NAME)-$$target; \
+		rm $(DISTDIR)/$(BINARY_NAME)-$$target$$ext; \
 	done
 	@echo "All release packages created in $(DISTDIR)/"
 	@ls -1 $(DISTDIR)/
@@ -267,14 +280,21 @@ mcpb-local: build ## Generate MCPB package locally
 	./scripts/generate-mcpb.sh
 
 .PHONY: mcpb-ci
-mcpb-ci: pre-dist build-all mcpb-build-image ## Generate MCPB packages for all architectures
+mcpb-ci: build-all mcpb-ci-nobuild ## Build, then generate MCPB packages for all architectures
+
+# mcpb-ci-nobuild wraps the already-built (and, in release CI, already-signed)
+# binaries in $(BUILDDIR) into MCPB packages. It deliberately does NOT depend on
+# build-all so a signing step can run between build-all and packaging.
+.PHONY: mcpb-ci-nobuild
+mcpb-ci-nobuild: pre-dist mcpb-build-image ## Generate MCPB packages from pre-built binaries
 	@echo $(BGreen)----------------------------------$(Color_Off)
 	@echo $(BGreen)-- Generating MCPB Packages CI --$(Color_Off)
 	@echo $(BGreen)----------------------------------$(Color_Off)
 	@for target in $(RELEASE_TARGETS); do \
 		echo "Generating MCPB for $$target..."; \
+		case "$$target" in windows-*) ext=".exe";; *) ext="";; esac; \
 		mkdir -p /tmp/mcpb-workspace-$$target/binaries; \
-		cp $(BUILDDIR)/thehivemcp-$$target /tmp/mcpb-workspace-$$target/binaries/; \
+		cp $(BUILDDIR)/thehivemcp-$$target$$ext /tmp/mcpb-workspace-$$target/binaries/; \
 		docker run --rm \
 			-v /tmp/mcpb-workspace-$$target:/workspace \
 			-e CI_MODE=true \
@@ -286,3 +306,14 @@ mcpb-ci: pre-dist build-all mcpb-build-image ## Generate MCPB packages for all a
 		docker run --rm -v /tmp/mcpb-workspace-$$target:/workspace alpine:latest rm -rf /workspace/* || rm -rf /tmp/mcpb-workspace-$$target || true; \
 	done
 	@echo "All MCPB packages created in $(DISTDIR)/"
+
+# The windows release targets, expanded to their built .exe paths.
+WINDOWS_TARGETS := $(filter windows-%,$(RELEASE_TARGETS))
+WINDOWS_BINARIES := $(foreach t,$(WINDOWS_TARGETS),$(BUILDDIR)/$(BINARY_NAME)-$(t).exe)
+
+.PHONY: sign-windows
+sign-windows: ## Sign the built windows .exe binaries in place (release CI; mechanism-agnostic)
+	@echo $(BGreen)-----------------------------$(Color_Off)
+	@echo $(BGreen)-- Signing Windows binaries --$(Color_Off)
+	@echo $(BGreen)-----------------------------$(Color_Off)
+	./scripts/sign-windows.sh $(WINDOWS_BINARIES)
