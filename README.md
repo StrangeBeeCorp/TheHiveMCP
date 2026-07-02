@@ -49,13 +49,15 @@ This enables security teams to **leverage existing AI assistants** for security 
 
 ## ✅ Production-ready: what we commit to
 
-TheHiveMCP is production-ready. "Production-ready" is a specific claim, not a
-label — here is exactly what it does and does not cover, so you can size your
-own risk acceptance and answer your security team's questions. The reasoning
-behind this contract is recorded in
-[ADR-0001](docs/adr/0001-security-and-accuracy-testing-policy.md), and the
-evidence that backs it is published in
-[`docs/evaluation/`](docs/evaluation/).
+TheHiveMCP is production-ready. Two things to know before you point it at real data:
+
+- **Use a recommended model.** Our accuracy and security commitments hold only for models on the published recommended list — see [`docs/evaluation/`](docs/evaluation/) for the list and the evidence.
+- **Security has a boundary.** The server tags all TheHive-sourced data as untrusted to resist prompt injection, but this **reduces, not eliminates** the risk and resilience varies by model — the `read_only` default is your enforced backstop.
+
+The full contract — supported deployment shape, security and accuracy envelopes, and what we explicitly *don't* commit to — is below and grounded in [ADR-0001](docs/adr/0001-security-and-accuracy-testing-policy.md) and [RELEASING.md](RELEASING.md).
+
+<details>
+<summary><strong>📜 The full contract — what we vouch for, and what we don't</strong></summary>
 
 ### What we vouch for
 
@@ -112,6 +114,8 @@ Evidence is kept current on a change-triggered basis: every publicly published
 server version is re-evaluated before release (or previous results are carried
 forward for no-behavior-change releases). The full policy is in
 [RELEASING.md](RELEASING.md) and [ADR-0001](docs/adr/0001-security-and-accuracy-testing-policy.md).
+
+</details>
 
 ## 🪜 Project Structure
 
