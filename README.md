@@ -563,6 +563,13 @@ policy is recorded in
 - [thehive4go](https://github.com/StrangeBeeCorp/thehive4go) - TheHive Go SDK
 - [mcp-go](https://github.com/mark3labs/mcp-go) - Model Context Protocol Go SDK
 
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE)
+for attribution. The Apache 2.0 license includes an explicit patent grant and
+patent-retaliation clause, giving adopters clear protection when evaluating
+TheHiveMCP for production use.
+
 ---
 
 Open source project maintained by StrangeBee. [Issues and contributions welcome](https://github.com/StrangeBeeCorp/TheHiveMCP/issues).

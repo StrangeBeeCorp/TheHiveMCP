@@ -22,7 +22,7 @@ cat > server.json << EOF
   "description": "MCP server for TheHive security platform - AI-powered incident response",
   "version": "${VERSION_NUMBER}",
   "homepage": "https://github.com/${REPO}",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "packages": [
 EOF
 
@@ -38,15 +38,17 @@ for i in "${!PLATFORMS[@]}"; do
         hash=$(openssl dgst -sha256 "$filepath" | cut -d' ' -f2)
         url="https://github.com/${REPO}/releases/download/${VERSION}/${filename}"
 
-        echo "    {" >> server.json
-        echo "      \"registryType\": \"mcpb\"," >> server.json
-        echo "      \"identifier\": \"${url}\"," >> server.json
-        echo "      \"version\": \"${VERSION_NUMBER}\"," >> server.json
-        echo "      \"fileSha256\": \"${hash}\"," >> server.json
-        echo "      \"transport\": {" >> server.json
-        echo "        \"type\": \"stdio\"" >> server.json
-        echo "      }" >> server.json
-        echo "    }," >> server.json
+        cat >> server.json << EOF
+    {
+      "registryType": "mcpb",
+      "identifier": "${url}",
+      "version": "${VERSION_NUMBER}",
+      "fileSha256": "${hash}",
+      "transport": {
+        "type": "stdio"
+      }
+    },
+EOF
 
         found=$((found + 1))
         echo "  ✓ Added ${filename}"
