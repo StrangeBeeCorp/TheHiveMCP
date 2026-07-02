@@ -72,20 +72,21 @@ across time and across candidates. The pipeline serves **every model —
 candidates and judge alike — through a single pinned provider**, so a model is
 never silently routed to a different quantization or hardware between runs.
 That removes the cross-provider variance that would otherwise rule out
-open-weight models, and lets us choose the judge on quality, cost, and
-neutrality. The policy:
+open-weight models, and lets us choose the judge on quality and cost. The
+policy:
 
 - The judge is **pinned** (model version and provider) and run
   deterministically (temperature 0) — fixed weights, no silent upgrades.
 - It is **held constant** across runs. A judge change re-baselines every score,
   so it is recorded with the results and triggers a re-run.
-- It must follow detailed rubrics reliably and be **independent of the
-  candidate set**, so it never grades its own family's outputs.
+- It must follow detailed rubrics reliably.
 
 **Chosen judge: a pinned `z-ai/glm-5.2`.** It sits in the frontier tier for
 intelligence and instruction-following — level with the strongest hosted
-models — at roughly a third of their cost, and it is *not* in the candidate
-matrix, so it grades every candidate neutrally.
+models — at roughly a third of their cost. It also appears in the candidate
+matrix; models are generally unaware of their own identity, so a judge grading
+its own family is not a meaningful bias concern. Evidence published from runs
+that predate this ADR records the judge actually used in its `results.csv`.
 
 ### What we do *not* test
 

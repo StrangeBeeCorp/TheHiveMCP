@@ -5,7 +5,9 @@
 - **Previous evaluated version:** [v0.3.3](../v0.3.3/summary.md)
 - **Machine-readable results:** [`results.csv`](results.csv)
 - **Detailed visual report:** [`report.html`](report.html) (raw generated
-  charts; read the `security` series as the shipped result)
+  charts; the published security figure is the report's `security` series — the
+  `security-hardened` series it also shows was an internal system-prompt A/B,
+  not a published result)
 - **Judge model:** `anthropic/claude-sonnet-4.6`
 
 ## What changed since v0.3.3, and how it moved the benchmarks
