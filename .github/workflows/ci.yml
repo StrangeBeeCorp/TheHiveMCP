@@ -17,6 +17,23 @@ jobs:
         with:
           go-version: '^1.26.4'
 
+      # Mirror golangci-lint-action's cache strategy: a 7-day interval number in
+      # the key forces a periodic refresh even when nothing else changes, so a
+      # frozen (never-re-saved) cache can't go stale indefinitely. The go.mod +
+      # .golangci.yml hash busts it earlier on a dependency or lint-config change.
+      - name: Compute cache interval
+        id: lint-cache
+        run: echo "interval=$(( $(date +%s) / 86400 / 7 ))" >> "$GITHUB_OUTPUT"
+
+      - name: Cache golangci-lint
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/golangci-lint
+          key: golangci-lint-${{ runner.os }}-${{ steps.lint-cache.outputs.interval }}-${{ hashFiles('go.mod', '.golangci.yml') }}
+          restore-keys: |
+            golangci-lint-${{ runner.os }}-${{ steps.lint-cache.outputs.interval }}-
+            golangci-lint-${{ runner.os }}-
+
       - name: Format check
         run: make fmt
 
