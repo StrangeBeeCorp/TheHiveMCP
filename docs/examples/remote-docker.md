@@ -2,8 +2,6 @@
 
 This example shows how to deploy TheHiveMCP as a remote HTTP service using Docker.
 
-> **⚠️ BETA WARNING**: Use only with test data and development TheHive instances.
-
 ## Security requirements
 
 TheHiveMCP serves plain HTTP and does not authenticate callers itself. Before exposing it beyond localhost:

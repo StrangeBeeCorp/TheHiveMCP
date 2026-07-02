@@ -2,8 +2,6 @@
 
 This example shows how to run TheHiveMCP with **LibreChat** using Anthropic models for AI-powered TheHive operations.
 
-> **⚠️ BETA WARNING**: Use only with test data and development TheHive instances.
-
 ## Overview
 
 This setup provides a web-based chat interface where users can interact with TheHive through natural language using Claude models. The configuration includes:

@@ -8,40 +8,6 @@
 
 **Model Context Protocol server for TheHive security platform**
 
-> **⚠️ BETA WARNING: NOT FOR PRODUCTION USE**
->
-> **This project is in BETA version and is insufficiently tested. Do NOT use with real production data.**
->
-> <details>
-> <summary><strong>🚨 Current Limitations and Security Risks</strong></summary>
->
-> ### Security Risks
->
-> - **Prompt Injection Vulnerabilities**: AI prompts may be exploited to bypass security controls
-> - **Data Exposure**: Beta-level data filtering may not properly restrict sensitive information
-> - **Authentication Bypass**: Security mechanisms are not fully hardened
-> - **Audit Trail Gaps**: Incomplete logging of security-sensitive operations
->
-> ### Feature Limitations
->
-> - **No TTP (Tactics, Techniques, Procedures) Support**: MITRE ATT&CK integration not implemented
-> - **Limited Responder Support**: Cortex responder execution has known issues and limitations
-> - **No Alert Comments**: Alert commenting functionality not implemented
-> - **Limited Observable Types**: Some specialized observable types not fully supported
-> - **No Case Templates**: Custom case template support not implemented
-> - **Limited Task Management**: Advanced task workflows not fully supported
-> - **No Dashboard Integration**: No support for TheHive dashboard widgets or custom views
-> - **Basic Permission Model**: Advanced RBAC features incomplete
->
-> ### Recommended Usage
->
-> - **Development and Testing Only**: Use with test data and development instances
-> - **Proof of Concept**: Evaluate integration potential with non-sensitive data
-> - **Sandbox Environment**: Deploy in isolated environments with restricted network access
->
-> Production use requires thorough security review and extensive testing.
-> </details>
-
 ## 🌍 Overview
 
 TheHiveMCP is an MCP (Model Context Protocol) server that enables AI agents to interact with [TheHive](https://strangebee.com/thehive/) security platform through natural language. Built in Go, it provides a structured interface for security operations, case management, and threat intelligence workflows.
@@ -80,6 +46,72 @@ When you connect an AI assistant to TheHiveMCP, the AI can:
 **Real-world example:** An analyst using ChatGPT with TheHiveMCP can say *"Show me high-severity phishing alerts from last week"* and ChatGPT will use TheHiveMCP to query TheHive database and present the results in an organized, actionable format.
 
 This enables security teams to **leverage existing AI assistants** for security operations without replacing their current tools or workflows. TheHiveMCP handles the technical complexity of integrating with TheHive, so AI assistants can focus on understanding security context and providing intelligent insights.
+
+## ✅ Production-ready: what we commit to
+
+TheHiveMCP is production-ready. "Production-ready" is a specific claim, not a
+label — here is exactly what it does and does not cover, so you can size your
+own risk acceptance and answer your security team's questions. The reasoning
+behind this contract is recorded in
+[ADR-0001](docs/adr/0001-security-and-accuracy-testing-policy.md), and the
+evidence that backs it is published in
+[`docs/evaluation/`](docs/evaluation/).
+
+### What we vouch for
+
+- **Supported deployment shape.** A single Go server (Docker image or native
+  binary) speaking MCP over **stdio** (local, single-user) or **HTTP**. HTTP is
+  supported only **behind a TLS-terminating, authenticating reverse proxy** —
+  the server serves plain HTTP and does not authenticate callers itself. Per
+  request, callers supply their own TheHive credentials, and the target TheHive
+  URL is restricted to `THEHIVE_URL` / `THEHIVE_URL_ALLOWLIST`. This is the
+  shape we test and support; see the Get Started and Configuration sections
+  below.
+
+- **Recommended models only.** Accuracy and prompt-injection resilience vary
+  widely by model, so our commitments hold for models on the **published
+  recommended list**, evaluated against a specific MCP-server version. Use a
+  recommended model; the current list and its evidence live in
+  [`docs/evaluation/`](docs/evaluation/). A model earns its place only with
+  published accuracy **and** security evidence tied to a server version.
+
+- **Security posture, and its boundary.** Every user-generated field the server
+  returns (titles, descriptions, comments, observable values, tags) is wrapped
+  in `[UNTRUSTED_DATA]…[/UNTRUSTED_DATA]` boundary tags, and every tool tells the
+  model never to follow instructions found inside them. We publish
+  prompt-injection resilience per recommended model — the pass bar is strict:
+  the agent must **both** ignore the injection **and** warn the analyst.
+  *Boundary:* this defense **reduces but does not eliminate** injection risk, and
+  resilience still varies by model. Weaker models should not drive
+  write-capable or automation tools on attacker-reachable data. The permission
+  model (`read_only` default) is your enforced backstop — see
+  [docs/permissions.md](docs/permissions.md).
+
+- **Accuracy envelope, and its boundary.** We measure correct tool use across
+  realistic, multi-step investigations — entity search, schema/resource
+  discovery, case and observable management, and automation — end-to-end against
+  a real TheHive instance with the real MCP server, no mocked tools. Per-model
+  results are published in [`docs/evaluation/`](docs/evaluation/). *Boundary:*
+  the envelope is the tested surface at a named server version; it is not a
+  guarantee of correctness on every prompt, and the model — not the server — is
+  the dominant factor.
+
+### What we explicitly do *not* commit to
+
+- **Arbitrary models.** Models not on the recommended list may work but are
+  neither recommended nor evidenced. You run them at your own risk.
+- **Untested workloads.** Feature areas and usage patterns outside the published
+  evaluation surface are not part of the commitment.
+- **Latency / throughput SLAs.** End-to-end latency is dominated by the model,
+  not the thin Go layer, so we do not publish or commit to latency or throughput
+  numbers.
+- **Provider-side regressions between runs.** A vendor can change a model under a
+  stable ID; we do not continuously detect this.
+
+Evidence is kept current on a change-triggered basis: every publicly published
+server version is re-evaluated before release (or previous results are carried
+forward for no-behavior-change releases). The full policy is in
+[RELEASING.md](RELEASING.md) and [ADR-0001](docs/adr/0001-security-and-accuracy-testing-policy.md).
 
 ## 🪜 Project Structure
 

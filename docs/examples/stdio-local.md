@@ -2,8 +2,6 @@
 
 This example shows how to run TheHiveMCP in stdio mode for integration with local MCP hosts like GitHub Copilot and Claude Desktop.
 
-> **⚠️ BETA WARNING**: Use only with test data and development TheHive instances.
-
 ## Prerequisites
 
 - TheHive 5.5+ instance with API access
