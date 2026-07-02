@@ -2,7 +2,7 @@
 
 This is the operational checklist for cutting a public release. The **testing
 policy it enforces is defined in
-[ADR-0001](docs/adr/0001-security-and-accuracy-testing-policy.md), which is the
+[ADR-0001](docs/explanation/adr/0001-security-and-accuracy-testing-policy.md), which is the
 source of truth** — if this document and the ADR ever disagree, the ADR wins.
 
 ## Re-test policy

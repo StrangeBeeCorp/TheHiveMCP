@@ -563,7 +563,7 @@ evidence stays honest as the server evolves. See [RELEASING.md](RELEASING.md)
 for the re-test policy (which changes trigger which test suites), the release
 notes format, and the maintainer release checklist. The reasoning behind the
 policy is recorded in
-[ADR-0001](docs/adr/0001-security-and-accuracy-testing-policy.md).
+[ADR-0001](docs/explanation/adr/0001-security-and-accuracy-testing-policy.md).
 
 ## Related Projects
 

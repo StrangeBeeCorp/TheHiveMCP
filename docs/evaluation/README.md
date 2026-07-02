@@ -2,7 +2,7 @@
 
 This directory holds TheHiveMCP's published **accuracy** and **security**
 evaluation evidence, per
-[ADR-0001](../adr/0001-security-and-accuracy-testing-policy.md).
+[ADR-0001](../explanation/adr/0001-security-and-accuracy-testing-policy.md).
 
 Evidence is published **one folder per evaluated MCP-server version**. Each
 version folder contains:
