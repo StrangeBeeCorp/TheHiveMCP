@@ -10,11 +10,6 @@ if [ "$CI_MODE" != "true" ] && [ -f "./.env" ]; then
     export $(grep -v '^#' ./.env | xargs)
 fi
 
-# Set defaults for OpenAI variables if not already set
-export OPENAI_API_KEY="${OPENAI_API_KEY:-}"
-export OPENAI_BASE_URL="${OPENAI_BASE_URL:-https://openrouter.ai/api/v1}"
-export OPENAI_MODEL="${OPENAI_MODEL:-anthropic/claude-haiku-4.5}"
-
 # Set default for permissions config
 export PERMISSIONS_CONFIG="${PERMISSIONS_CONFIG:-}"
 
@@ -132,10 +127,7 @@ cat > manifest.json << EOF
         "THEHIVE_URL": "\${user_config.thehive_url}",
         "THEHIVE_API_KEY": "\${user_config.thehive_api_key}",
         "THEHIVE_ORGANISATION": "\${user_config.organisation}",
-        "PERMISSIONS_CONFIG": "\${user_config.permissions_config}",
-        "OPENAI_API_KEY": "\${user_config.openai_api_key}",
-        "OPENAI_BASE_URL": "\${user_config.openai_base_url}",
-        "OPENAI_MODEL": "\${user_config.openai_model}"
+        "PERMISSIONS_CONFIG": "\${user_config.permissions_config}"
       }
     }
   },
@@ -165,28 +157,6 @@ cat > manifest.json << EOF
       "type": "string",
       "required": false,
       "default": "$PERMISSIONS_DEFAULT"
-    },
-    "openai_api_key": {
-      "title": "OpenAI API Key",
-      "description": "OpenAI/OpenRouter API key for AI features",
-      "type": "string",
-      "required": true,
-      "sensitive": true,
-      "default": "$OPENAI_API_KEY"
-    },
-    "openai_base_url": {
-      "title": "OpenAI Base URL",
-      "description": "OpenAI API base URL (use OpenRouter for model variety)",
-      "type": "string",
-      "required": false,
-      "default": "$OPENAI_BASE_URL"
-    },
-    "openai_model": {
-      "title": "OpenAI Model",
-      "description": "AI model to use for analysis and automation",
-      "type": "string",
-      "required": false,
-      "default": "$OPENAI_MODEL"
     }
   }
 }
