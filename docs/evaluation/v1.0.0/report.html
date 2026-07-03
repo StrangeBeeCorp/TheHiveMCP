@@ -44,7 +44,7 @@ td.model{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
   <div class="meta"><span><b>Accuracy:</b> mcp-tools (34) + workflows (3) = 37</span><span><b>Security:</b> 15 injection scenarios</span></div>
 
   <div class="note">
-    v1.0.0 is the production-ready release; the server's model-facing behavior — including the <code>[UNTRUSTED_DATA]</code> boundary-tag injection defense — is unchanged from v0.3.4. This run refreshes the recommended-model matrix (ten current models) rather than measuring a server change. The matrix shares only two models with v0.3.4 (<code>claude-sonnet-4.6</code>, <code>qwen3.5-9b</code>), so results are read within v1.0.0; see <a href="summary.md">summary.md</a> for the version-over-version note.
+    v1.0.0 is the production-ready release; the server's model-facing behavior — including the <code>[UNTRUSTED_DATA]</code> boundary-tag injection defense — is unchanged from v0.3.4. This run refreshes the recommended-model matrix (ten current models) rather than measuring a server change. The matrix shares only two models with v0.3.4 (<code>anthropic/claude-sonnet-4.6</code>, <code>qwen/qwen3.5-9b</code>), so results are read within v1.0.0; see <a href="summary.md">summary.md</a> for the version-over-version note.
   </div>
 
   <h2>Accuracy &amp; security by model</h2>
@@ -56,20 +56,20 @@ td.model{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
 
   <h2>Comparison with v0.3.4</h2>
   <div class="note">
-    The server's injection defense is unchanged from v0.3.4, so this is a comparison of two <em>model matrices</em>, not a server before/after. Only two models carry over; the rest advanced to newer versions within the same families (e.g. <code>gpt-5.4</code>→<code>gpt-5.5</code>, <code>deepseek-v3.2</code>→<code>deepseek-v4-pro</code>, <code>mistral-large-2512</code>→<code>mistral-medium-3.5</code>, <code>gemini-3-flash</code>→<code>gemini-3.5-flash</code>). The accuracy suite also grew (32→37 checks) and the judge changed (<code>claude-sonnet-4.6</code>→<code>z-ai/glm-5.2</code>), so carried-over figures are indicative, not exact deltas.
+    The server's injection defense is unchanged from v0.3.4, so this is a comparison of two <em>model matrices</em>, not a server before/after. Only two models carry over; the rest advanced to newer versions within the same families (e.g. <code>openai/gpt-5.4</code>→<code>openai/gpt-5.5</code>, <code>deepseek/deepseek-v3.2</code>→<code>deepseek/deepseek-v4-pro</code>, <code>mistralai/mistral-large-2512</code>→<code>mistralai/mistral-medium-3.5</code>, <code>google/gemini-3-flash</code>→<code>google/gemini-3.5-flash</code>). The accuracy suite also grew (32→37 checks) and the judge changed (<code>anthropic/claude-sonnet-4.6</code>→<code>z-ai/glm-5.2</code>), so carried-over figures are indicative, not exact deltas.
   </div>
   <table id="carry">
     <thead><tr><th>Carried-over model</th><th>Accuracy v0.3.4 → v1.0.0</th><th>Security v0.3.4 → v1.0.0</th></tr></thead>
     <tbody>
-      <tr><td class="model">claude-sonnet-4.6</td><td>100% (32/32) → 100% (37/37)</td><td>93% (14/15) → <b style="color:var(--sec)">100% (15/15)</b></td></tr>
-      <tr><td class="model">qwen3.5-9b</td><td>88% (28/32) → 73% (27/37)</td><td>67% (10/15) → 53% (8/15)</td></tr>
+      <tr><td class="model">anthropic/claude-sonnet-4.6</td><td>100% (32/32) → 100% (37/37)</td><td>93% (14/15) → <b style="color:var(--sec)">100% (15/15)</b></td></tr>
+      <tr><td class="model">qwen/qwen3.5-9b</td><td>88% (28/32) → 73% (27/37)</td><td>67% (10/15) → 53% (8/15)</td></tr>
     </tbody>
   </table>
   <div class="legend" style="margin-top:12px">
-    <span><b style="color:var(--text)">New in v1.0.0 matrix (8):</b>&nbsp; kimi-k2.6, gpt-5.5, glm-5.2, gemini-3.5-flash, gemini-3.1-flash-lite, deepseek-v4-pro, mistral-medium-3.5, ministral-8b-2512</span>
+    <span><b style="color:var(--text)">New in v1.0.0 matrix (8):</b>&nbsp; moonshotai/kimi-k2.6, openai/gpt-5.5, z-ai/glm-5.2, google/gemini-3.5-flash, google/gemini-3.1-flash-lite, deepseek/deepseek-v4-pro, mistralai/mistral-medium-3.5, mistralai/ministral-8b-2512</span>
   </div>
   <div class="legend">
-    <span><b style="color:var(--text)">Dropped from v0.3.4 matrix (6):</b>&nbsp; gemini-3-flash, gpt-5.4, deepseek-v3.2, mistral-large-2512, gpt-4.1, mistral-small-3.2-24b</span>
+    <span><b style="color:var(--text)">Dropped from v0.3.4 matrix (6):</b>&nbsp; google/gemini-3-flash, openai/gpt-5.4, deepseek/deepseek-v3.2, mistralai/mistral-large-2512, openai/gpt-4.1, mistralai/mistral-small-3.2-24b</span>
   </div>
   <div class="note">
     Field-level: v0.3.4 injection resilience ranged 20%–100% (median ~70%); the current matrix ranges 53%–100% with eight of ten models at ≥93%. The lift reflects newer models, not a defense change — model choice remains the dominant control on injection risk.

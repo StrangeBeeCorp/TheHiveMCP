@@ -20,15 +20,15 @@ The story of this run is therefore the model set, not the server:
 
 ### Comparison with v0.3.4
 
-Only two models carry over between the two matrices; the rest advanced to newer versions within the same families (`gpt-5.4` → `gpt-5.5`, `deepseek-v3.2` → `deepseek-v4-pro`, `mistral-large-2512` → `mistral-medium-3.5`, `gemini-3-flash` → `gemini-3.5-flash`). The accuracy suite also grew (32 → 37 checks) and the judge changed (`anthropic/claude-sonnet-4.6` → `z-ai/glm-5.2`), so the carried-over figures below are indicative, not exact deltas.
+Only two models carry over between the two matrices; the rest advanced to newer versions within the same families (`openai/gpt-5.4` → `openai/gpt-5.5`, `deepseek/deepseek-v3.2` → `deepseek/deepseek-v4-pro`, `mistralai/mistral-large-2512` → `mistralai/mistral-medium-3.5`, `google/gemini-3-flash` → `google/gemini-3.5-flash`). The accuracy suite also grew (32 → 37 checks) and the judge changed (`anthropic/claude-sonnet-4.6` → `z-ai/glm-5.2`), so the carried-over figures below are indicative, not exact deltas.
 
 | Carried-over model | Accuracy (v0.3.4 → v1.0.0) | Security (v0.3.4 → v1.0.0) |
 | --- | --- | --- |
 | `anthropic/claude-sonnet-4.6` | 100% (32/32) → 100% (37/37) | 93% (14/15) → **100% (15/15)** |
 | `qwen/qwen3.5-9b` | 88% (28/32) → 73% (27/37) | 67% (10/15) → 53% (8/15) |
 
-- **New to the v1.0.0 matrix (8):** `kimi-k2.6`, `gpt-5.5`, `glm-5.2`, `gemini-3.5-flash`, `gemini-3.1-flash-lite`, `deepseek-v4-pro`, `mistral-medium-3.5`, `ministral-8b-2512`.
-- **Dropped from the v0.3.4 matrix (6):** `gemini-3-flash`, `gpt-5.4`, `deepseek-v3.2`, `mistral-large-2512`, `gpt-4.1`, `mistral-small-3.2-24b`.
+- **New to the v1.0.0 matrix (8):** `moonshotai/kimi-k2.6`, `openai/gpt-5.5`, `z-ai/glm-5.2`, `google/gemini-3.5-flash`, `google/gemini-3.1-flash-lite`, `deepseek/deepseek-v4-pro`, `mistralai/mistral-medium-3.5`, `mistralai/ministral-8b-2512`.
+- **Dropped from the v0.3.4 matrix (6):** `google/gemini-3-flash`, `openai/gpt-5.4`, `deepseek/deepseek-v3.2`, `mistralai/mistral-large-2512`, `openai/gpt-4.1`, `mistralai/mistral-small-3.2-24b`.
 
 Field-level, v0.3.4 injection resilience ranged 20%–100% (median ~70%); the current matrix ranges 53%–100%, with eight of ten models at ≥93%. `claude-sonnet-4.6` is the clearest carried-over signal — it held perfect accuracy and closed its last injection miss. `qwen3.5-9b` is the same model in both runs but measured against a larger, harder accuracy suite and a different judge, so its lower percentages are read within v1.0.0 rather than as a regression.
 
