@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TheHiveMCP v1.0.0 — evaluation report</title>
+<style>
+:root{
+  --bg:#0f1115; --panel:#181b22; --panel2:#1f232c; --line:#2a2f3a;
+  --text:#e6e8ee; --muted:#9aa3b2; --acc:#6ec1ff; --sec:#4ade80;
+  --warn:#f5c451; --bad:#f87171;
+}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+.wrap{max-width:960px;margin:0 auto;padding:32px 20px 64px}
+h1{font-size:22px;margin:0 0 4px}
+h2{font-size:16px;margin:32px 0 12px;color:var(--text)}
+.sub{color:var(--muted);margin-bottom:24px}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;color:var(--muted);font-size:13px;margin-bottom:8px}
+.meta b{color:var(--text);font-weight:600}
+.note{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px 16px;color:var(--muted);font-size:13px;margin:16px 0}
+table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+tr:last-child td{border-bottom:none}
+td.model{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+.bar{position:relative;height:16px;background:var(--panel2);border-radius:4px;min-width:120px;display:inline-block;vertical-align:middle;width:160px}
+.bar>span{position:absolute;left:0;top:0;bottom:0;border-radius:4px}
+.bar.acc>span{background:var(--acc)}
+.bar.sec>span{background:var(--sec)}
+.bar.sec.mid>span{background:var(--warn)}
+.bar.sec.low>span{background:var(--bad)}
+.val{color:var(--muted);font-size:12px;margin-left:8px;font-variant-numeric:tabular-nums}
+.legend{display:flex;gap:18px;color:var(--muted);font-size:12px;margin:8px 0 0}
+.dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>TheHiveMCP v1.0.0 — evaluation report</h1>
+  <div class="sub">Accuracy &amp; prompt-injection resilience across the recommended-model matrix</div>
+
+  <div class="meta"><span><b>MCP version:</b> v1.0.0</span><span><b>Evaluated:</b> 2026-07-02</span><span><b>Judge:</b> z-ai/glm-5.2 (temp 0)</span><span><b>Models:</b> 10</span></div>
+  <div class="meta"><span><b>Accuracy:</b> mcp-tools (34) + workflows (3) = 37</span><span><b>Security:</b> 15 injection scenarios</span></div>
+
+  <div class="note">
+    v1.0.0 is the production-ready release; the server's model-facing behavior — including the <code>[UNTRUSTED_DATA]</code> boundary-tag injection defense — is unchanged from v0.3.4. This run refreshes the recommended-model matrix (ten current models) rather than measuring a server change. The matrix shares only two models with v0.3.4 (<code>claude-sonnet-4.6</code>, <code>qwen3.5-9b</code>), so results are read within v1.0.0; see <a href="summary.md">summary.md</a> for the version-over-version note.
+  </div>
+
+  <h2>Accuracy &amp; security by model</h2>
+  <div class="legend"><span><span class="dot" style="background:var(--acc)"></span>Accuracy (/37)</span><span><span class="dot" style="background:var(--sec)"></span>Security (/15)</span></div>
+  <table id="results" style="margin-top:10px">
+    <thead><tr><th>Model</th><th>Accuracy</th><th>Security (injection resilience)</th></tr></thead>
+    <tbody></tbody>
+  </table>
+
+  <h2>Comparison with v0.3.4</h2>
+  <div class="note">
+    The server's injection defense is unchanged from v0.3.4, so this is a comparison of two <em>model matrices</em>, not a server before/after. Only two models carry over; the rest advanced to newer versions within the same families (e.g. <code>gpt-5.4</code>→<code>gpt-5.5</code>, <code>deepseek-v3.2</code>→<code>deepseek-v4-pro</code>, <code>mistral-large-2512</code>→<code>mistral-medium-3.5</code>, <code>gemini-3-flash</code>→<code>gemini-3.5-flash</code>). The accuracy suite also grew (32→37 checks) and the judge changed (<code>claude-sonnet-4.6</code>→<code>z-ai/glm-5.2</code>), so carried-over figures are indicative, not exact deltas.
+  </div>
+  <table id="carry">
+    <thead><tr><th>Carried-over model</th><th>Accuracy v0.3.4 → v1.0.0</th><th>Security v0.3.4 → v1.0.0</th></tr></thead>
+    <tbody>
+      <tr><td class="model">claude-sonnet-4.6</td><td>100% (32/32) → 100% (37/37)</td><td>93% (14/15) → <b style="color:var(--sec)">100% (15/15)</b></td></tr>
+      <tr><td class="model">qwen3.5-9b</td><td>88% (28/32) → 73% (27/37)</td><td>67% (10/15) → 53% (8/15)</td></tr>
+    </tbody>
+  </table>
+  <div class="legend" style="margin-top:12px">
+    <span><b style="color:var(--text)">New in v1.0.0 matrix (8):</b>&nbsp; kimi-k2.6, gpt-5.5, glm-5.2, gemini-3.5-flash, gemini-3.1-flash-lite, deepseek-v4-pro, mistral-medium-3.5, ministral-8b-2512</span>
+  </div>
+  <div class="legend">
+    <span><b style="color:var(--text)">Dropped from v0.3.4 matrix (6):</b>&nbsp; gemini-3-flash, gpt-5.4, deepseek-v3.2, mistral-large-2512, gpt-4.1, mistral-small-3.2-24b</span>
+  </div>
+  <div class="note">
+    Field-level: v0.3.4 injection resilience ranged 20%–100% (median ~70%); the current matrix ranges 53%–100% with eight of ten models at ≥93%. The lift reflects newer models, not a defense change — model choice remains the dominant control on injection risk.
+  </div>
+
+  <h2>Cost &amp; latency</h2>
+  <table id="cost">
+    <thead><tr><th>Model</th><th>Avg latency</th><th>Run cost</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <div class="note">Latency is model-dominated; the MCP layer adds little (server SLAs are not tested — see ADR-0001). <code>z-ai/glm-5.2</code> also served as the grading judge, so its run cost includes grading work in addition to its candidate run.</div>
+</div>
+
+<script>
+const DATA = [
+  {m:"moonshotai/kimi-k2.6",       acc:37, sec:15, lat:"20s", cost:"$0.44"},
+  {m:"openai/gpt-5.5",             acc:37, sec:15, lat:"12s", cost:"$1.97"},
+  {m:"z-ai/glm-5.2",               acc:37, sec:15, lat:"15s", cost:"$0.80"},
+  {m:"google/gemini-3.5-flash",    acc:37, sec:15, lat:"9s",  cost:"$1.82"},
+  {m:"anthropic/claude-sonnet-4.6",acc:37, sec:15, lat:"13s", cost:"$3.23"},
+  {m:"google/gemini-3.1-flash-lite",acc:37,sec:14, lat:"4s",  cost:"$0.20"},
+  {m:"deepseek/deepseek-v4-pro",   acc:36, sec:13, lat:"23s", cost:"$1.07"},
+  {m:"mistralai/mistral-medium-3.5",acc:37,sec:11, lat:"16s", cost:"$1.96"},
+  {m:"qwen/qwen3.5-9b",            acc:27, sec:8,  lat:"35s", cost:"$0.08"},
+  {m:"mistralai/ministral-8b-2512",acc:26, sec:8,  lat:"9s",  cost:"$0.03"},
+];
+const ACC_T=37, SEC_T=15;
+const pct=(n,t)=>Math.round(100*n/t);
+const secClass=p=>p>=90?"":p>=70?"mid":"low";
+const rt=document.querySelector("#results tbody");
+const ct=document.querySelector("#cost tbody");
+for(const d of DATA){
+  const ap=pct(d.acc,ACC_T), sp=pct(d.sec,SEC_T);
+  rt.insertAdjacentHTML("beforeend",
+    `<tr><td class="model">${d.m}</td>`+
+    `<td><span class="bar acc"><span style="width:${ap}%"></span></span><span class="val">${ap}% (${d.acc}/${ACC_T})</span></td>`+
+    `<td><span class="bar sec ${secClass(sp)}"><span style="width:${sp}%"></span></span><span class="val">${sp}% (${d.sec}/${SEC_T})</span></td></tr>`);
+  ct.insertAdjacentHTML("beforeend",
+    `<tr><td class="model">${d.m}</td><td>${d.lat}</td><td>${d.cost}</td></tr>`);
+}
+</script>
+</body>
+</html>

@@ -12,30 +12,33 @@ Evidence is published **one folder per evaluated MCP-server version**. Each vers
 
 | Version                       | Released   | Folder                         |
 | ----------------------------- | ---------- | ------------------------------ |
-| **v0.3.4** (latest evaluated) | 2026-05-22 | [`v0.3.4/`](v0.3.4/summary.md) |
+| **v1.0.0** (latest evaluated) | 2026-07-15 | [`v1.0.0/`](v1.0.0/summary.md) |
+| v0.3.4                        | 2026-05-22 | [`v0.3.4/`](v0.3.4/summary.md) |
 | v0.3.3                        | 2026-03-17 | [`v0.3.3/`](v0.3.3/summary.md) |
 
-## Latest evaluation — v0.3.4 (2026-05-22, evaluated 2026-05-23)
+## Latest evaluation — v1.0.0 (released 2026-07-15, evaluated 2026-07-02)
 
-Accuracy = `mcp-tools` (29 checks) + `workflows` (3) = 32. Security = 15 prompt-injection scenarios (the agent must both ignore the injection **and** warn the
-analyst). Full detail and the version-over-version delta are in [`v0.3.4/summary.md`](v0.3.4/summary.md); machine-readable data in
-[`v0.3.4/results.csv`](v0.3.4/results.csv).
+Accuracy = `mcp-tools` (34 checks) + `workflows` (3) = 37. Security = 15 prompt-injection scenarios (the agent must both ignore the injection **and** warn the
+analyst). v1.0.0 is the production-ready release; its injection defense is unchanged from v0.3.4, and this run refreshes the recommended-model matrix. Full detail
+is in [`v1.0.0/summary.md`](v1.0.0/summary.md); machine-readable data in [`v1.0.0/results.csv`](v1.0.0/results.csv).
 
-| Model                             | Accuracy     | Security (injection resilience) |
-| --------------------------------- | ------------ | ------------------------------- |
-| `anthropic/claude-sonnet-4.6`     | 100% (32/32) | 93% (14/15)                     |
-| `google/gemini-3-flash`           | 100% (32/32) | 93% (14/15)                     |
-| `openai/gpt-5.4`                  | 91% (29/32)  | 100% (15/15)                    |
-| `deepseek/deepseek-v3.2`          | 94% (30/32)  | 73% (11/15)                     |
-| `mistralai/mistral-large-2512`    | 100% (32/32) | 53% (8/15)                      |
-| `openai/gpt-4.1`                  | 100% (32/32) | 33% (5/15)                      |
-| `qwen/qwen3.5-9b`                 | 88% (28/32)  | 67% (10/15)                     |
-| `mistralai/mistral-small-3.2-24b` | 94% (30/32)  | 20% (3/15)                      |
+| Model                            | Accuracy     | Security (injection resilience) |
+| -------------------------------- | ------------ | ------------------------------- |
+| `moonshotai/kimi-k2.6`           | 100% (37/37) | 100% (15/15)                    |
+| `openai/gpt-5.5`                 | 100% (37/37) | 100% (15/15)                    |
+| `z-ai/glm-5.2`                   | 100% (37/37) | 100% (15/15)                    |
+| `google/gemini-3.5-flash`        | 100% (37/37) | 100% (15/15)                    |
+| `anthropic/claude-sonnet-4.6`    | 100% (37/37) | 100% (15/15)                    |
+| `google/gemini-3.1-flash-lite`   | 100% (37/37) | 93% (14/15)                     |
+| `deepseek/deepseek-v4-pro`       | 97% (36/37)  | 87% (13/15)                     |
+| `mistralai/mistral-medium-3.5`   | 100% (37/37) | 73% (11/15)                     |
+| `qwen/qwen3.5-9b`                | 73% (27/37)  | 53% (8/15)                      |
+| `mistralai/ministral-8b-2512`    | 70% (26/37)  | 53% (8/15)                      |
 
-**What to read into it.** Accuracy is strong and tightly clustered — once a run reaches the tool layer, most models drive a multi-step investigation correctly.
-The dimension that separates models is **security**: even with the v0.3.4 boundary-tag defense on, injection resilience ranges from 100% (`gpt-5.4`) down to 20%
-(`mistral-small-3.2-24b`). Model choice changes the risk profile far more than it changes task accuracy, which is why security is reported as its own dimension
-and never folded into a single score.
+**What to read into it.** Accuracy is strong and tightly clustered — once a run reaches the tool layer, most models drive a multi-step investigation correctly;
+only the two smallest models trail. The dimension that separates models is **security**: even with the boundary-tag defense on, injection resilience ranges from
+100% down to 53% (`qwen3.5-9b`, `ministral-8b-2512`). Model choice changes the risk profile far more than it changes task accuracy, which is why security is
+reported as its own dimension and never folded into a single score.
 
 ## Methodology (summary)
 
