@@ -1,6 +1,6 @@
 # TheHiveMCP v1.0.0 — evaluation summary
 
-- **MCP-server version:** v1.0.0 (released 2026-07-15)
+- **MCP-server version:** v1.0.0 (released 2026-07-06)
 - **Evaluated:** 2026-07-02
 - **Previous evaluated version:** [v0.3.4](../v0.3.4/summary.md)
 - **Machine-readable results:** [`results.csv`](results.csv)

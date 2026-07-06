@@ -4,15 +4,15 @@ This guide is for Windows users who want to run TheHiveMCP **without downloading
 locally compiled binary is never marked as downloaded-from-the-internet, this path sidesteps the SmartScreen "unknown publisher" prompt you would otherwise see
 on a released `.exe`.
 
-> **This is a fallback, not the recommended path.** The supported way to run TheHiveMCP on Windows is the signed release binary / `.mcpb` bundle (see the
+> **This is a fallback, not the recommended path.** The supported way to run TheHiveMCP on Windows is the released binary / `.mcpb` bundle (see the
 > [README](../../README.md#get-started)). Reach for source builds only if you already have the Go toolchain and want to avoid the download step. Note the hard
 > limit in [Before you start](#before-you-start): building from source does **not** bypass Smart App Control / WDAC — an unsigned binary is still an unsigned
-> binary at execution time.
+> binary at execution time, and the current released Windows binaries are themselves unsigned (see the [README](../../README.md#get-started) note).
 
 ## Prerequisites
 
 - **Go 1.26 or later** installed and on your `PATH` (`go version` should succeed).
-- A running TheHive 5.x instance with API access.
+- A running TheHive 5.5+ instance with API access.
 - Your TheHive URL, API key, and organisation name.
 - An MCP host to connect to (Claude Desktop, Claude Code, etc.).
 
@@ -22,7 +22,8 @@ Building from source clears the _download_ trust gate but not the _execution_ on
 
 - ✅ **SmartScreen** — a source-built binary carries no Mark-of-the-Web, so the "unknown publisher" download/run prompt does not appear.
 - ❌ **Smart App Control / WDAC** — on hardened, policy-managed Windows 11 machines configured to run signed code only, an unsigned binary is **blocked at
-  launch** regardless of how it was produced. If you are on such a machine, use the signed release; no source path will help you.
+  launch** regardless of how it was produced. The current released binaries are unsigned too, so no install path bypasses this; if you are on such a machine,
+  ask your Windows administrator to allow the binary, or run TheHiveMCP over HTTP from a non-Windows host instead.
 
 If you are unsure whether your machine enforces a signed-only policy, try [Option A](#option-a--build-once-recommended-for-source-builds) first — a hard block
 on launch is the symptom.
@@ -138,4 +139,4 @@ For anything beyond experimentation, use [Option A](#option-a--build-once-recomm
 ## See also
 
 - [How to Set Up TheHiveMCP with Claude Code](setup-claude-code.md) — full host configuration walkthrough.
-- [README — Get started](../../README.md#get-started) — the supported signed-binary / `.mcpb` install path.
+- [README — Get started](../../README.md#get-started) — the supported released-binary / `.mcpb` install path.

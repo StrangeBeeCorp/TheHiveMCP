@@ -151,14 +151,15 @@ Download and install [Claude Desktop](https://claude.ai/download) for your opera
 
 #### Step 2: Download TheHiveMCP MCPB package
 
-Download the appropriate MCPB file for your system from the [latest release](https://github.com/StrangeBeeCorp/TheHiveMCP/releases):
+Download the appropriate MCPB file for your system from the [latest release](https://github.com/StrangeBeeCorp/TheHiveMCP/releases) — replace `<version>` with
+the release tag (for example, `v1.0.0`):
 
-- **macOS (Intel)**: `thehivemcp-v0.2.0-darwin-amd64.mcpb`
-- **macOS (Apple Silicon)**: `thehivemcp-v0.2.0-darwin-arm64.mcpb`
-- **Windows (64-bit)**: `thehivemcp-v0.2.0-windows-amd64.mcpb`
-- **Windows (ARM64)**: `thehivemcp-v0.2.0-windows-arm64.mcpb`
-- **Linux (64-bit)**: `thehivemcp-v0.2.0-linux-amd64.mcpb`
-- **Linux (ARM64)**: `thehivemcp-v0.2.0-linux-arm64.mcpb`
+- **macOS (Intel)**: `thehivemcp-<version>-darwin-amd64.mcpb`
+- **macOS (Apple Silicon)**: `thehivemcp-<version>-darwin-arm64.mcpb`
+- **Windows (64-bit)**: `thehivemcp-<version>-windows-amd64.mcpb`
+- **Windows (ARM64)**: `thehivemcp-<version>-windows-arm64.mcpb`
+- **Linux (64-bit)**: `thehivemcp-<version>-linux-amd64.mcpb`
+- **Linux (ARM64)**: `thehivemcp-<version>-linux-arm64.mcpb`
 
 > **⚠️ Windows users — unsigned interim binaries.** The current Windows artifacts are **not code-signed** yet (signing is in progress). Expect a Windows
 > SmartScreen **"unknown publisher"** warning on download/run — click **More info → Run anyway** to proceed. On hardened enterprise machines, **Smart App
@@ -242,7 +243,7 @@ services:
 
 ```bash
 # Start services
-docker-compose up -d
+docker compose up -d
 ```
 
 ##### Step 2: Configure your MCP client

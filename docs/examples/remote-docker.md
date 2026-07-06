@@ -41,10 +41,10 @@ THEHIVE_ORGANISATION=your-org  # Optional, defaults to user's own organisation
 
 ```bash
 # Start the service
-docker-compose -f docs/examples/docker/docker-compose.basic.yml up -d
+docker compose -f docs/examples/docker/docker-compose.basic.yml up -d
 
 # Check status
-docker-compose -f docs/examples/docker/docker-compose.basic.yml ps
+docker compose -f docs/examples/docker/docker-compose.basic.yml ps
 ```
 
 ## How it works

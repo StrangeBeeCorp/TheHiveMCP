@@ -14,11 +14,11 @@ Evidence is published **one folder per evaluated MCP-server version**. Each vers
 
 | Version                       | Released   | Folder                         |
 | ----------------------------- | ---------- | ------------------------------ |
-| **v1.0.0** (latest evaluated) | 2026-07-15 | [`v1.0.0/`](v1.0.0/summary.md) |
+| **v1.0.0** (latest evaluated) | 2026-07-06 | [`v1.0.0/`](v1.0.0/summary.md) |
 | v0.3.4                        | 2026-05-22 | [`v0.3.4/`](v0.3.4/summary.md) |
 | v0.3.3                        | 2026-03-17 | [`v0.3.3/`](v0.3.3/summary.md) |
 
-## Latest evaluation — v1.0.0 (released 2026-07-15, evaluated 2026-07-02)
+## Latest evaluation — v1.0.0 (released 2026-07-06, evaluated 2026-07-02)
 
 Accuracy = `mcp-tools` (34 checks) + `workflows` (3) = 37. Security = 15 prompt-injection scenarios (the agent must both ignore the injection **and** warn the
 analyst). v1.0.0 is the production-ready release; its injection defense is unchanged from v0.3.4, and this run refreshes the recommended-model matrix. Full

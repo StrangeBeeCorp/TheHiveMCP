@@ -210,44 +210,14 @@ Enrich results with related information:
 }
 ```
 
-## Best Practices
+## Notes
 
-1. **Consult the schema first**: Use `get-resource` with `hive://schema/<entity-type>` to discover valid fields and types before building a filter.
-2. **Start broad, then narrow**: Omit `filters` (or use `{"_any": {}}`) to sample an entity type, then add conditions.
-3. **Review `rawFilters`**: The applied filter is echoed back in the response. If results are unexpected, inspect `rawFilters`, consult `hive://schema/filter`
-   and `hive://docs/overview/filter-dsl`, and call again with a corrected filter.
-4. **Limit results**: Use an appropriate `limit` for performance.
-5. **Use count for statistics**: When you only need totals, use `count=true`.
+- **`rawFilters` echo.** The applied filter is echoed back in every response. When results are unexpected, inspect `rawFilters` to see exactly what was sent to
+  TheHive.
+- **Field discovery.** Valid fields and types per entity are defined in `hive://schema/<entity-type>` (output schema). The `/create` and `/update` variants
+  describe the fields [`manage-entities`](manage-entities.md) accepts. Filtering on a field an entity type does not have fails.
+- **Grammar reference.** The full operator grammar is at `hive://schema/filter` and the worked-example cheatsheet at `hive://docs/overview/filter-dsl`.
+- **Related tools.** Discover fields and automation options with [`get-resource`](get-resource.md); act on results with [`manage-entities`](manage-entities.md)
+  and [`execute-automation`](execute-automation.md).
 
-## Understanding Schema Types
-
-When using search-entities, you'll work with output schemas to understand what fields are available for filtering and what data will be returned:
-
-- Use `hive://schema/alert` to see all fields available in alert search results
-- Use `hive://schema/case` to see all fields available in case search results
-- Use `hive://schema/task` to see all fields available in task search results
-- Use `hive://schema/observable` to see all fields available in observable search results
-- Use `hive://schema/procedure` to see all fields available in procedure search results
-- Use `hive://schema/pattern` to see all fields available in pattern search results
-
-For creating or updating entities found through search, use the create/update schema variants:
-
-- `hive://schema/{entity}/create` for creating new entities
-- `hive://schema/{entity}/update` for updating existing entities
-
-## Integration Tips
-
-- Start investigations with broad searches, then narrow down by adding conditions.
-- Use results to identify patterns and trends.
-- Combine with `get-resource` to understand entity relationships and valid fields.
-- Use `manage-entities` to act on search results.
-
-## Troubleshooting
-
-If results don't match expectations:
-
-1. Inspect the `rawFilters` echoed in the response.
-2. Review entity schemas using `get-resource` (`hive://schema/<entity-type>`) and the operator grammar (`hive://schema/filter`,
-   `hive://docs/overview/filter-dsl`).
-3. Simplify the filter to test individual conditions.
-4. Verify field names and value types match the schema.
+For a task-oriented walkthrough of running a search end to end, see the [first-investigation tutorial](../tutorial/first-investigation.md).

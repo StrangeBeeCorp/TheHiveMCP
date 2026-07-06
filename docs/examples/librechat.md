@@ -33,15 +33,15 @@ The Docker Compose file already includes all other necessary configuration with 
 
 ```bash
 # Start all services
-docker-compose -f docs/examples/docker/docker-compose.librechat.yml up -d
+docker compose -f docs/examples/docker/docker-compose.librechat.yml up -d
 
 # Check status
-docker-compose -f docs/examples/docker/docker-compose.librechat.yml ps
+docker compose -f docs/examples/docker/docker-compose.librechat.yml ps
 ```
 
 ### 3. Access LibreChat
 
-1. **Open browser**: http://localhost:3080
+1. **Open browser**: <http://localhost:3080>
 2. **Create account** and login
 3. **Select Claude model** from the model dropdown
 4. **Configure TheHive connection**: You'll be prompted to enter:
