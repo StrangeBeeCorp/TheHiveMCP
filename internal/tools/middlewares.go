@@ -19,18 +19,21 @@ func WithValidation[TParams, TResult any](tool Tool[TParams, TResult]) server.To
 	}
 
 	businessHandler := func(ctx context.Context, request mcp.CallToolRequest, params TParams) (TResult, error) {
-		// 1. Validate parameters and apply defaults
+		// 1. Validate parameters and apply defaults.
+		// Errors from ValidateParams/ValidatePermissions are already crafted as
+		// user-facing messages (with hints and examples) surfaced verbatim to the
+		// MCP client, so they are returned unwrapped by design.
 		err := tool.ValidateParams(&params)
 		if err != nil {
 			var zero TResult
-			return zero, err
+			return zero, err //nolint:wrapcheck // user-facing validation message, see above
 		}
 
 		// 2. Validate permissions
 		err = tool.ValidatePermissions(ctx, params)
 		if err != nil {
 			var zero TResult
-			return zero, err
+			return zero, err //nolint:wrapcheck // user-facing validation message, see above
 		}
 
 		// 3. Call the main handler

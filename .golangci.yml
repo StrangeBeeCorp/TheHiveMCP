@@ -6,45 +6,66 @@ run:
 linters:
   default: all
   disable:
-    # Disable overly strict linters for this project
+    # --- Complexity: gocognit is kept ENABLED as a regression ratchet (see
+    # `settings` below). The others overlap with it and are redundant noise.
     - cyclop
-    - depguard
-    - dupl
-    - exhaustive
-    - exhaustruct
-    - forbidigo
-    - funlen
-    - gochecknoglobals
-    - gochecknoinits
-    - gocognit
     - gocyclo
-    - godot
-    - err113
-    - mnd
-    - gomoddirectives
-    - gomodguard # deprecated in v2.12.0; gomodguard_v2 is enabled via `default: all`
-    - ireturn
-    - lll
+    - funlen
     - maintidx
     - nestif
+    # --- Genuinely too strict / opinionated for this project
+    - depguard # no import allowlist maintained; would be pure noise
+    - dupl # tool packages share intentional shape; false positives outweigh signal
+    - exhaustive
+    - exhaustruct # flags every partial struct literal; unusable in practice
+    - forbidigo
+    - gochecknoglobals # embed.FS handles and sentinel errors are package globals by design
+    - gochecknoinits
+    - err113 # 46 one-off fmt.Errorf messages; sentinel-error refactor not worth the churn
+    - gomoddirectives
+    - gomodguard # deprecated in v2.12.0; gomodguard_v2 is enabled via `default: all`
+    - ireturn # Definition()/Handler() must return mcp.Tool / ToolHandlerFunc (framework contract)
+    - varnamelen # idiomatic short names (r, ctx) are intentional
+    # --- Pure formatting / whitespace opinion
+    - godot
+    - lll
     - nlreturn
     - nonamedreturns
+    - wsl
+    # --- Test conventions specific to this repo
+    # Integration tests share a live Docker stack (TheHive + Elasticsearch); running
+    # them in parallel is unsafe, so we do not mandate t.Parallel().
     - paralleltest
+    - tparallel
     - prealloc
+    # In-package tests (package bootstrap, not bootstrap_test) exercise unexported
+    # helpers directly.
+    - testpackage
     # JSON/YAML tags mirror TheHive's wire format (_id, _createdAt) and the
     # MCP tool parameter contract (kebab-case); renaming them breaks compatibility
     - tagliatelle
-    - testpackage
-    - tparallel
-    - varnamelen
-    - wrapcheck
-    - wsl
+
+  settings:
+    # Complexity ratchet. 56 is the current worst function (the deferred
+    # SonarCloud cognitive-complexity cleanup left a handful in the 31–56 range),
+    # so this threshold adds no churn today while blocking anything worse.
+    # Lower it as those functions are refactored down.
+    gocognit:
+      min-complexity: 56
+
+    mnd:
+      # Numbers that are self-evident and not "magic" in context.
+      ignored-numbers:
+        - "2" # strings.SplitN(s, sep, 2) and "at least 2" domain checks
+        - "500" # request-body truncation length in elicitation prompts
+        - "1000" # documented max entity limit (error message states it inline)
 
   exclusions:
-    # Exclude the generated test directory completely
-    paths:
-      - "thehive/test/.*\\.go$"
-    # Ignore deprecation warnings (SA1019) in the generated code
     rules:
-      - path: "thehive/test/.*\\.go$"
-        text: "SA1019:"
+      # Test-support helpers in internal/testutils are full of intentional
+      # fixture literals (fixed timestamps, TLP/severity values, poll intervals,
+      # file modes). Naming each as a constant adds noise without clarity, so
+      # mnd is not enforced there.
+      - path: internal/testutils/
+        linters:
+          - mnd

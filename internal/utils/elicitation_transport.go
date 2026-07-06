@@ -45,7 +45,7 @@ func (e *ElicitationTransport) RoundTrip(req *http.Request) (*http.Response, err
 				slog.String("method", req.Method),
 				slog.String("url", req.URL.String()))
 			// Allow the request to proceed
-			return e.transport().RoundTrip(req)
+			return e.roundTrip(req)
 		}
 
 		err := e.handleElicitation(req)
@@ -55,7 +55,17 @@ func (e *ElicitationTransport) RoundTrip(req *http.Request) (*http.Response, err
 	}
 
 	// Execute the request using the underlying transport
-	return e.transport().RoundTrip(req)
+	return e.roundTrip(req)
+}
+
+// roundTrip delegates to the underlying transport, wrapping any error with request context.
+func (e *ElicitationTransport) roundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := e.transport().RoundTrip(req)
+	if err != nil {
+		return resp, fmt.Errorf("round trip %s %s: %w", req.Method, req.URL, err)
+	}
+
+	return resp, nil
 }
 
 func (e *ElicitationTransport) transport() http.RoundTripper {

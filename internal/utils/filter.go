@@ -2,6 +2,7 @@ package utils
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -15,7 +16,7 @@ func CreateFilterFromJSONString(filterString string) (thehive.InputQueryNamedOpe
 
 	err := json.Unmarshal([]byte(filterString), &filterMap)
 	if err != nil {
-		return thehive.InputQueryNamedOperation{}, err
+		return thehive.InputQueryNamedOperation{}, fmt.Errorf("parsing filter JSON: %w", err)
 	}
 
 	// Use the generic map converter that's available in the generated client
@@ -28,7 +29,7 @@ func parseDateStringToTimestamp(dateStr string) (int64, error) {
 
 	t, err := time.Parse(layout, dateStr)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("parsing date %q: %w", dateStr, err)
 	}
 
 	return t.UnixMilli(), nil

@@ -30,7 +30,11 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Log the response
 	t.logResponse(req, resp, err, duration)
 
-	return resp, err
+	if err != nil {
+		return resp, fmt.Errorf("round trip %s %s: %w", req.Method, req.URL, err)
+	}
+
+	return resp, nil
 }
 
 func (t *Transport) transport() http.RoundTripper {
@@ -73,11 +77,11 @@ func (t *Transport) logResponse(req *http.Request, resp *http.Response, err erro
 	}
 
 	level := slog.LevelInfo
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= http.StatusBadRequest {
 		level = slog.LevelWarn
 	}
 
-	if resp.StatusCode >= 500 {
+	if resp.StatusCode >= http.StatusInternalServerError {
 		level = slog.LevelError
 	}
 

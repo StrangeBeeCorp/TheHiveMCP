@@ -3,18 +3,21 @@
 package logging
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 )
 
 // ParseLevel parses a textual log level (e.g. "info") into a slog.Level.
 func ParseLevel(s string) (slog.Level, error) {
-	var (
-		level slog.Level
-		err   = level.UnmarshalText([]byte(s))
-	)
+	var level slog.Level
 
-	return level, err
+	err := level.UnmarshalText([]byte(s))
+	if err != nil {
+		return level, fmt.Errorf("parsing log level %q: %w", s, err)
+	}
+
+	return level, nil
 }
 
 // InitLogger builds a JSON slog.Logger at the given level, sets it as the

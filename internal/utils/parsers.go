@@ -22,7 +22,7 @@ func ParseURIParameters(uri string) (string, map[string]any, error) {
 
 	values, err := url.ParseQuery(params)
 	if err != nil {
-		return "", nil, err
+		return "", nil, fmt.Errorf("parsing URI query parameters: %w", err)
 	}
 
 	result := make(map[string]any)
