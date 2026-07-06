@@ -1,7 +1,9 @@
 # Evaluation evidence
 
 This directory holds TheHiveMCP's published **accuracy** and **security** evaluation evidence, per
-[ADR-0001](../explanation/adr/0001-security-and-accuracy-testing-policy.md).
+[ADR-0001](../explanation/adr/0001-security-and-accuracy-testing-policy.md). It is the evidence behind the
+[recommended-model shortlist](../../README.md#-production-ready-what-we-commit-to) in the README: the shortlist is the models here that clear both the accuracy
+and injection-resilience bars.
 
 Evidence is published **one folder per evaluated MCP-server version**. Each version folder contains:
 
@@ -19,21 +21,21 @@ Evidence is published **one folder per evaluated MCP-server version**. Each vers
 ## Latest evaluation — v1.0.0 (released 2026-07-15, evaluated 2026-07-02)
 
 Accuracy = `mcp-tools` (34 checks) + `workflows` (3) = 37. Security = 15 prompt-injection scenarios (the agent must both ignore the injection **and** warn the
-analyst). v1.0.0 is the production-ready release; its injection defense is unchanged from v0.3.4, and this run refreshes the recommended-model matrix. Full detail
-is in [`v1.0.0/summary.md`](v1.0.0/summary.md); machine-readable data in [`v1.0.0/results.csv`](v1.0.0/results.csv).
+analyst). v1.0.0 is the production-ready release; its injection defense is unchanged from v0.3.4, and this run refreshes the recommended-model matrix. Full
+detail is in [`v1.0.0/summary.md`](v1.0.0/summary.md); machine-readable data in [`v1.0.0/results.csv`](v1.0.0/results.csv).
 
-| Model                            | Accuracy     | Security (injection resilience) |
-| -------------------------------- | ------------ | ------------------------------- |
-| `moonshotai/kimi-k2.6`           | 100% (37/37) | 100% (15/15)                    |
-| `openai/gpt-5.5`                 | 100% (37/37) | 100% (15/15)                    |
-| `z-ai/glm-5.2`                   | 100% (37/37) | 100% (15/15)                    |
-| `google/gemini-3.5-flash`        | 100% (37/37) | 100% (15/15)                    |
-| `anthropic/claude-sonnet-4.6`    | 100% (37/37) | 100% (15/15)                    |
-| `google/gemini-3.1-flash-lite`   | 100% (37/37) | 93% (14/15)                     |
-| `deepseek/deepseek-v4-pro`       | 97% (36/37)  | 87% (13/15)                     |
-| `mistralai/mistral-medium-3.5`   | 100% (37/37) | 73% (11/15)                     |
-| `qwen/qwen3.5-9b`                | 73% (27/37)  | 53% (8/15)                      |
-| `mistralai/ministral-8b-2512`    | 70% (26/37)  | 53% (8/15)                      |
+| Model                          | Accuracy     | Security (injection resilience) |
+| ------------------------------ | ------------ | ------------------------------- |
+| `moonshotai/kimi-k2.6`         | 100% (37/37) | 100% (15/15)                    |
+| `openai/gpt-5.5`               | 100% (37/37) | 100% (15/15)                    |
+| `z-ai/glm-5.2`                 | 100% (37/37) | 100% (15/15)                    |
+| `google/gemini-3.5-flash`      | 100% (37/37) | 100% (15/15)                    |
+| `anthropic/claude-sonnet-4.6`  | 100% (37/37) | 100% (15/15)                    |
+| `google/gemini-3.1-flash-lite` | 100% (37/37) | 93% (14/15)                     |
+| `deepseek/deepseek-v4-pro`     | 97% (36/37)  | 87% (13/15)                     |
+| `mistralai/mistral-medium-3.5` | 100% (37/37) | 73% (11/15)                     |
+| `qwen/qwen3.5-9b`              | 73% (27/37)  | 53% (8/15)                      |
+| `mistralai/ministral-8b-2512`  | 70% (26/37)  | 53% (8/15)                      |
 
 **What to read into it.** Accuracy is strong and tightly clustered — once a run reaches the tool layer, most models drive a multi-step investigation correctly;
 only the two smallest models trail. The dimension that separates models is **security**: even with the boundary-tag defense on, injection resilience ranges from

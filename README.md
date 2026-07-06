@@ -56,13 +56,13 @@ handles the technical complexity of integrating with TheHive, so AI assistants c
 TheHiveMCP is production-ready. Two things to know before you point it at real data:
 
 - **Use a recommended model.** Our accuracy and security commitments hold only for the recommended models: **`anthropic/claude-sonnet-4.6`**,
-  **`google/gemini-3-flash`**, and **`openai/gpt-5.4`**. These are the models that clear both bars on the published evidence — see
-  [`docs/evaluation/`](docs/evaluation/).
+  **`openai/gpt-5.5`**, **`moonshotai/kimi-k2.6`**, **`z-ai/glm-5.2`**, **`google/gemini-3.5-flash`**, and **`google/gemini-3.1-flash-lite`**. These are the
+  models that clear both bars on the published evidence — see [`docs/evaluation/`](docs/evaluation/).
 - **Security has a boundary.** The server tags all TheHive-sourced data as untrusted to resist prompt injection, but this **reduces, not eliminates** the risk
   and resilience varies by model — the `read_only` default is your enforced backstop.
 
 The full contract — supported deployment shape, security and accuracy envelopes, and what we explicitly _don't_ commit to — is below and grounded in
-[ADR-0001](docs/adr/0001-security-and-accuracy-testing-policy.md) and [RELEASING.md](RELEASING.md).
+[ADR-0001](docs/explanation/adr/0001-security-and-accuracy-testing-policy.md) and [RELEASING.md](RELEASING.md).
 
 <details>
 <summary><strong>📜 The full contract — what we vouch for, and what we don't</strong></summary>
@@ -74,19 +74,22 @@ The full contract — supported deployment shape, security and accuracy envelope
   request, callers supply their own TheHive credentials, and the target TheHive URL is restricted to `THEHIVE_URL` / `THEHIVE_URL_ALLOWLIST`. This is the shape
   we test and support; see the Get Started and Configuration sections below.
 
-- **Recommended models only.** Accuracy is uniformly strong across models (88–100%); prompt-injection resilience is what separates them (20–100%), so it is the
-  deciding bar. On the v0.3.4 evidence, the recommended list is the models that clear **both** high accuracy **and** ≥90% injection resilience:
+- **Recommended models only.** Accuracy is uniformly strong across models (68–100%); prompt-injection resilience is what separates them (53–100%), so it is the
+  deciding bar. On the v1.0.0 evidence, the recommended list is the models that clear **both** high accuracy **and** ≥90% injection resilience:
 
-  | Recommended model             | Accuracy | Injection resilience |
-  | ----------------------------- | -------- | -------------------- |
-  | `anthropic/claude-sonnet-4.6` | 100%     | 93%                  |
-  | `google/gemini-3-flash`       | 100%     | 93%                  |
-  | `openai/gpt-5.4`              | 91%      | 100%                 |
+  | Recommended model              | Accuracy | Injection resilience |
+  | ------------------------------ | -------- | -------------------- |
+  | `anthropic/claude-sonnet-4.6`  | 100%     | 100%                 |
+  | `openai/gpt-5.5`               | 100%     | 100%                 |
+  | `moonshotai/kimi-k2.6`         | 100%     | 100%                 |
+  | `z-ai/glm-5.2`                 | 100%     | 100%                 |
+  | `google/gemini-3.5-flash`      | 100%     | 100%                 |
+  | `google/gemini-3.1-flash-lite` | 100%     | 93%                  |
 
-  Other evaluated models may work but are **not recommended** — most fall short on injection resilience (e.g. `mistralai/mistral-large-2512` 53%,
-  `openai/gpt-4.1` 33%, `mistralai/mistral-small-3.2-24b` 20%) and should not drive write-capable or automation tools on attacker-reachable data. Per-model
-  results and the full field are in [`docs/evaluation/`](docs/evaluation/); a model earns its place only with published accuracy **and** security evidence tied
-  to a server version.
+  Other evaluated models may work but are **not recommended** — they fall short on injection resilience (e.g. `mistralai/mistral-medium-3.5` 73%,
+  `qwen/qwen3.5-9b` 53%, `mistralai/ministral-8b-2512` 53%) and should not drive write-capable or automation tools on attacker-reachable data. Per-model results
+  and the full field are in [`docs/evaluation/`](docs/evaluation/); a model earns its place only with published accuracy **and** security evidence tied to a
+  server version.
 
 - **Security posture, and its boundary.** Every user-generated field the server returns (titles, descriptions, comments, observable values, tags) is wrapped in
   `[UNTRUSTED_DATA]…[/UNTRUSTED_DATA]` boundary tags, and every tool tells the model never to follow instructions found inside them. We publish prompt-injection
@@ -109,7 +112,7 @@ The full contract — supported deployment shape, security and accuracy envelope
 
 Evidence is kept current on a change-triggered basis: every publicly published server version is re-evaluated before release (or previous results are carried
 forward for no-behavior-change releases). The full policy is in [RELEASING.md](RELEASING.md) and
-[ADR-0001](docs/adr/0001-security-and-accuracy-testing-policy.md).
+[ADR-0001](docs/explanation/adr/0001-security-and-accuracy-testing-policy.md).
 
 </details>
 
