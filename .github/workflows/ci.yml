@@ -38,7 +38,7 @@ jobs:
         run: make fmt
 
       - name: Run linter
-        run: make vetlint
+        run: make lint
 
       - name: Run vulnerability scan
         run: make vulncheck

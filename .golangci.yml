@@ -4,7 +4,7 @@ run:
   timeout: 5m
 
 linters:
-  enable-all: true
+  default: all
   disable:
     # Disable overly strict linters for this project
     - cyclop
@@ -40,7 +40,7 @@ linters:
     # Exclude the generated test directory completely
     paths:
       - "thehive/test/.*\\.go$"
-
-issues:
-  exclude:
-    - "SA1019:" # Ignore deprecation warnings in generated code
+    # Ignore deprecation warnings (SA1019) in the generated code
+    rules:
+      - path: "thehive/test/.*\\.go$"
+        text: "SA1019:"
