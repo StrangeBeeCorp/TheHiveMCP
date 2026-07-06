@@ -21,6 +21,7 @@ func main() {
 		slog.Error("Failed to get default options", "error", err)
 		os.Exit(1)
 	}
+	// Initialise the logger befor serving any requests.
 	logging.InitLogger(options.LogLevel, options.TransportType)
 
 	slog.Info("Starting TheHiveMCP server", "version", version.GitVersion())
