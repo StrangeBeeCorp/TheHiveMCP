@@ -3,6 +3,9 @@
 All notable changes to TheHiveMCP are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+> **Note:** All `0.x` releases (v0.3.4 and earlier) were **beta / pre-release** versions. **v1.0.0 is the first production-ready release** — see its notes
+> below.
+
 ## [1.0.0] - 2026-07-06
 
 TheHiveMCP is now **production-ready and out of beta**. This is a milestone release: it removes the beta warning, publishes accuracy and security evaluation
@@ -69,8 +72,8 @@ fields) and its measured resilience per recommended model are documented in [`do
 
 ## [0.3.4] - 2026-04-13
 
-A compatibility and hardening release: it adds support for TheHive 5.5+, introduces the first prompt-injection mitigation, and makes the Cortex
-analyzer/responder integration configurable.
+_A beta / pre-release version._ A compatibility and hardening release: it adds support for TheHive 5.5+, introduces the first prompt-injection mitigation, and
+makes the Cortex analyzer/responder integration configurable.
 
 ### Added
 
