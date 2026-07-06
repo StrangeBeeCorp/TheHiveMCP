@@ -1,4 +1,6 @@
-FROM ghcr.io/danny-avila/librechat-dev:latest
+# Pinned by digest for reproducible builds (resolved from librechat-dev:latest).
+# Bump the digest to pick up a newer LibreChat dev image.
+FROM ghcr.io/danny-avila/librechat-dev:latest@sha256:16d3f679a1a00777dd903961720c376ba34fa2529a71ab40634a1c9ce373daaf
 
 COPY librechat.yaml /app/librechat.yaml
 

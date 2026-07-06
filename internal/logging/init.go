@@ -11,7 +11,7 @@ func ParseLevel(s string) (slog.Level, error) {
 	return level, err
 }
 
-func InitLogger(levelStr string, transportType string) *slog.Logger {
+func InitLogger(levelStr, transportType string) *slog.Logger {
 	level, err := ParseLevel(levelStr)
 	if err != nil {
 		slog.Error("Invalid log level", "level", levelStr, "error", err)

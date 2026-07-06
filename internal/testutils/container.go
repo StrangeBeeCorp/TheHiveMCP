@@ -171,7 +171,7 @@ func ResetHiveInstance(t *testing.T, hiveUrl string, testConfig *HiveTestConfig)
 func initHiveInstance(t *testing.T, url string) error {
 	adminConfig := &Config{
 		URL:      url,
-		Username: "admin@thehive.local",
+		Username: DefaultAdminUser,
 		Password: "secret",
 		OrgName:  "admin",
 	}
@@ -344,7 +344,7 @@ func resetOrganisation(t *testing.T, hiveUrl string, org string) error {
 
 	cfg := &Config{
 		URL:      hiveUrl,
-		Username: "admin@thehive.local",
+		Username: DefaultAdminUser,
 		Password: "secret",
 		OrgName:  org,
 	}

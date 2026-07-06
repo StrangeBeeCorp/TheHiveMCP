@@ -13,6 +13,14 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+const (
+	// mimeApplicationJSON is the MIME type served for JSON resource contents.
+	mimeApplicationJSON = "application/json"
+	// suffixCreate / suffixUpdate name the input-schema variants of an entity.
+	suffixCreate = "/create"
+	suffixUpdate = "/update"
+)
+
 //go:embed schemas/*.json schemas/*/*.json
 var schemasFS embed.FS
 
@@ -34,7 +42,7 @@ func getSchemaContent(schemaName string) ([]mcp.ResourceContents, error) {
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      fmt.Sprintf("docs://schema/%s", schemaName),
-			MIMEType: "application/json",
+			MIMEType: mimeApplicationJSON,
 			Text:     string(schemaBytes),
 		},
 	}, nil
@@ -275,27 +283,27 @@ func GetCatalogData() map[string]interface{} {
 				"description": "Entity field definitions and data types. Query these to understand what fields are available for each entity type and their constraints. Each entity has three variants: base (output), /create (input for creation), and /update (partial input for updates).",
 				"resources": []string{
 					types.EntityTypeAlert,
-					types.EntityTypeAlert + "/create",
-					types.EntityTypeAlert + "/update",
+					types.EntityTypeAlert + suffixCreate,
+					types.EntityTypeAlert + suffixUpdate,
 					types.EntityTypeCase,
-					types.EntityTypeCase + "/create",
-					types.EntityTypeCase + "/update",
+					types.EntityTypeCase + suffixCreate,
+					types.EntityTypeCase + suffixUpdate,
 					types.EntityTypeTask,
-					types.EntityTypeTask + "/create",
-					types.EntityTypeTask + "/update",
+					types.EntityTypeTask + suffixCreate,
+					types.EntityTypeTask + suffixUpdate,
 					types.EntityTypeObservable,
-					types.EntityTypeObservable + "/create",
-					types.EntityTypeObservable + "/update",
+					types.EntityTypeObservable + suffixCreate,
+					types.EntityTypeObservable + suffixUpdate,
 					types.EntityTypeProcedure,
-					types.EntityTypeProcedure + "/create",
-					types.EntityTypeProcedure + "/update",
+					types.EntityTypeProcedure + suffixCreate,
+					types.EntityTypeProcedure + suffixUpdate,
 					types.EntityTypePattern,
 					"case-template",
-					"case-template/create",
-					"case-template/update",
+					"case-template" + suffixCreate,
+					"case-template" + suffixUpdate,
 					types.EntityTypePage,
-					types.EntityTypePage + "/create",
-					types.EntityTypePage + "/update",
+					types.EntityTypePage + suffixCreate,
+					types.EntityTypePage + suffixUpdate,
 					"filter",
 				},
 			},
@@ -362,7 +370,7 @@ func GetResourceCatalog(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      "hive://catalog",
-			MIMEType: "application/json",
+			MIMEType: mimeApplicationJSON,
 			Text:     string(content),
 		},
 	}, nil
@@ -374,7 +382,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/alert",
 		"Alert Output Schema",
 		mcp.WithResourceDescription("Output fields, types, and constraints for alerts returned from TheHive API"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(alertSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetAlertSchemaHandler()
@@ -384,7 +392,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/alert/create",
 		"Alert Create Schema",
 		mcp.WithResourceDescription("Input fields and requirements for creating new alerts"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(alertCreateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetAlertCreateSchemaHandler()
@@ -394,7 +402,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/alert/update",
 		"Alert Update Schema",
 		mcp.WithResourceDescription("Partial input fields for updating existing alerts"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(alertUpdateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetAlertUpdateSchemaHandler()
@@ -405,7 +413,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/case",
 		"Case Output Schema",
 		mcp.WithResourceDescription("Output fields, types, and constraints for cases returned from TheHive API"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(caseSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetCaseSchemaHandler()
@@ -415,7 +423,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/case/create",
 		"Case Create Schema",
 		mcp.WithResourceDescription("Input fields and requirements for creating new cases"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(caseCreateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetCaseCreateSchemaHandler()
@@ -425,7 +433,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/case/update",
 		"Case Update Schema",
 		mcp.WithResourceDescription("Partial input fields for updating existing cases"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(caseUpdateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetCaseUpdateSchemaHandler()
@@ -436,7 +444,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/task",
 		"Task Output Schema",
 		mcp.WithResourceDescription("Output fields, types, and constraints for tasks returned from TheHive API"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(taskSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetTaskSchemaHandler()
@@ -446,7 +454,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/task/create",
 		"Task Create Schema",
 		mcp.WithResourceDescription("Input fields and requirements for creating new tasks"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(taskCreateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetTaskCreateSchemaHandler()
@@ -456,7 +464,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/task/update",
 		"Task Update Schema",
 		mcp.WithResourceDescription("Partial input fields for updating existing tasks"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(taskUpdateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetTaskUpdateSchemaHandler()
@@ -467,7 +475,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/observable",
 		"Observable Output Schema",
 		mcp.WithResourceDescription("Output fields, types, and constraints for observables returned from TheHive API"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(observableSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetObservableSchemaHandler()
@@ -477,7 +485,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/observable/create",
 		"Observable Create Schema",
 		mcp.WithResourceDescription("Input fields and requirements for creating new observables"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(observableCreateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetObservableCreateSchemaHandler()
@@ -487,7 +495,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/observable/update",
 		"Observable Update Schema",
 		mcp.WithResourceDescription("Partial input fields for updating existing observables"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(observableUpdateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetObservableUpdateSchemaHandler()
@@ -497,7 +505,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/procedure",
 		"Procedure Output Schema",
 		mcp.WithResourceDescription("Output fields, types, and constraints for procedures returned from TheHive API"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 
 	registry.Register(procedureSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
@@ -508,7 +516,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/procedure/create",
 		"Procedure Create Schema",
 		mcp.WithResourceDescription("Input fields and requirements for creating new procedures"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 
 	registry.Register(procedureCreateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
@@ -519,7 +527,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/procedure/update",
 		"Procedure Update Schema",
 		mcp.WithResourceDescription("Partial input fields for updating existing procedures"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(procedureUpdateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetProcedureUpdateSchemaHandler()
@@ -529,7 +537,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/pattern",
 		"Pattern Output Schema",
 		mcp.WithResourceDescription("Output fields, types, and constraints for patterns returned from TheHive API"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 
 	registry.Register(patternSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
@@ -541,7 +549,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/case-template",
 		"Case Template Schema",
 		mcp.WithResourceDescription("Output fields, types, and constraints for case templates"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(caseTemplateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetCaseTemplateSchemaHandler()
@@ -551,7 +559,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/case-template/create",
 		"Case Template Create Schema",
 		mcp.WithResourceDescription("Input fields and requirements for creating new case templates"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(caseTemplateCreateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetCaseTemplateCreateSchemaHandler()
@@ -561,7 +569,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/case-template/update",
 		"Case Template Update Schema",
 		mcp.WithResourceDescription("Partial input fields for updating existing case templates"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(caseTemplateUpdateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetCaseTemplateUpdateSchemaHandler()
@@ -572,7 +580,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/page",
 		"Page Output Schema",
 		mcp.WithResourceDescription("Output fields, types, and constraints for pages returned from TheHive API"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(pageSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetPageSchemaHandler()
@@ -582,7 +590,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/page/create",
 		"Page Create Schema",
 		mcp.WithResourceDescription("Input fields and requirements for creating new pages"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(pageCreateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetPageCreateSchemaHandler()
@@ -592,7 +600,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/page/update",
 		"Page Update Schema",
 		mcp.WithResourceDescription("Partial input fields for updating existing pages"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(pageUpdateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetPageUpdateSchemaHandler()
@@ -603,7 +611,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		"hive://schema/filter",
 		"Filter Schema",
 		mcp.WithResourceDescription("TheHive filter data structure for search queries"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(filterSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetFilterSchemaHandler()
@@ -615,7 +623,7 @@ func RegisterRuleResources(registry *ResourceRegistry) {
 		"hive://rule/formatting",
 		"Formatting Rule",
 		mcp.WithResourceDescription("TheHive formatting rule"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(formattingRule, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetFormattingRuleHandler()
@@ -624,7 +632,7 @@ func RegisterRuleResources(registry *ResourceRegistry) {
 		"hive://rule/integrity",
 		"Integrity Rule",
 		mcp.WithResourceDescription("TheHive integrity rule"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(integrityRule, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetIntegrityRuleHandler()
@@ -633,7 +641,7 @@ func RegisterRuleResources(registry *ResourceRegistry) {
 		"hive://rule/filtering",
 		"Filtering Rule",
 		mcp.WithResourceDescription("TheHive filtering rule"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(filteringRule, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetFilteringRuleHandler()
@@ -645,7 +653,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		"hive://config/server-time",
 		"Server Time",
 		mcp.WithResourceDescription("Current server date/time for timestamp calculations"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(serverTime, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetDateFactHandler()
@@ -654,7 +662,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		"hive://docs/overview/platform",
 		"TheHive Overview",
 		mcp.WithResourceDescription("General facts about TheHive platform, workflow, and capabilities"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(theHiveOverview, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetHiveFactHandler()
@@ -663,7 +671,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		"hive://docs/entities/task",
 		"Task Documentation",
 		mcp.WithResourceDescription("How tasks work, assignment, and task groups"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(taskDocumentation, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetTaskFactHandler()
@@ -673,7 +681,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		"hive://docs/entities/observable",
 		"Observable Documentation",
 		mcp.WithResourceDescription("How observables work, IOC types, enrichment workflow"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(
 		observableDocumentation,
@@ -685,7 +693,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		"hive://docs/entities/alert",
 		"Alert Documentation",
 		mcp.WithResourceDescription("How alerts work, lifecycle, and best practices"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(
 		alertDocumentation,
@@ -697,7 +705,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		"hive://docs/entities/case",
 		"Case Documentation",
 		mcp.WithResourceDescription("How cases work, investigation workflow, TLP/PAP usage"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(
 		caseDocumentation,
@@ -710,7 +718,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		"hive://docs/entities/procedure",
 		"Procedure Documentation",
 		mcp.WithResourceDescription("How procedures work, when to use them, and best practices"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(
 		procedureDocumentation,
@@ -723,7 +731,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		"hive://docs/entities/pattern",
 		"Pattern Documentation",
 		mcp.WithResourceDescription("How patterns work, syntax, and usage in procedures"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(
 		patternDocumentation,
@@ -736,7 +744,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		"hive://docs/entities/case-template",
 		"Case Template Documentation",
 		mcp.WithResourceDescription("How case templates work, their role as AI knowledge layer, and usage patterns"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(
 		caseTemplateDocumentation,
@@ -749,7 +757,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		"hive://docs/entities/page",
 		"Page Documentation",
 		mcp.WithResourceDescription("How pages work, their relationship to cases, and usage patterns"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(
 		pageDocumentation,
@@ -762,7 +770,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		"hive://docs/automation/analyzers",
 		"Analyzer Documentation",
 		mcp.WithResourceDescription("How analyzers work, when to use them, and interpreting results"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(
 		analyzerDocumentation,
@@ -774,7 +782,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		"hive://docs/automation/responders",
 		"Responder Documentation",
 		mcp.WithResourceDescription("How responders work, active response workflow, and PAP considerations"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(
 		responderDocumentation,
@@ -801,7 +809,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		"hive://catalog",
 		"Resource Catalog",
 		mcp.WithResourceDescription("Directory of all available resource categories and their purposes. This is the starting point for exploring resources."),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(
 		catalogResource,

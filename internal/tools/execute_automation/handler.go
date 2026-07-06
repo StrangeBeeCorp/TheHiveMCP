@@ -10,6 +10,13 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+const (
+	// errGetHiveClient is the error message when the TheHive client is unavailable.
+	errGetHiveClient = "failed to get TheHive client"
+	// hintCheckAuth is the accompanying hint for a missing/invalid client.
+	hintCheckAuth = "Check your authentication and connection settings"
+)
+
 func (t *ExecuteAutomationTool) Handle(ctx context.Context, request mcp.CallToolRequest, params ExecuteAutomationParams) (ExecuteAutomationResult, error) {
 	// Apply default Cortex ID from configuration if not specified by the caller
 	if params.CortexID == "" {
@@ -34,8 +41,8 @@ func (t *ExecuteAutomationTool) Handle(ctx context.Context, request mcp.CallTool
 func (t *ExecuteAutomationTool) handleRunAnalyzer(ctx context.Context, params ExecuteAutomationParams) (ExecuteAutomationResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return ExecuteAutomationResult{}, tools.NewToolError("failed to get TheHive client").Cause(err).
-			Hint("Check your authentication and connection settings")
+		return ExecuteAutomationResult{}, tools.NewToolError(errGetHiveClient).Cause(err).
+			Hint(hintCheckAuth)
 	}
 	// Create InputJob
 	inputJob := thehive.NewInputJob(params.AnalyzerID, params.CortexID, params.ObservableID)
@@ -64,8 +71,8 @@ func (t *ExecuteAutomationTool) handleRunAnalyzer(ctx context.Context, params Ex
 func (t *ExecuteAutomationTool) handleRunResponder(ctx context.Context, params ExecuteAutomationParams) (ExecuteAutomationResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return ExecuteAutomationResult{}, tools.NewToolError("failed to get TheHive client").Cause(err).
-			Hint("Check your authentication and connection settings")
+		return ExecuteAutomationResult{}, tools.NewToolError(errGetHiveClient).Cause(err).
+			Hint(hintCheckAuth)
 	}
 	// Create InputAction
 	inputAction := thehive.NewInputAction(params.ResponderID, params.EntityType, params.EntityID)
@@ -99,8 +106,8 @@ func (t *ExecuteAutomationTool) handleRunResponder(ctx context.Context, params E
 func (t *ExecuteAutomationTool) handleGetJobStatus(ctx context.Context, params ExecuteAutomationParams) (ExecuteAutomationResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return ExecuteAutomationResult{}, tools.NewToolError("failed to get TheHive client").Cause(err).
-			Hint("Check your authentication and connection settings")
+		return ExecuteAutomationResult{}, tools.NewToolError(errGetHiveClient).Cause(err).
+			Hint(hintCheckAuth)
 	}
 
 	// Get job status
@@ -126,8 +133,8 @@ func (t *ExecuteAutomationTool) handleGetJobStatus(ctx context.Context, params E
 func (t *ExecuteAutomationTool) handleGetActionStatus(ctx context.Context, params ExecuteAutomationParams) (ExecuteAutomationResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return ExecuteAutomationResult{}, tools.NewToolError("failed to get TheHive client").Cause(err).
-			Hint("Check your authentication and connection settings")
+		return ExecuteAutomationResult{}, tools.NewToolError(errGetHiveClient).Cause(err).
+			Hint(hintCheckAuth)
 	}
 
 	actionList, resp, err := hiveClient.CortexAPI.GetActionByEntity(ctx, params.EntityType, params.EntityID).Execute()

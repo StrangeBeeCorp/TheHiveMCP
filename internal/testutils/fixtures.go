@@ -17,7 +17,7 @@ func MockInputCase() *thehive.InputCreateCase {
 		Pap:         thehive.PtrInt32(2),
 		Status:      thehive.PtrString("InProgress"),
 		Summary:     thehive.PtrString("This is a summary"),
-		Assignee:    thehive.PtrString("admin@thehive.local"),
+		Assignee:    thehive.PtrString(DefaultAdminUser),
 		CustomFields: &thehive.InputCreateAlertCustomFields{
 			ArrayOfInputCustomFieldValue: &[]thehive.InputCustomFieldValue{
 				{
@@ -38,7 +38,7 @@ func MockInputCase() *thehive.InputCreateCase {
 				Flag:        thehive.PtrBool(true),
 				StartDate:   thehive.PtrInt64(1609459200),
 				EndDate:     thehive.PtrInt64(1609545600),
-				Assignee:    thehive.PtrString("admin@thehive.local"),
+				Assignee:    thehive.PtrString(DefaultAdminUser),
 			},
 		},
 	}
@@ -57,7 +57,7 @@ func MockInputAlert() *thehive.InputCreateAlert {
 		Source:      "test",
 		SourceRef:   "test",
 		Summary:     thehive.PtrString("This is a summary"),
-		Assignee:    thehive.PtrString("admin@thehive.local"),
+		Assignee:    thehive.PtrString(DefaultAdminUser),
 	}
 }
 
@@ -111,7 +111,7 @@ func MockInputTask() *thehive.InputCreateTask {
 		Flag:        thehive.PtrBool(true),
 		StartDate:   thehive.PtrInt64(1609459200),
 		EndDate:     thehive.PtrInt64(1609545600),
-		Assignee:    thehive.PtrString("admin@thehive.local"),
+		Assignee:    thehive.PtrString(DefaultAdminUser),
 		Mandatory:   thehive.PtrBool(false),
 	}
 }

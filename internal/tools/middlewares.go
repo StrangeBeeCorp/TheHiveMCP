@@ -13,7 +13,7 @@ import (
 func WithValidation[TParams, TResult any](tool Tool[TParams, TResult]) server.ToolHandlerFunc {
 	// Check if this tool returns user-generated (untrusted) data
 	wrapUntrusted := false
-	if u, ok := any(tool).(UntrustedDataSource); ok {
+	if u, ok := any(tool).(UntrustedDataReporter); ok {
 		wrapUntrusted = u.HasUntrustedData()
 	}
 

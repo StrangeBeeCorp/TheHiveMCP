@@ -83,7 +83,7 @@ func GetAvailableUsers(ctx context.Context, _ mcp.ReadResourceRequest) ([]mcp.Re
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      "hive://metadata/organisation/users",
-			MIMEType: "application/json",
+			MIMEType: mimeApplicationJSON,
 			Text:     string(usersJSON),
 		},
 	}, nil
@@ -114,7 +114,7 @@ func GetAvailableCaseTemplates(ctx context.Context, _ mcp.ReadResourceRequest) (
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      "hive://metadata/entities/case/templates",
-			MIMEType: "application/json",
+			MIMEType: mimeApplicationJSON,
 			Text:     string(caseTemplatesJSON),
 		},
 	}, nil
@@ -156,7 +156,7 @@ func GetAvailableAnalyzers(ctx context.Context, _ mcp.ReadResourceRequest) ([]mc
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      "hive://metadata/automation/analyzers",
-			MIMEType: "application/json",
+			MIMEType: mimeApplicationJSON,
 			Text:     string(analyzersJSON),
 		},
 	}, nil
@@ -219,7 +219,7 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      fmt.Sprintf("hive://metadata/automation/responders?entityType=%s&entityId=%s", entityType, entityID),
-			MIMEType: "application/json",
+			MIMEType: mimeApplicationJSON,
 			Text:     string(respondersJSON),
 		},
 	}, nil
@@ -249,7 +249,7 @@ func GetAvailableCaseStatuses(ctx context.Context, _ mcp.ReadResourceRequest) ([
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      "hive://metadata/entities/case/statuses",
-			MIMEType: "application/json",
+			MIMEType: mimeApplicationJSON,
 			Text:     string(caseStatusesJSON),
 		},
 	}, nil
@@ -272,7 +272,7 @@ func GetCurrentUser(ctx context.Context, _ mcp.ReadResourceRequest) ([]mcp.Resou
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      "hive://config/current-user",
-			MIMEType: "application/json",
+			MIMEType: mimeApplicationJSON,
 			Text:     string(currentUserJSON),
 		},
 	}, nil
@@ -302,7 +302,7 @@ func GetAvailableObservableTypes(ctx context.Context, _ mcp.ReadResourceRequest)
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      "hive://metadata/entities/observable/types",
-			MIMEType: "application/json",
+			MIMEType: mimeApplicationJSON,
 			Text:     string(observableTypesJSON),
 		},
 	}, nil
@@ -324,7 +324,7 @@ func GetAvailableCustomFields(ctx context.Context, _ mcp.ReadResourceRequest) ([
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      "hive://metadata/entities/custom-fields",
-			MIMEType: "application/json",
+			MIMEType: mimeApplicationJSON,
 			Text:     string(customFieldsJSON),
 		},
 	}, nil
@@ -344,7 +344,7 @@ func GetCurrentPermissions(ctx context.Context, _ mcp.ReadResourceRequest) ([]mc
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      "hive://config/permissions",
-			MIMEType: "application/json",
+			MIMEType: mimeApplicationJSON,
 			Text:     string(permissionsJSON),
 		},
 	}, nil
@@ -356,7 +356,7 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 		"hive://metadata/organisation/users",
 		"Users",
 		mcp.WithResourceDescription("List of users in the organisation for assignment"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(availableUsers, GetAvailableUsers)
 
@@ -365,7 +365,7 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 		"hive://metadata/entities/case/templates",
 		"Case Templates",
 		mcp.WithResourceDescription("Available case templates with predefined tasks and fields"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(availableCaseTemplates, GetAvailableCaseTemplates)
 
@@ -374,7 +374,7 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 		"hive://metadata/automation/analyzers",
 		"Analyzers",
 		mcp.WithResourceDescription("Available Cortex analyzers for observable enrichment"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(availableAnalyzers, GetAvailableAnalyzers)
 
@@ -383,7 +383,7 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 		"hive://metadata/automation/responders",
 		"Responders",
 		mcp.WithResourceDescription("Available Cortex responders for active response. Requires entityType and entityId query parameters."),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(availableResponders, GetAvailableResponders)
 
@@ -392,7 +392,7 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 		"hive://metadata/entities/case/statuses",
 		"Case Statuses",
 		mcp.WithResourceDescription("Available status values for cases (New, InProgress, Resolved, etc.)"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(availableCaseStatuses, GetAvailableCaseStatuses)
 
@@ -401,7 +401,7 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 		"hive://config/current-user",
 		"Current User",
 		mcp.WithResourceDescription("Currently authenticated user information"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(currentUser, GetCurrentUser)
 
@@ -410,7 +410,7 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 		"hive://metadata/entities/observable/types",
 		"Observable Types",
 		mcp.WithResourceDescription("Available observable data types (ip, domain, hash, url, etc.)"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(availableObservableTypes, GetAvailableObservableTypes)
 
@@ -419,7 +419,7 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 		"hive://metadata/entities/custom-fields",
 		"Custom Fields",
 		mcp.WithResourceDescription("Organisation-defined custom fields across all entities"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(availableCustomFields, GetAvailableCustomFields)
 
@@ -428,7 +428,7 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 		"hive://config/permissions",
 		"Current Permissions",
 		mcp.WithResourceDescription("Currently active permissions configuration for this session"),
-		mcp.WithMIMEType("application/json"),
+		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(currentPermissions, GetCurrentPermissions)
 }

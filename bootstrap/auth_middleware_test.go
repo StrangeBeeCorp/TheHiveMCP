@@ -51,7 +51,10 @@ func TestAuthenticationChecks(t *testing.T) {
 	authError := fmt.Errorf("TheHive authentication failed: invalid credentials")
 
 	scenarios := []struct {
-		name        string
+		name string
+		// ctx is the per-scenario request context, not a stored/long-lived
+		// field — the S8242 "pass context as a parameter" rule does not apply
+		// to a test-case table. NOSONAR
 		ctx         context.Context
 		expectCall  bool
 		expectedErr error

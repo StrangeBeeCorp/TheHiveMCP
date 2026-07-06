@@ -13,6 +13,10 @@ import (
 // Renovate tracks this tag via the custom Docker manager in renovate.json.
 const DefaultTheHiveTestImage = "strangebee/thehive:5.6.3"
 
+// DefaultAdminUser is the built-in TheHive superadmin login used across the
+// integration suite for authentication and as a default assignee in fixtures.
+const DefaultAdminUser = "admin@thehive.local"
+
 // TheHiveTestImage returns the TheHive container image for the integration suite.
 // It is the single source of truth for the image: THEHIVE_TEST_IMAGE overrides
 // the default, which is how the CI matrix selects 5.5 vs 5.6.
@@ -47,7 +51,7 @@ func NewHiveTestConfig() *HiveTestConfig {
 	return &HiveTestConfig{
 		ImageName:     TheHiveTestImage(),
 		ContainerName: "thehive4go-integration-tester",
-		User:          "admin@thehive.local",
+		User:          DefaultAdminUser,
 		Password:      "secret",
 		MainOrg:       "main-org",
 		AdminOrg:      "admin",
@@ -58,7 +62,7 @@ func NewMCPTestConfig() *types.TheHiveMcpDefaultOptions {
 	return &types.TheHiveMcpDefaultOptions{
 		TheHiveURL:            "http://localhost:9000",
 		TheHiveAPIKey:         "",
-		TheHiveUsername:       "admin@thehive.local",
+		TheHiveUsername:       DefaultAdminUser,
 		TheHivePassword:       "secret",
 		TheHiveOrganisation:   "main-org",
 		MCPServerEndpointPath: "/mcp",

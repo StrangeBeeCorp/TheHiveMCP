@@ -11,6 +11,13 @@ import (
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 )
 
+const (
+	// hintValidJSONFields is the error hint shown when entity-data fails to marshal.
+	hintValidJSONFields = "Check that entity-data contains valid JSON fields"
+	// hintRequiredFields is the error hint shown when a create call is rejected.
+	hintRequiredFields = "Check required fields and permissions"
+)
+
 func (t *ManageTool) handleCreate(ctx context.Context, params *ManageEntityParams) (ManageEntityResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
@@ -48,7 +55,7 @@ func (t *ManageTool) createAlert(ctx context.Context, client *thehive.APIClient,
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return ManageEntityResult{}, tools.NewToolError("failed to marshal alert data").Cause(err).
-			Hint("Check that entity-data contains valid JSON fields").
+			Hint(hintValidJSONFields).
 			Schema("alert", "create")
 	}
 
@@ -62,7 +69,7 @@ func (t *ManageTool) createAlert(ctx context.Context, client *thehive.APIClient,
 	alert, resp, err := client.AlertAPI.CreateAlert(ctx).InputCreateAlert(inputAlert).Execute()
 	if err != nil {
 		return ManageEntityResult{}, tools.NewToolError("failed to create alert").Cause(err).
-			Hint("Check required fields and permissions").API(resp)
+			Hint(hintRequiredFields).API(resp)
 	}
 
 	return ManageEntityResult{
@@ -74,7 +81,7 @@ func (t *ManageTool) createCase(ctx context.Context, client *thehive.APIClient, 
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return ManageEntityResult{}, tools.NewToolError("failed to marshal case data").Cause(err).
-			Hint("Check that entity-data contains valid JSON fields").
+			Hint(hintValidJSONFields).
 			Schema("case", "create")
 	}
 
@@ -88,7 +95,7 @@ func (t *ManageTool) createCase(ctx context.Context, client *thehive.APIClient, 
 	result, resp, err := client.CaseAPI.CreateCase(ctx).InputCreateCase(inputCase).Execute()
 	if err != nil {
 		return ManageEntityResult{}, tools.NewToolError("failed to create case").Cause(err).
-			Hint("Check required fields and permissions").API(resp)
+			Hint(hintRequiredFields).API(resp)
 	}
 
 	// For create operations, return the single entity, not an array
@@ -102,7 +109,7 @@ func (t *ManageTool) createTask(ctx context.Context, client *thehive.APIClient, 
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return ManageEntityResult{}, tools.NewToolError("failed to marshal task data").Cause(err).
-			Hint("Check that entity-data contains valid JSON fields").
+			Hint(hintValidJSONFields).
 			Schema("task", "create")
 	}
 
@@ -128,7 +135,7 @@ func (t *ManageTool) createObservable(ctx context.Context, client *thehive.APICl
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return ManageEntityResult{}, tools.NewToolError("failed to marshal observable data").Cause(err).
-			Hint("Check that entity-data contains valid JSON fields").
+			Hint(hintValidJSONFields).
 			Schema("observable", "create")
 	}
 
@@ -166,7 +173,7 @@ func (t *ManageTool) createProcedure(ctx context.Context, client *thehive.APICli
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return ManageEntityResult{}, tools.NewToolError("failed to marshal procedure data").Cause(err).
-			Hint("Check that entity-data contains valid JSON fields").
+			Hint(hintValidJSONFields).
 			Schema("procedure", "create")
 	}
 
@@ -200,7 +207,7 @@ func (t *ManageTool) createCaseTemplate(ctx context.Context, client *thehive.API
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return ManageEntityResult{}, tools.NewToolError("failed to marshal case template data").Cause(err).
-			Hint("Check that entity-data contains valid JSON fields").
+			Hint(hintValidJSONFields).
 			Schema("case-template", "create")
 	}
 
@@ -226,7 +233,7 @@ func (t *ManageTool) createPage(ctx context.Context, client *thehive.APIClient, 
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return ManageEntityResult{}, tools.NewToolError("failed to marshal page data").Cause(err).
-			Hint("Check that entity-data contains valid JSON fields").
+			Hint(hintValidJSONFields).
 			Schema("page", "create")
 	}
 
@@ -250,7 +257,7 @@ func (t *ManageTool) createPage(ctx context.Context, client *thehive.APIClient, 
 		result, resp, err = client.PageAPI.CreateAPage(ctx).InputCreatePage(inputPage).Execute()
 		if err != nil {
 			return ManageEntityResult{}, tools.NewToolError("failed to create standalone page").Cause(err).
-				Hint("Check required fields and permissions").API(resp)
+				Hint(hintRequiredFields).API(resp)
 		}
 	}
 

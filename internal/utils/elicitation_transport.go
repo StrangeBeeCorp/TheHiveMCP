@@ -54,7 +54,7 @@ func (e *ElicitationTransport) transport() http.RoundTripper {
 }
 
 // requiresElicitation determines if the HTTP method requires user confirmation
-func (e *ElicitationTransport) requiresElicitation(method string, endpoint string) bool {
+func (e *ElicitationTransport) requiresElicitation(method, endpoint string) bool {
 	switch strings.ToUpper(method) {
 	case "POST", "PATCH", "DELETE":
 		if strings.HasSuffix(endpoint, "/api/v1/query") { // Allow queries without elicitation
