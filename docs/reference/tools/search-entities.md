@@ -220,4 +220,4 @@ Enrich results with related information:
 - **Related tools.** Discover fields and automation options with [`get-resource`](get-resource.md); act on results with [`manage-entities`](manage-entities.md)
   and [`execute-automation`](execute-automation.md).
 
-For a task-oriented walkthrough of running a search end to end, see the [first-investigation tutorial](../tutorial/first-investigation.md).
+For a task-oriented walkthrough of running a search end to end, see the [first-investigation tutorial](../../tutorial/first-investigation.md).

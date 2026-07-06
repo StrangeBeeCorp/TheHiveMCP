@@ -102,9 +102,9 @@ tools, and nothing was ever modified, because we stayed in `read_only` mode.
 
 ## Where to go next
 
-- To let the assistant **create and update** entities safely, learn the permission model in the [permissions reference](../permissions.md) — start restrictive,
+- To let the assistant **create and update** entities safely, learn the permission model in the [permissions reference](../reference/permissions.md) — start restrictive,
   then grant only what a role needs.
 - To wire TheHiveMCP into a different host, follow a [deployment how-to](../README.md#how-to-guides) (Claude Code, remote Docker, LibreChat).
-- To understand exactly how each tool behaves, read the [tool reference](../tools/search-entities.md).
+- To understand exactly how each tool behaves, read the [tool reference](../reference/tools/search-entities.md).
 - To understand the security boundary around untrusted TheHive data and why model choice matters, read the
   [production-ready commitments](../../README.md#-production-ready-what-we-commit-to).

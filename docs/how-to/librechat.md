@@ -33,10 +33,10 @@ The Docker Compose file already includes all other necessary configuration with 
 
 ```bash
 # Start all services
-docker compose -f docs/examples/docker/docker-compose.librechat.yml up -d
+docker compose -f docs/how-to/docker/docker-compose.librechat.yml up -d
 
 # Check status
-docker compose -f docs/examples/docker/docker-compose.librechat.yml ps
+docker compose -f docs/how-to/docker/docker-compose.librechat.yml ps
 ```
 
 ### 3. Access LibreChat
@@ -86,4 +86,4 @@ The stack includes:
 
 - For simpler deployment: [Remote Docker Example](remote-docker.md)
 - For local development: [stdio Example](stdio-local.md)
-- For custom permissions: [Permissions Guide](../permissions.md)
+- For custom permissions: [Permissions Guide](../reference/permissions.md)

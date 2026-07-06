@@ -81,4 +81,4 @@ Once configured, your MCP host can:
 
 - For team deployment: [Remote Docker Example](remote-docker.md)
 - For LibreChat integration: [LibreChat Example](librechat.md)
-- For custom permissions: [Permissions Guide](../permissions.md)
+- For custom permissions: [Permissions Guide](../reference/permissions.md)

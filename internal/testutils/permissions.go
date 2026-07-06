@@ -21,8 +21,8 @@ func WritePermissionsFile(t *testing.T, content string) string {
 }
 
 // PermissionsFixture returns the absolute path to a fixture under
-// docs/examples/permissions/. Anchored on this source file (not the working
-// directory) so it survives test files moving between packages.
+// docs/reference/permissions-examples/. Anchored on this source file (not the
+// working directory) so it survives test files moving between packages.
 //
 // Example: PermissionsFixture(t, "analyst.yaml")
 func PermissionsFixture(t *testing.T, name string) string {
@@ -32,7 +32,7 @@ func PermissionsFixture(t *testing.T, name string) string {
 	require.True(t, ok, "PermissionsFixture: unable to resolve caller source path")
 
 	repoRoot := filepath.Join(filepath.Dir(thisFile), "..", "..") // internal/testutils/ -> repo root
-	path := filepath.Join(repoRoot, "docs", "examples", "permissions", name)
+	path := filepath.Join(repoRoot, "docs", "reference", "permissions-examples", name)
 
 	require.FileExists(t, path, "permission fixture %q not found at %s", name, path)
 

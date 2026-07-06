@@ -20,19 +20,19 @@ Goal-oriented recipes for a specific task. They assume you already know the basi
 
 Worked deployment examples for specific hosts:
 
-- **[stdio — local MCP host integration](examples/stdio-local.md)** — GitHub Copilot, Claude Desktop, and other local clients.
-- **[Remote Docker — HTTP deployment](examples/remote-docker.md)** — run the server as a remote HTTP service behind a reverse proxy.
-- **[LibreChat integration](examples/librechat.md)** — a complete web chat stack using Claude models.
+- **[stdio — local MCP host integration](how-to/stdio-local.md)** — GitHub Copilot, Claude Desktop, and other local clients.
+- **[Remote Docker — HTTP deployment](how-to/remote-docker.md)** — run the server as a remote HTTP service behind a reverse proxy.
+- **[LibreChat integration](how-to/librechat.md)** — a complete web chat stack using Claude models.
 
 ## Reference
 
 Information-oriented, neutral description of the tools and their contracts. Look things up here.
 
-- **[search-entities](tools/search-entities.md)** — search TheHive with the filter DSL.
-- **[manage-entities](tools/manage-entities.md)** — create, update, delete, comment, promote, merge, and apply templates.
-- **[execute-automation](tools/execute-automation.md)** — run Cortex analyzers and responders and check their status.
-- **[get-resource](tools/get-resource.md)** — browse schemas, metadata, and docs through the `hive://` resource system.
-- **[Permissions](permissions.md)** — the permission profile format, tool filters, and the untrusted-data boundary.
+- **[search-entities](reference/tools/search-entities.md)** — search TheHive with the filter DSL.
+- **[manage-entities](reference/tools/manage-entities.md)** — create, update, delete, comment, promote, merge, and apply templates.
+- **[execute-automation](reference/tools/execute-automation.md)** — run Cortex analyzers and responders and check their status.
+- **[get-resource](reference/tools/get-resource.md)** — browse schemas, metadata, and docs through the `hive://` resource system.
+- **[Permissions](reference/permissions.md)** — the permission profile format, tool filters, and the untrusted-data boundary.
 - **[Configuration parameters](../README.md#configuration)** — environment variables, flags, and HTTP headers (in the main README).
 
 ## Explanation
