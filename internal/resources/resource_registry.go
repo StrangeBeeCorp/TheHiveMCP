@@ -31,35 +31,43 @@ func NewResourceRegistry() *ResourceRegistry {
 // RegisterCategoryMetadata stores category and subcategory descriptions from catalog
 func (r *ResourceRegistry) RegisterCategoryMetadata(categories []map[string]any) {
 	for _, cat := range categories {
-		name, ok := cat[keyName].(string)
-		if !ok {
-			continue
-		}
-
-		desc, ok := cat[keyDescription].(string)
+		name, desc, ok := nameAndDescription(cat)
 		if !ok {
 			continue
 		}
 
 		r.categoryDescriptions[name] = desc
 
-		if subcats, ok := cat["subcategories"].([]map[string]any); ok {
-			for _, subcat := range subcats {
-				subName, ok := subcat[keyName].(string)
-				if !ok {
-					continue
-				}
+		subcats, ok := cat["subcategories"].([]map[string]any)
+		if !ok {
+			continue
+		}
 
-				subDesc, ok := subcat[keyDescription].(string)
-				if !ok {
-					continue
-				}
-
-				fullPath := fmt.Sprintf("%s/%s", name, subName)
-				r.categoryDescriptions[fullPath] = subDesc
+		for _, subcat := range subcats {
+			subName, subDesc, ok := nameAndDescription(subcat)
+			if !ok {
+				continue
 			}
+
+			r.categoryDescriptions[fmt.Sprintf("%s/%s", name, subName)] = subDesc
 		}
 	}
+}
+
+// nameAndDescription extracts the name and description string values from a
+// catalog map; ok is false when either key is missing or not a string.
+func nameAndDescription(m map[string]any) (name, desc string, ok bool) {
+	name, ok = m[keyName].(string)
+	if !ok {
+		return "", "", false
+	}
+
+	desc, ok = m[keyDescription].(string)
+	if !ok {
+		return "", "", false
+	}
+
+	return name, desc, true
 }
 
 // Register adds a resource to the registry

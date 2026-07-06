@@ -54,43 +54,55 @@ func authWrappers() map[string]invokeThroughAuth {
 func TestAuthenticationChecks(t *testing.T) {
 	authError := errors.New("TheHive authentication failed: invalid credentials")
 
+	// buildCtx constructs the per-scenario request context from the scenario's
+	// declared markers, keeping context out of the test-case table (godre:S8242).
 	scenarios := []struct {
-		name string
-		// ctx is the per-scenario request context, not a stored/long-lived
-		// field — the "pass context as a parameter" rule does not apply to a
-		// test-case table. NOSONAR
-		ctx         context.Context //nolint:containedctx // per-scenario request context in a test table, not a stored long-lived context
+		name        string
+		validated   bool
+		authErr     error
 		expectCall  bool
 		expectedErr error
 	}{
 		{
 			name:       "allows request when authentication was validated",
-			ctx:        context.WithValue(context.Background(), types.AuthValidatedCtxKey, true),
+			validated:  true,
 			expectCall: true,
 		},
 		{
 			name:        "blocks request when auth error exists",
-			ctx:         context.WithValue(context.Background(), types.AuthErrorCtxKey, authError),
+			authErr:     authError,
 			expectedErr: authError,
 		},
 		{
 			// No auth error and no validation marker: the request must still
 			// be denied, never silently allowed (RandoriSec 5.5)
 			name:        "blocks request when validation marker is absent (fail closed)",
-			ctx:         context.Background(),
 			expectedErr: auth.ErrAuthenticationNotValidated,
 		},
 		{
 			name:        "auth error takes precedence over missing marker",
-			ctx:         context.WithValue(context.Background(), types.AuthErrorCtxKey, authError),
+			authErr:     authError,
 			expectedErr: authError,
 		},
+	}
+
+	buildCtx := func(validated bool, authErr error) context.Context {
+		ctx := context.Background()
+		if validated {
+			ctx = context.WithValue(ctx, types.AuthValidatedCtxKey, true)
+		}
+
+		if authErr != nil {
+			ctx = context.WithValue(ctx, types.AuthErrorCtxKey, authErr)
+		}
+
+		return ctx
 	}
 
 	for wrapperName, invoke := range authWrappers() {
 		for _, scenario := range scenarios {
 			t.Run(wrapperName+" "+scenario.name, func(t *testing.T) {
-				called, err := invoke(scenario.ctx)
+				called, err := invoke(buildCtx(scenario.validated, scenario.authErr))
 
 				assert.Equal(t, scenario.expectCall, called)
 

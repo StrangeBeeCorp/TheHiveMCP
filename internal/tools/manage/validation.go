@@ -154,93 +154,135 @@ func scopeChecksForOperation(params EntityParams) (allOf, anyOf []scopeCheck) {
 func (t *Tool) ValidateParams(params *EntityParams) error {
 	switch params.Operation {
 	case OperationCreate:
-		if params.EntityData == nil {
-			return tools.NewToolError("entity-data is required for create operations.").Hintf(
-				"Use get-resource 'hive://schema/%s/create' to see required fields for %s creation", params.EntityType, params.EntityType)
-		}
-
-		needsParentID := params.EntityType == types.EntityTypeTask || params.EntityType == types.EntityTypeObservable || params.EntityType == types.EntityTypeProcedure
-		if needsParentID && len(params.EntityIDs) == 0 {
-			return tools.NewToolErrorf("%s creation requires a parent case or alert ID in entity-ids parameter", params.EntityType)
-		}
-
-		if needsParentID && len(params.EntityIDs) > 1 {
-			return tools.NewToolErrorf("%s creation requires exactly one parent ID in entity-ids parameter, got %d", params.EntityType, len(params.EntityIDs))
-		}
-		// Pages support an optional parent case ID
-		if params.EntityType == types.EntityTypePage && len(params.EntityIDs) > 1 {
-			return tools.NewToolErrorf("page creation accepts at most one parent case ID in entity-ids parameter, got %d", len(params.EntityIDs))
-		}
+		return validateCreateParams(params)
 	case OperationUpdate:
-		if len(params.EntityIDs) == 0 {
-			return tools.NewToolErrorf("entity-ids are required for update operations. Provide an array of %s IDs to update, e.g., ['id1', 'id2']", params.EntityType)
-		}
-
-		if params.EntityData == nil {
-			return tools.NewToolErrorf("entity-data is required for update operations. Provide a JSON object with fields to update.").Hintf(
-				"Use get-resource 'hive://schema/%s/update' to see available fields", params.EntityType)
-		}
+		return validateUpdateParams(params)
 	case OperationDelete:
-		if len(params.EntityIDs) == 0 {
-			return tools.NewToolErrorf("entity-ids are required for delete operations. Provide an array of %s IDs to delete, e.g., ['id1', 'id2']. WARNING: This operation is irreversible", params.EntityType)
-		}
+		return validateDeleteParams(params)
 	case OperationComment:
-		if len(params.EntityIDs) == 0 {
-			return tools.NewToolErrorf("entity-ids are required for comment operations. Provide an array of %s IDs to add comments to, e.g., ['id1', 'id2']", params.EntityType)
-		}
-
-		if params.Comment == "" {
-			return tools.NewToolError("comment parameter is required for comment operations. Provide the text content for the comment or task log")
-		}
-
-		if params.EntityType != types.EntityTypeCase && params.EntityType != types.EntityTypeTask {
-			return tools.NewToolErrorf("comments are only supported on cases and tasks, not %s. For cases: adds a comment. For tasks: adds a task log", params.EntityType)
-		}
+		return validateCommentParams(params)
 	case OperationPromote:
-		if params.EntityType != types.EntityTypeAlert {
-			return tools.NewToolErrorf("promote operation is only supported for alerts, not %s. Use promote to convert an alert into a new case", params.EntityType)
-		}
-
-		if len(params.EntityIDs) == 0 {
-			return tools.NewToolErrorf("entity-ids are required for promote operations. Provide a single alert ID to promote to a case, e.g., ['alert-id']")
-		}
-
-		if len(params.EntityIDs) > 1 {
-			return tools.NewToolErrorf("promote operation requires exactly one alert ID, got %d. Provide a single alert ID in entity-ids", len(params.EntityIDs))
-		}
+		return validatePromoteParams(params)
 	case OperationMerge:
-		switch params.EntityType {
-		case types.EntityTypeCase:
-			if len(params.EntityIDs) < 2 {
-				return tools.NewToolErrorf("merge operation for cases requires at least 2 case IDs in entity-ids, got %d. Provide multiple case IDs to merge together", len(params.EntityIDs))
-			}
-		case types.EntityTypeAlert:
-			if len(params.EntityIDs) == 0 {
-				return tools.NewToolErrorf("merge operation for alerts requires alert IDs in entity-ids. Provide alert IDs to merge into the target case")
-			}
-
-			if params.TargetID == "" {
-				return tools.NewToolErrorf("merge operation for alerts requires target-id parameter. Provide the case ID to merge alerts into")
-			}
-		case types.EntityTypeObservable:
-			if params.TargetID == "" {
-				return tools.NewToolErrorf("merge operation for observables requires target-id parameter. Provide the case ID containing observables to deduplicate")
-			}
-		default:
-			return tools.NewToolErrorf("merge operation is not supported for entity type %s. Merge is only supported for cases, alerts, and observables", params.EntityType)
-		}
+		return validateMergeParams(params)
 	case OperationApplyTemplate:
-		if params.EntityType != types.EntityTypeCase {
-			return tools.NewToolErrorf("apply-template operation is only supported for cases, not %s. Use entity-type=\"case\" and provide case IDs in entity-ids", params.EntityType)
-		}
+		return validateApplyTemplateParams(params)
+	}
 
+	return nil
+}
+
+func validateCreateParams(params *EntityParams) error {
+	if params.EntityData == nil {
+		return tools.NewToolError("entity-data is required for create operations.").Hintf(
+			"Use get-resource 'hive://schema/%s/create' to see required fields for %s creation", params.EntityType, params.EntityType)
+	}
+
+	needsParentID := params.EntityType == types.EntityTypeTask || params.EntityType == types.EntityTypeObservable || params.EntityType == types.EntityTypeProcedure
+	if needsParentID && len(params.EntityIDs) == 0 {
+		return tools.NewToolErrorf("%s creation requires a parent case or alert ID in entity-ids parameter", params.EntityType)
+	}
+
+	if needsParentID && len(params.EntityIDs) > 1 {
+		return tools.NewToolErrorf("%s creation requires exactly one parent ID in entity-ids parameter, got %d", params.EntityType, len(params.EntityIDs))
+	}
+	// Pages support an optional parent case ID
+	if params.EntityType == types.EntityTypePage && len(params.EntityIDs) > 1 {
+		return tools.NewToolErrorf("page creation accepts at most one parent case ID in entity-ids parameter, got %d", len(params.EntityIDs))
+	}
+
+	return nil
+}
+
+func validateUpdateParams(params *EntityParams) error {
+	if len(params.EntityIDs) == 0 {
+		return tools.NewToolErrorf("entity-ids are required for update operations. Provide an array of %s IDs to update, e.g., ['id1', 'id2']", params.EntityType)
+	}
+
+	if params.EntityData == nil {
+		return tools.NewToolErrorf("entity-data is required for update operations. Provide a JSON object with fields to update.").Hintf(
+			"Use get-resource 'hive://schema/%s/update' to see available fields", params.EntityType)
+	}
+
+	return nil
+}
+
+func validateDeleteParams(params *EntityParams) error {
+	if len(params.EntityIDs) == 0 {
+		return tools.NewToolErrorf("entity-ids are required for delete operations. Provide an array of %s IDs to delete, e.g., ['id1', 'id2']. WARNING: This operation is irreversible", params.EntityType)
+	}
+
+	return nil
+}
+
+func validateCommentParams(params *EntityParams) error {
+	if len(params.EntityIDs) == 0 {
+		return tools.NewToolErrorf("entity-ids are required for comment operations. Provide an array of %s IDs to add comments to, e.g., ['id1', 'id2']", params.EntityType)
+	}
+
+	if params.Comment == "" {
+		return tools.NewToolError("comment parameter is required for comment operations. Provide the text content for the comment or task log")
+	}
+
+	if params.EntityType != types.EntityTypeCase && params.EntityType != types.EntityTypeTask {
+		return tools.NewToolErrorf("comments are only supported on cases and tasks, not %s. For cases: adds a comment. For tasks: adds a task log", params.EntityType)
+	}
+
+	return nil
+}
+
+func validatePromoteParams(params *EntityParams) error {
+	if params.EntityType != types.EntityTypeAlert {
+		return tools.NewToolErrorf("promote operation is only supported for alerts, not %s. Use promote to convert an alert into a new case", params.EntityType)
+	}
+
+	if len(params.EntityIDs) == 0 {
+		return tools.NewToolErrorf("entity-ids are required for promote operations. Provide a single alert ID to promote to a case, e.g., ['alert-id']")
+	}
+
+	if len(params.EntityIDs) > 1 {
+		return tools.NewToolErrorf("promote operation requires exactly one alert ID, got %d. Provide a single alert ID in entity-ids", len(params.EntityIDs))
+	}
+
+	return nil
+}
+
+func validateMergeParams(params *EntityParams) error {
+	switch params.EntityType {
+	case types.EntityTypeCase:
+		if len(params.EntityIDs) < 2 {
+			return tools.NewToolErrorf("merge operation for cases requires at least 2 case IDs in entity-ids, got %d. Provide multiple case IDs to merge together", len(params.EntityIDs))
+		}
+	case types.EntityTypeAlert:
 		if len(params.EntityIDs) == 0 {
-			return tools.NewToolError("entity-ids are required for apply-template operations. Provide an array of case IDs to apply the template to")
+			return tools.NewToolErrorf("merge operation for alerts requires alert IDs in entity-ids. Provide alert IDs to merge into the target case")
 		}
 
 		if params.TargetID == "" {
-			return tools.NewToolError("target-id is required for apply-template operations. Provide the case template name or ID to apply")
+			return tools.NewToolErrorf("merge operation for alerts requires target-id parameter. Provide the case ID to merge alerts into")
 		}
+	case types.EntityTypeObservable:
+		if params.TargetID == "" {
+			return tools.NewToolErrorf("merge operation for observables requires target-id parameter. Provide the case ID containing observables to deduplicate")
+		}
+	default:
+		return tools.NewToolErrorf("merge operation is not supported for entity type %s. Merge is only supported for cases, alerts, and observables", params.EntityType)
+	}
+
+	return nil
+}
+
+func validateApplyTemplateParams(params *EntityParams) error {
+	if params.EntityType != types.EntityTypeCase {
+		return tools.NewToolErrorf("apply-template operation is only supported for cases, not %s. Use entity-type=\"case\" and provide case IDs in entity-ids", params.EntityType)
+	}
+
+	if len(params.EntityIDs) == 0 {
+		return tools.NewToolError("entity-ids are required for apply-template operations. Provide an array of case IDs to apply the template to")
+	}
+
+	if params.TargetID == "" {
+		return tools.NewToolError("target-id is required for apply-template operations. Provide the case template name or ID to apply")
 	}
 
 	return nil

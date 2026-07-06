@@ -303,7 +303,7 @@ func GetPatternFactHandler() ([]mcp.ResourceContents, error) {
 
 // GetCaseTemplateFactHandler returns the case template documentation fact resource.
 func GetCaseTemplateFactHandler() ([]mcp.ResourceContents, error) {
-	return getFactContent("case-template", nil)
+	return getFactContent(types.EntityTypeCaseTemplate, nil)
 }
 
 // GetPageFactHandler returns the page documentation fact resource.
@@ -340,9 +340,9 @@ func GetCatalogData() map[string]any {
 					types.EntityTypeProcedure + suffixCreate,
 					types.EntityTypeProcedure + suffixUpdate,
 					types.EntityTypePattern,
-					"case-template",
-					"case-template" + suffixCreate,
-					"case-template" + suffixUpdate,
+					types.EntityTypeCaseTemplate,
+					types.EntityTypeCaseTemplate + suffixCreate,
+					types.EntityTypeCaseTemplate + suffixUpdate,
 					types.EntityTypePage,
 					types.EntityTypePage + suffixCreate,
 					types.EntityTypePage + suffixUpdate,

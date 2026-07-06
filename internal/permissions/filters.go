@@ -5,7 +5,7 @@ import (
 )
 
 // MergeFilters ANDs permission filters into the user query; the bool reports whether any were applied.
-func MergeFilters(userQuery map[string]any, permissionFilters map[string]any) (map[string]any, bool) {
+func MergeFilters(userQuery, permissionFilters map[string]any) (map[string]any, bool) {
 	if len(permissionFilters) == 0 {
 		return userQuery, false
 	}

@@ -309,22 +309,9 @@ func processDatesStruct(val reflect.Value, wrapUntrusted bool) map[string]any {
 			continue
 		}
 
-		key := field.Name
-		omitempty := false
-
-		if tag := field.Tag.Get("json"); tag != "" {
-			if tag == "-" {
-				continue
-			}
-
-			parts := strings.Split(tag, ",")
-			if parts[0] != "" { // empty (json:",omitempty") keeps field.Name
-				key = parts[0]
-			}
-
-			if slices.Contains(parts[1:], "omitempty") {
-				omitempty = true
-			}
+		key, omitempty, skip := jsonFieldKey(field)
+		if skip {
+			continue
 		}
 
 		fieldVal := val.Field(i)
@@ -334,36 +321,9 @@ func processDatesStruct(val reflect.Value, wrapUntrusted bool) map[string]any {
 			continue
 		}
 
-		var (
-			processedValue any
-			err            error
-		)
-
-		if isDateField(key) {
-			if fieldVal.Kind() == reflect.Pointer && fieldVal.IsNil() {
-				processedValue = nil
-			} else {
-				var dateValue any
-				if fieldVal.Kind() == reflect.Pointer {
-					dateValue = fieldVal.Elem().Interface()
-				} else {
-					dateValue = fieldVal.Interface()
-				}
-
-				processedValue = processDateField(key, dateValue)
-			}
-		} else {
-			// Disable wrapping under a structural subtree (see structuralSubtrees).
-			childWrap := wrapUntrusted
-			if _, structural := structuralSubtrees[key]; structural {
-				childWrap = false
-			}
-
-			processedValue, err = processDatesValue(fieldVal, childWrap)
-			if err != nil {
-				slog.Error("Failed to process nested value in struct", "field", key, "error", err)
-				continue // skip this field, keep the rest
-			}
+		processedValue, ok := processStructField(key, fieldVal, wrapUntrusted)
+		if !ok {
+			continue // skip this field, keep the rest
 		}
 
 		if wrapUntrusted && !isTrustedField(key) && !isStructuralSubtree(key) {
@@ -374,6 +334,59 @@ func processDatesStruct(val reflect.Value, wrapUntrusted bool) map[string]any {
 	}
 
 	return result
+}
+
+// jsonFieldKey derives the output key and omitempty flag from a struct field's
+// json tag. skip is true when the field is tagged json:"-".
+func jsonFieldKey(field reflect.StructField) (key string, omitempty, skip bool) {
+	key = field.Name
+
+	tag := field.Tag.Get("json")
+	if tag == "" {
+		return key, false, false
+	}
+
+	if tag == "-" {
+		return "", false, true
+	}
+
+	parts := strings.Split(tag, ",")
+	if parts[0] != "" { // empty (json:",omitempty") keeps field.Name
+		key = parts[0]
+	}
+
+	return key, slices.Contains(parts[1:], "omitempty"), false
+}
+
+// processStructField parses a date field or recurses into everything else. ok is
+// false when a nested value fails to process and the field should be skipped.
+func processStructField(key string, fieldVal reflect.Value, wrapUntrusted bool) (any, bool) {
+	if isDateField(key) {
+		if fieldVal.Kind() == reflect.Pointer && fieldVal.IsNil() {
+			return nil, true
+		}
+
+		dateValue := fieldVal.Interface()
+		if fieldVal.Kind() == reflect.Pointer {
+			dateValue = fieldVal.Elem().Interface()
+		}
+
+		return processDateField(key, dateValue), true
+	}
+
+	// Disable wrapping under a structural subtree (see structuralSubtrees).
+	childWrap := wrapUntrusted
+	if _, structural := structuralSubtrees[key]; structural {
+		childWrap = false
+	}
+
+	processedValue, err := processDatesValue(fieldVal, childWrap)
+	if err != nil {
+		slog.Error("Failed to process nested value in struct", "field", key, "error", err)
+		return nil, false
+	}
+
+	return processedValue, true
 }
 
 func processDatesMap(val reflect.Value, wrapUntrusted bool) (map[string]any, error) {
