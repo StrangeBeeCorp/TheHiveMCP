@@ -8,7 +8,11 @@ import (
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 )
 
+// NewTestClient starts (or reuses) the integration TheHive instance and returns
+// an API client scoped to the main test organisation.
 func NewTestClient(t *testing.T) *thehive.APIClient {
+	t.Helper()
+
 	url, err := StartTheHiveContainer(t)
 	if err != nil {
 		log.Fatalf("Failed to start container: %v", err)
@@ -38,6 +42,8 @@ func GetAdminAuthContext(testConfig *HiveTestConfig) context.Context {
 // SetupTestWithCleanup creates a test client and registers automatic cleanup
 // Call this at the beginning of each test function
 func SetupTestWithCleanup(t *testing.T) *thehive.APIClient {
+	t.Helper()
+
 	client := NewTestClient(t)
 
 	// Register cleanup function that will run after the test completes
@@ -49,7 +55,9 @@ func SetupTestWithCleanup(t *testing.T) *thehive.APIClient {
 		}
 
 		testConfig := NewHiveTestConfig()
-		if err := ResetHiveInstance(t, url, testConfig); err != nil {
+
+		err = ResetHiveInstance(t, url, testConfig)
+		if err != nil {
 			t.Logf("Warning: Failed to reset hive instance: %v", err)
 		}
 	})

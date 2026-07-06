@@ -9,8 +9,9 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 const (
@@ -19,6 +20,11 @@ const (
 	// suffixCreate / suffixUpdate name the input-schema variants of an entity.
 	suffixCreate = "/create"
 	suffixUpdate = "/update"
+	// keyName / keyDescription / keyResources are catalog map keys reused
+	// across the resource catalog and registry listings.
+	keyName        = "name"
+	keyDescription = "description"
+	keyResources   = "resources"
 )
 
 //go:embed schemas/*.json schemas/*/*.json
@@ -39,9 +45,10 @@ func getSchemaContent(schemaName string) ([]mcp.ResourceContents, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s schema: %w", schemaName, err)
 	}
+
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
-			URI:      fmt.Sprintf("docs://schema/%s", schemaName),
+			URI:      "docs://schema/" + schemaName,
 			MIMEType: mimeApplicationJSON,
 			Text:     string(schemaBytes),
 		},
@@ -53,16 +60,17 @@ func getRuleContent(ruleName string) ([]mcp.ResourceContents, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s rule: %w", ruleName, err)
 	}
+
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
-			URI:      fmt.Sprintf("docs://rule/%s", ruleName),
+			URI:      "docs://rule/" + ruleName,
 			MIMEType: "text/plain",
 			Text:     string(ruleBytes),
 		},
 	}, nil
 }
 
-func getFactContent(factName string, data interface{}) ([]mcp.ResourceContents, error) {
+func getFactContent(factName string, data any) ([]mcp.ResourceContents, error) {
 	factBytes, err := factsFS.ReadFile(fmt.Sprintf("facts/%s.txt", factName))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s fact: %w", factName, err)
@@ -76,135 +84,158 @@ func getFactContent(factName string, data interface{}) ([]mcp.ResourceContents, 
 
 	// Execute template with data
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
+
+	err = tmpl.Execute(&buf, data)
+	if err != nil {
 		return nil, fmt.Errorf("failed to execute template: %w", err)
 	}
 
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
-			URI:      fmt.Sprintf("docs://fact/%s", factName),
+			URI:      "docs://fact/" + factName,
 			MIMEType: "text/plain",
 			Text:     buf.String(),
 		},
 	}, nil
 }
 
-// Alert schema handlers
+// GetAlertSchemaHandler returns the alert output schema.
 func GetAlertSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("alert/OutputAlert")
 }
 
+// GetAlertCreateSchemaHandler returns the alert create-input schema.
 func GetAlertCreateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("alert/CreateAlert")
 }
 
+// GetAlertUpdateSchemaHandler returns the alert update-input schema.
 func GetAlertUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("alert/UpdateAlert")
 }
 
-// Case schema handlers
+// GetCaseSchemaHandler returns the case output schema.
 func GetCaseSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("case/OutputCase")
 }
 
+// GetCaseCreateSchemaHandler returns the case create-input schema.
 func GetCaseCreateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("case/CreateCase")
 }
 
+// GetCaseUpdateSchemaHandler returns the case update-input schema.
 func GetCaseUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("case/UpdateCase")
 }
 
-// Task schema handlers
+// GetTaskSchemaHandler returns the task output schema.
 func GetTaskSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("task/OutputTask")
 }
 
+// GetTaskCreateSchemaHandler returns the task create-input schema.
 func GetTaskCreateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("task/CreateTask")
 }
 
+// GetTaskUpdateSchemaHandler returns the task update-input schema.
 func GetTaskUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("task/UpdateTask")
 }
 
-// Observable schema handlers
+// GetObservableSchemaHandler returns the observable output schema.
 func GetObservableSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("observable/OutputObservable")
 }
 
+// GetObservableCreateSchemaHandler returns the observable create-input schema.
 func GetObservableCreateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("observable/CreateObservable")
 }
 
+// GetObservableUpdateSchemaHandler returns the observable update-input schema.
 func GetObservableUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("observable/UpdateObservable")
 }
 
-// Procedure schema handlers
+// GetProcedureSchemaHandler returns the procedure output schema.
 func GetProcedureSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("ttp/OutputProcedure")
 }
 
+// GetProcedureCreateSchemaHandler returns the procedure create-input schema.
 func GetProcedureCreateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("ttp/CreateProcedure")
 }
 
+// GetProcedureUpdateSchemaHandler returns the procedure update-input schema.
 func GetProcedureUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("ttp/UpdateProcedure")
 }
 
+// GetPatternSchemaHandler returns the pattern output schema.
 func GetPatternSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("ttp/OutputPattern")
 }
 
-// Case template schema handler
+// GetCaseTemplateSchemaHandler returns the case template output schema.
 func GetCaseTemplateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("case_template/OutputCaseTemplate")
 }
 
+// GetCaseTemplateCreateSchemaHandler returns the case template create-input schema.
 func GetCaseTemplateCreateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("case_template/CreateCaseTemplate")
 }
 
+// GetCaseTemplateUpdateSchemaHandler returns the case template update-input schema.
 func GetCaseTemplateUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("case_template/UpdateCaseTemplate")
 }
 
-// Page schema handlers
+// GetPageSchemaHandler returns the page output schema.
 func GetPageSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("page/OutputPage")
 }
 
+// GetPageCreateSchemaHandler returns the page create-input schema.
 func GetPageCreateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("page/CreatePage")
 }
 
+// GetPageUpdateSchemaHandler returns the page update-input schema.
 func GetPageUpdateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("page/UpdatePage")
 }
 
+// GetFilterSchemaHandler returns the filter schema.
 func GetFilterSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("Filter")
 }
 
+// GetFormattingRuleHandler returns TheHive formatting rule content.
 func GetFormattingRuleHandler() ([]mcp.ResourceContents, error) {
 	return getRuleContent("formatting")
 }
 
+// GetIntegrityRuleHandler returns TheHive integrity rule content.
 func GetIntegrityRuleHandler() ([]mcp.ResourceContents, error) {
 	return getRuleContent("integrity")
 }
 
+// GetFilteringRuleHandler returns TheHive filtering rule content.
 func GetFilteringRuleHandler() ([]mcp.ResourceContents, error) {
 	return getRuleContent("filtering")
 }
 
+// GetFilterDslDocHandler returns the filter DSL cheatsheet document.
 func GetFilterDslDocHandler() ([]mcp.ResourceContents, error) {
 	docBytes, err := docsFS.ReadFile("docs/filter-dsl.md")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read filter-dsl doc: %w", err)
 	}
+
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      "hive://docs/overview/filter-dsl",
@@ -214,74 +245,88 @@ func GetFilterDslDocHandler() ([]mcp.ResourceContents, error) {
 	}, nil
 }
 
+// DateData carries the current date into the date fact template.
 type DateData struct {
 	CurrentDate string
 }
 
+// GetDateFactHandler returns the current server time as a fact resource.
 func GetDateFactHandler() ([]mcp.ResourceContents, error) {
 	data := DateData{
 		CurrentDate: time.Now().Format("2006-01-02T15:04:05Z07:00"),
 	}
+
 	return getFactContent("date", data)
 }
 
+// GetHiveFactHandler returns the TheHive platform overview fact resource.
 func GetHiveFactHandler() ([]mcp.ResourceContents, error) {
 	return getFactContent("thehive", nil)
 }
 
+// GetTaskFactHandler returns the task documentation fact resource.
 func GetTaskFactHandler() ([]mcp.ResourceContents, error) {
 	return getFactContent(types.EntityTypeTask, nil)
 }
 
+// GetObservableFactHandler returns the observable documentation fact resource.
 func GetObservableFactHandler() ([]mcp.ResourceContents, error) {
 	return getFactContent(types.EntityTypeObservable, nil)
 }
 
+// GetAlertFactHandler returns the alert documentation fact resource.
 func GetAlertFactHandler() ([]mcp.ResourceContents, error) {
 	return getFactContent(types.EntityTypeAlert, nil)
 }
 
+// GetCaseFactHandler returns the case documentation fact resource.
 func GetCaseFactHandler() ([]mcp.ResourceContents, error) {
 	return getFactContent(types.EntityTypeCase, nil)
 }
 
+// GetResponderFactHandler returns the responder documentation fact resource.
 func GetResponderFactHandler() ([]mcp.ResourceContents, error) {
 	return getFactContent("responder", nil)
 }
 
+// GetAnalyzerFactHandler returns the analyzer documentation fact resource.
 func GetAnalyzerFactHandler() ([]mcp.ResourceContents, error) {
 	return getFactContent("analyzer", nil)
 }
 
+// GetProcedureFactHandler returns the procedure documentation fact resource.
 func GetProcedureFactHandler() ([]mcp.ResourceContents, error) {
 	return getFactContent(types.EntityTypeProcedure, nil)
 }
 
+// GetPatternFactHandler returns the pattern documentation fact resource.
 func GetPatternFactHandler() ([]mcp.ResourceContents, error) {
 	return getFactContent(types.EntityTypePattern, nil)
 }
 
+// GetCaseTemplateFactHandler returns the case template documentation fact resource.
 func GetCaseTemplateFactHandler() ([]mcp.ResourceContents, error) {
 	return getFactContent("case-template", nil)
 }
 
+// GetPageFactHandler returns the page documentation fact resource.
 func GetPageFactHandler() ([]mcp.ResourceContents, error) {
 	return getFactContent(types.EntityTypePage, nil)
 }
 
-// Helper to get catalog structure
-func GetCatalogData() map[string]interface{} {
-	return map[string]interface{}{
-		"categories": []map[string]interface{}{
+// GetCatalogData returns the resource catalog's category structure.
+func GetCatalogData() map[string]any {
+	return map[string]any{
+		"categories": []map[string]any{
 			{
-				"name":        "config",
-				"description": "Current session and system configuration. Includes authenticated user info and server time.",
-				"resources":   []string{"current-user", "server-time", "permissions"},
+				keyName:        "config",
+				keyDescription: "Current session and system configuration. Includes authenticated user info and server time.",
+				keyResources:   []string{"current-user", "server-time", "permissions"},
 			},
 			{
-				"name":        "schema",
-				"description": "Entity field definitions and data types. Query these to understand what fields are available for each entity type and their constraints. Each entity has three variants: base (output), /create (input for creation), and /update (partial input for updates).",
-				"resources": []string{
+				keyName:        "schema",
+				keyDescription: "Entity field definitions and data types. Query these to understand what fields are available for each entity type and their constraints. Each entity has three variants: base (output), /create (input for creation), and /update (partial input for updates).",
+				keyResources: []string{
 					types.EntityTypeAlert,
 					types.EntityTypeAlert + suffixCreate,
 					types.EntityTypeAlert + suffixUpdate,
@@ -308,44 +353,44 @@ func GetCatalogData() map[string]interface{} {
 				},
 			},
 			{
-				"name":        "metadata",
-				"description": "Available options, enumerations, and choices. Use these to get valid values for dropdowns, assignments, and entity properties.",
-				"subcategories": []map[string]interface{}{
+				keyName:        "metadata",
+				keyDescription: "Available options, enumerations, and choices. Use these to get valid values for dropdowns, assignments, and entity properties.",
+				"subcategories": []map[string]any{
 					{
-						"name":        "entities",
-						"description": "Entity-specific metadata like statuses, templates, and types",
-						"resources":   []string{"case/statuses", "case/templates", "observable/types", "custom-fields"},
+						keyName:        "entities",
+						keyDescription: "Entity-specific metadata like statuses, templates, and types",
+						keyResources:   []string{"case/statuses", "case/templates", "observable/types", "custom-fields"},
 					},
 					{
-						"name":        "automation",
-						"description": "Cortex integration resources for analyzers and responders",
-						"resources":   []string{"analyzers", "responders"},
+						keyName:        "automation",
+						keyDescription: "Cortex integration resources for analyzers and responders",
+						keyResources:   []string{"analyzers", "responders"},
 					},
 					{
-						"name":        "organisation",
-						"description": "Organisation settings and user management",
-						"resources":   []string{"users"},
+						keyName:        "organisation",
+						keyDescription: "Organisation settings and user management",
+						keyResources:   []string{"users"},
 					},
 				},
 			},
 			{
-				"name":        "docs",
-				"description": "Documentation and educational content about TheHive platform, entities, and workflows. Read these to understand best practices.",
-				"subcategories": []map[string]interface{}{
+				keyName:        "docs",
+				keyDescription: "Documentation and educational content about TheHive platform, entities, and workflows. Read these to understand best practices.",
+				"subcategories": []map[string]any{
 					{
-						"name":        "overview",
-						"description": "Platform-wide documentation and general information",
-						"resources":   []string{"platform", "filter-dsl"},
+						keyName:        "overview",
+						keyDescription: "Platform-wide documentation and general information",
+						keyResources:   []string{"platform", "filter-dsl"},
 					},
 					{
-						"name":        "entities",
-						"description": "Entity-specific guides and best practices",
-						"resources":   []string{types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable, types.EntityTypeProcedure, types.EntityTypePattern, types.EntityTypeCaseTemplate, types.EntityTypePage},
+						keyName:        "entities",
+						keyDescription: "Entity-specific guides and best practices",
+						keyResources:   []string{types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable, types.EntityTypeProcedure, types.EntityTypePattern, types.EntityTypeCaseTemplate, types.EntityTypePage},
 					},
 					{
-						"name":        "automation",
-						"description": "Automation workflow guides for analyzers and responders",
-						"resources":   []string{"analyzers", "responders"},
+						keyName:        "automation",
+						keyDescription: "Automation workflow guides for analyzers and responders",
+						keyResources:   []string{"analyzers", "responders"},
 					},
 				},
 			},
@@ -354,9 +399,9 @@ func GetCatalogData() map[string]interface{} {
 }
 
 // GetResourceCatalog returns the catalog (uses the same GetCatalogData)
-func GetResourceCatalog(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+func GetResourceCatalog(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	catalog := GetCatalogData()
-	catalog["usage"] = map[string]interface{}{
+	catalog["usage"] = map[string]any{
 		"discover": "Use get-resource tool without parameters to list all categories",
 		"browse":   "Use get-resource tool with a URI to browse a category (e.g., uri=\"hive://schema\" or uri=\"hive://metadata/automation\")",
 		"fetch":    "Use get-resource tool with a URI to fetch a specific resource (e.g., uri=\"hive://schema/alert\")",
@@ -376,6 +421,7 @@ func GetResourceCatalog(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp
 	}, nil
 }
 
+// RegisterSchemaResources registers the entity schema resources on the registry.
 func RegisterSchemaResources(registry *ResourceRegistry) {
 	// Alert schemas
 	alertSchema := mcp.NewResource(
@@ -618,6 +664,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 	})
 }
 
+// RegisterRuleResources registers the rule resources on the registry.
 func RegisterRuleResources(registry *ResourceRegistry) {
 	formattingRule := mcp.NewResource(
 		"hive://rule/formatting",
@@ -628,6 +675,7 @@ func RegisterRuleResources(registry *ResourceRegistry) {
 	registry.Register(formattingRule, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetFormattingRuleHandler()
 	})
+
 	integrityRule := mcp.NewResource(
 		"hive://rule/integrity",
 		"Integrity Rule",
@@ -637,6 +685,7 @@ func RegisterRuleResources(registry *ResourceRegistry) {
 	registry.Register(integrityRule, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetIntegrityRuleHandler()
 	})
+
 	filteringRule := mcp.NewResource(
 		"hive://rule/filtering",
 		"Filtering Rule",
@@ -648,6 +697,7 @@ func RegisterRuleResources(registry *ResourceRegistry) {
 	})
 }
 
+// RegisterFactResources registers the fact and documentation resources on the registry.
 func RegisterFactResources(registry *ResourceRegistry) {
 	serverTime := mcp.NewResource(
 		"hive://config/server-time",
@@ -658,6 +708,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 	registry.Register(serverTime, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetDateFactHandler()
 	})
+
 	theHiveOverview := mcp.NewResource(
 		"hive://docs/overview/platform",
 		"TheHive Overview",
@@ -667,6 +718,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 	registry.Register(theHiveOverview, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetHiveFactHandler()
 	})
+
 	taskDocumentation := mcp.NewResource(
 		"hive://docs/entities/task",
 		"Task Documentation",
@@ -689,6 +741,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 			return GetObservableFactHandler()
 		},
 	)
+
 	alertDocumentation := mcp.NewResource(
 		"hive://docs/entities/alert",
 		"Alert Documentation",
@@ -701,6 +754,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 			return GetAlertFactHandler()
 		},
 	)
+
 	caseDocumentation := mcp.NewResource(
 		"hive://docs/entities/case",
 		"Case Documentation",
@@ -778,6 +832,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 			return GetAnalyzerFactHandler()
 		},
 	)
+
 	responderDocumentation := mcp.NewResource(
 		"hive://docs/automation/responders",
 		"Responder Documentation",
@@ -811,14 +866,10 @@ func RegisterFactResources(registry *ResourceRegistry) {
 		mcp.WithResourceDescription("Directory of all available resource categories and their purposes. This is the starting point for exploring resources."),
 		mcp.WithMIMEType(mimeApplicationJSON),
 	)
-	registry.Register(
-		catalogResource,
-		func(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-			return GetResourceCatalog(ctx, req)
-		},
-	)
+	registry.Register(catalogResource, GetResourceCatalog)
 }
 
+// RegisterStaticResources registers all static schema, rule, and fact resources.
 func RegisterStaticResources(registry *ResourceRegistry) {
 	RegisterSchemaResources(registry)
 	RegisterRuleResources(registry)

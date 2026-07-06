@@ -16,6 +16,7 @@ func WritePermissionsFile(t *testing.T, content string) string {
 
 	path := filepath.Join(t.TempDir(), "permissions.yaml")
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
 	return path
 }
 
@@ -40,5 +41,6 @@ func PermissionsFixture(t *testing.T, name string) string {
 	path := filepath.Join(repoRoot, "docs", "examples", "permissions", name)
 
 	require.FileExists(t, path, "permission fixture %q not found at %s", name, path)
+
 	return path
 }

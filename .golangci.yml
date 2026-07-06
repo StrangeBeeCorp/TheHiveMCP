@@ -31,6 +31,9 @@ linters:
     - nonamedreturns
     - paralleltest
     - prealloc
+    # JSON/YAML tags mirror TheHive's wire format (_id, _createdAt) and the
+    # MCP tool parameter contract (kebab-case); renaming them breaks compatibility
+    - tagliatelle
     - testpackage
     - tparallel
     - varnamelen

@@ -20,6 +20,7 @@ type resourceEntry struct {
 	handler  func(context.Context, mcp.ReadResourceRequest) ([]mcp.ResourceContents, error)
 }
 
+// NewResourceRegistry returns an empty ResourceRegistry ready for registration.
 func NewResourceRegistry() *ResourceRegistry {
 	return &ResourceRegistry{
 		resources:            make(map[string]resourceEntry),
@@ -28,17 +29,33 @@ func NewResourceRegistry() *ResourceRegistry {
 }
 
 // RegisterCategoryMetadata stores category and subcategory descriptions from catalog
-func (r *ResourceRegistry) RegisterCategoryMetadata(categories []map[string]interface{}) {
+func (r *ResourceRegistry) RegisterCategoryMetadata(categories []map[string]any) {
 	for _, cat := range categories {
-		name := cat["name"].(string)
-		desc := cat["description"].(string)
+		name, ok := cat[keyName].(string)
+		if !ok {
+			continue
+		}
+
+		desc, ok := cat[keyDescription].(string)
+		if !ok {
+			continue
+		}
+
 		r.categoryDescriptions[name] = desc
 
 		// Register subcategories if they exist
-		if subcats, ok := cat["subcategories"].([]map[string]interface{}); ok {
+		if subcats, ok := cat["subcategories"].([]map[string]any); ok {
 			for _, subcat := range subcats {
-				subName := subcat["name"].(string)
-				subDesc := subcat["description"].(string)
+				subName, ok := subcat[keyName].(string)
+				if !ok {
+					continue
+				}
+
+				subDesc, ok := subcat[keyDescription].(string)
+				if !ok {
+					continue
+				}
+
 				fullPath := fmt.Sprintf("%s/%s", name, subName)
 				r.categoryDescriptions[fullPath] = subDesc
 			}
@@ -60,12 +77,14 @@ func (r *ResourceRegistry) Get(uri string) (mcp.Resource, func(context.Context, 
 	if !exists {
 		return mcp.Resource{}, nil, fmt.Errorf("resource not found: %s. Use get-resource without parameters to see available resources, or check the URI format (e.g., 'hive://schema/alert')", uri)
 	}
+
 	return entry.resource, entry.handler, nil
 }
 
 // ListByCategory returns resources and subcategories at the specified level
-func (r *ResourceRegistry) ListByCategory(category string) ([]map[string]interface{}, []map[string]interface{}) {
-	var resources []map[string]interface{}
+func (r *ResourceRegistry) ListByCategory(category string) ([]map[string]any, []map[string]any) {
+	var resources []map[string]any
+
 	subcategoriesMap := make(map[string]bool)
 
 	prefix := fmt.Sprintf("hive://%s/", category)
@@ -92,10 +111,10 @@ func (r *ResourceRegistry) ListByCategory(category string) ([]map[string]interfa
 
 		if slashCount == 0 {
 			// Direct child resource (no more slashes)
-			resources = append(resources, map[string]interface{}{
-				"uri":         uri,
-				"name":        entry.resource.Name,
-				"description": entry.resource.Description,
+			resources = append(resources, map[string]any{
+				"uri":          uri,
+				keyName:        entry.resource.Name,
+				keyDescription: entry.resource.Description,
 			})
 		} else {
 			// Has more path segments, so there's a subcategory
@@ -107,18 +126,20 @@ func (r *ResourceRegistry) ListByCategory(category string) ([]map[string]interfa
 	}
 
 	// Convert subcategories map to slice with descriptions from catalog
-	var subcategories []map[string]interface{}
+	var subcategories []map[string]any
+
 	for subcat := range subcategoriesMap {
 		fullPath := category
 		if fullPath != "" {
 			fullPath += "/"
 		}
+
 		fullPath += subcat
 
-		subcategories = append(subcategories, map[string]interface{}{
-			"name":        subcat,
-			"uri":         fmt.Sprintf("hive://%s/", fullPath),
-			"description": r.categoryDescriptions[fullPath],
+		subcategories = append(subcategories, map[string]any{
+			keyName:        subcat,
+			"uri":          fmt.Sprintf("hive://%s/", fullPath),
+			keyDescription: r.categoryDescriptions[fullPath],
 		})
 	}
 

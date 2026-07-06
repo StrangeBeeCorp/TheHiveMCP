@@ -3,11 +3,19 @@ package execute_automation_test
 import (
 	"testing"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
+)
+
+const (
+	toolNameExecuteAutomation = "execute-automation"
+	argOperation              = "operation"
+	argEntityType             = "entity-type"
+	argEntityID               = "entity-id"
 )
 
 // scopedPermissionsYAML restricts execute-automation to entities with
@@ -47,6 +55,7 @@ func createCaseWithTLP(t *testing.T, hiveClient *thehive.APIClient, title string
 	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
+
 	return createdCase
 }
 
@@ -55,20 +64,23 @@ func createObservableWithTLP(t *testing.T, hiveClient *thehive.APIClient, caseID
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	observable := thehive.NewInputCreateObservable("ip")
-	observable.SetData(thehive.StringAsInputObservableData(thehive.PtrString(data)))
+	observable.SetData(thehive.StringAsInputObservableData(new(data)))
 	observable.SetMessage("scope test observable")
 	observable.SetTlp(tlp)
 
 	created, _, err := hiveClient.ObservableAPI.CreateObservableInCase(authContext, caseID).InputCreateObservable(*observable).Execute()
 	require.NoError(t, err)
 	require.NotEmpty(t, created)
+
 	return created[0].UnderscoreId
 }
 
 func requireScopeDenied(t *testing.T, result *mcp.CallToolResult) {
 	t.Helper()
 	require.True(t, result.IsError, "automation against an out-of-scope entity must be denied")
-	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not within the scope")
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	require.Contains(t, textContent.Text, "not within the scope")
 }
 
 // TestExecuteAutomationScopeRunResponderDeniedOutOfScope verifies that
@@ -85,12 +97,12 @@ func TestExecuteAutomationScopeRunResponderDeniedOutOfScope(t *testing.T) {
 	runResponderRequest := func(caseID string) mcp.CallToolRequest {
 		return mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
-				Name: "execute-automation",
+				Name: toolNameExecuteAutomation,
 				Arguments: map[string]any{
-					"operation":    "run-responder",
+					argOperation:   "run-responder",
 					"responder-id": "TestResponder_1_0",
-					"entity-type":  types.EntityTypeCase,
-					"entity-id":    caseID,
+					argEntityType:  types.EntityTypeCase,
+					argEntityID:    caseID,
 				},
 			},
 		}
@@ -106,7 +118,10 @@ func TestExecuteAutomationScopeRunResponderDeniedOutOfScope(t *testing.T) {
 	result, err = mcpClient.CallTool(t.Context(), runResponderRequest(inScopeCase.UnderscoreId))
 	require.NoError(t, err)
 	require.True(t, result.IsError)
-	text := result.Content[0].(mcp.TextContent).Text
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+
+	text := textContent.Text
 	require.NotContains(t, text, "not within the scope")
 	require.Contains(t, text, "failed to execute responder")
 }
@@ -127,9 +142,9 @@ func TestExecuteAutomationScopeRunAnalyzerDeniedOutOfScope(t *testing.T) {
 	runAnalyzerRequest := func(observableID string) mcp.CallToolRequest {
 		return mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
-				Name: "execute-automation",
+				Name: toolNameExecuteAutomation,
 				Arguments: map[string]any{
-					"operation":     "run-analyzer",
+					argOperation:    "run-analyzer",
 					"analyzer-id":   "TestAnalyzer_1_0",
 					"observable-id": observableID,
 				},
@@ -158,10 +173,10 @@ func TestExecuteAutomationScopeRunAnalyzerDeniedOutOfScope(t *testing.T) {
 	// Reading the status of a job targeting an in-scope observable succeeds
 	statusResult, err := mcpClient.CallTool(t.Context(), mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "execute-automation",
+			Name: toolNameExecuteAutomation,
 			Arguments: map[string]any{
-				"operation": "get-job-status",
-				"job-id":    jobID,
+				argOperation: "get-job-status",
+				"job-id":     jobID,
 			},
 		},
 	})
@@ -189,10 +204,10 @@ func TestExecuteAutomationScopeGetJobStatusDeniedOutOfScope(t *testing.T) {
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "execute-automation",
+			Name: toolNameExecuteAutomation,
 			Arguments: map[string]any{
-				"operation": "get-job-status",
-				"job-id":    job.GetUnderscoreId(),
+				argOperation: "get-job-status",
+				"job-id":     job.GetUnderscoreId(),
 			},
 		},
 	}
@@ -213,12 +228,12 @@ func TestExecuteAutomationScopeGetActionStatusDeniedOutOfScope(t *testing.T) {
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "execute-automation",
+			Name: toolNameExecuteAutomation,
 			Arguments: map[string]any{
-				"operation":   "get-action-status",
+				argOperation:  "get-action-status",
 				"action-id":   "~999999",
-				"entity-type": types.EntityTypeCase,
-				"entity-id":   outOfScopeCase.UnderscoreId,
+				argEntityType: types.EntityTypeCase,
+				argEntityID:   outOfScopeCase.UnderscoreId,
 			},
 		},
 	}
@@ -239,12 +254,12 @@ func TestExecuteAutomationScopeNoFiltersBackwardCompatible(t *testing.T) {
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "execute-automation",
+			Name: toolNameExecuteAutomation,
 			Arguments: map[string]any{
-				"operation":   "get-action-status",
+				argOperation:  "get-action-status",
 				"action-id":   "~999999",
-				"entity-type": types.EntityTypeCase,
-				"entity-id":   highTLPCase.UnderscoreId,
+				argEntityType: types.EntityTypeCase,
+				argEntityID:   highTLPCase.UnderscoreId,
 			},
 		},
 	}
@@ -252,7 +267,10 @@ func TestExecuteAutomationScopeNoFiltersBackwardCompatible(t *testing.T) {
 	result, err := mcpClient.CallTool(t.Context(), request)
 	require.NoError(t, err)
 	require.True(t, result.IsError)
-	text := result.Content[0].(mcp.TextContent).Text
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+
+	text := textContent.Text
 	// The action lookup itself ran (and found nothing); it was not blocked by
 	// any scope gate
 	require.NotContains(t, text, "not within the scope")

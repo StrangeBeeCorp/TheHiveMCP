@@ -10,11 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/auth"
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/auth"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 // fakeTheHive is an httptest stand-in for a TheHive instance that answers the
@@ -29,6 +30,7 @@ type fakeTheHive struct {
 
 func newFakeTheHive(t *testing.T) *fakeTheHive {
 	t.Helper()
+
 	fake := &fakeTheHive{}
 	fake.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fake.requests.Add(1)
@@ -44,40 +46,49 @@ func newFakeTheHive(t *testing.T) *fakeTheHive {
 		if r.URL.Path == "/api/v1/user/current" {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = fmt.Fprint(w, `{"_id":"~1","_createdBy":"admin","_createdAt":1,"login":"test","name":"Test User","hasKey":true,"hasPassword":false,"hasMFA":false,"locked":false,"profile":"analyst","organisation":"test-org","type":"Normal","extraData":{}}`)
+
 			return
 		}
+
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	t.Cleanup(fake.server.Close)
+
 	return fake
 }
 
 func (f *fakeTheHive) lastAuthorization() string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	return f.lastAuth
 }
 
 func authContextForRequest(options *types.TheHiveMcpDefaultOptions, headers map[string]string) context.Context {
-	req := httptest.NewRequest("POST", "/mcp", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/mcp", nil)
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
+
 	return GetHTTPAuthContextFunc(options)(context.Background(), req)
 }
 
-func assertAuthRejected(t *testing.T, ctx context.Context, msgAndArgs ...interface{}) {
+func assertAuthRejected(ctx context.Context, t *testing.T, msgAndArgs ...any) {
 	t.Helper()
+
 	authErr, _ := ctx.Value(types.AuthErrorCtxKey).(error)
-	assert.Error(t, authErr, msgAndArgs...)
+	require.Error(t, authErr, msgAndArgs...)
+
 	validated, _ := ctx.Value(types.AuthValidatedCtxKey).(bool)
 	assert.False(t, validated, msgAndArgs...)
 }
 
-func assertAuthValidated(t *testing.T, ctx context.Context, msgAndArgs ...interface{}) {
+func assertAuthValidated(ctx context.Context, t *testing.T, msgAndArgs ...any) {
 	t.Helper()
+
 	authErr, _ := ctx.Value(types.AuthErrorCtxKey).(error)
-	assert.NoError(t, authErr, msgAndArgs...)
+	require.NoError(t, authErr, msgAndArgs...)
+
 	validated, _ := ctx.Value(types.AuthValidatedCtxKey).(bool)
 	assert.True(t, validated, msgAndArgs...)
 }
@@ -93,15 +104,15 @@ func TestGetHTTPAuthContextFunc_TheHiveURL(t *testing.T) {
 		{
 			name:        "URL from header takes precedence",
 			headerValue: "https://header.thehive.com",
-			optionsURL:  "https://default.thehive.com",
+			optionsURL:  testDefaultHiveURL,
 			expectedURL: "https://header.thehive.com",
 			expectInCtx: true,
 		},
 		{
 			name:        "Falls back to options URL when header empty",
 			headerValue: "",
-			optionsURL:  "https://default.thehive.com",
-			expectedURL: "https://default.thehive.com",
+			optionsURL:  testDefaultHiveURL,
+			expectedURL: testDefaultHiveURL,
 			expectInCtx: true,
 		},
 		{
@@ -130,7 +141,7 @@ func TestGetHTTPAuthContextFunc_TheHiveURL(t *testing.T) {
 			}
 
 			// Create test request
-			req := httptest.NewRequest("POST", "/mcp", nil)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/mcp", nil)
 			if tt.headerValue != "" {
 				req.Header.Set(string(types.HeaderKeyTheHiveURL), tt.headerValue)
 			}
@@ -145,11 +156,9 @@ func TestGetHTTPAuthContextFunc_TheHiveURL(t *testing.T) {
 			if tt.expectInCtx {
 				require.True(t, hasURL, "Expected URL to be in context")
 				assert.Equal(t, tt.expectedURL, urlFromCtx, "URL in context should match expected")
-			} else {
+			} else if hasURL {
 				// When no URL is expected, either the key is not present or the value is empty
-				if hasURL {
-					assert.Empty(t, urlFromCtx, "URL should be empty when not expected")
-				}
+				assert.Empty(t, urlFromCtx, "URL should be empty when not expected")
 			}
 		})
 	}
@@ -157,12 +166,12 @@ func TestGetHTTPAuthContextFunc_TheHiveURL(t *testing.T) {
 
 func TestGetHTTPAuthContextFunc_AllHeaders(t *testing.T) {
 	options := &types.TheHiveMcpDefaultOptions{
-		TheHiveURL:          "https://default.thehive.com",
+		TheHiveURL:          testDefaultHiveURL,
 		TheHiveAPIKey:       "default-key",
 		TheHiveOrganisation: "default-org",
 	}
 
-	req := httptest.NewRequest("POST", "/mcp", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/mcp", nil)
 	req.Header.Set(string(types.HeaderKeyTheHiveURL), "https://header.thehive.com")
 	req.Header.Set(string(types.HeaderKeyTheHiveAPIKey), "header-api-key")
 	req.Header.Set(string(types.HeaderKeyTheHiveOrganisation), "header-org")
@@ -205,14 +214,15 @@ func TestGetHTTPAuthContextFunc_AuthorizationHeader(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("POST", "/mcp", nil)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/mcp", nil)
 			req.Header.Set("Authorization", tt.authHeader)
 			req.Header.Set(string(types.HeaderKeyTheHiveURL), "https://test.thehive.com")
 
 			authFunc := GetHTTPAuthContextFunc(options)
 			ctx := authFunc(context.Background(), req)
 
-			apiKey := ctx.Value(types.HiveAPIKeyCtxKey).(string)
+			apiKey, ok := ctx.Value(types.HiveAPIKeyCtxKey).(string)
+			require.True(t, ok)
 			assert.Equal(t, tt.expectedKey, apiKey)
 		})
 	}
@@ -227,6 +237,7 @@ func clientHeaders(hiveURL string) map[string]string {
 	if hiveURL != "" {
 		headers[string(types.HeaderKeyTheHiveURL)] = hiveURL
 	}
+
 	return headers
 }
 
@@ -239,7 +250,7 @@ func TestGetHTTPAuthContextFunc_URLAllowlist(t *testing.T) {
 
 		ctx := authContextForRequest(options, clientHeaders(hive.server.URL))
 
-		assertAuthValidated(t, ctx)
+		assertAuthValidated(ctx, t)
 		assert.Equal(t, int32(1), hive.requests.Load())
 	})
 
@@ -251,7 +262,7 @@ func TestGetHTTPAuthContextFunc_URLAllowlist(t *testing.T) {
 
 		ctx := authContextForRequest(options, clientHeaders(attacker.server.URL))
 
-		assertAuthRejected(t, ctx)
+		assertAuthRejected(ctx, t)
 		assert.Equal(t, int32(0), attacker.requests.Load(), "attacker-controlled URL must never receive a request")
 	})
 
@@ -263,17 +274,17 @@ func TestGetHTTPAuthContextFunc_URLAllowlist(t *testing.T) {
 		}
 
 		rejectedCtx := authContextForRequest(options, clientHeaders(attacker.server.URL))
-		assertAuthRejected(t, rejectedCtx)
+		assertAuthRejected(rejectedCtx, t)
 		assert.Equal(t, int32(0), attacker.requests.Load())
 
 		allowedCtx := authContextForRequest(options, clientHeaders(hive.server.URL))
-		assertAuthValidated(t, allowedCtx)
+		assertAuthValidated(allowedCtx, t)
 		assert.Equal(t, int32(1), hive.requests.Load())
 	})
 
 	t.Run("host suffix does not bypass the allowlist", func(t *testing.T) {
 		options := &types.TheHiveMcpDefaultOptions{
-			TheHiveURLAllowlist: []string{"https://thehive.com"},
+			TheHiveURLAllowlist: []string{testHiveComURL},
 		}
 
 		for _, evil := range []string{
@@ -282,7 +293,7 @@ func TestGetHTTPAuthContextFunc_URLAllowlist(t *testing.T) {
 			"https://thehive.com@evil.test",
 		} {
 			ctx := authContextForRequest(options, clientHeaders(evil))
-			assertAuthRejected(t, ctx, "URL %q must be rejected", evil)
+			assertAuthRejected(ctx, t, "URL %q must be rejected", evil)
 		}
 	})
 }
@@ -292,13 +303,14 @@ func TestGetHTTPAuthContextFunc_EnvCredentialFallback(t *testing.T) {
 		hive := newFakeTheHive(t)
 		options := &types.TheHiveMcpDefaultOptions{
 			TheHiveURL:    hive.server.URL,
-			TheHiveAPIKey: "env-secret-key",
+			TheHiveAPIKey: testEnvSecretKey,
 		}
 
 		ctx := authContextForRequest(options, nil)
 
-		assertAuthRejected(t, ctx)
+		assertAuthRejected(ctx, t)
 		assert.Equal(t, int32(0), hive.requests.Load(), "env API key must never be sent on behalf of an unauthenticated request")
+
 		apiKey, _ := ctx.Value(types.HiveAPIKeyCtxKey).(string)
 		assert.Empty(t, apiKey, "env API key must not leak into the request context")
 	})
@@ -307,13 +319,13 @@ func TestGetHTTPAuthContextFunc_EnvCredentialFallback(t *testing.T) {
 		hive := newFakeTheHive(t)
 		options := &types.TheHiveMcpDefaultOptions{
 			TheHiveURL:                 hive.server.URL,
-			TheHiveAPIKey:              "env-secret-key",
+			TheHiveAPIKey:              testEnvSecretKey,
 			AllowEnvCredentialFallback: true,
 		}
 
 		ctx := authContextForRequest(options, nil)
 
-		assertAuthValidated(t, ctx)
+		assertAuthValidated(ctx, t)
 		assert.Equal(t, int32(1), hive.requests.Load())
 		assert.Equal(t, "Bearer env-secret-key", hive.lastAuthorization())
 	})
@@ -322,12 +334,12 @@ func TestGetHTTPAuthContextFunc_EnvCredentialFallback(t *testing.T) {
 		hive := newFakeTheHive(t)
 		options := &types.TheHiveMcpDefaultOptions{
 			TheHiveURL:    hive.server.URL,
-			TheHiveAPIKey: "env-secret-key",
+			TheHiveAPIKey: testEnvSecretKey,
 		}
 
 		ctx := authContextForRequest(options, clientHeaders(""))
 
-		assertAuthValidated(t, ctx)
+		assertAuthValidated(ctx, t)
 		assert.Equal(t, "Bearer client-key", hive.lastAuthorization())
 	})
 }
@@ -340,12 +352,12 @@ func TestGetHTTPAuthContextFunc_EmptyURLFailsClosed(t *testing.T) {
 		string(types.HeaderKeyTheHiveAPIKey): "client-key",
 	})
 
-	assertAuthRejected(t, ctx)
+	assertAuthRejected(ctx, t)
 
 	// The middleware must deny the request
-	handler := auth.AuthenticationMiddleware()(func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	handler := auth.AuthenticationMiddleware()(func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		t.Fatal("tool handler must not be called for an unauthenticated request")
-		return nil, nil
+		return nil, errUnexpectedHandlerCall
 	})
 	_, err := handler(ctx, mcp.CallToolRequest{})
 	assert.Error(t, err)
@@ -355,8 +367,9 @@ func TestGetHTTPAuthContextFunc_ValidationCache(t *testing.T) {
 	// invoke runs the auth context func for a request authenticated with the
 	// given API key and returns the resulting context
 	invoke := func(authFunc func(context.Context, *http.Request) context.Context, apiKey string) context.Context {
-		req := httptest.NewRequest("POST", "/mcp", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/mcp", nil)
 		req.Header.Set(string(types.HeaderKeyTheHiveAPIKey), apiKey)
+
 		return authFunc(context.Background(), req)
 	}
 
@@ -367,14 +380,15 @@ func TestGetHTTPAuthContextFunc_ValidationCache(t *testing.T) {
 			AuthValidationCacheTTL: "150ms",
 		})
 
-		for i := 0; i < 2; i++ {
-			assertAuthValidated(t, invoke(authFunc, "client-key"), "request %d", i)
+		for i := range 2 {
+			assertAuthValidated(invoke(authFunc, "client-key"), t, "request %d", i)
 		}
+
 		assert.Equal(t, int32(1), hive.requests.Load(), "second request within TTL must hit the cache")
 
 		// After the TTL the credentials are re-validated upstream
 		time.Sleep(200 * time.Millisecond)
-		assertAuthValidated(t, invoke(authFunc, "client-key"))
+		assertAuthValidated(invoke(authFunc, "client-key"), t)
 		assert.Equal(t, int32(2), hive.requests.Load(), "expired cache entry must be re-validated")
 	})
 
@@ -383,8 +397,9 @@ func TestGetHTTPAuthContextFunc_ValidationCache(t *testing.T) {
 		authFunc := GetHTTPAuthContextFunc(&types.TheHiveMcpDefaultOptions{TheHiveURL: hive.server.URL})
 
 		for _, key := range []string{"key-one", "key-two"} {
-			assertAuthValidated(t, invoke(authFunc, key))
+			assertAuthValidated(invoke(authFunc, key), t)
 		}
+
 		assert.Equal(t, int32(2), hive.requests.Load(), "each credential set must be validated upstream")
 	})
 
@@ -393,12 +408,12 @@ func TestGetHTTPAuthContextFunc_ValidationCache(t *testing.T) {
 		authFunc := GetHTTPAuthContextFunc(&types.TheHiveMcpDefaultOptions{TheHiveURL: hive.server.URL})
 
 		hive.failNextAuth.Store(true)
-		assertAuthRejected(t, invoke(authFunc, "client-key"))
+		assertAuthRejected(invoke(authFunc, "client-key"), t)
 		assert.Equal(t, int32(1), hive.requests.Load())
 
 		// The same credentials must be re-validated upstream, not served from cache
 		hive.failNextAuth.Store(false)
-		assertAuthValidated(t, invoke(authFunc, "client-key"))
+		assertAuthValidated(invoke(authFunc, "client-key"), t)
 		assert.Equal(t, int32(2), hive.requests.Load())
 	})
 
@@ -406,15 +421,38 @@ func TestGetHTTPAuthContextFunc_ValidationCache(t *testing.T) {
 		hive := newFakeTheHive(t)
 		authFunc := GetHTTPAuthContextFunc(&types.TheHiveMcpDefaultOptions{TheHiveURL: hive.server.URL})
 
+		type authOutcome struct {
+			err       error
+			validated bool
+		}
+
 		var wg sync.WaitGroup
-		for i := 0; i < 16; i++ {
+
+		outcomes := make([]authOutcome, 16)
+
+		for i := range 16 {
 			wg.Add(1)
+
 			go func(i int) {
 				defer wg.Done()
-				assertAuthValidated(t, invoke(authFunc, fmt.Sprintf("key-%d", i%4)))
+
+				// Assertions must run on the test goroutine, so only exercise the
+				// auth func concurrently here and record the outcome for the main
+				// goroutine to validate afterwards.
+				resultCtx := invoke(authFunc, fmt.Sprintf("key-%d", i%4))
+
+				authErr, _ := resultCtx.Value(types.AuthErrorCtxKey).(error)
+				validated, _ := resultCtx.Value(types.AuthValidatedCtxKey).(bool)
+				outcomes[i] = authOutcome{err: authErr, validated: validated}
 			}(i)
 		}
+
 		wg.Wait()
+
+		for i, outcome := range outcomes {
+			require.NoError(t, outcome.err, "request %d", i)
+			assert.True(t, outcome.validated, "request %d", i)
+		}
 	})
 }
 

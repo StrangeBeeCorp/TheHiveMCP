@@ -1,3 +1,7 @@
+// Package bootstrap constructs the MCP server, registers its tools, resources,
+// and prompts, and serves them over the configured transport (stdio or http),
+// including authentication middleware, the TheHive URL allowlist, and the
+// credential validation cache.
 package bootstrap
 
 import (
@@ -59,6 +63,7 @@ func NewTheHiveURLAllowlist(entries []string, serverURL string) (*TheHiveURLAllo
 		if err != nil {
 			return nil, fmt.Errorf("invalid TheHive URL allowlist entry: %w", err)
 		}
+
 		allowed[normalized] = struct{}{}
 	}
 
@@ -68,6 +73,7 @@ func NewTheHiveURLAllowlist(entries []string, serverURL string) (*TheHiveURLAllo
 		if err != nil {
 			return nil, fmt.Errorf("invalid TheHive URL: %w", err)
 		}
+
 		allowed[normalized] = struct{}{}
 	}
 
@@ -80,10 +86,13 @@ func (a *TheHiveURLAllowlist) Allows(rawURL string) bool {
 	if a == nil {
 		return false
 	}
+
 	normalized, err := normalizeTheHiveURL(rawURL)
 	if err != nil {
 		return false
 	}
+
 	_, ok := a.allowed[normalized]
+
 	return ok
 }

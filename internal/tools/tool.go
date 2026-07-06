@@ -36,22 +36,26 @@ type Registry struct {
 	tools []BaseTool
 }
 
+// NewRegistry creates an empty tool registry.
 func NewRegistry() *Registry {
 	return &Registry{
 		tools: make([]BaseTool, 0),
 	}
 }
 
+// Register adds a tool to the registry.
 func (r *Registry) Register(tool BaseTool) {
 	r.tools = append(r.tools, tool)
 }
 
+// RegisterAll registers every tool in the registry with the given MCP server.
 func (r *Registry) RegisterAll(s *server.MCPServer) {
 	for _, tool := range r.tools {
 		s.AddTool(tool.Definition(), tool.Handler())
 	}
 }
 
+// Tool name constants identify the MCP tools exposed by the server.
 const (
 	ToolNameManageEntities    = "manage-entities"
 	ToolNameExecuteAutomation = "execute-automation"

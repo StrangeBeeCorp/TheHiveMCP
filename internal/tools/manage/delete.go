@@ -3,16 +3,17 @@ package manage
 import (
 	"context"
 
+	"github.com/StrangeBeeCorp/thehive4go/thehive"
+
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
-	"github.com/StrangeBeeCorp/thehive4go/thehive"
 )
 
-func (t *ManageTool) handleDelete(ctx context.Context, params *ManageEntityParams) (ManageEntityResult, error) {
+func (t *Tool) handleDelete(ctx context.Context, params *EntityParams) (EntityResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return ManageEntityResult{}, tools.NewToolError("failed to get TheHive client").Cause(err).
+		return EntityResult{}, tools.NewToolError("failed to get TheHive client").Cause(err).
 			Hint("Check your authentication and connection settings")
 	}
 
@@ -23,15 +24,17 @@ func (t *ManageTool) handleDelete(ctx context.Context, params *ManageEntityParam
 		results = append(results, result)
 	}
 
-	return ManageEntityResult{
+	return EntityResult{
 		DeleteResults: NewDeleteEntityResult(params.EntityType, results),
 	}, nil
 }
 
-func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient, entityType, entityID, targetID string) SingleEntityDeleteResult {
+func (t *Tool) deleteEntity(ctx context.Context, client *thehive.APIClient, entityType, entityID, targetID string) SingleEntityDeleteResult {
 	switch entityType {
 	case types.EntityTypeAlert:
 		resp, err := client.AlertAPI.DeleteAlert(ctx, entityID).Execute()
+		defer closeResponse(resp)
+
 		if err != nil {
 			return SingleEntityDeleteResult{
 				EntityID: entityID,
@@ -39,6 +42,7 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 					"failed to delete alert %s: %v. Check that the alert exists and you have permissions. This operation is irreversible.", entityID, err).API(resp).ToMap(),
 			}
 		}
+
 		return SingleEntityDeleteResult{
 			EntityID: entityID,
 			Deleted:  true,
@@ -46,12 +50,15 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 
 	case types.EntityTypeCase:
 		resp, err := client.CaseAPI.DeleteCase(ctx, entityID).Execute()
+		defer closeResponse(resp)
+
 		if err != nil {
 			return SingleEntityDeleteResult{
 				EntityID: entityID,
 				Error:    tools.NewToolErrorf("failed to delete case %s: %v. Check that the case exists and you have permissions. This operation is irreversible.", entityID, err).API(resp).ToMap(),
 			}
 		}
+
 		return SingleEntityDeleteResult{
 			EntityID: entityID,
 			Deleted:  true,
@@ -59,12 +66,15 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 
 	case types.EntityTypeTask:
 		resp, err := client.TaskAPI.DeleteTask(ctx, entityID).Execute()
+		defer closeResponse(resp)
+
 		if err != nil {
 			return SingleEntityDeleteResult{
 				EntityID: entityID,
 				Error:    tools.NewToolErrorf("failed to delete task %s: %v. Check that the task exists and you have permissions. This operation is irreversible.", entityID, err).API(resp).ToMap(),
 			}
 		}
+
 		return SingleEntityDeleteResult{
 			EntityID: entityID,
 			Deleted:  true,
@@ -72,12 +82,15 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 
 	case types.EntityTypeObservable:
 		resp, err := client.ObservableAPI.DeleteObservable(ctx, entityID).Execute()
+		defer closeResponse(resp)
+
 		if err != nil {
 			return SingleEntityDeleteResult{
 				EntityID: entityID,
 				Error:    tools.NewToolErrorf("failed to delete observable %s: %v. Check that the observable exists and you have permissions. This operation is irreversible.", entityID, err).API(resp).ToMap(),
 			}
 		}
+
 		return SingleEntityDeleteResult{
 			EntityID: entityID,
 			Deleted:  true,
@@ -85,12 +98,15 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 
 	case types.EntityTypeProcedure:
 		resp, err := client.TTPAPI.DeleteProcedure(ctx, entityID).Execute()
+		defer closeResponse(resp)
+
 		if err != nil {
 			return SingleEntityDeleteResult{
 				EntityID: entityID,
 				Error:    tools.NewToolErrorf("failed to delete procedure %s: %v. Check that the procedure exists and you have permissions. This operation is irreversible.", entityID, err).API(resp).ToMap(),
 			}
 		}
+
 		return SingleEntityDeleteResult{
 			EntityID: entityID,
 			Deleted:  true,
@@ -98,12 +114,15 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 
 	case types.EntityTypeCaseTemplate:
 		resp, err := client.CaseTemplateAPI.DeleteCaseTemplate(ctx, entityID).Execute()
+		defer closeResponse(resp)
+
 		if err != nil {
 			return SingleEntityDeleteResult{
 				EntityID: entityID,
 				Error:    tools.NewToolErrorf("failed to delete case template %s: %v. Check that the case template exists and you have permissions. This operation is irreversible.", entityID, err).API(resp).ToMap(),
 			}
 		}
+
 		return SingleEntityDeleteResult{
 			EntityID: entityID,
 			Deleted:  true,
@@ -112,6 +131,8 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 	case types.EntityTypePage:
 		if targetID != "" {
 			resp, err := client.PageAPI.DeleteAPageInACase(ctx, targetID, entityID).Execute()
+			defer closeResponse(resp)
+
 			if err != nil {
 				return SingleEntityDeleteResult{
 					EntityID: entityID,
@@ -120,6 +141,8 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 			}
 		} else {
 			resp, err := client.PageAPI.DeleteAPage(ctx, entityID).Execute()
+			defer closeResponse(resp)
+
 			if err != nil {
 				return SingleEntityDeleteResult{
 					EntityID: entityID,
@@ -127,6 +150,7 @@ func (t *ManageTool) deleteEntity(ctx context.Context, client *thehive.APIClient
 				}
 			}
 		}
+
 		return SingleEntityDeleteResult{
 			EntityID: entityID,
 			Deleted:  true,

@@ -4,13 +4,17 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
+
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/logging"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/TheHiveMCP/version"
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
 )
 
+// AuthMiddleware returns a tool-handler middleware for the in-process server
+// that injects a TheHive client built from the given trusted credentials, marks
+// authentication as validated, and loads permissions from the given config path.
 func AuthMiddleware(creds *TheHiveCredentials, permissionsConfigPath string) server.ToolHandlerMiddleware {
 	return func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
 		return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -28,6 +32,7 @@ func AuthMiddleware(creds *TheHiveCredentials, permissionsConfigPath string) ser
 			if err != nil {
 				return nil, fmt.Errorf("failed to load permissions: %w", err)
 			}
+
 			newCtx = context.WithValue(newCtx, types.PermissionsCtxKey, permsConfig)
 
 			return next(newCtx, request)
@@ -35,6 +40,8 @@ func AuthMiddleware(creds *TheHiveCredentials, permissionsConfigPath string) ser
 	}
 }
 
+// GetInprocessServer builds an MCP server for in-process use, wired with the
+// in-process AuthMiddleware for the given credentials and permissions config.
 func GetInprocessServer(creds *TheHiveCredentials, permissionsConfigPath string) *server.MCPServer {
 	mcpServer := server.NewMCPServer(
 		"TheHiveMCP",
@@ -46,5 +53,6 @@ func GetInprocessServer(creds *TheHiveCredentials, permissionsConfigPath string)
 		server.WithElicitation(),
 		server.WithToolHandlerMiddleware(AuthMiddleware(creds, permissionsConfigPath)),
 	)
+
 	return mcpServer
 }

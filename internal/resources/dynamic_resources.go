@@ -1,15 +1,20 @@
+// Package resources exposes TheHive metadata, schemas, rules, and facts as MCP
+// resources, covering both static embedded content and dynamic API-backed lookups.
 package resources
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 )
 
+// SimplifiedUser is a trimmed-down view of a TheHive user for assignment lookups.
 type SimplifiedUser struct {
 	ID           string `json:"_id"`
 	Name         string `json:"name"`
@@ -23,11 +28,12 @@ func derefString(s *string) string {
 	if s == nil {
 		return ""
 	}
+
 	return *s
 }
 
 // Filter out unnecessary user fields
-func parseUsers(results interface{}) (string, error) {
+func parseUsers(results any) (string, error) {
 	// Convert interface{} -> JSON -> []thehive.OutputUser
 	resultBytes, err := json.Marshal(results)
 	if err != nil {
@@ -35,7 +41,9 @@ func parseUsers(results interface{}) (string, error) {
 	}
 
 	var users []thehive.OutputUser
-	if err := json.Unmarshal(resultBytes, &users); err != nil {
+
+	err = json.Unmarshal(resultBytes, &users)
+	if err != nil {
 		return "", fmt.Errorf("failed to unmarshal to OutputUser: %w", err)
 	}
 
@@ -57,38 +65,44 @@ func parseUsers(results interface{}) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal simplified users: %w", err)
 	}
+
 	return string(simplifiedUsersJSON), nil
 }
 
+// GetAvailableUsers returns the organisation's users as a JSON resource.
 func GetAvailableUsers(ctx context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get TheHive client from context: %w. Check authentication and connection settings", err)
 	}
+
 	operation := thehive.NewInputQueryGenericOperation("listUser")
 	hiveQuery := thehive.InputQuery{
 		Query: []thehive.InputQueryNamedOperation{
 			thehive.InputQueryGenericOperationAsInputQueryNamedOperation(operation),
 		},
 	}
-	results, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(ctx).InputQuery(hiveQuery).Execute()
 
+	results, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(ctx).InputQuery(hiveQuery).Execute()
 	if err != nil {
 		return nil, fmt.Errorf("failed to find users: %w. Check that you have permissions to list users. API response: %v", err, resp)
 	}
+
 	usersJSON, err := parseUsers(results)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse users: %w", err)
 	}
+
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      "hive://metadata/organisation/users",
 			MIMEType: mimeApplicationJSON,
-			Text:     string(usersJSON),
+			Text:     usersJSON,
 		},
 	}, nil
 }
 
+// GetAvailableCaseTemplates returns the organisation's case templates as a JSON resource.
 func GetAvailableCaseTemplates(ctx context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
@@ -101,8 +115,8 @@ func GetAvailableCaseTemplates(ctx context.Context, _ mcp.ReadResourceRequest) (
 			thehive.InputQueryGenericOperationAsInputQueryNamedOperation(operation),
 		},
 	}
-	caseTemplates, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(ctx).InputQuery(hiveQuery).Execute()
 
+	caseTemplates, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(ctx).InputQuery(hiveQuery).Execute()
 	if err != nil {
 		return nil, fmt.Errorf("failed to find case templates: %w. Check that you have permissions to list case templates. API response: %v", err, resp)
 	}
@@ -111,6 +125,7 @@ func GetAvailableCaseTemplates(ctx context.Context, _ mcp.ReadResourceRequest) (
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal case templates: %w", err)
 	}
+
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      "hive://metadata/entities/case/templates",
@@ -120,6 +135,7 @@ func GetAvailableCaseTemplates(ctx context.Context, _ mcp.ReadResourceRequest) (
 	}, nil
 }
 
+// GetAvailableAnalyzers returns the Cortex analyzers the session may use as a JSON resource.
 func GetAvailableAnalyzers(ctx context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
@@ -127,7 +143,6 @@ func GetAvailableAnalyzers(ctx context.Context, _ mcp.ReadResourceRequest) ([]mc
 	}
 
 	analyzers, resp, err := hiveClient.CortexAPI.ListAnalyzers(ctx).Range_("0-100").Execute()
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to find analyzers: %w. Check that Cortex integration is enabled and you have permissions to list analyzers. API response: %v", err, resp)
 	}
@@ -136,6 +151,7 @@ func GetAvailableAnalyzers(ctx context.Context, _ mcp.ReadResourceRequest) ([]mc
 	perms, err := utils.GetPermissionsFromContext(ctx)
 	if err == nil {
 		filteredAnalyzers := []thehive.OutputWorker{}
+
 		for _, analyzer := range analyzers {
 			// Check both ID and name for permission matching
 			analyzerID := analyzer.GetId()
@@ -146,6 +162,7 @@ func GetAvailableAnalyzers(ctx context.Context, _ mcp.ReadResourceRequest) ([]mc
 				filteredAnalyzers = append(filteredAnalyzers, analyzer)
 			}
 		}
+
 		analyzers = filteredAnalyzers
 	}
 
@@ -153,6 +170,7 @@ func GetAvailableAnalyzers(ctx context.Context, _ mcp.ReadResourceRequest) ([]mc
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal analyzers: %w", err)
 	}
+
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      "hive://metadata/automation/analyzers",
@@ -162,25 +180,28 @@ func GetAvailableAnalyzers(ctx context.Context, _ mcp.ReadResourceRequest) ([]mc
 	}, nil
 }
 
+// GetAvailableResponders returns the Cortex responders for the entity named by the
+// request's entityType and entityId parameters as a JSON resource.
 func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	// Extract entityType and entityId from query parameters and validate that they are strings
 	entityType, ok := req.Params.Arguments["entityType"].(string)
 	if !ok {
-		return nil, fmt.Errorf("entityType query parameter is required and must be a string. Example: hive://metadata/automation/responders?entityType=case&entityId=~123456")
+		return nil, errors.New("entityType query parameter is required and must be a string. Example: hive://metadata/automation/responders?entityType=case&entityId=~123456")
 	}
 
 	entityID, ok := req.Params.Arguments["entityId"].(string)
 	if !ok {
-		return nil, fmt.Errorf("entityId query parameter is required and must be a string. Example: hive://metadata/automation/responders?entityType=case&entityId=~123456")
+		return nil, errors.New("entityId query parameter is required and must be a string. Example: hive://metadata/automation/responders?entityType=case&entityId=~123456")
 	}
 
 	if entityType == "" || entityID == "" {
-		return nil, fmt.Errorf("entityType and entityId query parameters are required. Example: hive://metadata/automation/responders?entityType=case&entityId=~123456")
+		return nil, errors.New("entityType and entityId query parameters are required. Example: hive://metadata/automation/responders?entityType=case&entityId=~123456")
 	}
 
 	// Both values are interpolated into the Cortex endpoint path; reject
 	// anything that is not a well-formed entity reference before any call
-	if err := validateResponderParams(entityType, entityID); err != nil {
+	err := validateResponderParams(entityType, entityID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -190,7 +211,6 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 	}
 
 	responders, resp, err := hiveClient.CortexAPI.ListResponders(ctx, entityType, entityID).Execute()
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to find responders for %s %s: %w. Check that Cortex integration is enabled and you have permissions to list responders. API response: %v", entityType, entityID, err, resp)
 	}
@@ -199,6 +219,7 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 	perms, err := utils.GetPermissionsFromContext(ctx)
 	if err == nil {
 		filteredResponders := []thehive.OutputWorker{}
+
 		for _, responder := range responders {
 			// Check both ID and name for permission matching
 			responderID := responder.GetId()
@@ -209,6 +230,7 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 				filteredResponders = append(filteredResponders, responder)
 			}
 		}
+
 		responders = filteredResponders
 	}
 
@@ -216,6 +238,7 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal responders: %w", err)
 	}
+
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      fmt.Sprintf("hive://metadata/automation/responders?entityType=%s&entityId=%s", entityType, entityID),
@@ -225,6 +248,7 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 	}, nil
 }
 
+// GetAvailableCaseStatuses returns the configured case status values as a JSON resource.
 func GetAvailableCaseStatuses(ctx context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
@@ -237,15 +261,17 @@ func GetAvailableCaseStatuses(ctx context.Context, _ mcp.ReadResourceRequest) ([
 			thehive.InputQueryGenericOperationAsInputQueryNamedOperation(operation),
 		},
 	}
-	caseStatuses, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(ctx).InputQuery(hiveQuery).Execute()
 
+	caseStatuses, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(ctx).InputQuery(hiveQuery).Execute()
 	if err != nil {
 		return nil, fmt.Errorf("failed to find case statuses: %w, %v", err, resp)
 	}
+
 	caseStatusesJSON, err := json.MarshalIndent(caseStatuses, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal case statuses: %w", err)
 	}
+
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      "hive://metadata/entities/case/statuses",
@@ -255,6 +281,7 @@ func GetAvailableCaseStatuses(ctx context.Context, _ mcp.ReadResourceRequest) ([
 	}, nil
 }
 
+// GetCurrentUser returns the authenticated user's information as a JSON resource.
 func GetCurrentUser(ctx context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
@@ -265,10 +292,12 @@ func GetCurrentUser(ctx context.Context, _ mcp.ReadResourceRequest) ([]mcp.Resou
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current user information: %w. Check authentication status. API response: %v", err, resp)
 	}
+
 	currentUserJSON, err := json.MarshalIndent(currentUser, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal current user: %w", err)
 	}
+
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      "hive://config/current-user",
@@ -278,6 +307,7 @@ func GetCurrentUser(ctx context.Context, _ mcp.ReadResourceRequest) ([]mcp.Resou
 	}, nil
 }
 
+// GetAvailableObservableTypes returns the configured observable data types as a JSON resource.
 func GetAvailableObservableTypes(ctx context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
@@ -290,15 +320,17 @@ func GetAvailableObservableTypes(ctx context.Context, _ mcp.ReadResourceRequest)
 			thehive.InputQueryGenericOperationAsInputQueryNamedOperation(operation),
 		},
 	}
-	observableTypes, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(ctx).InputQuery(hiveQuery).Execute()
 
+	observableTypes, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(ctx).InputQuery(hiveQuery).Execute()
 	if err != nil {
 		return nil, fmt.Errorf("failed to find observable types: %w, %v", err, resp)
 	}
+
 	observableTypesJSON, err := json.MarshalIndent(observableTypes, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal observable types: %w", err)
 	}
+
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      "hive://metadata/entities/observable/types",
@@ -308,19 +340,23 @@ func GetAvailableObservableTypes(ctx context.Context, _ mcp.ReadResourceRequest)
 	}, nil
 }
 
+// GetAvailableCustomFields returns the organisation's custom fields as a JSON resource.
 func GetAvailableCustomFields(ctx context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get TheHive client from context: %w. Check authentication and connection settings", err)
 	}
+
 	customFields, resp, err := hiveClient.CustomFieldAPI.ListCustomFields(ctx).Execute()
 	if err != nil {
 		return nil, fmt.Errorf("failed to find custom fields: %w, %v", err, resp)
 	}
+
 	customFieldsJSON, err := json.MarshalIndent(customFields, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal custom fields: %w", err)
 	}
+
 	return []mcp.ResourceContents{
 		mcp.TextResourceContents{
 			URI:      "hive://metadata/entities/custom-fields",
@@ -330,12 +366,14 @@ func GetAvailableCustomFields(ctx context.Context, _ mcp.ReadResourceRequest) ([
 	}, nil
 }
 
+// GetCurrentPermissions returns the session's active permission configuration as a JSON resource.
 func GetCurrentPermissions(ctx context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	permissions, err := utils.GetPermissionsFromContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get permissions from context: %w", err)
 	}
 
+	//nolint:musttag // permissions.Config lives in another package and is tagged for yaml; JSON falls back to field names intentionally here.
 	permissionsJSON, err := json.MarshalIndent(permissions, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal permissions: %w", err)
@@ -350,6 +388,7 @@ func GetCurrentPermissions(ctx context.Context, _ mcp.ReadResourceRequest) ([]mc
 	}, nil
 }
 
+// RegisterDynamicResources registers the API-backed metadata resources on the registry.
 func RegisterDynamicResources(registry *ResourceRegistry) {
 	// Register available users
 	availableUsers := mcp.NewResource(

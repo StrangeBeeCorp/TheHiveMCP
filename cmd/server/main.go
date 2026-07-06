@@ -1,3 +1,6 @@
+// Package main is the entry point for the TheHiveMCP server binary. It loads
+// configuration, initialises logging, and serves the MCP server over the
+// configured transport (stdio or http).
 package main
 
 import (
@@ -13,9 +16,11 @@ import (
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
+	err := godotenv.Load()
+	if err != nil {
 		slog.Warn("No .env file found, proceeding with environment variables")
 	}
+
 	options, err := types.NewTheHiveMcpDefaultOptions()
 	if err != nil {
 		slog.Error("Failed to get default options", "error", err)
@@ -30,12 +35,14 @@ func main() {
 
 	switch options.TransportType {
 	case "stdio":
-		if err := bootstrap.StartStdioServer(mcpServer, options); err != nil {
+		err := bootstrap.StartStdioServer(mcpServer, options)
+		if err != nil {
 			slog.Error("Failed to start STDIO server", "error", err)
 			os.Exit(1)
 		}
 	case "http":
-		if err := bootstrap.StartHTTPServer(mcpServer, options); err != nil {
+		err := bootstrap.StartHTTPServer(mcpServer, options)
+		if err != nil {
 			slog.Error("Failed to start HTTP server", "error", err)
 			os.Exit(1)
 		}

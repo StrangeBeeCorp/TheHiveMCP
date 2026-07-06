@@ -9,6 +9,8 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 )
 
+// ValidatePermissions checks that the caller is permitted to run the requested
+// operation and that the target entity is within the configured filter scope.
 func (t *ExecuteAutomationTool) ValidatePermissions(ctx context.Context, params ExecuteAutomationParams) error {
 	perms, err := utils.GetPermissionsFromContext(ctx)
 	if err != nil {
@@ -24,11 +26,13 @@ func (t *ExecuteAutomationTool) ValidatePermissions(ctx context.Context, params 
 		if !perms.IsAnalyzerAllowed(params.AnalyzerID) {
 			return tools.NewToolErrorf("Analyzer %s is not permitted by your permissions configuration", params.AnalyzerID)
 		}
+
 		return t.validateTargetScope(ctx, perms, types.EntityTypeObservable, params.ObservableID)
 	case OperationRunResponder:
 		if !perms.IsResponderAllowed(params.ResponderID) {
 			return tools.NewToolErrorf("Responder %s is not permitted by your permissions configuration", params.ResponderID)
 		}
+
 		return t.validateTargetScope(ctx, perms, params.EntityType, params.EntityID)
 	case OperationGetActionStatus:
 		// Status reads need no analyzer/responder permission, but the target
@@ -55,10 +59,12 @@ func (t *ExecuteAutomationTool) validateJobScope(ctx context.Context, perms *per
 		return tools.NewToolError("failed to verify entity scope").Cause(err).
 			Hint("The operation was denied because the configured permission filters could not be checked against the job's target entity")
 	}
+
 	if !inScope {
 		return tools.NewToolErrorf("job %s was not found or its target is not within the scope permitted by your permissions configuration", jobID).
 			Hint("The configured permission filters restrict which entities this tool can reach")
 	}
+
 	return nil
 }
 
@@ -76,19 +82,24 @@ func (t *ExecuteAutomationTool) validateTargetScope(ctx context.Context, perms *
 		return tools.NewToolError("failed to verify entity scope").Cause(err).
 			Hint("The operation was denied because the configured permission filters could not be checked against the target entity")
 	}
+
 	if !inScope {
 		return tools.NewToolErrorf("%s %s was not found or is not within the scope permitted by your permissions configuration", entityType, entityID).
 			Hint("The configured permission filters restrict which entities this tool can reach")
 	}
+
 	return nil
 }
 
+// ValidateParams verifies that the parameters required by the requested
+// operation are present.
 func (t *ExecuteAutomationTool) ValidateParams(params *ExecuteAutomationParams) error {
 	switch params.Operation {
 	case OperationRunAnalyzer:
 		if params.AnalyzerID == "" {
 			return tools.NewToolErrorf("analyzer-id is required for run-analyzer operations.").Hint("Get available analyzers from get-resource 'hive://metadata/automation/analyzers'")
 		}
+
 		if params.ObservableID == "" {
 			return tools.NewToolErrorf("observable-id is required for run-analyzer operations. This is the ID of the observable to analyze")
 		}
@@ -96,9 +107,11 @@ func (t *ExecuteAutomationTool) ValidateParams(params *ExecuteAutomationParams) 
 		if params.ResponderID == "" {
 			return tools.NewToolErrorf("responder-id is required for run-responder operations.").Hint("Get available responders from get-resource 'hive://metadata/automation/responders?entityType=<type>&entityId=<id>'")
 		}
+
 		if params.EntityType == "" {
 			return tools.NewToolErrorf("entity-type is required for run-responder operations.").Hint("Must be one of: 'case', 'alert', 'task', 'observable'")
 		}
+
 		if params.EntityID == "" {
 			return tools.NewToolErrorf("entity-id is required for run-responder operations. This is the ID of the entity the responder will act on")
 		}
@@ -110,14 +123,17 @@ func (t *ExecuteAutomationTool) ValidateParams(params *ExecuteAutomationParams) 
 		if params.ActionID == "" {
 			return tools.NewToolErrorf("action-id is required for get-action-status operations.").Hint("Provide the action ID returned by run-responder")
 		}
+
 		if params.EntityType == "" {
 			return tools.NewToolErrorf("entity-type is required for get-action-status operations.").Hint("Must be one of: 'case', 'alert', 'task', 'observable'")
 		}
+
 		if params.EntityID == "" {
 			return tools.NewToolErrorf("entity-id is required for get-action-status operations. This is the ID of the entity the action is running against").Hint("Provide the entity ID the action is running against")
 		}
 	default:
 		return tools.NewToolErrorf("unsupported operation: %s", params.Operation)
 	}
+
 	return nil
 }

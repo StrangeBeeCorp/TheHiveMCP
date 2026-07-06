@@ -5,13 +5,13 @@ import (
 	"log/slog"
 	"net/url"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 )
 
 // ParseURIParameters extracts query parameters from a parameters string
 func ParseURIParameters(uri string) (string, map[string]any, error) {
-
 	parts := strings.SplitN(uri, "?", 2)
 	if len(parts) != 2 {
 		return uri, nil, nil // No parameters to parse
@@ -29,6 +29,7 @@ func ParseURIParameters(uri string) (string, map[string]any, error) {
 	for k, v := range values {
 		result[k] = v[0] // takes first value if multiple
 	}
+
 	return uri, result, nil
 }
 
@@ -38,10 +39,13 @@ func timestampToString(ts int64) string {
 	}
 	// Assuming ts is in milliseconds (TheHive format)
 	t := time.UnixMilli(ts)
+
 	return t.Format("02-01-2006T15:04:05")
 }
 
-func GetJSONFields(v interface{}) []string {
+// GetJSONFields returns the json tag names of the exported fields of v (a struct
+// or pointer to struct), skipping fields with no json tag or a "-" tag.
+func GetJSONFields(v any) []string {
 	var fields []string
 
 	t := reflect.TypeOf(v)
@@ -56,9 +60,7 @@ func GetJSONFields(v interface{}) []string {
 		return fields
 	}
 
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-
+	for field := range t.Fields() {
 		// Get the json tag
 		jsonTag := field.Tag.Get("json")
 
@@ -118,7 +120,7 @@ var dateFields = []string{
 // upgrade; when unsure, leave a field out.
 var trustedFields = map[string]struct{}{
 	// System metadata and the kind discriminator.
-	"_id": {}, "_type": {}, "_createdBy": {}, "_updatedBy": {}, "_kind": {},
+	fieldID: {}, "_type": {}, "_createdBy": {}, "_updatedBy": {}, "_kind": {},
 	// Entity identifiers and references.
 	"id": {}, "caseId": {}, "patternId": {}, "organisationId": {},
 	"attachmentId": {}, "rootId": {}, "requestId": {}, "objectId": {},
@@ -127,7 +129,7 @@ var trustedFields = map[string]struct{}{
 	"login": {}, "assignee": {}, "owner": {}, "createdBy": {}, "updatedBy": {},
 	// Closed status/type controls. dataType is open but is a required tool input
 	// (creating/filtering observables), so wrapping it would break that flow.
-	"status": {}, "stage": {}, "impactStatus": {}, "dataType": {}, "objectType": {},
+	"status": {}, "stage": {}, "impactStatus": {}, fieldDataType: {}, "objectType": {},
 	// MCP result envelope: server-generated control values and reported ids (our
 	// own structs, not SDK fields).
 	"operation": {}, "entityType": {}, "templateId": {}, "caseIds": {},
@@ -148,7 +150,7 @@ var trustedFields = map[string]struct{}{
 // name, whereas this exempts a whole nested structure regardless of its inner
 // key names (_field, _value, _and, _like, ...).
 var structuralSubtrees = map[string]struct{}{
-	"rawFilters": {},
+	rawFiltersKey: {},
 }
 
 // isTrustedField reports whether a field's value may be returned to the LLM
@@ -158,10 +160,13 @@ func isTrustedField(fieldName string) bool {
 	if fieldName == "" {
 		return false
 	}
+
 	if isDateField(fieldName) {
 		return true
 	}
+
 	_, ok := trustedFields[fieldName]
+
 	return ok
 }
 
@@ -187,17 +192,19 @@ const (
 // wrapUntrustedValue wraps a string or slice of strings with boundary tags.
 // Any occurrences of the boundary markers inside the value are neutralized first
 // to prevent an attacker from prematurely closing/opening the boundary.
-func wrapUntrustedValue(value interface{}) interface{} {
+func wrapUntrustedValue(value any) any {
 	switch v := value.(type) {
 	case string:
 		neutralized := strings.ReplaceAll(v, untrustedOpenTag, neutralizedMarker)
 		neutralized = strings.ReplaceAll(neutralized, untrustedCloseTag, neutralizedMarker)
+
 		return untrustedOpenTag + neutralized + untrustedCloseTag
-	case []interface{}:
-		wrapped := make([]interface{}, len(v))
+	case []any:
+		wrapped := make([]any, len(v))
 		for i, item := range v {
 			wrapped[i] = wrapUntrustedValue(item)
 		}
+
 		return wrapped
 	default:
 		return value
@@ -205,16 +212,17 @@ func wrapUntrustedValue(value interface{}) interface{} {
 }
 
 // processDateField converts a date field value to string format if it's a recognized date field
-func processDateField(key string, value interface{}) (interface{}, error) {
+func processDateField(key string, value any) any {
 	// Check if this is a date field
 	for _, dateField := range dateFields {
 		if key == dateField {
 			// Handle nil values
 			if value == nil {
-				return nil, nil
+				return nil
 			}
 
 			var timestamp int64
+
 			switch v := value.(type) {
 			case int64:
 				timestamp = v
@@ -226,11 +234,12 @@ func processDateField(key string, value interface{}) (interface{}, error) {
 				slog.Warn("Date field is not a number", "field", key, "value", value, "type", fmt.Sprintf("%T", value))
 				continue
 			}
-			return timestampToString(timestamp), nil
+
+			return timestampToString(timestamp)
 		}
 	}
 	// Not a date field, return as-is
-	return value, nil
+	return value
 }
 
 // Unwrapper is implemented by union/sum types that wrap a single active variant.
@@ -252,17 +261,20 @@ func UnwrapUnion(v any) any {
 		if val.IsNil() {
 			return v
 		}
+
 		val = val.Elem()
 	}
+
 	if val.Kind() != reflect.Struct {
 		return v
 	}
-	for i := 0; i < val.NumField(); i++ {
-		f := val.Field(i)
+
+	for _, f := range val.Fields() {
 		if f.Kind() == reflect.Pointer && !f.IsNil() {
 			return f.Interface()
 		}
 	}
+
 	return v
 }
 
@@ -270,8 +282,9 @@ func UnwrapUnion(v any) any {
 // Handles structs, maps, slices, arrays, and nested combinations.
 // When wrapUntrusted is true, user-generated fields are wrapped with
 // [UNTRUSTED_DATA]...[/UNTRUSTED_DATA] boundary tags.
-func ProcessDatesRecursive(value interface{}, wrapUntrusted bool) (interface{}, error) {
+func ProcessDatesRecursive(value any, wrapUntrusted bool) (any, error) {
 	if value == nil {
+		//nolint:nilnil // nil is a valid processed value (serialized as JSON null), not a "not found" signal
 		return nil, nil
 	}
 
@@ -281,29 +294,34 @@ func ProcessDatesRecursive(value interface{}, wrapUntrusted bool) (interface{}, 
 	}
 
 	val := reflect.ValueOf(value)
+
 	return processDatesValue(val, wrapUntrusted)
 }
 
-func processDatesValue(val reflect.Value, wrapUntrusted bool) (interface{}, error) {
+func processDatesValue(val reflect.Value, wrapUntrusted bool) (any, error) {
 	// Handle pointers
 	if val.Kind() == reflect.Pointer {
 		if val.IsNil() {
+			//nolint:nilnil // nil is a valid processed value (serialized as JSON null), not a "not found" signal
 			return nil, nil
 		}
+
 		return processDatesValue(val.Elem(), wrapUntrusted)
 	}
 
 	switch val.Kind() {
 	case reflect.Struct:
-		return processDatesStruct(val, wrapUntrusted)
+		return processDatesStruct(val, wrapUntrusted), nil
 	case reflect.Map:
 		return processDatesMap(val, wrapUntrusted)
 	case reflect.Slice, reflect.Array:
 		return processDatesSlice(val, wrapUntrusted)
 	case reflect.Interface:
 		if val.IsNil() {
+			//nolint:nilnil // nil is a valid processed value (serialized as JSON null), not a "not found" signal
 			return nil, nil
 		}
+
 		return processDatesValue(val.Elem(), wrapUntrusted)
 	default:
 		// For primitive types, return as-is
@@ -311,11 +329,11 @@ func processDatesValue(val reflect.Value, wrapUntrusted bool) (interface{}, erro
 	}
 }
 
-func processDatesStruct(val reflect.Value, wrapUntrusted bool) (map[string]interface{}, error) {
-	result := make(map[string]interface{})
+func processDatesStruct(val reflect.Value, wrapUntrusted bool) map[string]any {
+	result := make(map[string]any)
 	typ := val.Type()
 
-	for i := 0; i < val.NumField(); i++ {
+	for i := range val.NumField() {
 		field := typ.Field(i)
 		if field.PkgPath != "" { // Skip unexported fields
 			continue
@@ -324,20 +342,19 @@ func processDatesStruct(val reflect.Value, wrapUntrusted bool) (map[string]inter
 		// Parse json tag for field name and omitempty option
 		key := field.Name
 		omitempty := false
+
 		if tag := field.Tag.Get("json"); tag != "" {
 			if tag == "-" {
 				continue
 			}
+
 			parts := strings.Split(tag, ",")
 			if parts[0] != "" {
 				key = parts[0]
 			}
 			// If parts[0] is empty (e.g., json:",omitempty"), keep field.Name
-			for _, opt := range parts[1:] {
-				if opt == "omitempty" {
-					omitempty = true
-					break
-				}
+			if slices.Contains(parts[1:], "omitempty") {
+				omitempty = true
 			}
 		}
 
@@ -348,8 +365,10 @@ func processDatesStruct(val reflect.Value, wrapUntrusted bool) (map[string]inter
 			continue
 		}
 
-		var processedValue interface{}
-		var err error
+		var (
+			processedValue any
+			err            error
+		)
 
 		// Check if this is a date field and handle appropriately
 		if isDateField(key) {
@@ -358,16 +377,14 @@ func processDatesStruct(val reflect.Value, wrapUntrusted bool) (map[string]inter
 				processedValue = nil
 			} else {
 				// For non-nil pointers, get the underlying value
-				var dateValue interface{}
+				var dateValue any
 				if fieldVal.Kind() == reflect.Pointer {
 					dateValue = fieldVal.Elem().Interface()
 				} else {
 					dateValue = fieldVal.Interface()
 				}
-				processedValue, err = processDateField(key, dateValue)
-				if err != nil {
-					return nil, fmt.Errorf("failed to process date field %s: %w", key, err)
-				}
+
+				processedValue = processDateField(key, dateValue)
 			}
 		} else {
 			// A structural subtree (e.g. rawFilters) is MCP/LLM-generated query
@@ -387,14 +404,15 @@ func processDatesStruct(val reflect.Value, wrapUntrusted bool) (map[string]inter
 		if wrapUntrusted && !isTrustedField(key) && !isStructuralSubtree(key) {
 			processedValue = wrapUntrustedValue(processedValue)
 		}
+
 		result[key] = processedValue
 	}
 
-	return result, nil
+	return result
 }
 
-func processDatesMap(val reflect.Value, wrapUntrusted bool) (map[string]interface{}, error) {
-	result := make(map[string]interface{})
+func processDatesMap(val reflect.Value, wrapUntrusted bool) (map[string]any, error) {
+	result := make(map[string]any)
 
 	for _, key := range val.MapKeys() {
 		keyStr := fmt.Sprintf("%v", key.Interface())
@@ -407,6 +425,7 @@ func processDatesMap(val reflect.Value, wrapUntrusted bool) (map[string]interfac
 		if wrapUntrusted && !isTrustedField(keyStr) && !isStructuralSubtree(keyStr) {
 			processedValue = wrapUntrustedValue(processedValue)
 		}
+
 		result[keyStr] = processedValue
 	}
 
@@ -417,36 +436,36 @@ func processDatesMap(val reflect.Value, wrapUntrusted bool) (map[string]interfac
 // everything else is recursed into. A structural subtree (e.g. rawFilters) is
 // MCP/LLM-generated query structure, not entity data, so wrapping is disabled
 // for everything under it.
-func processDatesMapEntry(keyStr string, mapVal reflect.Value, wrapUntrusted bool) (interface{}, error) {
+func processDatesMapEntry(keyStr string, mapVal reflect.Value, wrapUntrusted bool) (any, error) {
 	if isDateField(keyStr) {
-		processedValue, err := processDateField(keyStr, mapVal.Interface())
-		if err != nil {
-			return nil, fmt.Errorf("failed to process date field %s: %w", keyStr, err)
-		}
-		return processedValue, nil
+		return processDateField(keyStr, mapVal.Interface()), nil
 	}
 
 	childWrap := wrapUntrusted
 	if isStructuralSubtree(keyStr) {
 		childWrap = false
 	}
+
 	processedValue, err := processDatesValue(mapVal, childWrap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to process map value for key %s: %w", keyStr, err)
 	}
+
 	return processedValue, nil
 }
 
-func processDatesSlice(val reflect.Value, wrapUntrusted bool) ([]interface{}, error) {
+func processDatesSlice(val reflect.Value, wrapUntrusted bool) ([]any, error) {
 	length := val.Len()
-	result := make([]interface{}, length)
+	result := make([]any, length)
 
-	for i := 0; i < length; i++ {
+	for i := range length {
 		elem := val.Index(i)
+
 		processedElem, err := processDatesValue(elem, wrapUntrusted)
 		if err != nil {
 			return nil, fmt.Errorf("failed to process slice element %d: %w", i, err)
 		}
+
 		result[i] = processedElem
 	}
 
@@ -455,10 +474,5 @@ func processDatesSlice(val reflect.Value, wrapUntrusted bool) ([]interface{}, er
 
 // isDateField checks if a field name is a recognized date field
 func isDateField(fieldName string) bool {
-	for _, dateField := range dateFields {
-		if fieldName == dateField {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(dateFields, fieldName)
 }

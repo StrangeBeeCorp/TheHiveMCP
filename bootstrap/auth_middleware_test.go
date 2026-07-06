@@ -2,13 +2,14 @@ package bootstrap
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"testing"
+
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/auth"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/assert"
 )
 
 // invokeThroughAuth runs a no-op handler wrapped by the given auth layer and
@@ -19,43 +20,46 @@ func authWrappers() map[string]invokeThroughAuth {
 	return map[string]invokeThroughAuth{
 		"tool middleware": func(ctx context.Context) (bool, error) {
 			called := false
-			handler := auth.AuthenticationMiddleware()(func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			handler := auth.AuthenticationMiddleware()(func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				called = true
 				return &mcp.CallToolResult{}, nil
 			})
 			_, err := handler(ctx, mcp.CallToolRequest{})
+
 			return called, err
 		},
 		"resource middleware": func(ctx context.Context) (bool, error) {
 			called := false
-			handler := auth.ResourceAuthenticationMiddleware()(func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+			handler := auth.ResourceAuthenticationMiddleware()(func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 				called = true
 				return nil, nil
 			})
 			_, err := handler(ctx, mcp.ReadResourceRequest{})
+
 			return called, err
 		},
 		"prompt handler": func(ctx context.Context) (bool, error) {
 			called := false
-			handler := auth.AuthenticatedPromptHandlerFunc(func(ctx context.Context, request mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			handler := auth.AuthenticatedPromptHandlerFunc(func(_ context.Context, _ mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 				called = true
 				return &mcp.GetPromptResult{}, nil
 			})
 			_, err := handler(ctx, mcp.GetPromptRequest{})
+
 			return called, err
 		},
 	}
 }
 
 func TestAuthenticationChecks(t *testing.T) {
-	authError := fmt.Errorf("TheHive authentication failed: invalid credentials")
+	authError := errors.New("TheHive authentication failed: invalid credentials")
 
 	scenarios := []struct {
 		name string
 		// ctx is the per-scenario request context, not a stored/long-lived
-		// field — the S8242 "pass context as a parameter" rule does not apply
-		// to a test-case table. NOSONAR
-		ctx         context.Context
+		// field — the "pass context as a parameter" rule does not apply to a
+		// test-case table. NOSONAR
+		ctx         context.Context //nolint:containedctx // per-scenario request context in a test table, not a stored long-lived context
 		expectCall  bool
 		expectedErr error
 	}{
@@ -89,6 +93,7 @@ func TestAuthenticationChecks(t *testing.T) {
 				called, err := invoke(scenario.ctx)
 
 				assert.Equal(t, scenario.expectCall, called)
+
 				if scenario.expectedErr != nil {
 					assert.ErrorIs(t, err, scenario.expectedErr)
 				} else {

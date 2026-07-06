@@ -4,10 +4,11 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 )
 
 const (
@@ -17,7 +18,8 @@ const (
 	hintCheckAuth = "Check your authentication and connection settings"
 )
 
-func (t *ExecuteAutomationTool) Handle(ctx context.Context, request mcp.CallToolRequest, params ExecuteAutomationParams) (ExecuteAutomationResult, error) {
+// Handle dispatches the request to the operation-specific handler based on params.Operation.
+func (t *ExecuteAutomationTool) Handle(ctx context.Context, _ mcp.CallToolRequest, params ExecuteAutomationParams) (ExecuteAutomationResult, error) {
 	// Apply default Cortex ID from configuration if not specified by the caller
 	if params.CortexID == "" {
 		params.CortexID = utils.GetDefaultCortexIDFromContext(ctx)
@@ -56,12 +58,14 @@ func (t *ExecuteAutomationTool) handleRunAnalyzer(ctx context.Context, params Ex
 		return ExecuteAutomationResult{}, tools.NewToolError("failed to execute analyzer").Cause(err).
 			Hint("Check that the analyzer ID, Cortex ID, and observable ID are correct").API(resp)
 	}
+
 	slog.Info("Analyzer job created",
 		"jobId", job.GetUnderscoreId(),
 		"analyzerId", params.AnalyzerID,
 		"status", job.GetStatus())
 
 	analyzerJobResult := NewAnalyzerJobResult(job)
+
 	return ExecuteAutomationResult{
 		AnalyzerResult: analyzerJobResult,
 	}, nil
@@ -79,6 +83,7 @@ func (t *ExecuteAutomationTool) handleRunResponder(ctx context.Context, params E
 	if params.CortexID != "" {
 		inputAction.SetCortexId(params.CortexID)
 	}
+
 	if params.Parameters != nil {
 		inputAction.SetParameters(params.Parameters)
 	}
@@ -144,6 +149,7 @@ func (t *ExecuteAutomationTool) handleGetActionStatus(ctx context.Context, param
 	}
 
 	var targetAction *thehive.OutputAction
+
 	for _, action := range actionList {
 		if action.GetUnderscoreId() == params.ActionID {
 			targetAction = &action
@@ -161,6 +167,7 @@ func (t *ExecuteAutomationTool) handleGetActionStatus(ctx context.Context, param
 		"status", targetAction.GetStatus())
 
 	cortexActionResult := NewResponderActionStatusResult(targetAction)
+
 	return ExecuteAutomationResult{
 		ActionStatusResult: cortexActionResult,
 	}, nil

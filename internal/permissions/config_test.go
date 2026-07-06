@@ -12,16 +12,16 @@ func TestLoadDefault(t *testing.T) {
 		t.Fatalf("LoadDefault() failed: %v", err)
 	}
 
-	if config.Version != "1.0" {
+	if config.Version != versionV1 {
 		t.Errorf("Expected version 1.0, got %s", config.Version)
 	}
 
 	// Default should have read-only permissions
-	if !config.IsToolAllowed("search-entities") {
+	if !config.IsToolAllowed(toolSearchEntities) {
 		t.Error("Default should allow search-entities")
 	}
 
-	if config.IsToolAllowed("manage-entities") {
+	if config.IsToolAllowed(toolManageEntities) {
 		t.Error("Default should not allow manage-entities")
 	}
 
@@ -52,19 +52,19 @@ permissions:
 		t.Fatalf("ParseYAML() failed: %v", err)
 	}
 
-	if config.Version != "1.0" {
+	if config.Version != versionV1 {
 		t.Errorf("Expected version 1.0, got %s", config.Version)
 	}
 
-	if !config.IsToolAllowed("search-entities") {
+	if !config.IsToolAllowed(toolSearchEntities) {
 		t.Error("search-entities should be allowed")
 	}
 
-	if config.IsToolAllowed("manage-entities") {
+	if config.IsToolAllowed(toolManageEntities) {
 		t.Error("manage-entities should not be allowed")
 	}
 
-	if config.Permissions.Analyzers.Mode != "allow_list" {
+	if config.Permissions.Analyzers.Mode != modeAllowList {
 		t.Errorf("Expected analyzers mode 'allow_list', got %s", config.Permissions.Analyzers.Mode)
 	}
 
@@ -94,7 +94,8 @@ permissions:
     allowed: ["*"]
 `)
 
-	if err := os.WriteFile(configPath, configContent, 0644); err != nil {
+	err := os.WriteFile(configPath, configContent, 0o600)
+	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -103,11 +104,11 @@ permissions:
 		t.Fatalf("LoadFromFile() failed: %v", err)
 	}
 
-	if !config.IsToolAllowed("search-entities") {
+	if !config.IsToolAllowed(toolSearchEntities) {
 		t.Error("search-entities should be allowed")
 	}
 
-	if !config.IsToolAllowed("manage-entities") {
+	if !config.IsToolAllowed(toolManageEntities) {
 		t.Error("manage-entities should be allowed")
 	}
 }

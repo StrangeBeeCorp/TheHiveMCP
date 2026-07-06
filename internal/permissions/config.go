@@ -19,7 +19,8 @@ func LoadFromFile(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse permissions file: %w", err)
 	}
 
-	if err := Validate(config); err != nil {
+	err = Validate(config)
+	if err != nil {
 		return nil, fmt.Errorf("invalid permissions configuration: %w", err)
 	}
 
@@ -44,20 +45,20 @@ func LoadDefault() (*Config, error) {
 // LoadAdminForTesting returns an admin permissions configuration for testing purposes
 func LoadAdminForTesting() *Config {
 	return &Config{
-		Version: "1.0",
-		Permissions: PermissionsSection{
+		Version: versionV1,
+		Permissions: Section{
 			Tools: map[string]ToolPermission{
-				"search-entities":    {Allowed: true},
-				"manage-entities":    {Allowed: true},
+				toolSearchEntities:   {Allowed: true},
+				toolManageEntities:   {Allowed: true},
 				"execute-automation": {Allowed: true},
 				"get-resource":       {Allowed: true},
 			},
 			Analyzers: AutomationPermissions{
-				Mode:    "allow_list",
+				Mode:    modeAllowList,
 				Allowed: []string{"*"},
 			},
 			Responders: AutomationPermissions{
-				Mode:    "allow_list",
+				Mode:    modeAllowList,
 				Allowed: []string{"*"},
 			},
 		},
@@ -67,8 +68,11 @@ func LoadAdminForTesting() *Config {
 // ParseYAML parses YAML data into a Config struct
 func ParseYAML(data []byte) (*Config, error) {
 	var config Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
+
+	err := yaml.Unmarshal(data, &config)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal YAML: %w", err)
 	}
+
 	return &config, nil
 }

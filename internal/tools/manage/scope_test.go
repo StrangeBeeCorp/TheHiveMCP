@@ -3,11 +3,12 @@ package manage_test
 import (
 	"testing"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 // scopedPermissionsYAML restricts manage-entities to entities with TLP <= 2
@@ -51,6 +52,7 @@ func createCaseWithTLP(t *testing.T, hiveClient *thehive.APIClient, title string
 	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
+
 	return createdCase
 }
 
@@ -66,13 +68,16 @@ func createAlertWithTLP(t *testing.T, hiveClient *thehive.APIClient, sourceRef s
 	createdAlert, _, err := hiveClient.AlertAPI.CreateAlert(authContext).InputCreateAlert(*testAlert).Execute()
 	require.NoError(t, err)
 	require.NotNil(t, createdAlert)
+
 	return createdAlert
 }
 
 func requireScopeDenied(t *testing.T, result *mcp.CallToolResult) {
 	t.Helper()
 	require.True(t, result.IsError, "operation on an out-of-scope entity must be denied")
-	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not within the scope")
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	require.Contains(t, textContent.Text, "not within the scope")
 }
 
 // TestManageScopeUpdateDeniedOutOfScope verifies that with a configured
@@ -90,12 +95,12 @@ func TestManageScopeUpdateDeniedOutOfScope(t *testing.T) {
 	updateRequest := func(caseID string) mcp.CallToolRequest {
 		return mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
-				Name: "manage-entities",
+				Name: testToolName,
 				Arguments: map[string]any{
-					"operation":   "update",
-					"entity-type": types.EntityTypeCase,
-					"entity-ids":  []string{caseID},
-					"entity-data": map[string]interface{}{"title": "Title changed by MCP"},
+					testArgOperation:  testOpUpdate,
+					testArgEntityType: types.EntityTypeCase,
+					testArgEntityIDs:  []string{caseID},
+					testArgEntityData: map[string]any{testFieldTitle: "Title changed by MCP"},
 				},
 			},
 		}
@@ -133,12 +138,12 @@ func TestManageScopeBatchUpdateDeniedWhenAnyOutOfScope(t *testing.T) {
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "manage-entities",
+			Name: testToolName,
 			Arguments: map[string]any{
-				"operation":   "update",
-				"entity-type": types.EntityTypeCase,
-				"entity-ids":  []string{inScopeCase.UnderscoreId, outOfScopeCase.UnderscoreId},
-				"entity-data": map[string]interface{}{"title": "Batch title"},
+				testArgOperation:  testOpUpdate,
+				testArgEntityType: types.EntityTypeCase,
+				testArgEntityIDs:  []string{inScopeCase.UnderscoreId, outOfScopeCase.UnderscoreId},
+				testArgEntityData: map[string]any{testFieldTitle: "Batch title"},
 			},
 		},
 	}
@@ -167,11 +172,11 @@ func TestManageScopeDeleteDeniedOutOfScope(t *testing.T) {
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "manage-entities",
+			Name: testToolName,
 			Arguments: map[string]any{
-				"operation":   "delete",
-				"entity-type": types.EntityTypeAlert,
-				"entity-ids":  []string{outOfScopeAlert.UnderscoreId},
+				testArgOperation:  testOpDelete,
+				testArgEntityType: types.EntityTypeAlert,
+				testArgEntityIDs:  []string{outOfScopeAlert.UnderscoreId},
 			},
 		},
 	}
@@ -199,12 +204,12 @@ func TestManageScopeCommentDeniedOutOfScope(t *testing.T) {
 	commentRequest := func(caseID string) mcp.CallToolRequest {
 		return mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
-				Name: "manage-entities",
+				Name: testToolName,
 				Arguments: map[string]any{
-					"operation":   "comment",
-					"entity-type": types.EntityTypeCase,
-					"entity-ids":  []string{caseID},
-					"comment":     "Scope enforcement test comment",
+					testArgOperation:  testOpComment,
+					testArgEntityType: types.EntityTypeCase,
+					testArgEntityIDs:  []string{caseID},
+					testOpComment:     "Scope enforcement test comment",
 				},
 			},
 		}
@@ -232,12 +237,12 @@ func TestManageScopeCreateChildDeniedOutOfScopeParent(t *testing.T) {
 	createTaskRequest := func(caseID string) mcp.CallToolRequest {
 		return mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
-				Name: "manage-entities",
+				Name: testToolName,
 				Arguments: map[string]any{
-					"operation":   "create",
-					"entity-type": types.EntityTypeTask,
-					"entity-ids":  []string{caseID},
-					"entity-data": map[string]interface{}{"title": "Scope test task"},
+					testArgOperation:  testOpCreate,
+					testArgEntityType: types.EntityTypeTask,
+					testArgEntityIDs:  []string{caseID},
+					testArgEntityData: map[string]any{testFieldTitle: "Scope test task"},
 				},
 			},
 		}
@@ -266,15 +271,15 @@ func TestManageScopeCreateObservableInScopeAlertParent(t *testing.T) {
 	createObservableRequest := func(parentID, data string) mcp.CallToolRequest {
 		return mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
-				Name: "manage-entities",
+				Name: testToolName,
 				Arguments: map[string]any{
-					"operation":   "create",
-					"entity-type": types.EntityTypeObservable,
-					"entity-ids":  []string{parentID},
-					"entity-data": map[string]interface{}{
-						"dataType": "ip",
-						"data":     data,
-						"message":  "scope test observable",
+					testArgOperation:  testOpCreate,
+					testArgEntityType: types.EntityTypeObservable,
+					testArgEntityIDs:  []string{parentID},
+					testArgEntityData: map[string]any{
+						testFieldDataType: "ip",
+						testFieldData:     data,
+						testFieldMessage:  "scope test observable",
 					},
 				},
 			},
@@ -301,11 +306,11 @@ func TestManageScopePromoteDeniedOutOfScope(t *testing.T) {
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "manage-entities",
+			Name: testToolName,
 			Arguments: map[string]any{
-				"operation":   "promote",
-				"entity-type": types.EntityTypeAlert,
-				"entity-ids":  []string{outOfScopeAlert.UnderscoreId},
+				testArgOperation:  testOpPromote,
+				testArgEntityType: types.EntityTypeAlert,
+				testArgEntityIDs:  []string{outOfScopeAlert.UnderscoreId},
 			},
 		},
 	}
@@ -327,11 +332,11 @@ func TestManageScopeMergeDeniedWhenAnyCaseOutOfScope(t *testing.T) {
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "manage-entities",
+			Name: testToolName,
 			Arguments: map[string]any{
-				"operation":   "merge",
-				"entity-type": types.EntityTypeCase,
-				"entity-ids":  []string{inScopeCase.UnderscoreId, outOfScopeCase.UnderscoreId},
+				testArgOperation:  testOpMerge,
+				testArgEntityType: types.EntityTypeCase,
+				testArgEntityIDs:  []string{inScopeCase.UnderscoreId, outOfScopeCase.UnderscoreId},
 			},
 		},
 	}
@@ -353,12 +358,12 @@ func TestManageScopeNoFiltersBackwardCompatible(t *testing.T) {
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "manage-entities",
+			Name: testToolName,
 			Arguments: map[string]any{
-				"operation":   "update",
-				"entity-type": types.EntityTypeCase,
-				"entity-ids":  []string{highTLPCase.UnderscoreId},
-				"entity-data": map[string]interface{}{"title": "Updated without filters"},
+				testArgOperation:  testOpUpdate,
+				testArgEntityType: types.EntityTypeCase,
+				testArgEntityIDs:  []string{highTLPCase.UnderscoreId},
+				testArgEntityData: map[string]any{testFieldTitle: "Updated without filters"},
 			},
 		},
 	}

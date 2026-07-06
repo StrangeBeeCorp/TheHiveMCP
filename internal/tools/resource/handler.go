@@ -6,12 +6,14 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/mark3labs/mcp-go/mcp"
+
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func (t *ResourceTool) Handle(ctx context.Context, req mcp.CallToolRequest, params GetResourceParams) (GetResourceResult, error) {
+// Handle fetches the resource or category identified by params.URI.
+func (t *Tool) Handle(ctx context.Context, _ mcp.CallToolRequest, params GetResourceParams) (GetResourceResult, error) {
 	slog.Info("Fetching resource", "uri", params.URI)
 
 	return t.fetchUnified(ctx, params.URI)
@@ -19,13 +21,15 @@ func (t *ResourceTool) Handle(ctx context.Context, req mcp.CallToolRequest, para
 
 // fetchUnified attempts to fetch a resource and/or browse a category at the given URI
 // Returns a unified response with the resource content (if it exists), subcategories, and resources
-func (t *ResourceTool) fetchUnified(ctx context.Context, uri string) (GetResourceResult, error) {
+func (t *Tool) fetchUnified(ctx context.Context, uri string) (GetResourceResult, error) {
 	// Extract category path from URI
 	category := strings.TrimPrefix(uri, "hive://")
 
 	// Extract parameters from uri
-	var parameters map[string]any
-	var err error
+	var (
+		parameters map[string]any
+		err        error
+	)
 	if strings.Contains(uri, "?") {
 		uri, parameters, err = utils.ParseURIParameters(uri)
 		if err != nil {
@@ -35,7 +39,6 @@ func (t *ResourceTool) fetchUnified(ctx context.Context, uri string) (GetResourc
 
 	// Try to fetch as a specific resource first
 	resource, handler, resourceErr := t.resourceRegistry.Get(uri)
-
 	if resourceErr == nil {
 		// It's a resource, fetch its content
 		readRequest := mcp.ReadResourceRequest{
@@ -68,10 +71,12 @@ func (t *ResourceTool) fetchUnified(ctx context.Context, uri string) (GetResourc
 		mimeType := textContent.MIMEType
 
 		// Parse the content
-		var data interface{}
+		var data any
+
 		resourceContent := NewResourceContent(uri, resource.Name, mimeType)
 
-		if err := json.Unmarshal([]byte(contentText), &data); err != nil {
+		err = json.Unmarshal([]byte(contentText), &data)
+		if err != nil {
 			// If not JSON, return as text
 			resourceContent.SetTextContent(contentText)
 		} else {

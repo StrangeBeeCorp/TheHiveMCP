@@ -3,9 +3,15 @@ package resource_test
 import (
 	"testing"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
+)
+
+const (
+	toolNameGetResource = "get-resource"
+	argURI              = "uri"
 )
 
 // TestGetResourceCatalog tests fetching the root catalog
@@ -15,7 +21,7 @@ func TestGetResourceCatalog(t *testing.T) {
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name:      "get-resource",
+			Name:      toolNameGetResource,
 			Arguments: map[string]any{},
 		},
 	}
@@ -28,7 +34,7 @@ func TestGetResourceCatalog(t *testing.T) {
 	require.True(t, ok)
 
 	// Verify catalog structure
-	require.Equal(t, "hive://catalog", structuredData["uri"])
+	require.Equal(t, "hive://catalog", structuredData[argURI])
 	require.Equal(t, "Resource Catalog", structuredData["name"])
 	require.Equal(t, "application/json", structuredData["mimeType"])
 
@@ -42,9 +48,15 @@ func TestGetResourceCatalog(t *testing.T) {
 
 	// Verify expected categories exist
 	categoryNames := make([]string, 0)
+
 	for _, cat := range categories {
-		catMap := cat.(map[string]any)
-		categoryNames = append(categoryNames, catMap["name"].(string))
+		catMap, ok := cat.(map[string]any)
+		require.True(t, ok)
+
+		name, ok := catMap["name"].(string)
+		require.True(t, ok)
+
+		categoryNames = append(categoryNames, name)
 	}
 
 	require.Contains(t, categoryNames, "config")
@@ -60,9 +72,9 @@ func TestGetResourceBrowseSchemaCategory(t *testing.T) {
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "get-resource",
+			Name: toolNameGetResource,
 			Arguments: map[string]any{
-				"uri": "schema",
+				argURI: "schema",
 			},
 		},
 	}
@@ -75,7 +87,7 @@ func TestGetResourceBrowseSchemaCategory(t *testing.T) {
 	require.True(t, ok)
 
 	// Verify category response structure
-	require.Equal(t, "hive://schema", structuredData["uri"])
+	require.Equal(t, "hive://schema", structuredData[argURI])
 
 	// Verify resources list
 	resources, ok := structuredData["resources"].([]any)
@@ -84,9 +96,15 @@ func TestGetResourceBrowseSchemaCategory(t *testing.T) {
 
 	// Convert to string slice for easier checking
 	resourceNames := make([]string, 0)
+
 	for _, res := range resources {
-		resMap := res.(map[string]any)
-		resourceNames = append(resourceNames, resMap["name"].(string))
+		resMap, ok := res.(map[string]any)
+		require.True(t, ok)
+
+		name, ok := resMap["name"].(string)
+		require.True(t, ok)
+
+		resourceNames = append(resourceNames, name)
 	}
 
 	// Verify expected schemas are present
@@ -103,9 +121,9 @@ func TestGetResourceFetchAlertSchema(t *testing.T) {
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "get-resource",
+			Name: toolNameGetResource,
 			Arguments: map[string]any{
-				"uri": "hive://schema/alert",
+				argURI: "hive://schema/alert",
 			},
 		},
 	}
@@ -118,7 +136,7 @@ func TestGetResourceFetchAlertSchema(t *testing.T) {
 	require.True(t, ok)
 
 	// Verify resource response structure
-	require.Equal(t, "hive://schema/alert", structuredData["uri"])
+	require.Equal(t, "hive://schema/alert", structuredData[argURI])
 	require.Equal(t, "Alert Output Schema", structuredData["name"])
 	require.Equal(t, "application/json", structuredData["mimeType"])
 
@@ -150,9 +168,9 @@ func TestGetResourceFetchCurrentUser(t *testing.T) {
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "get-resource",
+			Name: toolNameGetResource,
 			Arguments: map[string]any{
-				"uri": "hive://config/current-user",
+				argURI: "hive://config/current-user",
 			},
 		},
 	}
@@ -165,7 +183,7 @@ func TestGetResourceFetchCurrentUser(t *testing.T) {
 	require.True(t, ok)
 
 	// Verify resource response structure
-	require.Equal(t, "hive://config/current-user", structuredData["uri"])
+	require.Equal(t, "hive://config/current-user", structuredData[argURI])
 	require.Equal(t, "Current User", structuredData["name"])
 	require.Equal(t, "application/json", structuredData["mimeType"])
 
@@ -189,9 +207,9 @@ func TestGetResourceFetchDocumentation(t *testing.T) {
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "get-resource",
+			Name: toolNameGetResource,
 			Arguments: map[string]any{
-				"uri": "hive://docs/entities/case",
+				argURI: "hive://docs/entities/case",
 			},
 		},
 	}
@@ -204,7 +222,7 @@ func TestGetResourceFetchDocumentation(t *testing.T) {
 	require.True(t, ok)
 
 	// Verify resource response structure
-	require.Equal(t, "hive://docs/entities/case", structuredData["uri"])
+	require.Equal(t, "hive://docs/entities/case", structuredData[argURI])
 	require.Equal(t, "Case Documentation", structuredData["name"])
 	require.Equal(t, "text/plain", structuredData["mimeType"])
 
@@ -224,9 +242,9 @@ func TestGetResourceBrowseMetadataCategory(t *testing.T) {
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "get-resource",
+			Name: toolNameGetResource,
 			Arguments: map[string]any{
-				"uri": "metadata",
+				argURI: "metadata",
 			},
 		},
 	}
@@ -239,7 +257,7 @@ func TestGetResourceBrowseMetadataCategory(t *testing.T) {
 	require.True(t, ok)
 
 	// Verify category response structure
-	require.Equal(t, "hive://metadata", structuredData["uri"])
+	require.Equal(t, "hive://metadata", structuredData[argURI])
 
 	// Verify subcategories exist for metadata
 	subcategories, ok := structuredData["subcategories"].([]any)
@@ -248,9 +266,15 @@ func TestGetResourceBrowseMetadataCategory(t *testing.T) {
 
 	// Verify expected subcategories
 	subcategoryNames := make([]string, 0)
+
 	for _, subcat := range subcategories {
-		subcatMap := subcat.(map[string]any)
-		subcategoryNames = append(subcategoryNames, subcatMap["name"].(string))
+		subcatMap, ok := subcat.(map[string]any)
+		require.True(t, ok)
+
+		name, ok := subcatMap["name"].(string)
+		require.True(t, ok)
+
+		subcategoryNames = append(subcategoryNames, name)
 	}
 
 	require.Contains(t, subcategoryNames, "entities")
@@ -265,9 +289,9 @@ func TestGetResourceFetchCaseStatuses(t *testing.T) {
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "get-resource",
+			Name: toolNameGetResource,
 			Arguments: map[string]any{
-				"uri": "hive://metadata/entities/case/statuses",
+				argURI: "hive://metadata/entities/case/statuses",
 			},
 		},
 	}
@@ -280,7 +304,7 @@ func TestGetResourceFetchCaseStatuses(t *testing.T) {
 	require.True(t, ok)
 
 	// Verify resource response structure
-	require.Equal(t, "hive://metadata/entities/case/statuses", structuredData["uri"])
+	require.Equal(t, "hive://metadata/entities/case/statuses", structuredData[argURI])
 	require.Equal(t, "Case Statuses", structuredData["name"])
 
 	// Verify data contains statuses
@@ -290,9 +314,15 @@ func TestGetResourceFetchCaseStatuses(t *testing.T) {
 
 	// Verify expected statuses exist
 	statusValues := make([]string, 0)
+
 	for _, status := range statuses {
-		statusMap := status.(map[string]any)
-		statusValues = append(statusValues, statusMap["value"].(string))
+		statusMap, ok := status.(map[string]any)
+		require.True(t, ok)
+
+		value, ok := statusMap["value"].(string)
+		require.True(t, ok)
+
+		statusValues = append(statusValues, value)
 	}
 
 	require.Contains(t, statusValues, "New")
@@ -307,9 +337,9 @@ func TestGetResourceTrailingSlashEquivalence(t *testing.T) {
 	// Get results using URI without trailing slash
 	noSlashRequest := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "get-resource",
+			Name: toolNameGetResource,
 			Arguments: map[string]any{
-				"uri": "metadata/automation",
+				argURI: "metadata/automation",
 			},
 		},
 	}
@@ -324,9 +354,9 @@ func TestGetResourceTrailingSlashEquivalence(t *testing.T) {
 	// Get results using URI with trailing slash
 	withSlashRequest := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "get-resource",
+			Name: toolNameGetResource,
 			Arguments: map[string]any{
-				"uri": "hive://metadata/automation/",
+				argURI: "hive://metadata/automation/",
 			},
 		},
 	}
@@ -339,8 +369,8 @@ func TestGetResourceTrailingSlashEquivalence(t *testing.T) {
 	require.True(t, ok)
 
 	// Verify both approaches return equivalent results
-	require.Equal(t, "hive://metadata/automation", noSlashData["uri"])
-	require.Equal(t, "hive://metadata/automation", withSlashData["uri"])
+	require.Equal(t, "hive://metadata/automation", noSlashData[argURI])
+	require.Equal(t, "hive://metadata/automation", withSlashData[argURI])
 	require.Equal(t, noSlashData["subcategories"], withSlashData["subcategories"])
 
 	// For resources, we need to compare sets as order may vary
@@ -349,20 +379,30 @@ func TestGetResourceTrailingSlashEquivalence(t *testing.T) {
 	withSlashResources, ok := withSlashData["resources"].([]any)
 	require.True(t, ok)
 
-	require.Equal(t, len(noSlashResources), len(withSlashResources), "should have same number of resources")
+	require.Len(t, withSlashResources, len(noSlashResources), "should have same number of resources")
 
 	// Convert to maps for easier comparison
 	noSlashResourcesMap := make(map[string]any)
 	withSlashResourcesMap := make(map[string]any)
 
 	for _, res := range noSlashResources {
-		resMap := res.(map[string]any)
-		noSlashResourcesMap[resMap["name"].(string)] = resMap
+		resMap, ok := res.(map[string]any)
+		require.True(t, ok)
+
+		name, ok := resMap["name"].(string)
+		require.True(t, ok)
+
+		noSlashResourcesMap[name] = resMap
 	}
 
 	for _, res := range withSlashResources {
-		resMap := res.(map[string]any)
-		withSlashResourcesMap[resMap["name"].(string)] = resMap
+		resMap, ok := res.(map[string]any)
+		require.True(t, ok)
+
+		name, ok := resMap["name"].(string)
+		require.True(t, ok)
+
+		withSlashResourcesMap[name] = resMap
 	}
 
 	require.Equal(t, noSlashResourcesMap, withSlashResourcesMap, "resources should be equivalent regardless of order")
@@ -376,9 +416,9 @@ func TestGetResourceResourcesFieldBehavior(t *testing.T) {
 	// Browse a category that has only subcategories (no direct resources)
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "get-resource",
+			Name: toolNameGetResource,
 			Arguments: map[string]any{
-				"uri": "metadata",
+				argURI: "metadata",
 			},
 		},
 	}

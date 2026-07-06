@@ -5,12 +5,13 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/bootstrap"
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/logging"
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/bootstrap"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/logging"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 // initTestLoggerOnce installs the test log level on slog's default logger
@@ -40,8 +41,10 @@ func (h *functionBasedElicitationHandler) Elicit(ctx context.Context, request mc
 	return h.elicitFunc(ctx, request)
 }
 
+// SamplingHandlerCreateMessageFromStringResponse returns a sampling handler that
+// always replies with the given response text.
 func SamplingHandlerCreateMessageFromStringResponse(response string) func(ctx context.Context, request mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
-	return func(ctx context.Context, request mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
+	return func(_ context.Context, _ mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
 		samplingMessage := mcp.SamplingMessage{
 			Role: mcp.RoleAssistant,
 			Content: mcp.TextContent{
@@ -58,7 +61,9 @@ func SamplingHandlerCreateMessageFromStringResponse(response string) func(ctx co
 	}
 }
 
-func DummyElicitationAccept(ctx context.Context, request mcp.ElicitationRequest) (*mcp.ElicitationResult, error) {
+// DummyElicitationAccept is an elicitation handler that always accepts with a
+// fixed mock payload, for tests that only need elicitation to succeed.
+func DummyElicitationAccept(_ context.Context, _ mcp.ElicitationRequest) (*mcp.ElicitationResult, error) {
 	return &mcp.ElicitationResult{
 		ElicitationResponse: mcp.ElicitationResponse{
 			Action: mcp.ElicitationResponseActionAccept,
@@ -70,15 +75,21 @@ func DummyElicitationAccept(ctx context.Context, request mcp.ElicitationRequest)
 	}, nil
 }
 
+// DummySamplingHandlerCreateMessage is a sampling handler that replies with a
+// fixed dummy response, for tests that only need sampling to succeed.
 func DummySamplingHandlerCreateMessage(ctx context.Context, request mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
 	return SamplingHandlerCreateMessageFromStringResponse("This is a dummy response")(ctx, request)
 }
 
+// GetMCPTestClient creates an in-process MCP test client with admin permissions
+// and the given sampling and elicitation handlers.
 func GetMCPTestClient(
 	t *testing.T,
 	samplingHandlerCreateMessage func(ctx context.Context, request mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error),
 	elicitationHandlerElicit func(ctx context.Context, request mcp.ElicitationRequest) (*mcp.ElicitationResult, error),
 ) *client.Client {
+	t.Helper()
+
 	return GetMCPTestClientWithPermissions(t, samplingHandlerCreateMessage, elicitationHandlerElicit, string(types.PermissionConfigAdmin))
 }
 
@@ -122,10 +133,14 @@ func GetMCPTestClientWithPermissions(
 		transport.WithSamplingHandler(serverSamplingHandler),
 		transport.WithElicitationHandler(serverElicitationHandler),
 	)
+
 	client := client.NewClient(inProcessTransport)
-	if err := client.Start(t.Context()); err != nil {
+
+	err = client.Start(t.Context())
+	if err != nil {
 		t.Fatalf("Failed to start client: %v", err)
 	}
+
 	_, err = client.Initialize(
 		t.Context(),
 		mcp.InitializeRequest{
@@ -145,5 +160,6 @@ func GetMCPTestClientWithPermissions(
 	if err != nil {
 		t.Fatalf("Failed to initialize client: %v", err)
 	}
+
 	return client
 }

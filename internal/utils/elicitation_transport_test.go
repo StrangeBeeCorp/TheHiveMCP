@@ -5,7 +5,6 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -21,6 +20,7 @@ type recordingTransport struct {
 
 func (rt *recordingTransport) RoundTrip(*http.Request) (*http.Response, error) {
 	rt.calls++
+
 	return &http.Response{
 		StatusCode: http.StatusOK,
 		Body:       io.NopCloser(bytes.NewReader(nil)),
@@ -46,6 +46,7 @@ func (s *clientInfoSession) GetClientCapabilities() mcp.ClientCapabilities {
 	if s.elicitationCapable {
 		caps.Elicitation = &struct{}{}
 	}
+
 	return caps
 }
 
@@ -53,6 +54,7 @@ func (s *clientInfoSession) GetClientCapabilities() mcp.ClientCapabilities {
 // response, so the "user accepts/declines" paths can be exercised.
 type elicitingSession struct {
 	clientInfoSession
+
 	result *mcp.ElicitationResult
 	err    error
 }
@@ -69,29 +71,40 @@ func ctxWithSession(session server.ClientSession) context.Context {
 	return srv.WithContext(context.Background(), session)
 }
 
-func newRequest(t *testing.T, ctx context.Context, method, path string) *http.Request {
+func newRequest(ctx context.Context, t *testing.T, method, path string) *http.Request {
 	t.Helper()
-	req := httptest.NewRequest(method, "http://thehive.example.com"+path, nil)
-	return req.WithContext(ctx)
+
+	req, err := http.NewRequestWithContext(ctx, method, "http://thehive.example.com"+path, nil)
+	require.NoError(t, err)
+
+	return req
+}
+
+// closeBody closes a response body when present, ignoring the close error.
+func closeBody(resp *http.Response) {
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
 }
 
 func TestRequiresElicitation(t *testing.T) {
 	e := &ElicitationTransport{}
+
 	tests := []struct {
 		method   string
 		endpoint string
 		want     bool
 	}{
-		{"POST", "/api/v1/case", true},
-		{"PATCH", "/api/v1/case/~1", true},
-		{"DELETE", "/api/v1/case/~1", true},
+		{methodPost, "/api/v1/case", true},
+		{methodPatch, pathCaseByID, true},
+		{methodDelete, pathCaseByID, true},
 		{"post", "/api/v1/alert", true},
-		{"GET", "/api/v1/case/~1", false},
-		{"HEAD", "/api/v1/case/~1", false},
-		{"PUT", "/api/v1/case/~1", false},
-		{"POST", "/api/v1/query", false},
-		{"PATCH", "/api/v1/query", false},
-		{"DELETE", "/api/v1/query", false},
+		{"GET", pathCaseByID, false},
+		{"HEAD", pathCaseByID, false},
+		{"PUT", pathCaseByID, false},
+		{methodPost, pathQuery, false},
+		{methodPatch, pathQuery, false},
+		{methodDelete, pathQuery, false},
 	}
 	for _, tt := range tests {
 		require.Equal(t, tt.want, e.requiresElicitation(tt.method, tt.endpoint), "%s %s", tt.method, tt.endpoint)
@@ -106,7 +119,8 @@ func TestRoundTrip_NoCapabilityProceeds(t *testing.T) {
 	rt := &recordingTransport{}
 	e := &ElicitationTransport{Transport: rt}
 
-	resp, err := e.RoundTrip(newRequest(t, context.Background(), "DELETE", "/api/v1/case/~1"))
+	resp, err := e.RoundTrip(newRequest(context.Background(), t, methodDelete, pathCaseByID))
+	defer closeBody(resp)
 
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -117,7 +131,9 @@ func TestRoundTrip_NonModifyingAlwaysProceeds(t *testing.T) {
 	rt := &recordingTransport{}
 	e := &ElicitationTransport{Transport: rt}
 
-	_, err := e.RoundTrip(newRequest(t, context.Background(), "GET", "/api/v1/case/~1"))
+	resp, err := e.RoundTrip(newRequest(context.Background(), t, "GET", pathCaseByID))
+	defer closeBody(resp)
+
 	require.NoError(t, err)
 	require.Equal(t, 1, rt.calls)
 }
@@ -127,7 +143,9 @@ func TestRoundTrip_QueryEndpointProceeds(t *testing.T) {
 	e := &ElicitationTransport{Transport: rt}
 
 	// POST to /api/v1/query is a read disguised as POST; must not be gated
-	_, err := e.RoundTrip(newRequest(t, context.Background(), "POST", "/api/v1/query"))
+	resp, err := e.RoundTrip(newRequest(context.Background(), t, methodPost, pathQuery))
+	defer closeBody(resp)
+
 	require.NoError(t, err)
 	require.Equal(t, 1, rt.calls)
 }
@@ -142,7 +160,9 @@ func TestRoundTrip_AdvertisedButUnsupportedMidflightDenies(t *testing.T) {
 	e := &ElicitationTransport{Transport: rt}
 
 	ctx := ctxWithSession(&clientInfoSession{elicitationCapable: true})
-	resp, err := e.RoundTrip(newRequest(t, ctx, "DELETE", "/api/v1/case/~1"))
+
+	resp, err := e.RoundTrip(newRequest(ctx, t, methodDelete, pathCaseByID))
+	defer closeBody(resp)
 
 	require.Error(t, err)
 	require.Nil(t, resp)
@@ -163,7 +183,9 @@ func TestRoundTrip_UserAcceptsProceeds(t *testing.T) {
 			ElicitationResponse: mcp.ElicitationResponse{Action: mcp.ElicitationResponseActionAccept},
 		},
 	}
-	_, err := e.RoundTrip(newRequest(t, ctxWithSession(session), "DELETE", "/api/v1/case/~1"))
+
+	resp, err := e.RoundTrip(newRequest(ctxWithSession(session), t, methodDelete, pathCaseByID))
+	defer closeBody(resp)
 
 	require.NoError(t, err)
 	require.Equal(t, 1, rt.calls)
@@ -179,7 +201,9 @@ func TestRoundTrip_UserDeclinesIsRefused(t *testing.T) {
 			ElicitationResponse: mcp.ElicitationResponse{Action: mcp.ElicitationResponseActionDecline},
 		},
 	}
-	_, err := e.RoundTrip(newRequest(t, ctxWithSession(session), "DELETE", "/api/v1/case/~1"))
+
+	resp, err := e.RoundTrip(newRequest(ctxWithSession(session), t, methodDelete, pathCaseByID))
+	defer closeBody(resp)
 
 	require.Error(t, err)
 	require.Equal(t, 0, rt.calls)

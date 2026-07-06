@@ -2,30 +2,36 @@ package search_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"testing"
 	"time"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 // unusedSamplingHandler is wired into the test MCP client but must never fire:
 // search-entities no longer uses the internal LLM. If it is ever called, the
 // test fails loudly — this asserts the no-sampling invariant.
 func unusedSamplingHandler(t *testing.T) func(context.Context, mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
+	t.Helper()
+
 	return func(context.Context, mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
 		t.Error("search-entities must not call the sampling/LLM path")
-		return nil, fmt.Errorf("unexpected sampling call")
+		return nil, errors.New("unexpected sampling call")
 	}
 }
 
 // Helper function to create a test alert with specific fields
-func createTestAlert(t *testing.T, hiveClient *thehive.APIClient, title string, severity int32, tags []string) map[string]interface{} {
+func createTestAlert(t *testing.T, hiveClient *thehive.APIClient, title string, severity int32, tags []string) map[string]any {
+	t.Helper()
+
 	testAlert := testutils.MockInputAlert()
 	testAlert.Title = title
 	testAlert.Severity = &severity
@@ -37,18 +43,21 @@ func createTestAlert(t *testing.T, hiveClient *thehive.APIClient, title string, 
 	require.NoError(t, err)
 	require.NotNil(t, createdAlert)
 
-	return map[string]interface{}{
-		"_id":      createdAlert.UnderscoreId,
-		"title":    createdAlert.Title,
-		"severity": createdAlert.Severity,
+	return map[string]any{
+		tID:       createdAlert.UnderscoreId,
+		tTitle:    createdAlert.Title,
+		tSeverity: createdAlert.Severity,
 	}
 }
 
 // Helper function to create a test case with specific fields
-func createTestCase(t *testing.T, hiveClient *thehive.APIClient, title string, severity int32, status string, assignee string) map[string]interface{} {
+func createTestCase(t *testing.T, hiveClient *thehive.APIClient, title string, severity int32, status string, assignee string) {
+	t.Helper()
+
 	testCase := testutils.MockInputCase()
 	testCase.Title = title
 	testCase.Severity = &severity
+
 	testCase.Status = &status
 	if assignee != "" {
 		testCase.Assignee = &assignee
@@ -61,15 +70,11 @@ func createTestCase(t *testing.T, hiveClient *thehive.APIClient, title string, s
 	slog.Info("Create case response", "response", resp)
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
-
-	return map[string]interface{}{
-		"_id":    createdCase.UnderscoreId,
-		"title":  createdCase.Title,
-		"status": createdCase.Status,
-	}
 }
 
-func createTestCaseWithTaskAndAlert(t *testing.T, hiveClient *thehive.APIClient) map[string]interface{} {
+func createTestCaseWithTaskAndAlert(t *testing.T, hiveClient *thehive.APIClient) map[string]any {
+	t.Helper()
+
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Test case with tasks"
 	testAlert := testutils.MockInputAlert()
@@ -79,6 +84,7 @@ func createTestCaseWithTaskAndAlert(t *testing.T, hiveClient *thehive.APIClient)
 	slog.Info("Create case response", "response", resp)
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
+
 	createdAlert, resp, err := hiveClient.AlertAPI.CreateAlert(authContext).InputCreateAlert(*testAlert).Execute()
 	slog.Info("Create alert response", "response", resp)
 	require.NoError(t, err)
@@ -87,8 +93,8 @@ func createTestCaseWithTaskAndAlert(t *testing.T, hiveClient *thehive.APIClient)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
-	return map[string]interface{}{
-		"case_id":  createdCase.UnderscoreId,
+	return map[string]any{
+		tCaseID:    createdCase.UnderscoreId,
 		"alert_id": createdAlert.UnderscoreId,
 	}
 }
@@ -105,31 +111,31 @@ func TestSearchCasesBySeverityAndStatus(t *testing.T) {
 	mcpClient := newSearchClient(t)
 
 	casesData := searchRows(t, mcpClient, map[string]any{
-		"entity-type": types.EntityTypeCase,
-		"filters": map[string]any{
-			"_and": []any{
+		pEntityType: types.EntityTypeCase,
+		pFilters: map[string]any{
+			tAnd: []any{
 				map[string]any{
-					"_gte": map[string]any{
-						"_field": "severity",
-						"_value": 3,
+					tGte: map[string]any{
+						tField: tSeverity,
+						tValue: 3,
 					},
 				},
 				map[string]any{
-					"_eq": map[string]any{
-						"_field": "status",
-						"_value": "New",
+					tEq: map[string]any{
+						tField: tStatus,
+						tValue: "New",
 					},
 				},
 			},
 		},
-		"extra-columns": []string{"_id", "title", "severity", "status"},
+		pExtraColumns: []string{tID, tTitle, tSeverity, tStatus},
 	})
 	require.Len(t, casesData, 1)
 
 	caseData, ok := casesData[0].(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, "[UNTRUSTED_DATA]High severity open case[/UNTRUSTED_DATA]", caseData["title"])
-	require.Equal(t, float64(3), caseData["severity"])
+	require.Equal(t, "[UNTRUSTED_DATA]High severity open case[/UNTRUSTED_DATA]", caseData[tTitle])
+	require.InDelta(t, float64(3), caseData[tSeverity], 0)
 }
 
 // TestSearchAlertsWithDateRange tests searching alerts created within a date range
@@ -148,15 +154,15 @@ func TestSearchAlertsWithDateRange(t *testing.T) {
 	mcpClient := newSearchClient(t)
 
 	alertsData := searchRows(t, mcpClient, map[string]any{
-		"entity-type": types.EntityTypeAlert,
-		"filters": map[string]any{
-			"_between": map[string]any{
-				"_field": "_createdAt",
-				"_from":  fromTime,
-				"_to":    toTime,
+		pEntityType: types.EntityTypeAlert,
+		pFilters: map[string]any{
+			tBetween: map[string]any{
+				tField:  tCreatedAt,
+				"_from": fromTime,
+				"_to":   toTime,
 			},
 		},
-		"extra-columns": []string{"_id", "title", "_createdAt"},
+		pExtraColumns: []string{tID, tTitle, tCreatedAt},
 	})
 	require.GreaterOrEqual(t, len(alertsData), 2)
 }
@@ -166,26 +172,26 @@ func TestSearchAlertsWithMultipleTags(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
 	// Create alerts with different tags
-	createTestAlert(t, hiveClient, "Phishing alert", 3, []string{"phishing", "email"})
-	createTestAlert(t, hiveClient, "Malware alert", 3, []string{"malware", "endpoint"})
-	createTestAlert(t, hiveClient, "Network alert", 2, []string{"network", "firewall"})
+	createTestAlert(t, hiveClient, "Phishing alert", 3, []string{tPhishing, "email"})
+	createTestAlert(t, hiveClient, "Malware alert", 3, []string{tMalware, "endpoint"})
+	createTestAlert(t, hiveClient, "Network alert", 2, []string{tNetwork, "firewall"})
 
 	mcpClient := newSearchClient(t)
 
 	alertsData := searchRows(t, mcpClient, map[string]any{
-		"entity-type": types.EntityTypeAlert,
-		"filters": map[string]any{
-			"_or": []any{
+		pEntityType: types.EntityTypeAlert,
+		pFilters: map[string]any{
+			tOr: []any{
 				map[string]any{
-					"_in": map[string]any{
-						"_field":  "tags",
-						"_values": []any{"phishing", "malware"},
+					tIn: map[string]any{
+						tField:  tTags,
+						tValues: []any{tPhishing, tMalware},
 					},
 				},
 			},
 		},
-		"extra-columns": []string{"_id", "title", "tags", "severity"},
-		"sort-by":       "severity",
+		pExtraColumns: []string{tID, tTitle, tTags, tSeverity},
+		"sort-by":     tSeverity,
 	})
 	require.Len(t, alertsData, 2)
 }
@@ -203,33 +209,36 @@ func TestSearchCasesWithAssigneeAndSorting(t *testing.T) {
 	mcpClient := newSearchClient(t)
 
 	casesData := searchRows(t, mcpClient, map[string]any{
-		"entity-type": types.EntityTypeCase,
-		"filters": map[string]any{
-			"_and": []any{
+		pEntityType: types.EntityTypeCase,
+		pFilters: map[string]any{
+			tAnd: []any{
 				map[string]any{
-					"_eq": map[string]any{
-						"_field": "assignee",
-						"_value": "admin@thehive.local",
+					tEq: map[string]any{
+						tField: "assignee",
+						tValue: "admin@thehive.local",
 					},
 				},
 				map[string]any{
-					"_eq": map[string]any{
-						"_field": "status",
-						"_value": "InProgress",
+					tEq: map[string]any{
+						tField: tStatus,
+						tValue: "InProgress",
 					},
 				},
 			},
 		},
-		"extra-columns": []string{"_id", "title", "assignee", "_createdAt"},
-		"sort-order":    "asc",
+		pExtraColumns: []string{tID, tTitle, "assignee", tCreatedAt},
+		"sort-order":  "asc",
 	})
 	require.Len(t, casesData, 2) // Should match both cases assigned to admin
 
 	// Verify sorting (oldest first with asc order)
-	firstCase := casesData[0].(map[string]any)
-	secondCase := casesData[1].(map[string]any)
-	require.Equal(t, "[UNTRUSTED_DATA]Admin's case 1[/UNTRUSTED_DATA]", firstCase["title"])
-	require.Equal(t, "[UNTRUSTED_DATA]Admin's case 2[/UNTRUSTED_DATA]", secondCase["title"])
+	firstCase, ok := casesData[0].(map[string]any)
+	require.True(t, ok)
+	secondCase, ok := casesData[1].(map[string]any)
+	require.True(t, ok)
+
+	require.Equal(t, "[UNTRUSTED_DATA]Admin's case 1[/UNTRUSTED_DATA]", firstCase[tTitle])
+	require.Equal(t, "[UNTRUSTED_DATA]Admin's case 2[/UNTRUSTED_DATA]", secondCase[tTitle])
 }
 
 // TestSearchAlertsWithComplexOrConditions tests using _or with multiple severity levels
@@ -245,33 +254,35 @@ func TestSearchAlertsWithComplexOrConditions(t *testing.T) {
 	mcpClient := newSearchClient(t)
 
 	alertsData := searchRows(t, mcpClient, map[string]any{
-		"entity-type": types.EntityTypeAlert,
-		"filters": map[string]any{
-			"_or": []any{
+		pEntityType: types.EntityTypeAlert,
+		pFilters: map[string]any{
+			tOr: []any{
 				map[string]any{
-					"_eq": map[string]any{
-						"_field": "severity",
-						"_value": 4,
+					tEq: map[string]any{
+						tField: tSeverity,
+						tValue: 4,
 					},
 				},
 				map[string]any{
-					"_eq": map[string]any{
-						"_field": "severity",
-						"_value": 3,
+					tEq: map[string]any{
+						tField: tSeverity,
+						tValue: 3,
 					},
 				},
 			},
 		},
-		"extra-columns": []string{"_id", "title", "severity"},
-		"sort-by":       "severity",
+		pExtraColumns: []string{tID, tTitle, tSeverity},
+		"sort-by":     tSeverity,
 	})
 	require.Len(t, alertsData, 2)
 
 	// Verify only high and critical alerts are returned
 	for _, alertAny := range alertsData {
-		alert := alertAny.(map[string]any)
-		severity := int(alert["severity"].(float64))
-		require.GreaterOrEqual(t, severity, 3, "Only high (3) and critical (4) severity alerts should be returned")
+		alert, ok := alertAny.(map[string]any)
+		require.True(t, ok)
+		severityValue, ok := alert[tSeverity].(float64)
+		require.True(t, ok)
+		require.GreaterOrEqual(t, int(severityValue), 3, "Only high (3) and critical (4) severity alerts should be returned")
 	}
 }
 
@@ -298,8 +309,8 @@ func TestSearchTasksWithLimit(t *testing.T) {
 	mcpClient := newSearchClient(t)
 
 	tasksData := searchRows(t, mcpClient, map[string]any{
-		"entity-type": types.EntityTypeTask,
-		"limit":       3,
+		pEntityType: types.EntityTypeTask,
+		"limit":     3,
 	})
 	require.Len(t, tasksData, 3, "Should return exactly 3 tasks as per limit")
 }
@@ -314,22 +325,23 @@ func TestExtraColumnsLimitColumns(t *testing.T) {
 	mcpClient := newSearchClient(t)
 
 	alertsData := searchRows(t, mcpClient, map[string]any{
-		"entity-type":   types.EntityTypeAlert,
-		"extra-columns": []string{"_id", "title"},
+		pEntityType:   types.EntityTypeAlert,
+		pExtraColumns: []string{tID, tTitle},
 	})
 	require.GreaterOrEqual(t, len(alertsData), 1)
 
 	// Verify that only the columns from kept_columns are returned
-	alertData := alertsData[0].(map[string]any)
+	alertData, ok := alertsData[0].(map[string]any)
+	require.True(t, ok)
 
 	// These should be present (from kept_columns)
-	require.Contains(t, alertData, "_id")
-	require.Contains(t, alertData, "title")
+	require.Contains(t, alertData, tID)
+	require.Contains(t, alertData, tTitle)
 
 	// These should NOT be present (not in kept_columns, even though requested in extra-columns)
-	require.NotContains(t, alertData, "severity", "severity should not be present as it's not in kept_columns")
-	require.NotContains(t, alertData, "tags", "tags should not be present as it's not in kept_columns")
-	require.NotContains(t, alertData, "_createdAt", "_createdAt should not be present as it's not in kept_columns")
+	require.NotContains(t, alertData, tSeverity, "severity should not be present as it's not in kept_columns")
+	require.NotContains(t, alertData, tTags, "tags should not be present as it's not in kept_columns")
+	require.NotContains(t, alertData, tCreatedAt, "_createdAt should not be present as it's not in kept_columns")
 
 	// Verify we only have the expected number of columns
 	require.Len(t, alertData, 2, "Should only have 2 columns as specified in kept_columns")
@@ -378,14 +390,19 @@ func TestSearchWithAnalystPermissions(t *testing.T) {
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, unusedSamplingHandler(t), testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
 	alertsData := searchRows(t, mcpClient, map[string]any{
-		"entity-type": types.EntityTypeAlert,
+		pEntityType: types.EntityTypeAlert,
 	})
 
 	// Check that only alert1 is visible (TLP<=2 and PAP<=2)
 	visibleIDs := make(map[string]bool)
+
 	for _, alertInterface := range alertsData {
-		alert := alertInterface.(map[string]any)
-		visibleIDs[alert["_id"].(string)] = true
+		alert, ok := alertInterface.(map[string]any)
+		require.True(t, ok)
+		alertID, ok := alert[tID].(string)
+		require.True(t, ok)
+
+		visibleIDs[alertID] = true
 	}
 
 	require.True(t, visibleIDs[createdAlert1.UnderscoreId], "Alert with TLP=2, PAP=2 should be visible")
@@ -412,7 +429,7 @@ func TestSearchWithReadOnlyPermissions(t *testing.T) {
 
 	// Test: Search should succeed with read-only permissions
 	result := callSearch(t, mcpClient, map[string]any{
-		"entity-type": types.EntityTypeAlert,
+		pEntityType: types.EntityTypeAlert,
 	})
 	require.False(t, result.IsError, "Search should succeed with read-only permissions")
 
@@ -424,13 +441,19 @@ func TestSearchWithReadOnlyPermissions(t *testing.T) {
 
 	// Verify our test alert is in the results
 	found := false
+
 	for _, alertInterface := range alertsData {
-		alert := alertInterface.(map[string]any)
-		if alert["_id"].(string) == createdAlert.UnderscoreId {
+		alert, ok := alertInterface.(map[string]any)
+		require.True(t, ok)
+		alertID, ok := alert[tID].(string)
+		require.True(t, ok)
+
+		if alertID == createdAlert.UnderscoreId {
 			found = true
 			break
 		}
 	}
+
 	require.True(t, found, "Should find our test alert")
 }
 
@@ -446,14 +469,14 @@ func TestSearchCasesWithCountOnly(t *testing.T) {
 	mcpClient := newSearchClient(t)
 
 	structuredData := searchStructured(t, mcpClient, map[string]any{
-		"entity-type": types.EntityTypeCase,
-		"filters": map[string]any{
-			"_gte": map[string]any{
-				"_field": "severity",
-				"_value": 3,
+		pEntityType: types.EntityTypeCase,
+		pFilters: map[string]any{
+			tGte: map[string]any{
+				tField: tSeverity,
+				tValue: 3,
 			},
 		},
-		"count": true,
+		tCount: true,
 	})
 
 	// Check that we got a count-only response
@@ -462,9 +485,9 @@ func TestSearchCasesWithCountOnly(t *testing.T) {
 	require.True(t, countOnly)
 
 	// Check that count is 2 (two high severity cases)
-	count, ok := structuredData["count"].(float64)
+	count, ok := structuredData[tCount].(float64)
 	require.True(t, ok)
-	require.Equal(t, float64(2), count)
+	require.InDelta(t, float64(2), count, 0)
 
 	// Verify other expected fields are present
 	require.Equal(t, types.EntityTypeCase, structuredData["entityType"])
@@ -476,26 +499,31 @@ func TestSearchAlertsWithCountOnly(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
 	// Create test alerts
-	createTestAlert(t, hiveClient, "Critical Alert 1", 4, []string{"malware", "phishing"})
-	createTestAlert(t, hiveClient, "Critical Alert 2", 4, []string{"malware"})
+	createTestAlert(t, hiveClient, "Critical Alert 1", 4, []string{tMalware, tPhishing})
+	createTestAlert(t, hiveClient, "Critical Alert 2", 4, []string{tMalware})
 	createTestAlert(t, hiveClient, "Medium Alert", 2, []string{"suspicious"})
 
 	mcpClient := newSearchClient(t)
 
 	structuredData := searchStructured(t, mcpClient, map[string]any{
-		"entity-type": types.EntityTypeAlert,
-		"filters": map[string]any{
-			"_eq": map[string]any{
-				"_field": "severity",
-				"_value": 4,
+		pEntityType: types.EntityTypeAlert,
+		pFilters: map[string]any{
+			tEq: map[string]any{
+				tField: tSeverity,
+				tValue: 4,
 			},
 		},
-		"count": true,
+		tCount: true,
 	})
 
 	// Verify count-only response structure
-	require.True(t, structuredData["countOnly"].(bool))
-	require.Equal(t, float64(2), structuredData["count"].(float64))
+	countOnly, ok := structuredData["countOnly"].(bool)
+	require.True(t, ok)
+	require.True(t, countOnly)
+
+	countValue, ok := structuredData[tCount].(float64)
+	require.True(t, ok)
+	require.InDelta(t, float64(2), countValue, 0)
 	require.Equal(t, types.EntityTypeAlert, structuredData["entityType"])
 }
 
@@ -513,9 +541,9 @@ func TestSearchCountVsRegularSearch(t *testing.T) {
 	// Same filter, toggling only count, so the count must equal the row count.
 	args := func(count bool) map[string]any {
 		return map[string]any{
-			"entity-type": types.EntityTypeCase,
-			"filters":     map[string]any{"_eq": map[string]any{"_field": "severity", "_value": 2}},
-			"count":       count,
+			pEntityType: types.EntityTypeCase,
+			pFilters:    map[string]any{tEq: map[string]any{tField: tSeverity, tValue: 2}},
+			tCount:      count,
 		}
 	}
 
@@ -526,11 +554,11 @@ func TestSearchCountVsRegularSearch(t *testing.T) {
 	// Now do a count-only search
 	countData := searchStructured(t, mcpClient, args(true))
 
-	countOnlyValue, ok := countData["count"].(float64)
+	countOnlyValue, ok := countData[tCount].(float64)
 	require.True(t, ok)
 
 	// Verify that the count matches the number of results
-	require.Equal(t, float64(regularCount), countOnlyValue)
+	require.InDelta(t, float64(regularCount), countOnlyValue, 0)
 	require.Equal(t, 3, regularCount) // We created 3 test cases
 }
 
@@ -542,25 +570,27 @@ func TestSearchExtraDataAndAdditionalQueries(t *testing.T) {
 	mcpClient := newSearchClient(t)
 
 	structuredData := searchStructured(t, mcpClient, map[string]any{
-		"entity-type":        types.EntityTypeCase,
-		"extra-columns":      []string{"_id", "title"},
-		"extra-data":         []string{"alerts"},
-		"additional-queries": []string{"tasks"},
+		pEntityType:        types.EntityTypeCase,
+		pExtraColumns:      []string{tID, tTitle},
+		"extra-data":       []string{"alerts"},
+		pAdditionalQueries: []string{tTasks},
 	})
 
 	casesData, ok := structuredData["results"].([]any)
 	require.True(t, ok)
 	require.Len(t, casesData, 1)
 
-	caseData := casesData[0].(map[string]any)
-	require.Equal(t, creationResult["case_id"], caseData["_id"])
-	require.Equal(t, "[UNTRUSTED_DATA]Test case with tasks[/UNTRUSTED_DATA]", caseData["title"])
+	caseData, ok := casesData[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, creationResult[tCaseID], caseData[tID])
+	require.Equal(t, "[UNTRUSTED_DATA]Test case with tasks[/UNTRUSTED_DATA]", caseData[tTitle])
 
 	restults, ok := structuredData["results"].([]any)
 	require.True(t, ok)
 	require.Len(t, restults, 1)
 
-	firstResult := restults[0].(map[string]any)
+	firstResult, ok := restults[0].(map[string]any)
+	require.True(t, ok)
 	extraData, ok := firstResult["extraData"].(map[string]any)
 	require.True(t, ok)
 
@@ -569,20 +599,24 @@ func TestSearchExtraDataAndAdditionalQueries(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, alertsData, 1)
 
-	alert := alertsData[0].(map[string]any)
+	alert, ok := alertsData[0].(map[string]any)
+	require.True(t, ok)
 	// DL-6006: "type" is an open ingestion-controlled label, so it is wrapped.
 	require.Equal(t, "[UNTRUSTED_DATA]test[/UNTRUSTED_DATA]", alert["type"])
 	require.Equal(t, "[UNTRUSTED_DATA]test[/UNTRUSTED_DATA]", alert["source"])
 
-	tasks, ok := firstResult["tasks"].([]any)
+	tasks, ok := firstResult[tTasks].([]any)
 	require.True(t, ok)
 	require.Len(t, tasks, 1)
 
-	task := tasks[0].(map[string]any)
-	require.Equal(t, "[UNTRUSTED_DATA]Test Task[/UNTRUSTED_DATA]", task["title"])
+	task, ok := tasks[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "[UNTRUSTED_DATA]Test Task[/UNTRUSTED_DATA]", task[tTitle])
 }
 
-func createTestCaseWithComment(t *testing.T, hiveClient *thehive.APIClient) map[string]interface{} {
+func createTestCaseWithComment(t *testing.T, hiveClient *thehive.APIClient) map[string]any {
+	t.Helper()
+
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Test case for comment"
@@ -595,8 +629,8 @@ func createTestCaseWithComment(t *testing.T, hiveClient *thehive.APIClient) map[
 	_, _, err = hiveClient.CommentAPI.CreateCommentInCase(authContext, createdCase.UnderscoreId).InputComment(commentInput).Execute()
 	require.NoError(t, err)
 
-	return map[string]interface{}{
-		"case_id": createdCase.UnderscoreId,
+	return map[string]any{
+		tCaseID: createdCase.UnderscoreId,
 	}
 }
 
@@ -607,25 +641,29 @@ func TestSearchAdditionalQueriesComments(t *testing.T) {
 	mcpClient := newSearchClient(t)
 
 	casesData := searchRows(t, mcpClient, map[string]any{
-		"entity-type":        types.EntityTypeCase,
-		"extra-columns":      []string{"_id", "title"},
-		"additional-queries": []string{"comments"},
+		pEntityType:        types.EntityTypeCase,
+		pExtraColumns:      []string{tID, tTitle},
+		pAdditionalQueries: []string{"comments"},
 	})
 	require.Len(t, casesData, 1)
 
-	caseData := casesData[0].(map[string]any)
-	require.Equal(t, creationResult["case_id"], caseData["_id"])
-	require.Equal(t, "[UNTRUSTED_DATA]Test case for comment[/UNTRUSTED_DATA]", caseData["title"])
+	caseData, ok := casesData[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, creationResult[tCaseID], caseData[tID])
+	require.Equal(t, "[UNTRUSTED_DATA]Test case for comment[/UNTRUSTED_DATA]", caseData[tTitle])
 
 	comments, ok := caseData["comments"].([]any)
 	require.True(t, ok)
 	require.Len(t, comments, 1)
 
-	comment := comments[0].(map[string]any)
+	comment, ok := comments[0].(map[string]any)
+	require.True(t, ok)
 	require.Equal(t, "[UNTRUSTED_DATA]This is a test comment[/UNTRUSTED_DATA]", comment["message"])
 }
 
-func createTaskWithLog(t *testing.T, hiveClient *thehive.APIClient) map[string]interface{} {
+func createTaskWithLog(t *testing.T, hiveClient *thehive.APIClient) map[string]any {
+	t.Helper()
+
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Test case for task logs"
@@ -644,8 +682,8 @@ func createTaskWithLog(t *testing.T, hiveClient *thehive.APIClient) map[string]i
 	_, _, err = hiveClient.TaskLogAPI.CreateTaskLog(authContext, createdTask.UnderscoreId).InputCreateLog(logInput).Execute()
 	require.NoError(t, err)
 
-	return map[string]interface{}{
-		"case_id": createdCase.UnderscoreId,
+	return map[string]any{
+		tCaseID:   createdCase.UnderscoreId,
 		"task_id": createdTask.UnderscoreId,
 	}
 }
@@ -657,9 +695,9 @@ func TestSearchTaskTasKLogs(t *testing.T) {
 	mcpClient := newSearchClient(t)
 
 	tasksData := searchRows(t, mcpClient, map[string]any{
-		"entity-type":        types.EntityTypeTask,
-		"extra-columns":      []string{"_id", "title"},
-		"additional-queries": []string{"task-logs"},
+		pEntityType:        types.EntityTypeTask,
+		pExtraColumns:      []string{tID, tTitle},
+		pAdditionalQueries: []string{"task-logs"},
 	})
 	require.NotEmpty(t, tasksData)
 
@@ -667,20 +705,28 @@ func TestSearchTaskTasKLogs(t *testing.T) {
 	// list may contain residue from other tests. Assert on this test's own task
 	// rather than the total count.
 	var found bool
+
 	for _, taskInterface := range tasksData {
-		task := taskInterface.(map[string]any)
-		if task["_id"].(string) != creationResult["task_id"] {
+		task, ok := taskInterface.(map[string]any)
+		require.True(t, ok)
+		taskID, ok := task[tID].(string)
+		require.True(t, ok)
+
+		if taskID != creationResult["task_id"] {
 			continue
 		}
+
 		found = true
 
 		logs, ok := task["task-logs"].([]any)
 		require.True(t, ok)
 		require.Len(t, logs, 1)
 
-		log := logs[0].(map[string]any)
+		log, ok := logs[0].(map[string]any)
+		require.True(t, ok)
 		require.Equal(t, "[UNTRUSTED_DATA]This is a test log entry[/UNTRUSTED_DATA]", log["message"])
 	}
+
 	require.True(t, found, "search results should include the task created by this test")
 }
 
@@ -690,6 +736,7 @@ func TestSearchCaseTemplates(t *testing.T) {
 
 	// Create two templates with distinct names for query matching
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+
 	for _, name := range []string{"Phishing-Search-Test", "Malware-Search-Test"} {
 		input := testutils.MockInputCaseTemplate()
 		input.Name = name
@@ -700,20 +747,20 @@ func TestSearchCaseTemplates(t *testing.T) {
 	mcpClient := newSearchClient(t)
 
 	templatesData := searchRows(t, mcpClient, map[string]any{
-		"entity-type": types.EntityTypeCaseTemplate,
-		"filters": map[string]any{
-			"_like": map[string]any{
-				"_field": "name",
-				"_value": "Phishing*",
+		pEntityType: types.EntityTypeCaseTemplate,
+		pFilters: map[string]any{
+			tLike: map[string]any{
+				tField: "name",
+				tValue: "Phishing*",
 			},
 		},
-		"extra-columns": []string{"_id", "name", "displayName"},
+		pExtraColumns: []string{tID, "name", "displayName"},
 	})
 	require.Len(t, templatesData, 1)
 
 	template, ok := templatesData[0].(map[string]any)
 	require.True(t, ok)
-	// DL-6006: "name" is free text, so it is wrapped (the agent uses "_id").
+	// DL-6006: "name" is free text, so it is wrapped (the agent uses tID).
 	require.Equal(t, "[UNTRUSTED_DATA]Phishing-Search-Test[/UNTRUSTED_DATA]", template["name"])
 }
 
@@ -742,14 +789,14 @@ func TestSearchPages(t *testing.T) {
 	mcpClient := newSearchClient(t)
 
 	pagesData := searchRows(t, mcpClient, map[string]any{
-		"entity-type": types.EntityTypePage,
-		"filters": map[string]any{
-			"_eq": map[string]any{
-				"_field": "category",
-				"_value": "Default",
+		pEntityType: types.EntityTypePage,
+		pFilters: map[string]any{
+			tEq: map[string]any{
+				tField: "category",
+				tValue: "Default",
 			},
 		},
-		"extra-columns": []string{"_id", "title", "category"},
+		pExtraColumns: []string{tID, tTitle, "category"},
 	})
 	require.GreaterOrEqual(t, len(pagesData), 1)
 

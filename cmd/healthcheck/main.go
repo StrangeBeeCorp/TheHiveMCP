@@ -52,6 +52,7 @@ func run() int {
 	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
 	defer cancel()
 
+	// #nosec G704 -- URL is built from the server's own MCP_PORT/MCP_SERVER_ENDPOINT env vars and always targets loopback; this is the intended healthcheck target.
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "healthcheck: build request: %v\n", err)
@@ -59,6 +60,8 @@ func run() int {
 	}
 
 	client := &http.Client{Timeout: probeTimeout}
+
+	// #nosec G704 -- request targets the loopback healthcheck URL derived from the server's own env vars; intended probe, not user-controlled SSRF.
 	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "healthcheck: request to %s failed: %v\n", url, err)

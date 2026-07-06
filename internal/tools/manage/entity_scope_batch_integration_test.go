@@ -4,11 +4,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/StrangeBeeCorp/thehive4go/thehive"
+	"github.com/stretchr/testify/require"
+
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
-	"github.com/StrangeBeeCorp/thehive4go/thehive"
-	"github.com/stretchr/testify/require"
 )
 
 // TestGetScopedEntityIDsBatchHonorsIDFilter is the empirical proof that the
@@ -42,20 +43,20 @@ func TestGetScopedEntityIDsBatchHonorsIDFilter(t *testing.T) {
 
 	// permFilters mirrors a representative production filter (analyst.yaml uses
 	// tlp<=2). An entity with tlp=3 (TLP:RED) is out of scope.
-	permFilters := map[string]interface{}{
-		"_lte": map[string]interface{}{"_field": "tlp", "_value": 2},
+	permFilters := map[string]any{
+		"_lte": map[string]any{"_field": testFieldTLP, "_value": 2},
 	}
 
 	// GetScopedEntityIDsBatch is only ever called with case (similarCases) and
 	// alert (similarAlerts), so both getCase and getAlert must be proven.
 	t.Run("case", func(t *testing.T) {
-		ids := createScopedCases(t, hiveClient, authCtx)
-		assertBatchHonorsIDFilter(t, ctx, types.EntityTypeCase, ids, permFilters)
+		ids := createScopedCases(authCtx, t, hiveClient)
+		assertBatchHonorsIDFilter(ctx, t, types.EntityTypeCase, ids, permFilters)
 	})
 
 	t.Run("alert", func(t *testing.T) {
-		ids := createScopedAlerts(t, hiveClient, authCtx)
-		assertBatchHonorsIDFilter(t, ctx, types.EntityTypeAlert, ids, permFilters)
+		ids := createScopedAlerts(authCtx, t, hiveClient)
+		assertBatchHonorsIDFilter(ctx, t, types.EntityTypeAlert, ids, permFilters)
 	})
 }
 
@@ -67,18 +68,21 @@ type scopedIDs struct {
 }
 
 // createScopedCases creates three cases with the TLPs scopedIDs documents.
-func createScopedCases(t *testing.T, c *thehive.APIClient, authCtx context.Context) scopedIDs {
+func createScopedCases(authCtx context.Context, t *testing.T, c *thehive.APIClient) scopedIDs {
 	t.Helper()
+
 	mk := func(title string, tlp int32) string {
 		in := testutils.MockInputCase()
 		in.Title = title
-		in.Tlp = thehive.PtrInt32(tlp)
+		in.Tlp = new(tlp)
 		in.Tasks = nil
 		created, _, err := c.CaseAPI.CreateCase(authCtx).InputCreateCase(*in).Execute()
 		require.NoError(t, err)
 		require.NotNil(t, created)
+
 		return created.UnderscoreId
 	}
+
 	return scopedIDs{
 		inScope:  mk("Batch scope in-scope case", 2),
 		outScope: mk("Batch scope TLP:RED case", 3),
@@ -87,18 +91,21 @@ func createScopedCases(t *testing.T, c *thehive.APIClient, authCtx context.Conte
 }
 
 // createScopedAlerts creates three alerts with the TLPs scopedIDs documents.
-func createScopedAlerts(t *testing.T, c *thehive.APIClient, authCtx context.Context) scopedIDs {
+func createScopedAlerts(authCtx context.Context, t *testing.T, c *thehive.APIClient) scopedIDs {
 	t.Helper()
+
 	mk := func(title, sourceRef string, tlp int32) string {
 		in := testutils.MockInputAlert()
 		in.Title = title
 		in.SourceRef = sourceRef
-		in.Tlp = thehive.PtrInt32(tlp)
+		in.Tlp = new(tlp)
 		created, _, err := c.AlertAPI.CreateAlert(authCtx).InputCreateAlert(*in).Execute()
 		require.NoError(t, err)
 		require.NotNil(t, created)
+
 		return created.UnderscoreId
 	}
+
 	return scopedIDs{
 		inScope:  mk("Batch scope in-scope alert", "batch-scope-in", 2),
 		outScope: mk("Batch scope TLP:RED alert", "batch-scope-red", 3),
@@ -109,11 +116,11 @@ func createScopedAlerts(t *testing.T, c *thehive.APIClient, authCtx context.Cont
 // assertBatchHonorsIDFilter drives GetScopedEntityIDsBatch against real TheHive
 // and asserts it filters correctly, naming whichever failure mode it catches.
 func assertBatchHonorsIDFilter(
-	t *testing.T,
 	ctx context.Context,
+	t *testing.T,
 	entityType string,
 	ids scopedIDs,
-	permFilters map[string]interface{},
+	permFilters map[string]any,
 ) {
 	t.Helper()
 

@@ -2,12 +2,15 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"maps"
 	"sync"
 	"unicode"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 // ListOperationName returns the TheHive query operation that lists entities
@@ -30,10 +33,12 @@ func entityOperationName(verb, entityType string) string {
 	capitalizedOverrides := map[string]string{
 		types.EntityTypeCaseTemplate: "CaseTemplate",
 	}
+
 	capitalizedEntityType, ok := capitalizedOverrides[entityType]
 	if !ok {
 		capitalizedEntityType = string(unicode.ToUpper(rune(entityType[0]))) + entityType[1:]
 	}
+
 	return fmt.Sprintf("%s%s", verb, capitalizedEntityType)
 }
 
@@ -45,7 +50,7 @@ func entityOperationName(verb, entityType string) string {
 // list operations for every entity type, so a get-by-ID pipeline is used
 // instead of one batched list query.)
 // With no configured filters every requested ID is in scope.
-func GetEntityIDsInScope(ctx context.Context, entityType string, entityIDs []string, permFilters map[string]interface{}) (map[string]bool, error) {
+func GetEntityIDsInScope(ctx context.Context, entityType string, entityIDs []string, permFilters map[string]any) (map[string]bool, error) {
 	return scopedEntityIDsBatch(ctx, entityType, entityIDs, permFilters, 1)
 }
 
@@ -75,7 +80,7 @@ const scopeCheckConcurrency = 8
 // instead of relying on the unsupported list filter.
 //
 // With no filters every ID is trivially in scope.
-func GetScopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []string, permFilters map[string]interface{}) (map[string]bool, error) {
+func GetScopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []string, permFilters map[string]any) (map[string]bool, error) {
 	return scopedEntityIDsBatch(ctx, entityType, entityIDs, permFilters, scopeCheckConcurrency)
 }
 
@@ -86,21 +91,23 @@ func GetScopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs [
 // run at once: GetEntityIDsInScope passes 1 (serial), GetScopedEntityIDsBatch
 // passes scopeCheckConcurrency. The result is keyed by ID, so it is independent
 // of goroutine scheduling and identical regardless of concurrency.
-func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []string, permFilters map[string]interface{}, concurrency int) (map[string]bool, error) {
+func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []string, permFilters map[string]any, concurrency int) (map[string]bool, error) {
 	inScope := make(map[string]bool, len(entityIDs))
 	if len(permFilters) == 0 {
 		for _, id := range entityIDs {
 			inScope[id] = true
 		}
+
 		return inScope, nil
 	}
+
 	if len(entityIDs) == 0 {
 		return inScope, nil
 	}
 
 	getOpName := getOperationName(entityType)
 	if getOpName == "" {
-		return nil, fmt.Errorf("cannot verify scope: missing entity type")
+		return nil, errors.New("cannot verify scope: missing entity type")
 	}
 
 	filterOp := scopeFilterOperation(permFilters)
@@ -124,9 +131,11 @@ func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []st
 	if concurrency < 1 {
 		concurrency = 1
 	}
+
 	sem := make(chan struct{}, concurrency)
 
 	dispatchedAll := true
+
 	for _, entityID := range entityIDs {
 		// Stop dispatching once the parent ctx is cancelled or our own cancel()
 		// has fired after the first error; the partial map is discarded below.
@@ -134,16 +143,20 @@ func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []st
 			dispatchedAll = false
 			break
 		}
+
 		wg.Add(1)
+
 		sem <- struct{}{}
+
 		go func(entityID string) {
 			defer wg.Done()
 			defer func() { <-sem }()
 
-			getOp := map[string]interface{}{
-				"_name":    getOpName,
-				"idOrName": entityID,
+			getOp := map[string]any{
+				opNameKey:   getOpName,
+				idOrNameKey: entityID,
 			}
+
 			matched, err := executeScopeQuery(qctx, []thehive.InputQueryNamedOperation{
 				thehive.MapmapOfStringAnyAsInputQueryNamedOperation(&getOp),
 				thehive.MapmapOfStringAnyAsInputQueryNamedOperation(&filterOp),
@@ -152,8 +165,10 @@ func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []st
 				once.Do(func() {
 					firstID = entityID
 					firstErr = err
+
 					cancel()
 				})
+
 				return
 			}
 
@@ -162,6 +177,7 @@ func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []st
 			mu.Unlock()
 		}(entityID)
 	}
+
 	wg.Wait()
 
 	if firstErr != nil {
@@ -175,6 +191,7 @@ func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []st
 	if !dispatchedAll {
 		return nil, fmt.Errorf("scope verification cancelled: %w", ctx.Err())
 	}
+
 	return inScope, nil
 }
 
@@ -184,14 +201,14 @@ func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []st
 // applied to the observable in the same query, so a job whose observable the
 // filters exclude is reported exactly like a missing one.
 // With no configured filters every job is in scope.
-func IsJobObservableInScope(ctx context.Context, jobID string, permFilters map[string]interface{}) (bool, error) {
+func IsJobObservableInScope(ctx context.Context, jobID string, permFilters map[string]any) (bool, error) {
 	if len(permFilters) == 0 {
 		return true, nil
 	}
 
-	getJobOp := map[string]interface{}{
-		"_name":    "getJob",
-		"idOrName": jobID,
+	getJobOp := map[string]any{
+		opNameKey:   "getJob",
+		idOrNameKey: jobID,
 	}
 	filterOp := scopeFilterOperation(permFilters)
 
@@ -203,18 +220,19 @@ func IsJobObservableInScope(ctx context.Context, jobID string, permFilters map[s
 	if err != nil {
 		return false, fmt.Errorf("failed to verify job %s against permission filters: %w", jobID, err)
 	}
+
 	return matched, nil
 }
 
 // scopeFilterOperation turns permission filters into a TheHive filter stage.
-func scopeFilterOperation(permFilters map[string]interface{}) map[string]interface{} {
-	filterOp := make(map[string]interface{}, len(permFilters)+1)
-	for k, v := range permFilters {
-		filterOp[k] = v
-	}
+func scopeFilterOperation(permFilters map[string]any) map[string]any {
+	filterOp := make(map[string]any, len(permFilters)+1)
+	maps.Copy(filterOp, permFilters)
+
 	filterOp = NormalizeFilterKeys(filterOp)
 	filterOp = TranslateDatesToTimestamps(filterOp)
-	filterOp["_name"] = "filter"
+	filterOp[opNameKey] = "filter"
+
 	return filterOp
 }
 
@@ -227,24 +245,31 @@ func executeScopeQuery(ctx context.Context, operations []thehive.InputQueryNamed
 	}
 
 	hiveQuery := thehive.InputQuery{Query: operations}
+
 	results, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(ctx).InputQuery(hiveQuery).Execute()
+	if resp != nil && resp.Body != nil {
+		defer func() { _ = resp.Body.Close() }()
+	}
+
 	if err != nil {
 		return false, fmt.Errorf("scope query failed: %w. API response: %v", err, resp)
 	}
 
-	resultsSlice, ok := results.([]interface{})
+	resultsSlice, ok := results.([]any)
 	if !ok {
 		return false, fmt.Errorf("unexpected result type from scope query. Expected []interface{} but got %T", results)
 	}
+
 	return len(resultsSlice) > 0, nil
 }
 
 // IsEntityInScope reports whether a single entity matches the permission
 // filters for the given entity type. See GetEntityIDsInScope.
-func IsEntityInScope(ctx context.Context, entityType, entityID string, permFilters map[string]interface{}) (bool, error) {
+func IsEntityInScope(ctx context.Context, entityType, entityID string, permFilters map[string]any) (bool, error) {
 	inScope, err := GetEntityIDsInScope(ctx, entityType, []string{entityID}, permFilters)
 	if err != nil {
 		return false, err
 	}
+
 	return inScope[entityID], nil
 }

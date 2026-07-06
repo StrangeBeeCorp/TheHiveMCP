@@ -13,18 +13,18 @@ func TestValidate(t *testing.T) {
 		{
 			name: "valid config",
 			config: &Config{
-				Version: "1.0",
-				Permissions: PermissionsSection{
+				Version: versionV1,
+				Permissions: Section{
 					Tools: map[string]ToolPermission{
-						"search-entities": {Allowed: true},
+						toolSearchEntities: {Allowed: true},
 					},
 					Analyzers: AutomationPermissions{
-						Mode:    "allow_list",
-						Allowed: []string{"Test"},
+						Mode:    modeAllowList,
+						Allowed: []string{testAutomationTest},
 					},
 					Responders: AutomationPermissions{
-						Mode:    "block_list",
-						Blocked: []string{"Bad"},
+						Mode:    modeBlockList,
+						Blocked: []string{testAutomationBad},
 					},
 				},
 			},
@@ -38,7 +38,7 @@ func TestValidate(t *testing.T) {
 		{
 			name: "missing version",
 			config: &Config{
-				Permissions: PermissionsSection{},
+				Permissions: Section{},
 			},
 			wantErr: true,
 		},
@@ -46,15 +46,15 @@ func TestValidate(t *testing.T) {
 			name: "invalid version",
 			config: &Config{
 				Version:     "2.0",
-				Permissions: PermissionsSection{},
+				Permissions: Section{},
 			},
 			wantErr: true,
 		},
 		{
 			name: "unknown tool",
 			config: &Config{
-				Version: "1.0",
-				Permissions: PermissionsSection{
+				Version: versionV1,
+				Permissions: Section{
 					Tools: map[string]ToolPermission{
 						"unknown-tool": {Allowed: true},
 					},
@@ -65,8 +65,8 @@ func TestValidate(t *testing.T) {
 		{
 			name: "invalid analyzer mode",
 			config: &Config{
-				Version: "1.0",
-				Permissions: PermissionsSection{
+				Version: versionV1,
+				Permissions: Section{
 					Analyzers: AutomationPermissions{
 						Mode: "invalid_mode",
 					},
@@ -77,12 +77,12 @@ func TestValidate(t *testing.T) {
 		{
 			name: "allow_list with blocked items",
 			config: &Config{
-				Version: "1.0",
-				Permissions: PermissionsSection{
+				Version: versionV1,
+				Permissions: Section{
 					Analyzers: AutomationPermissions{
-						Mode:    "allow_list",
-						Allowed: []string{"Test"},
-						Blocked: []string{"Bad"},
+						Mode:    modeAllowList,
+						Allowed: []string{testAutomationTest},
+						Blocked: []string{testAutomationBad},
 					},
 				},
 			},
@@ -91,12 +91,12 @@ func TestValidate(t *testing.T) {
 		{
 			name: "block_list with allowed items",
 			config: &Config{
-				Version: "1.0",
-				Permissions: PermissionsSection{
+				Version: versionV1,
+				Permissions: Section{
 					Responders: AutomationPermissions{
-						Mode:    "block_list",
-						Allowed: []string{"Test"},
-						Blocked: []string{"Bad"},
+						Mode:    modeBlockList,
+						Allowed: []string{testAutomationTest},
+						Blocked: []string{testAutomationBad},
 					},
 				},
 			},

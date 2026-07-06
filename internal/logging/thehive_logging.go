@@ -10,13 +10,13 @@ import (
 	"time"
 )
 
-// LoggingTransport wraps an http.RoundTripper to add structured logging
-type LoggingTransport struct {
+// Transport wraps an http.RoundTripper to add structured logging
+type Transport struct {
 	Transport http.RoundTripper
 }
 
 // RoundTrip implements http.RoundTripper interface
-func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	start := time.Now()
 
 	// Log the outgoing request
@@ -33,14 +33,15 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	return resp, err
 }
 
-func (t *LoggingTransport) transport() http.RoundTripper {
+func (t *Transport) transport() http.RoundTripper {
 	if t.Transport != nil {
 		return t.Transport
 	}
+
 	return http.DefaultTransport
 }
 
-func (t *LoggingTransport) logRequest(req *http.Request, start time.Time) {
+func (t *Transport) logRequest(req *http.Request, start time.Time) {
 	// Read and restore request body for logging
 	var bodyBytes []byte
 	if req.Body != nil {
@@ -58,7 +59,7 @@ func (t *LoggingTransport) logRequest(req *http.Request, start time.Time) {
 	)
 }
 
-func (t *LoggingTransport) logResponse(req *http.Request, resp *http.Response, err error, duration time.Duration) {
+func (t *Transport) logResponse(req *http.Request, resp *http.Response, err error, duration time.Duration) {
 	if err != nil {
 		slog.Error("HTTP request failed",
 			slog.String("method", req.Method),
@@ -67,6 +68,7 @@ func (t *LoggingTransport) logResponse(req *http.Request, resp *http.Response, e
 			slog.Duration("duration", duration),
 			slog.String("request_id", t.getRequestID(req)),
 		)
+
 		return
 	}
 
@@ -74,6 +76,7 @@ func (t *LoggingTransport) logResponse(req *http.Request, resp *http.Response, e
 	if resp.StatusCode >= 400 {
 		level = slog.LevelWarn
 	}
+
 	if resp.StatusCode >= 500 {
 		level = slog.LevelError
 	}
@@ -90,9 +93,10 @@ func (t *LoggingTransport) logResponse(req *http.Request, resp *http.Response, e
 	)
 }
 
-func (t *LoggingTransport) getRequestID(req *http.Request) string {
+func (t *Transport) getRequestID(req *http.Request) string {
 	if id := req.Header.Get("X-Request-ID"); id != "" {
 		return id
 	}
+
 	return fmt.Sprintf("%p", req)
 }

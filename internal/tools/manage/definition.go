@@ -1,32 +1,42 @@
+// Package manage implements the manage-entities MCP tool, exposing CRUD and
+// workflow operations (create, update, delete, comment, promote, merge,
+// apply-template) over TheHive entities.
 package manage
 
 import (
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 )
 
-type ManageTool struct{}
+// Tool is the MCP tool that performs CRUD and workflow operations on TheHive entities.
+type Tool struct{}
 
-func NewManageTool() *ManageTool {
-	return &ManageTool{}
+// NewManageTool returns a new Tool.
+func NewManageTool() *Tool {
+	return &Tool{}
 }
 
-func (t *ManageTool) Name() string {
+// Name returns the MCP tool name.
+func (t *Tool) Name() string {
 	return tools.ToolNameManageEntities
 }
 
-func (t *ManageTool) Handler() server.ToolHandlerFunc {
+// Handler returns the MCP tool handler, wrapped with parameter and permission validation.
+func (t *Tool) Handler() server.ToolHandlerFunc {
 	return tools.WithValidation(t)
 }
 
-func (t *ManageTool) HasUntrustedData() bool { return true }
+// HasUntrustedData reports that this tool's results may contain untrusted, user-generated data.
+func (t *Tool) HasUntrustedData() bool { return true }
 
-func (t *ManageTool) Definition() mcp.Tool {
+// Definition returns the MCP tool definition including input and output schemas.
+func (t *Tool) Definition() mcp.Tool {
 	return mcp.NewTool(
 		t.Name(),
 		mcp.WithDescription(ManageToolDescription),
-		mcp.WithInputSchema[ManageEntityParams](),
-		mcp.WithOutputSchema[ManageEntityResult](),
+		mcp.WithInputSchema[EntityParams](),
+		mcp.WithOutputSchema[EntityResult](),
 	)
 }

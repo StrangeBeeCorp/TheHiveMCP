@@ -11,14 +11,15 @@ import (
 // NewToolResultJSONUnescaped creates a new MCP tool result with proper UTF-8 encoding
 // without escaping non-ASCII characters. This fixes issues where Unicode characters
 // like emojis and accented characters get escaped (e.g., ✅ becomes \u2705).
-func NewToolResultJSONUnescaped(data interface{}) *mcp.CallToolResult {
+func NewToolResultJSONUnescaped(data any) *mcp.CallToolResult {
 	buffer := &bytes.Buffer{}
 	encoder := json.NewEncoder(buffer)
 
 	// Prevent HTML escaping and allow proper UTF-8 encoding
 	encoder.SetEscapeHTML(false)
 
-	if err := encoder.Encode(data); err != nil {
+	err := encoder.Encode(data)
+	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to encode data to JSON: %v", err))
 	}
 

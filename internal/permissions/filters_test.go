@@ -8,33 +8,33 @@ import (
 func TestMergeFilters(t *testing.T) {
 	tests := []struct {
 		name             string
-		userQuery        map[string]interface{}
-		permFilters      map[string]interface{}
+		userQuery        map[string]any
+		permFilters      map[string]any
 		wantApplied      bool
 		checkMergedField string
 	}{
 		{
 			name:        "no permission filters",
-			userQuery:   map[string]interface{}{"_field": "status", "_operator": "_eq", "_value": "Open"},
+			userQuery:   map[string]any{testFieldKey: testFieldStatus, testOperatorKey: "_eq", testValueKey: "Open"},
 			permFilters: nil,
 			wantApplied: false,
 		},
 		{
 			name:        "empty permission filters",
-			userQuery:   map[string]interface{}{"_field": "status"},
-			permFilters: map[string]interface{}{},
+			userQuery:   map[string]any{testFieldKey: testFieldStatus},
+			permFilters: map[string]any{},
 			wantApplied: false,
 		},
 		{
 			name:        "no user query",
 			userQuery:   nil,
-			permFilters: map[string]interface{}{"_field": "severity", "_operator": "_gte", "_value": 2},
+			permFilters: map[string]any{testFieldKey: "severity", testOperatorKey: "_gte", testValueKey: 2},
 			wantApplied: true,
 		},
 		{
 			name:             "both exist - should merge with AND",
-			userQuery:        map[string]interface{}{"_field": "status", "_operator": "_eq", "_value": "Open"},
-			permFilters:      map[string]interface{}{"_field": "severity", "_operator": "_gte", "_value": 2},
+			userQuery:        map[string]any{testFieldKey: testFieldStatus, testOperatorKey: "_eq", testValueKey: "Open"},
+			permFilters:      map[string]any{testFieldKey: "severity", testOperatorKey: "_gte", testValueKey: 2},
 			wantApplied:      true,
 			checkMergedField: "_and",
 		},
@@ -71,6 +71,7 @@ func TestNewPermissionInfoDenied(t *testing.T) {
 	if !info.Applied {
 		t.Error("NewPermissionInfoDenied() should have Applied=true")
 	}
+
 	if info.Message != msg {
 		t.Errorf("NewPermissionInfoDenied() message = %q, want %q", info.Message, msg)
 	}
@@ -83,9 +84,11 @@ func TestNewPermissionInfoFiltered(t *testing.T) {
 	if !info.Applied {
 		t.Error("NewPermissionInfoFiltered() should have Applied=true")
 	}
+
 	if !info.FilterApplied {
 		t.Error("NewPermissionInfoFiltered() should have FilterApplied=true")
 	}
+
 	if info.Message != msg {
 		t.Errorf("NewPermissionInfoFiltered() message = %q, want %q", info.Message, msg)
 	}
@@ -98,9 +101,11 @@ func TestNewPermissionInfoRestricted(t *testing.T) {
 	if !info.Applied {
 		t.Error("NewPermissionInfoRestricted() should have Applied=true")
 	}
+
 	if !reflect.DeepEqual(info.Restrictions, restrictions) {
 		t.Errorf("NewPermissionInfoRestricted() restrictions = %v, want %v", info.Restrictions, restrictions)
 	}
+
 	if info.Message != "3 items restricted by permissions" {
 		t.Errorf("NewPermissionInfoRestricted() message = %q, want '3 items restricted by permissions'", info.Message)
 	}

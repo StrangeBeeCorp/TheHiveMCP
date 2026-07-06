@@ -6,11 +6,11 @@ import (
 
 func TestIsToolAllowed(t *testing.T) {
 	config := &Config{
-		Version: "1.0",
-		Permissions: PermissionsSection{
+		Version: versionV1,
+		Permissions: Section{
 			Tools: map[string]ToolPermission{
-				"search-entities": {Allowed: true},
-				"manage-entities": {Allowed: false},
+				toolSearchEntities: {Allowed: true},
+				toolManageEntities: {Allowed: false},
 			},
 		},
 	}
@@ -20,8 +20,8 @@ func TestIsToolAllowed(t *testing.T) {
 		toolName string
 		want     bool
 	}{
-		{"allowed tool", "search-entities", true},
-		{"denied tool", "manage-entities", false},
+		{"allowed tool", toolSearchEntities, true},
+		{"denied tool", toolManageEntities, false},
 		{"nonexistent tool", "nonexistent", false},
 	}
 
@@ -36,10 +36,10 @@ func TestIsToolAllowed(t *testing.T) {
 
 func TestIsAnalyzerAllowed_AllowList(t *testing.T) {
 	config := &Config{
-		Permissions: PermissionsSection{
+		Permissions: Section{
 			Analyzers: AutomationPermissions{
-				Mode:    "allow_list",
-				Allowed: []string{"VirusTotal", "Shodan"},
+				Mode:    modeAllowList,
+				Allowed: []string{testAnalyzerVirusTotal, "Shodan"},
 			},
 		},
 	}
@@ -49,7 +49,7 @@ func TestIsAnalyzerAllowed_AllowList(t *testing.T) {
 		analyzerName string
 		want         bool
 	}{
-		{"allowed analyzer", "VirusTotal", true},
+		{"allowed analyzer", testAnalyzerVirusTotal, true},
 		{"allowed analyzer", "Shodan", true},
 		{"denied analyzer", "MISP", false},
 		{"empty analyzer", "", false},
@@ -66,9 +66,9 @@ func TestIsAnalyzerAllowed_AllowList(t *testing.T) {
 
 func TestIsAnalyzerAllowed_BlockList(t *testing.T) {
 	config := &Config{
-		Permissions: PermissionsSection{
+		Permissions: Section{
 			Analyzers: AutomationPermissions{
-				Mode:    "block_list",
+				Mode:    modeBlockList,
 				Blocked: []string{"BadAnalyzer"},
 			},
 		},
@@ -79,7 +79,7 @@ func TestIsAnalyzerAllowed_BlockList(t *testing.T) {
 		analyzerName string
 		want         bool
 	}{
-		{"not blocked analyzer", "VirusTotal", true},
+		{"not blocked analyzer", testAnalyzerVirusTotal, true},
 		{"blocked analyzer", "BadAnalyzer", false},
 	}
 
@@ -94,9 +94,9 @@ func TestIsAnalyzerAllowed_BlockList(t *testing.T) {
 
 func TestIsAnalyzerAllowed_Wildcard(t *testing.T) {
 	config := &Config{
-		Permissions: PermissionsSection{
+		Permissions: Section{
 			Analyzers: AutomationPermissions{
-				Mode:    "allow_list",
+				Mode:    modeAllowList,
 				Allowed: []string{"*"},
 			},
 		},
@@ -109,10 +109,10 @@ func TestIsAnalyzerAllowed_Wildcard(t *testing.T) {
 
 func TestIsResponderAllowed_AllowList(t *testing.T) {
 	config := &Config{
-		Permissions: PermissionsSection{
+		Permissions: Section{
 			Responders: AutomationPermissions{
-				Mode:    "allow_list",
-				Allowed: []string{"Responder1", "Responder2"},
+				Mode:    modeAllowList,
+				Allowed: []string{testResponder1, "Responder2"},
 			},
 		},
 	}
@@ -122,7 +122,7 @@ func TestIsResponderAllowed_AllowList(t *testing.T) {
 		responderName string
 		want          bool
 	}{
-		{"allowed responder", "Responder1", true},
+		{"allowed responder", testResponder1, true},
 		{"denied responder", "Responder3", false},
 	}
 
@@ -137,22 +137,22 @@ func TestIsResponderAllowed_AllowList(t *testing.T) {
 
 func TestGetAllowedAnalyzers(t *testing.T) {
 	config := &Config{
-		Permissions: PermissionsSection{
+		Permissions: Section{
 			Analyzers: AutomationPermissions{
-				Mode:    "allow_list",
-				Allowed: []string{"Analyzer1", "Analyzer2"},
+				Mode:    modeAllowList,
+				Allowed: []string{testAnalyzer1, testAnalyzer2},
 			},
 		},
 	}
 
-	allAnalyzers := []string{"Analyzer1", "Analyzer2", "Analyzer3", "Analyzer4"}
+	allAnalyzers := []string{testAnalyzer1, testAnalyzer2, "Analyzer3", "Analyzer4"}
 	allowed := config.GetAllowedAnalyzers(allAnalyzers)
 
 	if len(allowed) != 2 {
 		t.Errorf("Expected 2 allowed analyzers, got %d", len(allowed))
 	}
 
-	expected := map[string]bool{"Analyzer1": true, "Analyzer2": true}
+	expected := map[string]bool{testAnalyzer1: true, testAnalyzer2: true}
 	for _, name := range allowed {
 		if !expected[name] {
 			t.Errorf("Unexpected analyzer in allowed list: %s", name)
@@ -162,15 +162,15 @@ func TestGetAllowedAnalyzers(t *testing.T) {
 
 func TestGetAllowedResponders(t *testing.T) {
 	config := &Config{
-		Permissions: PermissionsSection{
+		Permissions: Section{
 			Responders: AutomationPermissions{
-				Mode:    "block_list",
-				Blocked: []string{"BadResponder"},
+				Mode:    modeBlockList,
+				Blocked: []string{testBadResponder},
 			},
 		},
 	}
 
-	allResponders := []string{"Responder1", "BadResponder", "Responder2"}
+	allResponders := []string{testResponder1, testBadResponder, "Responder2"}
 	allowed := config.GetAllowedResponders(allResponders)
 
 	if len(allowed) != 2 {
@@ -178,7 +178,7 @@ func TestGetAllowedResponders(t *testing.T) {
 	}
 
 	for _, name := range allowed {
-		if name == "BadResponder" {
+		if name == testBadResponder {
 			t.Error("BadResponder should not be in allowed list")
 		}
 	}
@@ -195,13 +195,13 @@ func TestIsEntityOperationAllowed(t *testing.T) {
 		{
 			name: "entity operation allowed",
 			config: &Config{
-				Version: "1.0",
-				Permissions: PermissionsSection{
+				Version: versionV1,
+				Permissions: Section{
 					Tools: map[string]ToolPermission{
-						"manage-entities": {
+						toolManageEntities: {
 							Allowed: true,
 							EntityPermissions: map[string]EntityOperation{
-								"alert": {
+								testEntityAlert: {
 									Create:  true,
 									Update:  true,
 									Delete:  false,
@@ -212,20 +212,20 @@ func TestIsEntityOperationAllowed(t *testing.T) {
 					},
 				},
 			},
-			entityType: "alert",
-			operation:  "create",
+			entityType: testEntityAlert,
+			operation:  operationCreate,
 			want:       true,
 		},
 		{
 			name: "entity operation denied",
 			config: &Config{
-				Version: "1.0",
-				Permissions: PermissionsSection{
+				Version: versionV1,
+				Permissions: Section{
 					Tools: map[string]ToolPermission{
-						"manage-entities": {
+						toolManageEntities: {
 							Allowed: true,
 							EntityPermissions: map[string]EntityOperation{
-								"alert": {
+								testEntityAlert: {
 									Create:  true,
 									Update:  true,
 									Delete:  false,
@@ -236,20 +236,20 @@ func TestIsEntityOperationAllowed(t *testing.T) {
 					},
 				},
 			},
-			entityType: "alert",
+			entityType: testEntityAlert,
 			operation:  "delete",
 			want:       false,
 		},
 		{
 			name: "entity type not configured - should deny",
 			config: &Config{
-				Version: "1.0",
-				Permissions: PermissionsSection{
+				Version: versionV1,
+				Permissions: Section{
 					Tools: map[string]ToolPermission{
-						"manage-entities": {
+						toolManageEntities: {
 							Allowed: true,
 							EntityPermissions: map[string]EntityOperation{
-								"alert": {
+								testEntityAlert: {
 									Create: true,
 								},
 							},
@@ -257,52 +257,52 @@ func TestIsEntityOperationAllowed(t *testing.T) {
 					},
 				},
 			},
-			entityType: "case",
-			operation:  "create",
+			entityType: testEntityCase,
+			operation:  operationCreate,
 			want:       false,
 		},
 		{
 			name: "no entity permissions configured - allow all (backward compatibility)",
 			config: &Config{
-				Version: "1.0",
-				Permissions: PermissionsSection{
+				Version: versionV1,
+				Permissions: Section{
 					Tools: map[string]ToolPermission{
-						"manage-entities": {
+						toolManageEntities: {
 							Allowed: true,
 						},
 					},
 				},
 			},
-			entityType: "alert",
-			operation:  "create",
+			entityType: testEntityAlert,
+			operation:  operationCreate,
 			want:       true,
 		},
 		{
 			name: "tool not allowed",
 			config: &Config{
-				Version: "1.0",
-				Permissions: PermissionsSection{
+				Version: versionV1,
+				Permissions: Section{
 					Tools: map[string]ToolPermission{
-						"manage-entities": {
+						toolManageEntities: {
 							Allowed: false,
 						},
 					},
 				},
 			},
-			entityType: "alert",
-			operation:  "create",
+			entityType: testEntityAlert,
+			operation:  operationCreate,
 			want:       false,
 		},
 		{
 			name: "comment operation allowed",
 			config: &Config{
-				Version: "1.0",
-				Permissions: PermissionsSection{
+				Version: versionV1,
+				Permissions: Section{
 					Tools: map[string]ToolPermission{
-						"manage-entities": {
+						toolManageEntities: {
 							Allowed: true,
 							EntityPermissions: map[string]EntityOperation{
-								"case": {
+								testEntityCase: {
 									Create:  false,
 									Update:  false,
 									Delete:  false,
@@ -313,20 +313,20 @@ func TestIsEntityOperationAllowed(t *testing.T) {
 					},
 				},
 			},
-			entityType: "case",
+			entityType: testEntityCase,
 			operation:  "comment",
 			want:       true,
 		},
 		{
 			name: "invalid operation",
 			config: &Config{
-				Version: "1.0",
-				Permissions: PermissionsSection{
+				Version: versionV1,
+				Permissions: Section{
 					Tools: map[string]ToolPermission{
-						"manage-entities": {
+						toolManageEntities: {
 							Allowed: true,
 							EntityPermissions: map[string]EntityOperation{
-								"alert": {
+								testEntityAlert: {
 									Create:  true,
 									Update:  true,
 									Delete:  true,
@@ -337,7 +337,7 @@ func TestIsEntityOperationAllowed(t *testing.T) {
 					},
 				},
 			},
-			entityType: "alert",
+			entityType: testEntityAlert,
 			operation:  "invalid",
 			want:       false,
 		},

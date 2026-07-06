@@ -2,13 +2,15 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/mark3labs/mcp-go/server"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 // parseAuthValidationCacheTTL parses the configured validation cache TTL,
@@ -17,22 +19,30 @@ func parseAuthValidationCacheTTL(ttl string) time.Duration {
 	if ttl == "" {
 		return DefaultAuthValidationCacheTTL
 	}
+
 	duration, err := time.ParseDuration(ttl)
 	if err != nil || duration <= 0 {
 		slog.Warn("Invalid auth validation cache TTL, using default",
 			"ttl", ttl,
 			"default", DefaultAuthValidationCacheTTL)
+
 		return DefaultAuthValidationCacheTTL
 	}
+
 	return duration
 }
 
+// GetHTTPAuthContextFunc returns an HTTP context function that extracts TheHive
+// credentials and target URL from request headers (or configured fallbacks),
+// enforces the URL allowlist, validates the credentials upstream (with caching),
+// and stores the resulting client, permissions, and auth outcome in the context.
 func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx context.Context, r *http.Request) context.Context {
 	allowlist, allowlistErr := NewTheHiveURLAllowlist(options.TheHiveURLAllowlist, options.TheHiveURL)
 	if allowlistErr != nil {
 		// Fail closed: with a nil allowlist every TheHive URL is rejected
 		slog.Error("Invalid TheHive URL allowlist configuration, all HTTP requests will be rejected", "error", allowlistErr)
 	}
+
 	cache := newValidationCache(parseAuthValidationCacheTTL(options.AuthValidationCacheTTL))
 
 	return func(ctx context.Context, r *http.Request) context.Context {
@@ -41,6 +51,7 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 		envAPIKey := ""
 		envUsername := ""
 		envPassword := ""
+
 		if options.AllowEnvCredentialFallback {
 			envAPIKey = options.TheHiveAPIKey
 			envUsername = options.TheHiveUsername
@@ -53,6 +64,7 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 			ctxKey types.CtxKey
 			deflt  string
 		}
+
 		keys := []keyMap{
 			{"Authorization", types.HiveAPIKeyCtxKey, envAPIKey},
 			{string(types.HeaderKeyTheHiveAPIKey), types.HiveAPIKeyCtxKey, envAPIKey},
@@ -60,19 +72,39 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 			{string(types.HeaderKeyTheHiveURL), types.HiveURLCtxKey, options.TheHiveURL},
 		}
 
-		// Extract string values into context
+		// Resolve every header value into a flat key->value map first, so the
+		// context is augmented outside the loop and we avoid nesting
+		// context.WithValue calls across iterations.
+		resolved := make(map[types.CtxKey]string, len(keys))
+
 		for _, km := range keys {
 			val := r.Header.Get(km.header)
 			if val == "" {
 				val = km.deflt
 			}
-			if val != "" {
-				// Special handling for Authorization header
-				if km.header == "Authorization" {
-					val = ExtractBearerToken(val)
-				}
-				ctx = context.WithValue(ctx, km.ctxKey, val)
+
+			if val == "" {
+				continue
 			}
+
+			// Special handling for Authorization header
+			if km.header == "Authorization" {
+				val = ExtractBearerToken(val)
+			}
+
+			resolved[km.ctxKey] = val
+		}
+
+		if v, ok := resolved[types.HiveAPIKeyCtxKey]; ok {
+			ctx = context.WithValue(ctx, types.HiveAPIKeyCtxKey, v)
+		}
+
+		if v, ok := resolved[types.HiveOrgCtxKey]; ok {
+			ctx = context.WithValue(ctx, types.HiveOrgCtxKey, v)
+		}
+
+		if v, ok := resolved[types.HiveURLCtxKey]; ok {
+			ctx = context.WithValue(ctx, types.HiveURLCtxKey, v)
 		}
 
 		// Add Hive client to context using extracted credentials. Authentication
@@ -85,14 +117,15 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 
 		switch {
 		case allowlistErr != nil:
-			ctx = context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: invalid TheHive URL allowlist configuration"))
+			ctx = context.WithValue(ctx, types.AuthErrorCtxKey, errors.New("TheHive authentication failed: invalid TheHive URL allowlist configuration"))
 		case hiveURL == "":
-			ctx = context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: no TheHive URL provided"))
+			ctx = context.WithValue(ctx, types.AuthErrorCtxKey, errors.New("TheHive authentication failed: no TheHive URL provided"))
 		case !allowlist.Allows(hiveURL):
 			// Reject before any outbound request so credentials are never sent
 			// to an attacker-controlled destination (SSRF / credential disclosure)
 			slog.Warn("Rejected TheHive URL not in allowlist", "url", hiveURL)
-			ctx = context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: TheHive URL is not in the allowlist"))
+
+			ctx = context.WithValue(ctx, types.AuthErrorCtxKey, errors.New("TheHive authentication failed: TheHive URL is not in the allowlist"))
 		default:
 			creds := &TheHiveCredentials{
 				URL:          hiveURL,
@@ -102,7 +135,8 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 				Organisation: hiveOrganisation,
 			}
 
-			if newCtx, err := AddTheHiveClientToContextWithCreds(ctx, creds); err != nil {
+			newCtx, err := AddTheHiveClientToContextWithCreds(ctx, creds)
+			if err != nil {
 				slog.Error("Failed to add TheHive client to context", "error", err)
 				ctx = context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: %w", err))
 			} else {
@@ -118,10 +152,11 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 		}
 
 		// Add permissions to context
-		if newCtx, err := AddPermissionsToContext(ctx, options); err != nil {
+		permsCtx, err := AddPermissionsToContext(ctx, options)
+		if err != nil {
 			slog.Warn("Failed to add permissions to context", "error", err)
 		} else {
-			ctx = newCtx
+			ctx = permsCtx
 		}
 
 		return ctx
@@ -131,29 +166,32 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 // StartHTTPServer starts the HTTP server with production-ready configuration
 func StartHTTPServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOptions) error {
 	if s == nil {
-		return fmt.Errorf("MCP server cannot be nil")
+		return errors.New("MCP server cannot be nil")
 	}
 
 	if options.BindAddr == "" {
-		return fmt.Errorf("bind address cannot be empty")
+		return errors.New("bind address cannot be empty")
 	}
 
 	// Reject invalid allowlist configuration at startup rather than denying
 	// every request at runtime
-	if _, err := NewTheHiveURLAllowlist(options.TheHiveURLAllowlist, options.TheHiveURL); err != nil {
+	_, err := NewTheHiveURLAllowlist(options.TheHiveURLAllowlist, options.TheHiveURL)
+	if err != nil {
 		return fmt.Errorf("invalid TheHive URL allowlist configuration: %w", err)
 	}
 
 	var httpOptions []server.StreamableHTTPOption
+
 	httpOptions = append(httpOptions, server.WithEndpointPath(options.MCPServerEndpointPath))
 	httpOptions = append(httpOptions, server.WithStateLess(false))
 	httpOptions = append(httpOptions, server.WithHTTPContextFunc(GetHTTPAuthContextFunc(options)))
 
 	// Configure heartbeat interval if specified
 	if options.MCPHeartbeatInterval != "" {
-		if duration, err := time.ParseDuration(options.MCPHeartbeatInterval); err != nil {
+		duration, parseErr := time.ParseDuration(options.MCPHeartbeatInterval)
+		if parseErr != nil {
 			slog.Warn("Invalid heartbeat interval format, using default",
-				"error", err,
+				"error", parseErr,
 				"interval", options.MCPHeartbeatInterval)
 		} else {
 			httpOptions = append(httpOptions, server.WithHeartbeatInterval(duration))
@@ -162,16 +200,19 @@ func StartHTTPServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOption
 	}
 
 	httpServer := server.NewStreamableHTTPServer(s, httpOptions...)
+
 	slog.Info("Starting HTTP server",
 		"bind_addr", options.BindAddr,
 		"endpoint", options.MCPServerEndpointPath,
 		"stateless", false,
 	)
 
-	if err := httpServer.Start(options.BindAddr); err != nil {
+	err = httpServer.Start(options.BindAddr)
+	if err != nil {
 		slog.Error("Failed to start HTTP server",
 			"error", err,
 			"bind_addr", options.BindAddr)
+
 		return fmt.Errorf("failed to start HTTP server on %s: %w", options.BindAddr, err)
 	}
 

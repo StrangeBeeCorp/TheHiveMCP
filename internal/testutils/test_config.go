@@ -24,6 +24,7 @@ func TheHiveTestImage() string {
 	if img := os.Getenv("THEHIVE_TEST_IMAGE"); img != "" {
 		return img
 	}
+
 	return DefaultTheHiveTestImage
 }
 
@@ -35,9 +36,12 @@ func testLogLevel() string {
 	if lvl := os.Getenv("LOG_LEVEL"); lvl != "" {
 		return lvl
 	}
+
 	return "warn"
 }
 
+// HiveTestConfig holds the credentials and organisation names used by the
+// integration suite against the compose-managed TheHive instance.
 type HiveTestConfig struct {
 	ImageName     string
 	ContainerName string
@@ -47,23 +51,25 @@ type HiveTestConfig struct {
 	AdminOrg      string
 }
 
+// NewHiveTestConfig returns the default HiveTestConfig for the integration suite.
 func NewHiveTestConfig() *HiveTestConfig {
 	return &HiveTestConfig{
 		ImageName:     TheHiveTestImage(),
 		ContainerName: "thehive4go-integration-tester",
 		User:          DefaultAdminUser,
-		Password:      "secret",
+		Password:      testAdminPassword,
 		MainOrg:       "main-org",
-		AdminOrg:      "admin",
+		AdminOrg:      adminOrg,
 	}
 }
 
+// NewMCPTestConfig returns the default in-process MCP server options for tests.
 func NewMCPTestConfig() *types.TheHiveMcpDefaultOptions {
 	return &types.TheHiveMcpDefaultOptions{
 		TheHiveURL:            "http://localhost:9000",
 		TheHiveAPIKey:         "",
 		TheHiveUsername:       DefaultAdminUser,
-		TheHivePassword:       "secret",
+		TheHivePassword:       testAdminPassword,
 		TheHiveOrganisation:   "main-org",
 		MCPServerEndpointPath: "/mcp",
 		MCPHeartbeatInterval:  "30s",

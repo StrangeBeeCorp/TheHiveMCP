@@ -3,6 +3,8 @@ package resources
 import (
 	"fmt"
 	"regexp"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 // allowedResponderEntityTypes is the allowlist of entity types accepted by
@@ -10,12 +12,12 @@ import (
 // (/api/v1/connector/cortex/responders/{entityType}/{entityId}).
 // Anything else is rejected before reaching TheHive (RandoriSec 5.3, DL-6004).
 var allowedResponderEntityTypes = map[string]bool{
-	"case":          true,
-	"alert":         true,
-	"task":          true,
-	"observable":    true,
-	"case_artifact": true,
-	"log":           true,
+	types.EntityTypeCase:       true,
+	types.EntityTypeAlert:      true,
+	types.EntityTypeTask:       true,
+	types.EntityTypeObservable: true,
+	"case_artifact":            true,
+	"log":                      true,
 }
 
 // entityIDPattern matches TheHive entity identifiers: a mandatory "~" prefix
@@ -32,8 +34,10 @@ func validateResponderParams(entityType, entityID string) error {
 	if !allowedResponderEntityTypes[entityType] {
 		return fmt.Errorf("invalid entityType %q: must be one of case, alert, task, observable, case_artifact, log", entityType)
 	}
+
 	if !entityIDPattern.MatchString(entityID) {
 		return fmt.Errorf("invalid entityId %q: must be a TheHive entity ID of the form '~' followed by digits, e.g. ~123456", entityID)
 	}
+
 	return nil
 }
