@@ -19,13 +19,9 @@ func (t *Tool) Handle(ctx context.Context, _ mcp.CallToolRequest, params GetReso
 	return t.fetchUnified(ctx, params.URI)
 }
 
-// fetchUnified attempts to fetch a resource and/or browse a category at the given URI
-// Returns a unified response with the resource content (if it exists), subcategories, and resources
 func (t *Tool) fetchUnified(ctx context.Context, uri string) (GetResourceResult, error) {
-	// Extract category path from URI
 	category := strings.TrimPrefix(uri, "hive://")
 
-	// Extract parameters from uri
 	var (
 		parameters map[string]any
 		err        error
@@ -37,10 +33,9 @@ func (t *Tool) fetchUnified(ctx context.Context, uri string) (GetResourceResult,
 		}
 	}
 
-	// Try to fetch as a specific resource first
+	// Try to fetch as a specific resource before falling back to category browse
 	resource, handler, resourceErr := t.resourceRegistry.Get(uri)
 	if resourceErr == nil {
-		// It's a resource, fetch its content
 		readRequest := mcp.ReadResourceRequest{
 			Params: mcp.ReadResourceParams{
 				URI:       uri,
@@ -60,7 +55,6 @@ func (t *Tool) fetchUnified(ctx context.Context, uri string) (GetResourceResult,
 				Hint("This may be a temporary issue or the resource may be empty")
 		}
 
-		// Assert the type of the first element (contents)
 		textContent, ok := contents[0].(mcp.TextResourceContents)
 		if !ok {
 			return GetResourceResult{}, tools.NewToolErrorf("resource content is not readable text or JSON compatible: %T", contents).
@@ -70,33 +64,27 @@ func (t *Tool) fetchUnified(ctx context.Context, uri string) (GetResourceResult,
 		contentText := textContent.Text
 		mimeType := textContent.MIMEType
 
-		// Parse the content
 		var data any
 
 		resourceContent := NewResourceContent(uri, resource.Name, mimeType)
 
 		err = json.Unmarshal([]byte(contentText), &data)
 		if err != nil {
-			// If not JSON, return as text
 			resourceContent.SetTextContent(contentText)
 		} else {
-			// Return structured JSON data
 			resourceContent.SetDataContent(data)
 		}
 
 		return *NewResourceResult(resourceContent), nil
 	}
 
-	// Check for subcategories and resources at this path
 	resources, subcategories := t.resourceRegistry.ListByCategory(category)
 
-	// If we found a category with contents, return it
 	if len(resources) > 0 || len(subcategories) > 0 {
 		categoryBrowse := NewCategoryBrowse(uri, subcategories, resources)
 		return *NewCategoryResult(categoryBrowse), nil
 	}
 
-	// Nothing found
 	return GetResourceResult{}, tools.NewToolErrorf("resource not found: %s", uri).
 		Hint("Use get-resource without parameters to browse available resources")
 }

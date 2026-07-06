@@ -59,9 +59,8 @@ func TestValidateResponderParams(t *testing.T) {
 	}
 }
 
-// TestGetAvailableRespondersValidatesBeforeAnyCall proves the parameter
-// validation runs before the TheHive client is even resolved from the
-// context, so no Cortex request can be issued for a rejected value.
+// Validation must run before the client is resolved, so a rejected value never
+// reaches a Cortex request.
 func TestGetAvailableRespondersValidatesBeforeAnyCall(t *testing.T) {
 	makeRequest := func(entityType, entityID string) mcp.ReadResourceRequest {
 		return mcp.ReadResourceRequest{

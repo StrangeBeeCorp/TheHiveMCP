@@ -39,14 +39,13 @@ func GetAdminAuthContext(testConfig *HiveTestConfig) context.Context {
 	return CreateAuthContext(testConfig.User, testConfig.Password)
 }
 
-// SetupTestWithCleanup creates a test client and registers automatic cleanup
-// Call this at the beginning of each test function
+// SetupTestWithCleanup returns a test client and registers a t.Cleanup that
+// resets the hive instance.
 func SetupTestWithCleanup(t *testing.T) *thehive.APIClient {
 	t.Helper()
 
 	client := NewTestClient(t)
 
-	// Register cleanup function that will run after the test completes
 	t.Cleanup(func() {
 		url, err := StartTheHiveContainer(t)
 		if err != nil {

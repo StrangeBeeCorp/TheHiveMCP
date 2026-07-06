@@ -133,31 +133,27 @@ func TestGetHTTPAuthContextFunc_TheHiveURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create test options
 			options := &types.TheHiveMcpDefaultOptions{
 				TheHiveURL:          tt.optionsURL,
 				TheHiveAPIKey:       "test-api-key",
 				TheHiveOrganisation: "test-org",
 			}
 
-			// Create test request
 			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/mcp", nil)
 			if tt.headerValue != "" {
 				req.Header.Set(string(types.HeaderKeyTheHiveURL), tt.headerValue)
 			}
 
-			// Get the auth context function and call it
 			authFunc := GetHTTPAuthContextFunc(options)
 			ctx := authFunc(context.Background(), req)
 
-			// Check if URL is in context
 			urlFromCtx, hasURL := ctx.Value(types.HiveURLCtxKey).(string)
 
 			if tt.expectInCtx {
 				require.True(t, hasURL, "Expected URL to be in context")
 				assert.Equal(t, tt.expectedURL, urlFromCtx, "URL in context should match expected")
 			} else if hasURL {
-				// When no URL is expected, either the key is not present or the value is empty
+				// Absent key or empty value both satisfy "no URL".
 				assert.Empty(t, urlFromCtx, "URL should be empty when not expected")
 			}
 		})
@@ -179,7 +175,6 @@ func TestGetHTTPAuthContextFunc_AllHeaders(t *testing.T) {
 	authFunc := GetHTTPAuthContextFunc(options)
 	ctx := authFunc(context.Background(), req)
 
-	// Verify all values are set correctly from headers
 	assert.Equal(t, "https://header.thehive.com", ctx.Value(types.HiveURLCtxKey))
 	assert.Equal(t, "header-api-key", ctx.Value(types.HiveAPIKeyCtxKey))
 	assert.Equal(t, "header-org", ctx.Value(types.HiveOrgCtxKey))
@@ -228,8 +223,6 @@ func TestGetHTTPAuthContextFunc_AuthorizationHeader(t *testing.T) {
 	}
 }
 
-// clientHeaders builds request headers carrying a client API key, optionally
-// targeting a specific TheHive URL.
 func clientHeaders(hiveURL string) map[string]string {
 	headers := map[string]string{
 		string(types.HeaderKeyTheHiveAPIKey): "client-key",
@@ -354,7 +347,6 @@ func TestGetHTTPAuthContextFunc_EmptyURLFailsClosed(t *testing.T) {
 
 	assertAuthRejected(ctx, t)
 
-	// The middleware must deny the request
 	handler := auth.AuthenticationMiddleware()(func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		t.Fatal("tool handler must not be called for an unauthenticated request")
 		return nil, errUnexpectedHandlerCall
@@ -364,8 +356,6 @@ func TestGetHTTPAuthContextFunc_EmptyURLFailsClosed(t *testing.T) {
 }
 
 func TestGetHTTPAuthContextFunc_ValidationCache(t *testing.T) {
-	// invoke runs the auth context func for a request authenticated with the
-	// given API key and returns the resulting context
 	invoke := func(authFunc func(context.Context, *http.Request) context.Context, apiKey string) context.Context {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/mcp", nil)
 		req.Header.Set(string(types.HeaderKeyTheHiveAPIKey), apiKey)
@@ -386,7 +376,6 @@ func TestGetHTTPAuthContextFunc_ValidationCache(t *testing.T) {
 
 		assert.Equal(t, int32(1), hive.requests.Load(), "second request within TTL must hit the cache")
 
-		// After the TTL the credentials are re-validated upstream
 		time.Sleep(200 * time.Millisecond)
 		assertAuthValidated(invoke(authFunc, "client-key"), t)
 		assert.Equal(t, int32(2), hive.requests.Load(), "expired cache entry must be re-validated")
@@ -411,7 +400,6 @@ func TestGetHTTPAuthContextFunc_ValidationCache(t *testing.T) {
 		assertAuthRejected(invoke(authFunc, "client-key"), t)
 		assert.Equal(t, int32(1), hive.requests.Load())
 
-		// The same credentials must be re-validated upstream, not served from cache
 		hive.failNextAuth.Store(false)
 		assertAuthValidated(invoke(authFunc, "client-key"), t)
 		assert.Equal(t, int32(2), hive.requests.Load())

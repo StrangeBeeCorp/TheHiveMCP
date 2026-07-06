@@ -23,10 +23,10 @@ type Tool[TParams, TResult any] interface {
 }
 
 // UntrustedDataReporter is an optional interface implemented by tools whose
-// responses contain user-generated data from external systems (e.g. TheHive).
-// When implemented and returning true, the middleware wraps designated fields
-// with [UNTRUSTED_DATA] boundary tags to help LLM clients distinguish data
-// from instructions.
+// responses carry user-generated data from external systems (e.g. TheHive). When
+// implemented and returning true, the middleware wraps designated fields in
+// [UNTRUSTED_DATA] boundary tags so LLM clients can distinguish data from
+// instructions.
 type UntrustedDataReporter interface {
 	HasUntrustedData() bool
 }

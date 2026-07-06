@@ -39,19 +39,17 @@ type TheHiveCredentials struct {
 	Organisation string
 }
 
-// Validate validates the credentials
+// Validate requires a valid URL plus either an API key or a username/password pair.
 func (c *TheHiveCredentials) Validate() error {
 	if c.URL == "" {
 		return ErrMissingHiveURL
 	}
 
-	// Validate URL format
 	_, err := url.ParseRequestURI(c.URL)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidHiveURL, err)
 	}
 
-	// Check authentication method
 	hasAPIKey := c.APIKey != ""
 	hasBasicAuth := c.Username != "" && c.Password != ""
 
@@ -181,7 +179,7 @@ func AddTheHiveClientToContextWithCreds(ctx context.Context, creds *TheHiveCrede
 	return context.WithValue(ctx, types.HiveClientCtxKey, client), nil
 }
 
-// ExtractBearerToken extracts a bearer token from an Authorization header
+// ExtractBearerToken strips a "Bearer " prefix if present, else returns the header unchanged.
 func ExtractBearerToken(authHeader string) string {
 	if authHeader == "" {
 		return ""
@@ -219,10 +217,9 @@ func ValidateTheHiveClient(ctx context.Context, client *thehive.APIClient) error
 	return nil
 }
 
-// validateTheHiveAuthInContext validates the TheHive client stored in ctx and
-// records the outcome: types.AuthValidatedCtxKey on success, an auth error
-// otherwise. A non-nil cache skips the upstream call for recently validated
-// credentials; failed validations are never cached.
+// validateTheHiveAuthInContext validates the client in ctx and records the
+// outcome: AuthValidatedCtxKey on success, AuthErrorCtxKey otherwise. A non-nil
+// cache skips the upstream call for recently validated creds; failures aren't cached.
 func validateTheHiveAuthInContext(ctx context.Context, creds *TheHiveCredentials, cache *validationCache) context.Context {
 	client, ok := ctx.Value(types.HiveClientCtxKey).(*thehive.APIClient)
 	if !ok || client == nil {
@@ -257,11 +254,9 @@ func SafeGetEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-// LoadPermissions loads permissions configuration from file or uses default
-// Special values: "admin" for full permissions, "read_only" for default read-only permissions
-// Empty string defaults to read-only, otherwise loads from the specified file path
+// LoadPermissions loads permissions config. "admin" grants full permissions,
+// "read_only" or "" defaults to read-only; any other value is a file path.
 func LoadPermissions(configPath string) (*permissions.Config, error) {
-	// Special handling for special config values
 	if configPath == string(types.PermissionConfigAdmin) {
 		slog.Info("Using admin permissions for testing")
 
@@ -296,7 +291,6 @@ func LoadPermissions(configPath string) (*permissions.Config, error) {
 		return config, nil
 	}
 
-	// Use embedded default permissions (empty string case)
 	slog.Info("Using default read-only permissions")
 
 	config, err := permissions.LoadDefault()

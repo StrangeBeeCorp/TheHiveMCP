@@ -4,20 +4,16 @@ import (
 	"fmt"
 )
 
-// MergeFilters combines permission filters with user-provided query filters
-// Returns the merged filter and a boolean indicating if permission filters were applied
+// MergeFilters ANDs permission filters into the user query; the bool reports whether any were applied.
 func MergeFilters(userQuery map[string]any, permissionFilters map[string]any) (map[string]any, bool) {
-	// If no permission filters, return original query
 	if len(permissionFilters) == 0 {
 		return userQuery, false
 	}
 
-	// If no user query, return permission filters only
 	if len(userQuery) == 0 {
 		return permissionFilters, true
 	}
 
-	// Both exist - merge with AND logic
 	merged := map[string]any{
 		"_and": []any{
 			userQuery,

@@ -79,7 +79,7 @@ type AutomationPermissions struct {
 	Blocked []string `yaml:"blocked"`
 }
 
-// IsToolAllowed checks if a tool is permitted
+// IsToolAllowed reports whether toolName is permitted; unknown tools and a nil config deny.
 func (c *Config) IsToolAllowed(toolName string) bool {
 	if c == nil || c.Permissions.Tools == nil {
 		return false
@@ -93,8 +93,8 @@ func (c *Config) IsToolAllowed(toolName string) bool {
 	return perm.Allowed
 }
 
-// IsEntityOperationAllowed checks if a specific operation on an entity type is permitted
-// If no entity-specific permissions are configured, defaults to the tool's general allowed setting
+// IsEntityOperationAllowed reports whether operation is permitted on entityType.
+// With no entity-specific permissions configured, defaults to the tool's general allowed setting.
 func (c *Config) IsEntityOperationAllowed(entityType, operation string) bool {
 	if c == nil || c.Permissions.Tools == nil {
 		return false
@@ -105,19 +105,16 @@ func (c *Config) IsEntityOperationAllowed(entityType, operation string) bool {
 		return false
 	}
 
-	// If no entity permissions configured, allow all operations (backward compatibility)
+	// No entity permissions configured: allow all (backward compatibility).
 	if len(toolPerm.EntityPermissions) == 0 {
 		return true
 	}
 
-	// Check entity-specific permissions
 	entityPerm, exists := toolPerm.EntityPermissions[entityType]
 	if !exists {
-		// If entity type not specified, deny by default
-		return false
+		return false // unlisted entity type: deny by default
 	}
 
-	// Check operation permission
 	switch operation {
 	case operationCreate:
 		return entityPerm.Create
@@ -204,7 +201,6 @@ func (c *Config) GetAllowedResponders(allResponders []string) []string {
 	return allowed
 }
 
-// isAutomationAllowed checks if an automation item is allowed based on mode and lists
 func isAutomationAllowed(name, mode string, allowed, blocked []string) bool {
 	switch mode {
 	case modeAllowList:

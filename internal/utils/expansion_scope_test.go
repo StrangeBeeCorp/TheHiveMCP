@@ -19,35 +19,21 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
-// fakeHiveServer stands in for a real TheHive instance so expansion scoping can
-// be exercised without Docker. Every SDK call (similarity queries and scope
-// checks alike) hits POST /api/v1/query; this handler routes on the operation
-// names in the request body.
-//
-//   - getAlert + similarCasesLight -> returns the alert's similar cases, flat:
-//     {fieldID: ..., fieldSimilarObservableCount: N} like the *Light ops do.
-//   - getCase  + filter        -> a scope check from GetEntityIDsInScope. Matches
-//     (returns one row) only when the requested case id is in scopeIDs.
-//
-// scopeQueries counts how many scope checks were issued, so the test can assert
-// whether similarity hits were re-scoped at all.
+// fakeHiveServer replaces a real TheHive (no Docker). Every SDK call hits POST
+// /api/v1/query; handle routes on the operation names in the body. scopeQueries
+// counts scope checks so tests can assert hits were re-scoped.
 type fakeHiveServer struct {
 	similarCases []map[string]any
-	// similarCasesByParent, when set, returns different similar cases per parent
-	// alert (keyed by the parent's idOrName). Falls back to similarCases when nil,
-	// so the single-parent test is unaffected.
+	// Per-parent similar cases (keyed by parent idOrName); falls back to similarCases when nil.
 	similarCasesByParent map[string][]map[string]any
 	scopeIDs             map[string]bool
 
-	// GetScopedEntityIDsBatch fans the per-hit scope checks out concurrently, so
-	// several handler goroutines update the counters at once. scopeQueries is
-	// atomic so the test can read it (.Load) without locking; mu guards the
-	// scopeCheckedIDs map, which an atomic can't cover.
+	// Concurrent handler goroutines update these: scopeQueries atomic; mu guards
+	// scopeCheckedIDs.
 	scopeQueries atomic.Int64
 	mu           sync.Mutex
-	// scopeCheckedIDs counts how many times each id was scope-checked. Cross-parent
-	// batching dedups an id two parents share, so a shared hit is checked exactly
-	// once even when several parents return it.
+	// Per-id scope-check count, for asserting cross-parent dedup (a hit two parents
+	// return is checked once).
 	scopeCheckedIDs map[string]int
 }
 
@@ -69,23 +55,20 @@ func (f *fakeHiveServer) handle(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	switch {
-	// Parent scope check: getAlert -> filter (GetEntityIDsInScope).
+	// Parent scope check (GetEntityIDsInScope).
 	case names[0] == opGetAlert && slices.Contains(names, "filter"):
 		idOrName, _ := parsed.Query[0]["idOrName"].(string)
 		f.recordScopeCheck(idOrName)
 		f.encodeScopeRows(w, f.inScopeSubset([]string{idOrName}))
 
-	// Per-hit scope check: getCase -> filter(perm), one per similarity hit,
-	// issued by GetScopedEntityIDsBatch. The batch fans these out concurrently
-	// (the old single listCase _id-filter query was unreliable on real TheHive),
-	// so the test sees one scope query PER hit, not one for the whole batch.
+	// Per-hit scope check, fanned out concurrently one per hit (a single listCase
+	// _id-filter query was unreliable on real TheHive) — tests see one query per hit.
 	case names[0] == opGetCase && slices.Contains(names, "filter"):
 		idOrName, _ := parsed.Query[0]["idOrName"].(string)
 		f.recordScopeCheck(idOrName)
 		f.encodeScopeRows(w, f.inScopeSubset([]string{idOrName}))
 
-	// Similarity query: getAlert -> similarCasesLight (the *Light op the MCP
-	// now sends; the MCP-facing query name stays "similarCases").
+	// The MCP sends the *Light op; its MCP-facing query name stays "similarCases".
 	case names[0] == opGetAlert && slices.Contains(names, "similarCasesLight"):
 		idOrName, _ := parsed.Query[0]["idOrName"].(string)
 
@@ -99,9 +82,6 @@ func (f *fakeHiveServer) handle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// recordScopeCheck bumps the total scope-query count and the per-id counter from
-// concurrent get-by-id scope-check handlers. scopeQueries is atomic; the
-// per-id map is guarded by mu.
 func (f *fakeHiveServer) recordScopeCheck(id string) {
 	f.scopeQueries.Add(1)
 	f.mu.Lock()
@@ -112,8 +92,6 @@ func (f *fakeHiveServer) recordScopeCheck(id string) {
 	}
 }
 
-// similarCasesFor returns the similar cases for a given parent alert, using the
-// per-parent map when configured and falling back to the shared similarCases.
 func (f *fakeHiveServer) similarCasesFor(parentID string) []map[string]any {
 	if f.similarCasesByParent != nil {
 		return f.similarCasesByParent[parentID]
@@ -122,7 +100,6 @@ func (f *fakeHiveServer) similarCasesFor(parentID string) []map[string]any {
 	return f.similarCases
 }
 
-// inScopeSubset keeps only the ids the server considers in scope.
 func (f *fakeHiveServer) inScopeSubset(ids []string) []string {
 	kept := make([]string, 0, len(ids))
 	for _, id := range ids {
@@ -134,7 +111,6 @@ func (f *fakeHiveServer) inScopeSubset(ids []string) []string {
 	return kept
 }
 
-// encodeScopeRows writes the in-scope ids back in TheHive's row shape.
 func (f *fakeHiveServer) encodeScopeRows(w http.ResponseWriter, ids []string) {
 	rows := make([]map[string]any, 0, len(ids))
 	for _, id := range ids {
@@ -147,7 +123,6 @@ func (f *fakeHiveServer) encodeScopeRows(w http.ResponseWriter, ids []string) {
 	}
 }
 
-// operationNames extracts the _name of each operation in a query pipeline.
 func operationNames(query []map[string]any) []string {
 	names := make([]string, 0, len(query))
 	for _, op := range query {
@@ -169,8 +144,7 @@ func newFakeHiveClient(t *testing.T, srv *httptest.Server) *thehive.APIClient {
 	return thehive.NewAPIClient(cfg)
 }
 
-// startFakeHive boots the fake server, registers cleanup, and returns a context
-// carrying a client wired to it — the four-line setup every scope test repeats.
+// startFakeHive returns a context carrying a client wired to the fake server.
 func startFakeHive(t *testing.T, fake *fakeHiveServer) context.Context {
 	t.Helper()
 
@@ -181,15 +155,13 @@ func startFakeHive(t *testing.T, fake *fakeHiveServer) context.Context {
 	return context.WithValue(context.Background(), types.HiveClientCtxKey, client)
 }
 
-// tlpLTE2Filters is the analyst permission filter (tlp <= 2) shared by every
-// scope test.
+// tlpLTE2Filters is the analyst permission filter shared by every scope test.
 func tlpLTE2Filters() map[string]any {
 	return map[string]any{
 		opLTE: map[string]any{fieldField: fieldTLP, fieldValue: 2},
 	}
 }
 
-// hitIDs extracts the _id of each hit under queryName on an expanded entity.
 func hitIDs(t *testing.T, entity map[string]any, queryName string) []string {
 	t.Helper()
 
@@ -206,15 +178,9 @@ func hitIDs(t *testing.T, entity map[string]any, queryName string) []string {
 	return ids
 }
 
-// TestExpandSimilarityHitsAreScoped is the permission-bypass regression test.
-//
-// An analyst with tlp<=2 expands an in-scope alert with similarCases. TheHive's
-// similarity engine returns two independent top-level cases: one TLP:AMBER (in
-// scope) and one TLP:RED (out of scope). The out-of-scope case must NOT be
-// surfaced, because a direct search would never return it.
-//
-// With the current code the similarity hits bypass scope re-checking entirely,
-// so the TLP:RED case leaks through and this test fails.
+// Permission-bypass regression: an analyst (tlp<=2) expands an in-scope alert with
+// similarCases; the engine returns a TLP:AMBER (in scope) and a TLP:RED (out of
+// scope) case. The RED case must not surface — a direct search would never return it.
 func TestExpandSimilarityHitsAreScoped(t *testing.T) {
 	const (
 		inScopeCaseID = "~1000" // TLP:AMBER, analyst may see it
@@ -223,8 +189,7 @@ func TestExpandSimilarityHitsAreScoped(t *testing.T) {
 	)
 
 	fake := &fakeHiveServer{
-		// What getAlert->similarCasesLight returns: both cases, flat (the Light
-		// ops emit entity fields and meta side by side, with no "case" wrapper).
+		// Both cases, flat like the *Light op (no "case" wrapper).
 		similarCases: []map[string]any{
 			{
 				fieldID:                     inScopeCaseID,
@@ -239,10 +204,9 @@ func TestExpandSimilarityHitsAreScoped(t *testing.T) {
 				fieldSimilarObservableCount: 1,
 			},
 		},
-		// Only the AMBER case is within the analyst's scope.
 		scopeIDs: map[string]bool{
 			inScopeCaseID: true,
-			parentAlertID: true, // parent alert is in scope
+			parentAlertID: true,
 		},
 	}
 
@@ -261,27 +225,18 @@ func TestExpandSimilarityHitsAreScoped(t *testing.T) {
 	require.NotContains(t, gotIDs, outOfScopeID,
 		"PERMISSION BYPASS: the out-of-scope (TLP:RED) similar case leaked through expansion")
 
-	// Exactly 3 scope queries: 1 for the parent alert, and 1 per similarity hit
-	// (2 hits) — the batch fans the proven get-by-ID check out concurrently
-	// rather than issuing a single (unreliable) listCase _id-filter query. The
-	// DL-5764 constraint is preserved as bounded *concurrency*, not a single
-	// query: the N checks overlap so latency stays ~one round-trip. If the hits
-	// were not re-scoped at all, only the parent check would fire (count 1) and
-	// the RED case would leak.
+	// 3 scope queries: 1 parent + 1 per hit. DL-5764's constraint is kept as bounded
+	// concurrency (overlapping checks, ~one round-trip), not a single unreliable
+	// listCase _id-filter query. No re-scoping would fire only the parent (count 1).
 	require.Equal(t, int64(3), fake.scopeQueries.Load(),
 		"each similarity hit must be re-scoped (1 parent + 2 hits), and the RED hit must not leak")
 }
 
-// TestExpandSimilarityHitsScopedAcrossParentsAreBatched proves the scope checks
-// are batched ACROSS parents, not once per parent (DL-5764, Finding 2).
-//
-// Two in-scope parent alerts are each expanded with similarCases. They share one
-// similar case (sharedCaseID); parent A additionally surfaces a TLP:RED case and
-// parent B an extra in-scope case. The cross-parent batch collects every hit _id
-// into one set per target type, so the shared case is scope-checked EXACTLY ONCE
-// — under the old per-parent code it would be checked once per parent (twice).
-// That dedup is the load-bearing assertion: it fails on the per-parent code even
-// though both produce the same surfaced result.
+// Scope checks are batched ACROSS parents, not once per parent (DL-5764, Finding 2).
+// Two parents share one similar case; the cross-parent batch collects hit _ids into
+// one set per type, so the shared case is scope-checked EXACTLY ONCE (twice under the
+// old per-parent code). That dedup is the load-bearing assertion — both paths produce
+// the same surfaced result, so only the check count distinguishes them.
 func TestExpandSimilarityHitsScopedAcrossParentsAreBatched(t *testing.T) {
 	const (
 		parentA      = "~500"
@@ -335,23 +290,16 @@ func TestExpandSimilarityHitsScopedAcrossParentsAreBatched(t *testing.T) {
 	require.Equal(t, 1, fake.scopeCheckedIDs[sharedCaseID],
 		"a hit shared by two parents must be scope-checked once, not once per parent")
 
-	// Total = 2 parent (getAlert) checks + 3 DISTINCT case (getCase) checks
-	// (sharedCaseID, onlyBCaseID, outOfScopeID). The naive per-parent approach
-	// would check the shared case twice, totalling 6.
+	// 2 parent checks + 3 distinct case checks = 5. Per-parent would check the
+	// shared case twice, totalling 6.
 	require.Equal(t, int64(5), fake.scopeQueries.Load(),
 		"scope checks must be batched across parents: 2 parents + 3 distinct hits, not 6")
 }
 
-// TestExpandIndependentNonSimilarityQueryIsScoped proves that re-scoping keys off
-// the descriptor's declared ResultsAreIndependent property, NOT a hardcoded set
-// of similarity query names. It registers a synthetic independent query whose
-// name is NOT similar* and whose results are canned (no similarity engine), then
-// asserts its out-of-scope hit is dropped exactly like a similar* hit would be.
-//
-// This is the regression guard for the old leak path: before Finding 6, scoping
-// was gated on a hardcoded similarityQueries set, so any future independent query
-// (e.g. linkedCases) would silently bypass the re-check and leak. Now the gate is
-// a declared property, so this synthetic query is re-scoped purely because it set
+// Re-scoping keys off the descriptor's ResultsAreIndependent, NOT a hardcoded set of
+// similarity names (Finding 6: that set would let a future independent query like
+// linkedCases silently bypass the re-check and leak). A synthetic independent query
+// with a non-similar* name gets its out-of-scope hit dropped, purely because it set
 // ResultsAreIndependent: true.
 func TestExpandIndependentNonSimilarityQueryIsScoped(t *testing.T) {
 	const (
@@ -366,12 +314,11 @@ func TestExpandIndependentNonSimilarityQueryIsScoped(t *testing.T) {
 		{fieldID: outOfScopeID, fieldTitle: "Out of scope linked case"},
 	}
 
-	// Inject a synthetic INDEPENDENT, non-similarity descriptor whose Func returns
-	// canned hits without any network call. The per-hit scope checks (getCase ->
-	// filter) still go through the fake server. Restored via defer.
+	// Synthetic independent, non-similarity descriptor: Func returns canned hits with
+	// no network call; per-hit scope checks still hit the fake server. Restored via defer.
 	queryRegistry[types.EntityTypeAlert][queryName] = QueryDescriptor{
 		Func: func(_ context.Context, _ *thehive.APIClient, _ string) ([]map[string]any, error) {
-			// Return a fresh copy so the test's input is not mutated by projection.
+			// Fresh copy so the test's input is not mutated by projection.
 			out := make([]map[string]any, len(cannedHits))
 			for i, h := range cannedHits {
 				cp := make(map[string]any, len(h))
@@ -413,9 +360,8 @@ func TestExpandIndependentNonSimilarityQueryIsScoped(t *testing.T) {
 		"an independent query must be re-scoped per hit regardless of its name")
 }
 
-// TestExpandChildQueryIsNotRescoped is the companion to the test above: a query
-// declared NOT independent (a child of an already-scoped parent) must fire ONLY
-// the single parent scope check, never a per-hit re-check.
+// Companion to the test above: a query declared NOT independent (a child of an
+// already-scoped parent) fires ONLY the parent scope check, never a per-hit re-check.
 func TestExpandChildQueryIsNotRescoped(t *testing.T) {
 	const (
 		childID       = "~3000"

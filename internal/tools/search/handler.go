@@ -24,21 +24,17 @@ func (t *Tool) Handle(ctx context.Context, req mcp.CallToolRequest, params Entit
 	// The caller (the model) supplies the TheHive filter DSL directly in
 	// params.Filters. There is no inner-LLM translation step — the filter is
 	// applied as-is, after merging any permission-scoping filters.
-	// Normalize to a non-nil map so the echoed rawFilters is always an object
-	// ({} = match-all) rather than JSON null when no filter is provided.
+	// Non-nil map so echoed rawFilters is always an object ({} = match-all), not JSON null.
 	rawFilters := params.Filters
 	if rawFilters == nil {
 		rawFilters = map[string]any{}
 	}
 
-	// Migration aid: the legacy natural-language "query" parameter was removed in
-	// favor of "filters". If a stale client still sends it, it is ignored — warn
-	// so the empty-filter match-all behavior is not mistaken for a bug.
+	// Legacy "query" param removed in favor of "filters"; warn so ignoring it isn't mistaken for a bug.
 	if _, ok := req.GetArguments()["query"]; ok {
 		slog.Warn("ignoring removed 'query' parameter; build a filter with the TheHive DSL and pass it in 'filters' (see hive://docs/overview/filter-dsl)", "entityType", params.EntityType)
 	}
 
-	// Apply permission filters
 	perms, err := utils.GetPermissionsFromContext(ctx)
 	if err != nil {
 		return EntitiesResult{}, tools.NewToolError("failed to get permissions").Cause(err)
@@ -56,11 +52,8 @@ func (t *Tool) Handle(ctx context.Context, req mcp.CallToolRequest, params Entit
 		rawFilters = merged
 	}
 
-	// Build TheHive query
 	hiveQuery := t.buildHiveQuery(params, rawFilters)
 
-	// Execute query. On failure, return an actionable error so the calling model
-	// can correct the filter and call again — no inner retry loop.
 	results, err := t.executeQuery(ctx, hiveQuery, params.EntityType)
 	if err != nil {
 		return EntitiesResult{}, tools.NewToolError("failed to execute search query").Cause(err).
@@ -68,7 +61,6 @@ func (t *Tool) Handle(ctx context.Context, req mcp.CallToolRequest, params Entit
 			Schema(params.EntityType, "")
 	}
 
-	// Skip additional queries for count-only requests
 	if !params.Count {
 		results, err = utils.ExpandEntitiesWithQueries(ctx, params.EntityType, results, params.AdditionalQueries, permFilters)
 		if err != nil {
@@ -76,24 +68,18 @@ func (t *Tool) Handle(ctx context.Context, req mcp.CallToolRequest, params Entit
 		}
 	}
 
-	// Process and format results
 	return NewSearchEntitiesResult(results, params, rawFilters)
 }
 
-// Query building
 func (t *Tool) buildHiveQuery(params EntitiesParams, rawFilters map[string]any) thehive.InputQuery {
-	// Build operations
 	listOp := t.buildListOperation(params.EntityType)
-
-	// Exclude unneeded fields
 	excludedFields := t.getExcludedFields(params.EntityType, params.ExtraColumns, params.ExtraData)
 
 	query := []thehive.InputQueryNamedOperation{
 		thehive.InputQueryGenericOperationAsInputQueryNamedOperation(listOp),
 	}
 
-	// Only apply a filter operation when filters were provided. An empty filter
-	// means "match all entities" (within the limit).
+	// Empty filter means match-all, so only add a filter op when filters exist.
 	if len(rawFilters) > 0 {
 		filterOp := t.buildFilterOperation(rawFilters)
 		query = append(query, thehive.MapmapOfStringAnyAsInputQueryNamedOperation(filterOp))
@@ -116,7 +102,6 @@ func (t *Tool) buildHiveQuery(params EntitiesParams, rawFilters map[string]any) 
 		ExcludeFields: excludedFields,
 	}
 
-	// Debug logging
 	queryJSON, err := json.MarshalIndent(hiveQuery, "", "  ")
 	if err == nil {
 		slog.Info("Built TheHive query", "json", string(queryJSON))
@@ -130,12 +115,12 @@ func (t *Tool) buildListOperation(entityType string) *thehive.InputQueryGenericO
 }
 
 func (t *Tool) buildFilterOperation(filters map[string]any) *map[string]any {
-	// Create a shallow copy to avoid modifying the original filters
+	// Shallow copy so we don't mutate the caller's filters.
 	filtersCopy := make(map[string]any)
 	maps.Copy(filtersCopy, filters)
 
-	// Repair structurally-malformed keys (over-quoting/whitespace from weaker
-	// models) before anything else, so the date pass and TheHive see valid keys.
+	// Repair malformed keys (over-quoting/whitespace from weaker models) before
+	// the date pass so it and TheHive see valid keys.
 	normalizedFilters := utils.NormalizeFilterKeys(filtersCopy)
 	parsedFilters := utils.TranslateDatesToTimestamps(normalizedFilters)
 	parsedFilters["_name"] = "filter"
@@ -160,8 +145,6 @@ func (t *Tool) buildPagingOperation(limit int, extraData []string) *thehive.Inpu
 	return query
 }
 
-// Query execution
-
 func (t *Tool) executeQuery(ctx context.Context, hiveQuery thehive.InputQuery, entityType string) ([]map[string]any, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
@@ -173,9 +156,8 @@ func (t *Tool) executeQuery(ctx context.Context, hiveQuery thehive.InputQuery, e
 		return nil, fmt.Errorf("failed to search %ss: %w. Check that you have permissions to view %ss. API response: %v", entityType, err, entityType, resp)
 	}
 
-	// Handle count queries - they return a number instead of an array
+	// Count queries return a bare number, not an array.
 	if countValue, ok := results.(float64); ok {
-		// For count queries, create a special entry to indicate the count
 		countResult := map[string]any{
 			"_count": countValue,
 		}
@@ -183,13 +165,11 @@ func (t *Tool) executeQuery(ctx context.Context, hiveQuery thehive.InputQuery, e
 		return []map[string]any{countResult}, nil
 	}
 
-	// Handle regular queries - they return an array of entities
 	resultsInterface, ok := results.([]any)
 	if !ok {
 		return nil, fmt.Errorf("unexpected result type from TheHive API. Expected []interface{} or float64 but got %T: %v", results, results)
 	}
 
-	// Convert each interface{} to map[string]interface{}
 	resultsSlice := make([]map[string]any, len(resultsInterface))
 	for i, item := range resultsInterface {
 		mapItem, ok := item.(map[string]any)
@@ -205,7 +185,6 @@ func (t *Tool) executeQuery(ctx context.Context, hiveQuery thehive.InputQuery, e
 	return resultsSlice, nil
 }
 
-// Helper methods
 func (t *Tool) getExcludedFields(entityType string, keptColumns []string, extraData []string) []string {
 	var baseModel any
 
@@ -233,8 +212,7 @@ func (t *Tool) getExcludedFields(entityType string, keptColumns []string, extraD
 	allFields := utils.GetJSONFields(baseModel)
 	excludeFields := make([]string, 0)
 
-	// System fields that must never be excluded from search results.
-	// _id is required by additional queries to fetch related entities.
+	// Never exclude _id: additional queries need it to fetch related entities.
 	systemFields := []string{fieldID}
 
 	for _, field := range allFields {

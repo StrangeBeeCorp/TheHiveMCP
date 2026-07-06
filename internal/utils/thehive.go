@@ -8,7 +8,6 @@ import (
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 )
 
-// executeQuery builds and executes a query for a parent entity and its children
 func executeQuery(ctx context.Context, client *thehive.APIClient, parentOp, parentID, childOp string) ([]map[string]any, error) {
 	operation := map[string]any{
 		opNameKey:   parentOp,
@@ -33,7 +32,6 @@ func executeQuery(ctx context.Context, client *thehive.APIClient, parentOp, pare
 		return nil, fmt.Errorf("error getting %s for %s ID %s: %w, %v", childOp, parentOp, parentID, err, resp)
 	}
 
-	// Convert results to []map[string]interface{}
 	resultBytes, err := json.Marshal(results)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal results: %w", err)

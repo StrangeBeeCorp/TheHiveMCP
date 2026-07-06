@@ -54,34 +54,29 @@ func (e *ToolError) Schema(entityType, operation string) *ToolError {
 	return e.Hintf("Use get-resource 'hive://schema/%s' for available fields", entityType)
 }
 
-// API adds the API response for debugging
-// Note: This method consumes and closes the response body
+// API attaches resp's body to the error; consumes and closes it.
 func (e *ToolError) API(resp *http.Response) *ToolError {
-	// Guard against nil response
 	if resp == nil {
 		return e.Hintf("API response is nil")
 	}
 
-	// Guard against nil body
 	if resp.Body == nil {
 		return e.Hintf("API response body is nil")
 	}
 
 	body, err := io.ReadAll(resp.Body)
-	_ = resp.Body.Close() // Close the body, ignore close errors as they're not critical
+	_ = resp.Body.Close()
 
 	if err != nil {
 		return e.Hintf("failed to read API response body: %v", err)
 	}
 
-	// Try to parse as JSON first, fallback to string
 	var jsonObj any
 
 	err = json.Unmarshal(body, &jsonObj)
 	if err == nil {
 		e.apiResponse = jsonObj
 	} else {
-		// If not valid JSON, store as string
 		e.apiResponse = string(body)
 	}
 
@@ -109,7 +104,6 @@ func (e *ToolError) Error() string {
 
 	errorJSON, err := json.Marshal(errorObj)
 	if err != nil {
-		// Fallback to simple string if JSON marshaling fails
 		return "error: " + e.message
 	}
 

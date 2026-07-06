@@ -13,15 +13,12 @@ import (
 )
 
 // ErrAuthenticationNotValidated is returned when a request reaches a handler
-// without the positive authentication marker set by the transport context
-// function.
+// without the authentication marker set by the transport context function.
 var ErrAuthenticationNotValidated = errors.New("TheHive authentication failed: credentials were not validated")
 
-// checkAuthentication enforces fail-closed authentication: a request is only
-// allowed when the transport context function recorded a successful
-// validation (types.AuthValidatedCtxKey) and no authentication error is
-// present. A descriptive error from the context takes precedence over the
-// generic missing-marker error.
+// checkAuthentication enforces fail-closed auth: allowed only when the context
+// recorded a successful validation (types.AuthValidatedCtxKey) and no auth
+// error is present. A context error takes precedence over the missing-marker error.
 func checkAuthentication(ctx context.Context) error {
 	authError, ok := ctx.Value(types.AuthErrorCtxKey).(error)
 	if ok && authError != nil {

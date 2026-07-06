@@ -18,9 +18,8 @@ const (
 	argEntityID               = "entity-id"
 )
 
-// scopedPermissionsYAML restricts execute-automation to entities with
-// TLP <= 2 while allowing every analyzer and responder, so the entity scope
-// check is the deciding gate (DL-6004 filter enforcement tests).
+// scopedPermissionsYAML restricts execute-automation to TLP <= 2 but allows every
+// analyzer/responder, so the entity scope check is the deciding gate (DL-6004).
 const scopedPermissionsYAML = `version: "1.0"
 permissions:
   tools:
@@ -83,9 +82,6 @@ func requireScopeDenied(t *testing.T, result *mcp.CallToolResult) {
 	require.Contains(t, textContent.Text, "not within the scope")
 }
 
-// TestExecuteAutomationScopeRunResponderDeniedOutOfScope verifies that
-// running a responder against an out-of-scope entity is denied before any
-// Cortex call, while an in-scope target passes the scope gate.
 func TestExecuteAutomationScopeRunResponderDeniedOutOfScope(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
@@ -108,13 +104,11 @@ func TestExecuteAutomationScopeRunResponderDeniedOutOfScope(t *testing.T) {
 		}
 	}
 
-	// Out-of-scope target: denied by the scope gate
 	result, err := mcpClient.CallTool(t.Context(), runResponderRequest(outOfScopeCase.UnderscoreId))
 	require.NoError(t, err)
 	requireScopeDenied(t, result)
 
-	// In-scope target: passes the scope gate and reaches TheHive's Cortex
-	// API (which fails here because no Cortex instance is connected)
+	// In-scope target passes the gate; the Cortex call then fails since no Cortex is connected.
 	result, err = mcpClient.CallTool(t.Context(), runResponderRequest(inScopeCase.UnderscoreId))
 	require.NoError(t, err)
 	require.True(t, result.IsError)
@@ -126,15 +120,13 @@ func TestExecuteAutomationScopeRunResponderDeniedOutOfScope(t *testing.T) {
 	require.Contains(t, text, "failed to execute responder")
 }
 
-// TestExecuteAutomationScopeRunAnalyzerDeniedOutOfScope verifies that running
-// an analyzer on an out-of-scope observable is denied before any Cortex call.
 func TestExecuteAutomationScopeRunAnalyzerDeniedOutOfScope(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
 
-	// The parent case is in scope; the observable itself carries TLP 3 and is
-	// therefore outside the configured filter
+	// Scope is decided on the observable's own TLP: the parent case is in scope (TLP 2)
+	// but the TLP-3 observable is not.
 	parentCase := createCaseWithTLP(t, hiveClient, "Case for analyzer scope test", 2)
 	outOfScopeObservableID := createObservableWithTLP(t, hiveClient, parentCase.UnderscoreId, "10.20.30.40", 3)
 	inScopeObservableID := createObservableWithTLP(t, hiveClient, parentCase.UnderscoreId, "10.20.30.41", 1)
@@ -156,8 +148,7 @@ func TestExecuteAutomationScopeRunAnalyzerDeniedOutOfScope(t *testing.T) {
 	require.NoError(t, err)
 	requireScopeDenied(t, result)
 
-	// In-scope observable passes the gate: TheHive accepts the job even
-	// without a connected Cortex instance
+	// In-scope observable passes the gate; TheHive accepts the analyzer job even without a connected Cortex.
 	result, err = mcpClient.CallTool(t.Context(), runAnalyzerRequest(inScopeObservableID))
 	require.NoError(t, err)
 	require.False(t, result.IsError, "running an analyzer on an in-scope observable must succeed")
@@ -170,7 +161,6 @@ func TestExecuteAutomationScopeRunAnalyzerDeniedOutOfScope(t *testing.T) {
 	require.True(t, ok)
 	require.NotEmpty(t, jobID)
 
-	// Reading the status of a job targeting an in-scope observable succeeds
 	statusResult, err := mcpClient.CallTool(t.Context(), mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Name: toolNameExecuteAutomation,
@@ -184,9 +174,6 @@ func TestExecuteAutomationScopeRunAnalyzerDeniedOutOfScope(t *testing.T) {
 	require.False(t, statusResult.IsError, "job status for an in-scope target must be readable")
 }
 
-// TestExecuteAutomationScopeGetJobStatusDeniedOutOfScope verifies that
-// reading the status (and report) of a job whose target observable is out of
-// scope is denied.
 func TestExecuteAutomationScopeGetJobStatusDeniedOutOfScope(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
@@ -217,8 +204,6 @@ func TestExecuteAutomationScopeGetJobStatusDeniedOutOfScope(t *testing.T) {
 	requireScopeDenied(t, result)
 }
 
-// TestExecuteAutomationScopeGetActionStatusDeniedOutOfScope verifies that
-// reading action status for an out-of-scope entity is denied.
 func TestExecuteAutomationScopeGetActionStatusDeniedOutOfScope(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
@@ -243,9 +228,7 @@ func TestExecuteAutomationScopeGetActionStatusDeniedOutOfScope(t *testing.T) {
 	requireScopeDenied(t, result)
 }
 
-// TestExecuteAutomationScopeNoFiltersBackwardCompatible verifies that without
-// configured filters the scope gate does not interfere: get-action-status on
-// a high-TLP entity proceeds to the lookup itself.
+// No filters means the scope gate is skipped: a high-TLP entity reaches the lookup.
 func TestExecuteAutomationScopeNoFiltersBackwardCompatible(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)

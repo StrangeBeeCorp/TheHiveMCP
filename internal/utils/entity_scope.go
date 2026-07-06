@@ -13,14 +13,12 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
-// ListOperationName returns the TheHive query operation that lists entities
-// of the given type (e.g. "case" -> "listCase").
+// ListOperationName returns the TheHive list operation for a type ("case" -> "listCase").
 func ListOperationName(entityType string) string {
 	return entityOperationName("list", entityType)
 }
 
-// getOperationName returns the TheHive query operation that fetches a single
-// entity of the given type by ID or name (e.g. "case" -> "getCase").
+// getOperationName: "case" -> "getCase" (fetches one entity by ID or name).
 func getOperationName(entityType string) string {
 	return entityOperationName("get", entityType)
 }
@@ -29,7 +27,7 @@ func entityOperationName(verb, entityType string) string {
 	if entityType == "" {
 		return ""
 	}
-	// Handle entity types that don't follow simple capitalization
+
 	capitalizedOverrides := map[string]string{
 		types.EntityTypeCaseTemplate: "CaseTemplate",
 	}
@@ -42,55 +40,29 @@ func entityOperationName(verb, entityType string) string {
 	return fmt.Sprintf("%s%s", verb, capitalizedEntityType)
 }
 
-// GetEntityIDsInScope reports which of the given entity IDs match the
-// permission filters for the given entity type. Each ID is checked
-// server-side by fetching the entity with the permission filters applied as
-// a filter stage, so an entity excluded by the filters is reported exactly
-// like a missing one. (TheHive does not support _id equality filters on
-// list operations for every entity type, so a get-by-ID pipeline is used
-// instead of one batched list query.)
-// With no configured filters every requested ID is in scope.
+// GetEntityIDsInScope reports which entity IDs match permFilters for the given
+// type, checked server-side per ID. With no filters every ID is in scope.
+// See GetScopedEntityIDsBatch for why this is per-ID, not one list query.
 func GetEntityIDsInScope(ctx context.Context, entityType string, entityIDs []string, permFilters map[string]any) (map[string]bool, error) {
 	return scopedEntityIDsBatch(ctx, entityType, entityIDs, permFilters, 1)
 }
 
-// scopeCheckConcurrency bounds how many get-by-ID scope checks run at once in
-// GetScopedEntityIDsBatch, so re-scoping a large batch of similarity hits does
-// not open an unbounded number of connections to TheHive.
+// scopeCheckConcurrency bounds concurrent get-by-ID checks so re-scoping a large
+// batch does not open unbounded connections to TheHive.
 const scopeCheckConcurrency = 8
 
-// GetScopedEntityIDsBatch reports which of the given entity IDs match the
-// permission filters. It checks every ID with the same proven get-by-ID
-// pipeline GetEntityIDsInScope uses (getCase/getAlert -> filter(permFilters)),
-// but issues the checks CONCURRENTLY behind a bounded worker pool rather than
-// serially — so re-scoping N similarity hits costs ~one round-trip of latency,
-// not N (DL-5764).
+// GetScopedEntityIDsBatch is GetEntityIDsInScope behind a bounded worker pool,
+// so N hits cost ~one round-trip, not N (DL-5764).
 //
-// This was originally a single list query that combined the IDs with _or and
-// intersected them with the permission filters:
-//
-//	listCase -> filter(_and[ permFilters, _or[ {_id:h1}, ... ] ])
-//
-// That pattern proved unreliable against real TheHive: a list operation does
-// not honour an _id equality filter the way a get-by-ID lookup does, so the
-// batch result disagreed with the proven get-by-ID path (verified against a
-// live container by TestGetScopedEntityIDsBatchHonorsIDFilter). Because this
-// guards a TLP:RED similarity-expansion leak path, correctness wins: we fan out
-// the proven per-ID check and recover the latency with bounded concurrency
-// instead of relying on the unsupported list filter.
-//
-// With no filters every ID is trivially in scope.
+// Per-ID, not one list query with _or of the IDs: a list op does not honour an
+// _id equality filter the way get-by-ID does, so the batch disagreed with the
+// proven path (TestGetScopedEntityIDsBatchHonorsIDFilter). Guards a TLP:RED leak.
 func GetScopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []string, permFilters map[string]any) (map[string]bool, error) {
 	return scopedEntityIDsBatch(ctx, entityType, entityIDs, permFilters, scopeCheckConcurrency)
 }
 
-// scopedEntityIDsBatch is the shared implementation behind both
-// GetEntityIDsInScope and GetScopedEntityIDsBatch. It checks every ID with the
-// proven get-by-ID pipeline (getCase/getAlert -> filter(permFilters)), fanning
-// the checks out behind a bounded worker pool. concurrency caps how many checks
-// run at once: GetEntityIDsInScope passes 1 (serial), GetScopedEntityIDsBatch
-// passes scopeCheckConcurrency. The result is keyed by ID, so it is independent
-// of goroutine scheduling and identical regardless of concurrency.
+// scopedEntityIDsBatch backs both public entry points via a get-by-ID ->
+// filter(permFilters) pipeline; the ID-keyed result is identical at any concurrency.
 func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []string, permFilters map[string]any, concurrency int) (map[string]bool, error) {
 	inScope := make(map[string]bool, len(entityIDs))
 	if len(permFilters) == 0 {
@@ -112,10 +84,8 @@ func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []st
 
 	filterOp := scopeFilterOperation(permFilters)
 
-	// Derive a cancelable context so that, once one check fails (or the caller's
-	// ctx is cancelled mid-batch), in-flight workers abort their queries early
-	// and the dispatch loop stops issuing the remaining checks instead of firing
-	// them all for a result that will be discarded.
+	// Cancelable so the first error (or caller-ctx cancel) aborts in-flight
+	// workers and stops dispatching checks for a result that will be discarded.
 	qctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -126,8 +96,7 @@ func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []st
 		firstID  string
 		firstErr error
 	)
-	// Clamp: a zero or negative concurrency would make a 0-capacity semaphore
-	// and deadlock on the first send. Treat anything < 1 as serial.
+	// concurrency < 1 would make a 0-capacity semaphore and deadlock on first send.
 	if concurrency < 1 {
 		concurrency = 1
 	}
@@ -137,8 +106,7 @@ func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []st
 	dispatchedAll := true
 
 	for _, entityID := range entityIDs {
-		// Stop dispatching once the parent ctx is cancelled or our own cancel()
-		// has fired after the first error; the partial map is discarded below.
+		// Stop on ctx cancel or first-error cancel(); partial map discarded below.
 		if qctx.Err() != nil {
 			dispatchedAll = false
 			break
@@ -183,11 +151,7 @@ func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []st
 	if firstErr != nil {
 		return nil, fmt.Errorf("failed to verify %s %s against permission filters: %w", entityType, firstID, firstErr)
 	}
-	// If the dispatch loop was cut short by a caller-ctx cancellation, the map
-	// is partial; surface that as an error rather than returning a
-	// silently-truncated result that looks complete. A loop that dispatched and
-	// checked every ID (dispatchedAll, firstErr == nil) yields a complete map,
-	// which is returned even if ctx was cancelled after the last check finished.
+	// Error out rather than return a truncated scope map that looks complete.
 	if !dispatchedAll {
 		return nil, fmt.Errorf("scope verification cancelled: %w", ctx.Err())
 	}
@@ -195,12 +159,9 @@ func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []st
 	return inScope, nil
 }
 
-// IsJobObservableInScope reports whether the observable targeted by the given
-// Cortex analyzer job matches the permission filters. The job's target is
-// resolved server-side (getJob -> observable traversal) and the filters are
-// applied to the observable in the same query, so a job whose observable the
-// filters exclude is reported exactly like a missing one.
-// With no configured filters every job is in scope.
+// IsJobObservableInScope reports whether a Cortex job's target observable matches
+// permFilters, resolved server-side (getJob -> observable -> filter). No filters:
+// every job is in scope.
 func IsJobObservableInScope(ctx context.Context, jobID string, permFilters map[string]any) (bool, error) {
 	if len(permFilters) == 0 {
 		return true, nil
@@ -224,7 +185,6 @@ func IsJobObservableInScope(ctx context.Context, jobID string, permFilters map[s
 	return matched, nil
 }
 
-// scopeFilterOperation turns permission filters into a TheHive filter stage.
 func scopeFilterOperation(permFilters map[string]any) map[string]any {
 	filterOp := make(map[string]any, len(permFilters)+1)
 	maps.Copy(filterOp, permFilters)
@@ -236,8 +196,6 @@ func scopeFilterOperation(permFilters map[string]any) map[string]any {
 	return filterOp
 }
 
-// executeScopeQuery runs a scope-check query and reports whether it matched
-// anything.
 func executeScopeQuery(ctx context.Context, operations []thehive.InputQueryNamedOperation) (bool, error) {
 	hiveClient, err := GetHiveClientFromContext(ctx)
 	if err != nil {
@@ -263,8 +221,7 @@ func executeScopeQuery(ctx context.Context, operations []thehive.InputQueryNamed
 	return len(resultsSlice) > 0, nil
 }
 
-// IsEntityInScope reports whether a single entity matches the permission
-// filters for the given entity type. See GetEntityIDsInScope.
+// IsEntityInScope is the single-ID form of GetEntityIDsInScope.
 func IsEntityInScope(ctx context.Context, entityType, entityID string, permFilters map[string]any) (bool, error) {
 	inScope, err := GetEntityIDsInScope(ctx, entityType, []string{entityID}, permFilters)
 	if err != nil {

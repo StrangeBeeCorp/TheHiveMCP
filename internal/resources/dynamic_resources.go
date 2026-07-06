@@ -32,9 +32,8 @@ func derefString(s *string) string {
 	return *s
 }
 
-// Filter out unnecessary user fields
 func parseUsers(results any) (string, error) {
-	// Convert interface{} -> JSON -> []thehive.OutputUser
+	// Round-trip through JSON to coerce interface{} into []thehive.OutputUser.
 	resultBytes, err := json.Marshal(results)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal results: %w", err)
@@ -47,7 +46,6 @@ func parseUsers(results any) (string, error) {
 		return "", fmt.Errorf("failed to unmarshal to OutputUser: %w", err)
 	}
 
-	// Create a simplified slice of users with only relevant fields
 	var simplifiedUsers []SimplifiedUser
 	for _, user := range users {
 		simplifiedUsers = append(simplifiedUsers, SimplifiedUser{
@@ -60,7 +58,6 @@ func parseUsers(results any) (string, error) {
 		})
 	}
 
-	// Marshal the simplified users to JSON
 	simplifiedUsersJSON, err := json.MarshalIndent(simplifiedUsers, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal simplified users: %w", err)
@@ -147,17 +144,14 @@ func GetAvailableAnalyzers(ctx context.Context, _ mcp.ReadResourceRequest) ([]mc
 		return nil, fmt.Errorf("failed to find analyzers: %w. Check that Cortex integration is enabled and you have permissions to list analyzers. API response: %v", err, resp)
 	}
 
-	// Filter analyzers based on permissions
 	perms, err := utils.GetPermissionsFromContext(ctx)
 	if err == nil {
 		filteredAnalyzers := []thehive.OutputWorker{}
 
 		for _, analyzer := range analyzers {
-			// Check both ID and name for permission matching
 			analyzerID := analyzer.GetId()
 			analyzerName := analyzer.GetName()
 
-			// Try ID first, then name
 			if perms.IsAnalyzerAllowed(analyzerID) || perms.IsAnalyzerAllowed(analyzerName) {
 				filteredAnalyzers = append(filteredAnalyzers, analyzer)
 			}
@@ -183,7 +177,6 @@ func GetAvailableAnalyzers(ctx context.Context, _ mcp.ReadResourceRequest) ([]mc
 // GetAvailableResponders returns the Cortex responders for the entity named by the
 // request's entityType and entityId parameters as a JSON resource.
 func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-	// Extract entityType and entityId from query parameters and validate that they are strings
 	entityType, ok := req.Params.Arguments["entityType"].(string)
 	if !ok {
 		return nil, errors.New("entityType query parameter is required and must be a string. Example: hive://metadata/automation/responders?entityType=case&entityId=~123456")
@@ -199,7 +192,7 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 	}
 
 	// Both values are interpolated into the Cortex endpoint path; reject
-	// anything that is not a well-formed entity reference before any call
+	// anything but a well-formed entity reference before any call.
 	err := validateResponderParams(entityType, entityID)
 	if err != nil {
 		return nil, err
@@ -215,17 +208,14 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 		return nil, fmt.Errorf("failed to find responders for %s %s: %w. Check that Cortex integration is enabled and you have permissions to list responders. API response: %v", entityType, entityID, err, resp)
 	}
 
-	// Filter responders based on permissions
 	perms, err := utils.GetPermissionsFromContext(ctx)
 	if err == nil {
 		filteredResponders := []thehive.OutputWorker{}
 
 		for _, responder := range responders {
-			// Check both ID and name for permission matching
 			responderID := responder.GetId()
 			responderName := responder.GetName()
 
-			// Try ID first, then name
 			if perms.IsResponderAllowed(responderID) || perms.IsResponderAllowed(responderName) {
 				filteredResponders = append(filteredResponders, responder)
 			}
@@ -390,7 +380,6 @@ func GetCurrentPermissions(ctx context.Context, _ mcp.ReadResourceRequest) ([]mc
 
 // RegisterDynamicResources registers the API-backed metadata resources on the registry.
 func RegisterDynamicResources(registry *ResourceRegistry) {
-	// Register available users
 	availableUsers := mcp.NewResource(
 		"hive://metadata/organisation/users",
 		"Users",
@@ -399,7 +388,6 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 	)
 	registry.Register(availableUsers, GetAvailableUsers)
 
-	// Register available case templates
 	availableCaseTemplates := mcp.NewResource(
 		"hive://metadata/entities/case/templates",
 		"Case Templates",
@@ -408,7 +396,6 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 	)
 	registry.Register(availableCaseTemplates, GetAvailableCaseTemplates)
 
-	// Register available analyzers
 	availableAnalyzers := mcp.NewResource(
 		"hive://metadata/automation/analyzers",
 		"Analyzers",
@@ -417,7 +404,6 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 	)
 	registry.Register(availableAnalyzers, GetAvailableAnalyzers)
 
-	// Register available responders
 	availableResponders := mcp.NewResource(
 		"hive://metadata/automation/responders",
 		"Responders",
@@ -426,7 +412,6 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 	)
 	registry.Register(availableResponders, GetAvailableResponders)
 
-	// Register available case statuses
 	availableCaseStatuses := mcp.NewResource(
 		"hive://metadata/entities/case/statuses",
 		"Case Statuses",
@@ -435,7 +420,6 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 	)
 	registry.Register(availableCaseStatuses, GetAvailableCaseStatuses)
 
-	// Register Current user
 	currentUser := mcp.NewResource(
 		"hive://config/current-user",
 		"Current User",
@@ -444,7 +428,6 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 	)
 	registry.Register(currentUser, GetCurrentUser)
 
-	// Register available observable types
 	availableObservableTypes := mcp.NewResource(
 		"hive://metadata/entities/observable/types",
 		"Observable Types",
@@ -453,7 +436,6 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 	)
 	registry.Register(availableObservableTypes, GetAvailableObservableTypes)
 
-	// Register available custom fields
 	availableCustomFields := mcp.NewResource(
 		"hive://metadata/entities/custom-fields",
 		"Custom Fields",
@@ -462,7 +444,6 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 	)
 	registry.Register(availableCustomFields, GetAvailableCustomFields)
 
-	// Register current permissions
 	currentPermissions := mcp.NewResource(
 		"hive://config/permissions",
 		"Current Permissions",

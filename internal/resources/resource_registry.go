@@ -12,7 +12,7 @@ import (
 // ResourceRegistry manages resource registration and lookup
 type ResourceRegistry struct {
 	resources            map[string]resourceEntry
-	categoryDescriptions map[string]string // Store descriptions from catalog
+	categoryDescriptions map[string]string
 }
 
 type resourceEntry struct {
@@ -43,7 +43,6 @@ func (r *ResourceRegistry) RegisterCategoryMetadata(categories []map[string]any)
 
 		r.categoryDescriptions[name] = desc
 
-		// Register subcategories if they exist
 		if subcats, ok := cat["subcategories"].([]map[string]any); ok {
 			for _, subcat := range subcats {
 				subName, ok := subcat[keyName].(string)
@@ -93,39 +92,30 @@ func (r *ResourceRegistry) ListByCategory(category string) ([]map[string]any, []
 	}
 
 	for uri, entry := range r.resources {
-		// Skip catalog
 		if uri == "hive://catalog" {
 			continue
 		}
 
-		// Check if this URI is under our category
 		if !strings.HasPrefix(uri, prefix) {
 			continue
 		}
 
-		// Get the relative path after the prefix
 		relativePath := strings.TrimPrefix(uri, prefix)
-
-		// Count slashes in relative path to determine depth
 		slashCount := strings.Count(relativePath, "/")
 
 		if slashCount == 0 {
-			// Direct child resource (no more slashes)
 			resources = append(resources, map[string]any{
 				"uri":          uri,
 				keyName:        entry.resource.Name,
 				keyDescription: entry.resource.Description,
 			})
 		} else {
-			// Has more path segments, so there's a subcategory
-			// Extract the immediate subcategory name
 			parts := strings.Split(relativePath, "/")
 			subcategory := parts[0]
 			subcategoriesMap[subcategory] = true
 		}
 	}
 
-	// Convert subcategories map to slice with descriptions from catalog
 	var subcategories []map[string]any
 
 	for subcat := range subcategoriesMap {

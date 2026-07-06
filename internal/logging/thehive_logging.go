@@ -19,15 +19,12 @@ type Transport struct {
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	start := time.Now()
 
-	// Log the outgoing request
 	t.logRequest(req, start)
 
-	// Execute the request
 	resp, err := t.transport().RoundTrip(req)
 
 	duration := time.Since(start)
 
-	// Log the response
 	t.logResponse(req, resp, err, duration)
 
 	if err != nil {
@@ -46,7 +43,7 @@ func (t *Transport) transport() http.RoundTripper {
 }
 
 func (t *Transport) logRequest(req *http.Request, start time.Time) {
-	// Read and restore request body for logging
+	// Restore body after reading so the transport can still send it.
 	var bodyBytes []byte
 	if req.Body != nil {
 		bodyBytes, _ = io.ReadAll(req.Body)

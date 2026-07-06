@@ -16,9 +16,7 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
-// unusedSamplingHandler is wired into the test MCP client but must never fire:
-// search-entities no longer uses the internal LLM. If it is ever called, the
-// test fails loudly — this asserts the no-sampling invariant.
+// Fails the test if invoked: asserts search-entities never uses the sampling/LLM path.
 func unusedSamplingHandler(t *testing.T) func(context.Context, mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
 	t.Helper()
 
@@ -28,7 +26,6 @@ func unusedSamplingHandler(t *testing.T) func(context.Context, mcp.CreateMessage
 	}
 }
 
-// Helper function to create a test alert with specific fields
 func createTestAlert(t *testing.T, hiveClient *thehive.APIClient, title string, severity int32, tags []string) map[string]any {
 	t.Helper()
 
@@ -50,7 +47,6 @@ func createTestAlert(t *testing.T, hiveClient *thehive.APIClient, title string, 
 	}
 }
 
-// Helper function to create a test case with specific fields
 func createTestCase(t *testing.T, hiveClient *thehive.APIClient, title string, severity int32, status string, assignee string) {
 	t.Helper()
 
@@ -99,11 +95,9 @@ func createTestCaseWithTaskAndAlert(t *testing.T, hiveClient *thehive.APIClient)
 	}
 }
 
-// TestSearchCasesBySeverityAndStatus tests searching cases with multiple filter conditions
 func TestSearchCasesBySeverityAndStatus(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
-	// Create test cases with different severities and statuses
 	createTestCase(t, hiveClient, "High severity open case", 3, "New", "")
 	createTestCase(t, hiveClient, "Low severity open case", 1, "New", "")
 	createTestCase(t, hiveClient, "High severity in progress case", 3, "InProgress", "")
@@ -138,13 +132,11 @@ func TestSearchCasesBySeverityAndStatus(t *testing.T) {
 	require.InDelta(t, float64(3), caseData[tSeverity], 0)
 }
 
-// TestSearchAlertsWithDateRange tests searching alerts created within a date range
 func TestSearchAlertsWithDateRange(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
-	// Create test alerts
 	createTestAlert(t, hiveClient, "Recent alert", 2, []string{"recent"})
-	time.Sleep(100 * time.Millisecond) // Ensure different timestamps
+	time.Sleep(100 * time.Millisecond) // distinct timestamps
 	createTestAlert(t, hiveClient, "Another recent alert", 2, []string{"recent"})
 
 	now := time.Now()
@@ -167,11 +159,9 @@ func TestSearchAlertsWithDateRange(t *testing.T) {
 	require.GreaterOrEqual(t, len(alertsData), 2)
 }
 
-// TestSearchAlertsWithMultipleTags tests searching alerts using the _in operator for tags
 func TestSearchAlertsWithMultipleTags(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
-	// Create alerts with different tags
 	createTestAlert(t, hiveClient, "Phishing alert", 3, []string{tPhishing, "email"})
 	createTestAlert(t, hiveClient, "Malware alert", 3, []string{tMalware, "endpoint"})
 	createTestAlert(t, hiveClient, "Network alert", 2, []string{tNetwork, "firewall"})
@@ -196,15 +186,14 @@ func TestSearchAlertsWithMultipleTags(t *testing.T) {
 	require.Len(t, alertsData, 2)
 }
 
-// TestSearchCasesWithAssigneeAndSorting tests searching cases assigned to specific user
 func TestSearchCasesWithAssigneeAndSorting(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
-	// Create cases with different assignees (using admin user since test users don't exist)
+	// Assign to admin: test users don't exist in the fixture.
 	createTestCase(t, hiveClient, "Admin's case 1", 2, "InProgress", "admin@thehive.local")
 	time.Sleep(50 * time.Millisecond)
 	createTestCase(t, hiveClient, "Admin's case 2", 3, "InProgress", "admin@thehive.local")
-	// Note: TheHive assigns the creator as default assignee even when we set nil, so all cases will show admin as assignee
+	// TheHive assigns the creator as assignee even when set nil, so all cases show admin.
 
 	mcpClient := newSearchClient(t)
 
@@ -229,9 +218,8 @@ func TestSearchCasesWithAssigneeAndSorting(t *testing.T) {
 		pExtraColumns: []string{tID, tTitle, "assignee", tCreatedAt},
 		"sort-order":  "asc",
 	})
-	require.Len(t, casesData, 2) // Should match both cases assigned to admin
+	require.Len(t, casesData, 2)
 
-	// Verify sorting (oldest first with asc order)
 	firstCase, ok := casesData[0].(map[string]any)
 	require.True(t, ok)
 	secondCase, ok := casesData[1].(map[string]any)
@@ -241,11 +229,9 @@ func TestSearchCasesWithAssigneeAndSorting(t *testing.T) {
 	require.Equal(t, "[UNTRUSTED_DATA]Admin's case 2[/UNTRUSTED_DATA]", secondCase[tTitle])
 }
 
-// TestSearchAlertsWithComplexOrConditions tests using _or with multiple severity levels
 func TestSearchAlertsWithComplexOrConditions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
-	// Create alerts with different severities
 	createTestAlert(t, hiveClient, "Critical alert", 4, []string{"critical"})
 	createTestAlert(t, hiveClient, "High alert", 3, []string{"high"})
 	createTestAlert(t, hiveClient, "Medium alert", 2, []string{"medium"})
@@ -276,7 +262,6 @@ func TestSearchAlertsWithComplexOrConditions(t *testing.T) {
 	})
 	require.Len(t, alertsData, 2)
 
-	// Verify only high and critical alerts are returned
 	for _, alertAny := range alertsData {
 		alert, ok := alertAny.(map[string]any)
 		require.True(t, ok)
@@ -286,18 +271,15 @@ func TestSearchAlertsWithComplexOrConditions(t *testing.T) {
 	}
 }
 
-// TestSearchTasksWithLimit tests searching tasks with a custom limit
 func TestSearchTasksWithLimit(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
-	// First create a case
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Test case for tasks"
 	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
 	require.NoError(t, err)
 
-	// Create multiple tasks
 	for i := 1; i <= 5; i++ {
 		testTask := testutils.MockInputTask()
 		testTask.Title = fmt.Sprintf("Task %d", i)
@@ -315,11 +297,9 @@ func TestSearchTasksWithLimit(t *testing.T) {
 	require.Len(t, tasksData, 3, "Should return exactly 3 tasks as per limit")
 }
 
-// TestExtraColumnsLimitColumns tests that extra-columns limits the columns returned
 func TestExtraColumnsLimitColumns(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
-	// Create a test alert
 	createTestAlert(t, hiveClient, "Test alert for column override", 2, []string{"test"})
 
 	mcpClient := newSearchClient(t)
@@ -330,30 +310,25 @@ func TestExtraColumnsLimitColumns(t *testing.T) {
 	})
 	require.GreaterOrEqual(t, len(alertsData), 1)
 
-	// Verify that only the columns from kept_columns are returned
 	alertData, ok := alertsData[0].(map[string]any)
 	require.True(t, ok)
 
-	// These should be present (from kept_columns)
 	require.Contains(t, alertData, tID)
 	require.Contains(t, alertData, tTitle)
 
-	// These should NOT be present (not in kept_columns, even though requested in extra-columns)
+	// Filtered out despite being requested in extra-columns: not in kept_columns.
 	require.NotContains(t, alertData, tSeverity, "severity should not be present as it's not in kept_columns")
 	require.NotContains(t, alertData, tTags, "tags should not be present as it's not in kept_columns")
 	require.NotContains(t, alertData, tCreatedAt, "_createdAt should not be present as it's not in kept_columns")
 
-	// Verify we only have the expected number of columns
 	require.Len(t, alertData, 2, "Should only have 2 columns as specified in kept_columns")
 }
 
-// TestSearchWithAnalystPermissions tests that analyst permissions filter results by TLP and PAP
 func TestSearchWithAnalystPermissions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 
-	// Create alerts with different TLP/PAP levels
-	// Alert 1: TLP=2, PAP=2 (should be visible)
+	// Alert 1: TLP=2, PAP=2 (visible)
 	alert1 := testutils.MockInputAlert()
 	tlp1 := int32(2)
 	pap1 := int32(2)
@@ -364,7 +339,7 @@ func TestSearchWithAnalystPermissions(t *testing.T) {
 	createdAlert1, _, err := hiveClient.AlertAPI.CreateAlert(authContext).InputCreateAlert(*alert1).Execute()
 	require.NoError(t, err)
 
-	// Alert 2: TLP=3, PAP=1 (should NOT be visible - TLP too high)
+	// Alert 2: TLP=3, PAP=1 (hidden: TLP too high)
 	alert2 := testutils.MockInputAlert()
 	tlp2 := int32(3)
 	pap2 := int32(1)
@@ -375,7 +350,7 @@ func TestSearchWithAnalystPermissions(t *testing.T) {
 	createdAlert2, _, err := hiveClient.AlertAPI.CreateAlert(authContext).InputCreateAlert(*alert2).Execute()
 	require.NoError(t, err)
 
-	// Alert 3: TLP=1, PAP=3 (should NOT be visible - PAP too high)
+	// Alert 3: TLP=1, PAP=3 (hidden: PAP too high)
 	alert3 := testutils.MockInputAlert()
 	tlp3 := int32(1)
 	pap3 := int32(3)
@@ -386,14 +361,12 @@ func TestSearchWithAnalystPermissions(t *testing.T) {
 	createdAlert3, _, err := hiveClient.AlertAPI.CreateAlert(authContext).InputCreateAlert(*alert3).Execute()
 	require.NoError(t, err)
 
-	// Use analyst permissions client
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, unusedSamplingHandler(t), testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
 	alertsData := searchRows(t, mcpClient, map[string]any{
 		pEntityType: types.EntityTypeAlert,
 	})
 
-	// Check that only alert1 is visible (TLP<=2 and PAP<=2)
 	visibleIDs := make(map[string]bool)
 
 	for _, alertInterface := range alertsData {
@@ -410,12 +383,10 @@ func TestSearchWithAnalystPermissions(t *testing.T) {
 	require.False(t, visibleIDs[createdAlert3.UnderscoreId], "Alert with PAP=3 should NOT be visible")
 }
 
-// TestSearchWithReadOnlyPermissions tests that read-only permissions still allow searching
 func TestSearchWithReadOnlyPermissions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 
-	// Create a test alert
 	alert := testutils.MockInputAlert()
 	alert.Title = "ReadOnly Search Test Alert"
 	alert.SourceRef = "test-readonly-search-001"
@@ -424,10 +395,8 @@ func TestSearchWithReadOnlyPermissions(t *testing.T) {
 	createdAlert, _, err := hiveClient.AlertAPI.CreateAlert(authContext).InputCreateAlert(*alert).Execute()
 	require.NoError(t, err)
 
-	// Use read-only permissions client (default permissions)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, unusedSamplingHandler(t), testutils.DummyElicitationAccept, "")
 
-	// Test: Search should succeed with read-only permissions
 	result := callSearch(t, mcpClient, map[string]any{
 		pEntityType: types.EntityTypeAlert,
 	})
@@ -439,7 +408,6 @@ func TestSearchWithReadOnlyPermissions(t *testing.T) {
 	require.True(t, ok)
 	require.GreaterOrEqual(t, len(alertsData), 1, "Should find at least one alert")
 
-	// Verify our test alert is in the results
 	found := false
 
 	for _, alertInterface := range alertsData {
@@ -457,11 +425,9 @@ func TestSearchWithReadOnlyPermissions(t *testing.T) {
 	require.True(t, found, "Should find our test alert")
 }
 
-// TestSearchCasesWithCountOnly tests searching cases with count=true parameter
 func TestSearchCasesWithCountOnly(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
-	// Create test cases with different severities
 	createTestCase(t, hiveClient, "High severity case 1", 3, "New", "")
 	createTestCase(t, hiveClient, "High severity case 2", 3, "InProgress", "")
 	createTestCase(t, hiveClient, "Low severity case", 1, "New", "")
@@ -479,26 +445,21 @@ func TestSearchCasesWithCountOnly(t *testing.T) {
 		tCount: true,
 	})
 
-	// Check that we got a count-only response
 	countOnly, ok := structuredData["countOnly"].(bool)
 	require.True(t, ok)
 	require.True(t, countOnly)
 
-	// Check that count is 2 (two high severity cases)
 	count, ok := structuredData[tCount].(float64)
 	require.True(t, ok)
 	require.InDelta(t, float64(2), count, 0)
 
-	// Verify other expected fields are present
 	require.Equal(t, types.EntityTypeCase, structuredData["entityType"])
 	require.NotNil(t, structuredData["rawFilters"])
 }
 
-// TestSearchAlertsWithCountOnly tests searching alerts with count=true parameter
 func TestSearchAlertsWithCountOnly(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
-	// Create test alerts
 	createTestAlert(t, hiveClient, "Critical Alert 1", 4, []string{tMalware, tPhishing})
 	createTestAlert(t, hiveClient, "Critical Alert 2", 4, []string{tMalware})
 	createTestAlert(t, hiveClient, "Medium Alert", 2, []string{"suspicious"})
@@ -516,7 +477,6 @@ func TestSearchAlertsWithCountOnly(t *testing.T) {
 		tCount: true,
 	})
 
-	// Verify count-only response structure
 	countOnly, ok := structuredData["countOnly"].(bool)
 	require.True(t, ok)
 	require.True(t, countOnly)
@@ -527,11 +487,9 @@ func TestSearchAlertsWithCountOnly(t *testing.T) {
 	require.Equal(t, types.EntityTypeAlert, structuredData["entityType"])
 }
 
-// TestSearchCountVsRegularSearch tests that count matches the number of results in regular search
 func TestSearchCountVsRegularSearch(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
-	// Create test cases for comparison (use valid statuses)
 	createTestCase(t, hiveClient, "Test case 1", 2, "New", "")
 	createTestCase(t, hiveClient, "Test case 2", 2, "InProgress", "")
 	createTestCase(t, hiveClient, "Test case 3", 2, "New", "")
@@ -547,17 +505,14 @@ func TestSearchCountVsRegularSearch(t *testing.T) {
 		}
 	}
 
-	// First, do a regular search
 	regularResults := searchRows(t, mcpClient, args(false))
 	regularCount := len(regularResults)
 
-	// Now do a count-only search
 	countData := searchStructured(t, mcpClient, args(true))
 
 	countOnlyValue, ok := countData[tCount].(float64)
 	require.True(t, ok)
 
-	// Verify that the count matches the number of results
 	require.InDelta(t, float64(regularCount), countOnlyValue, 0)
 	require.Equal(t, 3, regularCount) // We created 3 test cases
 }
@@ -594,7 +549,6 @@ func TestSearchExtraDataAndAdditionalQueries(t *testing.T) {
 	extraData, ok := firstResult["extraData"].(map[string]any)
 	require.True(t, ok)
 
-	// Verify extra data contains alerts
 	alertsData, ok := extraData["alerts"].([]any)
 	require.True(t, ok)
 	require.Len(t, alertsData, 1)
@@ -701,9 +655,7 @@ func TestSearchTaskTasKLogs(t *testing.T) {
 	})
 	require.NotEmpty(t, tasksData)
 
-	// The integration suite shares a single TheHive instance, so the global task
-	// list may contain residue from other tests. Assert on this test's own task
-	// rather than the total count.
+	// Shared TheHive instance may hold tasks from other tests; assert on this test's own task, not the count.
 	var found bool
 
 	for _, taskInterface := range tasksData {
@@ -730,11 +682,9 @@ func TestSearchTaskTasKLogs(t *testing.T) {
 	require.True(t, found, "search results should include the task created by this test")
 }
 
-// TestSearchCaseTemplates tests searching case templates with the search-entities tool
 func TestSearchCaseTemplates(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
-	// Create two templates with distinct names for query matching
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 
 	for _, name := range []string{"Phishing-Search-Test", "Malware-Search-Test"} {
@@ -764,11 +714,9 @@ func TestSearchCaseTemplates(t *testing.T) {
 	require.Equal(t, "[UNTRUSTED_DATA]Phishing-Search-Test[/UNTRUSTED_DATA]", template["name"])
 }
 
-// TestSearchPages tests searching page entities via the search-entities tool
 func TestSearchPages(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
-	// Create a case and add a page to it
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Case with Pages for Search"
@@ -777,7 +725,6 @@ func TestSearchPages(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
 
-	// Create a page in the case via the TheHive API
 	inputPage := thehive.InputCreatePage{
 		Title:    "Searchable Investigation Page",
 		Content:  "## Notes\nSome investigation content.",

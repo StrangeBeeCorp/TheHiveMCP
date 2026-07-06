@@ -19,11 +19,10 @@ func CreateFilterFromJSONString(filterString string) (thehive.InputQueryNamedOpe
 		return thehive.InputQueryNamedOperation{}, fmt.Errorf("parsing filter JSON: %w", err)
 	}
 
-	// Use the generic map converter that's available in the generated client
 	return thehive.MapmapOfStringAnyAsInputQueryNamedOperation(&filterMap), nil
 }
 
-// parses a string in the format YYYY-MM-DDTHH:mm:SS to a timestamp in milliseconds since epoch
+// parseDateStringToTimestamp returns epoch millis.
 func parseDateStringToTimestamp(dateStr string) (int64, error) {
 	layout := "2006-01-02T15:04:05"
 
@@ -35,17 +34,11 @@ func parseDateStringToTimestamp(dateStr string) (int64, error) {
 	return t.UnixMilli(), nil
 }
 
-// normalizeFilterKey repairs a structurally-malformed filter key produced by a
-// weaker model. Two defects are recovered, in order:
-//   - surrounding literal double-quotes, e.g. `"_field"` (the JSON key was
-//     itself written with embedded quote characters) -> `_field`
-//   - leading/trailing whitespace, e.g. ` _field` -> `_field`
-//
-// Only the key STRUCTURE is touched; values are never modified. Repairing only
-// keys is deliberate: a user value such as {"_value": "*Phishing*"} must reach
-// TheHive byte-for-byte, and an entity could legitimately be filtered on a
-// quoted/spaced value. Keys, by contrast, are operators and field markers from
-// a closed DSL vocabulary, so trimming them is safe.
+// normalizeFilterKey repairs a malformed filter key from a weaker model:
+// strips surrounding literal double-quotes (`"_field"` -> `_field`) and
+// leading/trailing whitespace. Keys only — never values: a user value like
+// {"_value": "*Phishing*"} must reach TheHive byte-for-byte, whereas keys are a
+// closed DSL vocabulary, so trimming them is safe.
 func normalizeFilterKey(key string) string {
 	key = strings.TrimSpace(key)
 	// Strip a single matched pair of surrounding double-quotes only — an
@@ -57,19 +50,17 @@ func normalizeFilterKey(key string) string {
 	return key
 }
 
-// NormalizeFilterKeys recursively repairs structurally-malformed keys in a
-// filter map (see normalizeFilterKey) so that filters from weaker models still
-// reach TheHive in valid form. It walks nested maps and slices exactly like
-// TranslateDatesToTimestamps. It does NOT validate keys against the DSL: an
-// unrecoverable key falls through unchanged so TheHive returns its existing
-// field-listing 400. Mutates and returns filterMap.
+// NormalizeFilterKeys recursively repairs malformed keys in a filter map (see
+// normalizeFilterKey), walking nested maps/slices like TranslateDatesToTimestamps.
+// Unrecoverable keys fall through so TheHive returns its field-listing 400.
+// Mutates and returns filterMap.
 //
 // Apply only to FILTER maps, never to entity-write payloads — a created entity
 // may legitimately carry a field whose name needs no repair.
 func NormalizeFilterKeys(filterMap map[string]any) map[string]any {
-	// Collect renames first: mutating the map (add/delete) while ranging over it
-	// has undefined behavior for newly-added keys in Go. Recursion is safe to do
-	// in the same pass because it mutates the nested map, not filterMap.
+	// Collect renames first: mutating a map while ranging over it is UB for
+	// newly-added keys in Go. Recursion is safe in the same pass (mutates the
+	// nested map, not filterMap).
 	renames := make(map[string]string)
 
 	for key, value := range filterMap {
@@ -91,9 +82,8 @@ func NormalizeFilterKeys(filterMap map[string]any) map[string]any {
 	}
 
 	for old, normalized := range renames {
-		// If the normalized key already exists (e.g. both `_field` and `"_field"`
-		// were present), the repaired duplicate would clobber the clean key — keep
-		// the clean one and drop the malformed duplicate instead.
+		// If the clean key already exists (both `_field` and `"_field"` present),
+		// keep it and drop the malformed duplicate rather than clobbering.
 		if _, clean := filterMap[normalized]; !clean {
 			filterMap[normalized] = filterMap[old]
 		}
@@ -104,8 +94,8 @@ func NormalizeFilterKeys(filterMap map[string]any) map[string]any {
 	return filterMap
 }
 
-// TranslateDatesToTimestamps searches the filter map for date strings and
-// converts them to timestamps in milliseconds since epoch.
+// TranslateDatesToTimestamps recursively converts date strings in a filter map
+// to epoch millis.
 func TranslateDatesToTimestamps(filterMap map[string]any) map[string]any {
 	for key, value := range filterMap {
 		switch v := value.(type) {

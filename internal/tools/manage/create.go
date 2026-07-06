@@ -108,7 +108,6 @@ func (t *Tool) createCase(ctx context.Context, client *thehive.APIClient, data m
 			Hint(hintRequiredFields).API(resp)
 	}
 
-	// For create operations, return the single entity, not an array
 	return EntityResult{
 		CreateCaseResult: NewCreateCaseResult(result),
 	}, nil
@@ -138,7 +137,7 @@ func (t *Tool) createTask(ctx context.Context, client *thehive.APIClient, data m
 		return EntityResult{}, tools.NewToolErrorf("failed to create task in case %s", parentID).Cause(err).
 			Hint("Check that the case exists and you have permissions").API(resp)
 	}
-	// For create operations, return the single entity, not an array
+
 	return EntityResult{
 		CreateTaskResult: NewCreateTaskResult(result),
 	}, nil
@@ -161,15 +160,13 @@ func (t *Tool) createObservable(ctx context.Context, client *thehive.APIClient, 
 			Schema("observable", "create")
 	}
 
-	// Try to create in case first, then alert if that fails
+	// parentID may be a case or an alert; try case, fall back to alert.
 	var result []thehive.OutputObservable
 
-	// First attempt with case
 	caseResult, caseResp, caseErr := client.ObservableAPI.CreateObservableInCase(ctx, parentID).InputCreateObservable(inputObservable).Execute()
 	defer closeResponse(caseResp)
 
 	if caseErr != nil {
-		// If case creation fails, try alert
 		alertResult, alertResp, alertErr := client.ObservableAPI.CreateObservableInAlert(ctx, parentID).InputCreateObservable(inputObservable).Execute()
 		defer closeResponse(alertResp)
 
@@ -205,12 +202,11 @@ func (t *Tool) createProcedure(ctx context.Context, client *thehive.APIClient, d
 			Schema("procedure", "create")
 	}
 
-	// First attempt with case
+	// parentID may be a case or an alert; try case, fall back to alert.
 	caseResult, caseResp, caseErr := client.TTPAPI.CreateProcedureForCase(ctx, parentID).InputProcedure(inputProcedure).Execute()
 	defer closeResponse(caseResp)
 
 	if caseErr != nil {
-		// If case creation fails, try alert
 		alertResult, alertResp, alertErr := client.TTPAPI.CreateProcedureForAlert(ctx, parentID).InputProcedure(inputProcedure).Execute()
 		defer closeResponse(alertResp)
 

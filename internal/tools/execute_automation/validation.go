@@ -46,8 +46,7 @@ func (t *ExecuteAutomationTool) ValidatePermissions(ctx context.Context, params 
 }
 
 // validateJobScope denies job status reads when the job's target observable
-// is excluded by the configured execute-automation permission filters
-// (DL-6004). The observable is resolved server-side from the job itself.
+// (resolved server-side) is excluded by the tool's filters (DL-6004).
 func (t *ExecuteAutomationTool) validateJobScope(ctx context.Context, perms *permissions.Config, jobID string) error {
 	permFilters := perms.GetToolFilters(t.Name())
 	if len(permFilters) == 0 {
@@ -68,9 +67,8 @@ func (t *ExecuteAutomationTool) validateJobScope(ctx context.Context, perms *per
 	return nil
 }
 
-// validateTargetScope denies automation against entities that the configured
-// execute-automation permission filters exclude (DL-6004). With no configured
-// filters every target is permitted.
+// validateTargetScope denies automation against entities excluded by the tool's
+// filters (DL-6004). No filters means every target is permitted.
 func (t *ExecuteAutomationTool) validateTargetScope(ctx context.Context, perms *permissions.Config, entityType, entityID string) error {
 	permFilters := perms.GetToolFilters(t.Name())
 	if len(permFilters) == 0 {

@@ -62,7 +62,6 @@ func (t *Tool) mergeCases(ctx context.Context, client *thehive.APIClient, caseID
 }
 
 func (t *Tool) mergeAlertsIntoCase(ctx context.Context, client *thehive.APIClient, alertIDs []string, targetCaseID string) (EntityResult, error) {
-	// Use bulk merge if multiple alerts, otherwise single merge
 	var (
 		result *thehive.OutputCase
 		resp   *http.Response
@@ -70,13 +69,11 @@ func (t *Tool) mergeAlertsIntoCase(ctx context.Context, client *thehive.APIClien
 	)
 
 	if len(alertIDs) == 1 {
-		// Single alert merge
 		singleResult, singleResp, singleErr := client.AlertAPI.MergeAlertWithCase(ctx, alertIDs[0], targetCaseID).Execute()
 		defer closeResponse(singleResp)
 
 		result, resp, err = singleResult, singleResp, singleErr
 	} else {
-		// Bulk merge
 		inputMerge := thehive.InputAlertsMergeWithCase{
 			AlertIds: alertIDs,
 			CaseId:   targetCaseID,
@@ -107,12 +104,9 @@ func (t *Tool) mergeObservables(ctx context.Context, client *thehive.APIClient, 
 			Hint("Check that the case exists and you have permissions").API(resp)
 	}
 
-	// The API returns summary information about the merge operation
-	// Convert result to a string representation
 	var resultData string
 
 	if result != nil {
-		// Convert the result to JSON string for serialization
 		jsonBytes, marshalErr := json.Marshal(result)
 		if marshalErr == nil {
 			resultData = string(jsonBytes)

@@ -56,8 +56,8 @@ func TestGetOperationName(t *testing.T) {
 	}
 }
 
-// Without configured filters every requested ID is in scope and no TheHive
-// call is made (the bare context carries no client, so a call would fail).
+// No filters: every requested ID is in scope with no TheHive call (the bare
+// context carries no client, so a call would fail).
 func TestGetEntityIDsInScopeWithoutFilters(t *testing.T) {
 	inScope, err := GetEntityIDsInScope(context.Background(), types.EntityTypeCase, []string{"~1", "~2"}, nil)
 	require.NoError(t, err)
@@ -76,12 +76,7 @@ func TestGetEntityIDsInScopeWithoutIDs(t *testing.T) {
 	require.Empty(t, inScope)
 }
 
-// GetScopedEntityIDsBatch shares its short-circuit guards with
-// GetEntityIDsInScope (both delegate to scopedEntityIDsBatch, differing only in
-// concurrency). These mirror the GetEntityIDsInScope guard tests for the batch
-// entry point, proving the shared no-query paths behave identically. Like the
-// serial tests they pass a bare context with no TheHive client, so reaching a
-// query would fail — confirming neither guard issues one.
+// Batch entry point, same bare-context guard as TestGetEntityIDsInScopeWithoutFilters.
 func TestGetScopedEntityIDsBatchWithoutFilters(t *testing.T) {
 	inScope, err := GetScopedEntityIDsBatch(context.Background(), types.EntityTypeCase, []string{"~1", "~2"}, nil)
 	require.NoError(t, err)
@@ -95,17 +90,10 @@ func TestGetScopedEntityIDsBatchWithoutIDs(t *testing.T) {
 	require.Empty(t, inScope)
 }
 
-// TestGetScopedEntityIDsBatchStopsDispatchingOnCancel proves the fan-out honours
-// context cancellation: when the caller's ctx is cancelled mid-batch, the
-// dispatch loop must stop issuing the remaining per-ID scope checks (rather than
-// firing every one for a result that will be discarded) and the call must report
-// an error instead of a silently-truncated partial map.
-//
-// It runs entirely against an httptest fake (no Docker), so it executes under
-// `make test`. The handler cancels the caller's ctx the moment the first scope
-// query lands, then counts how many further queries arrive. With 50 IDs and a
-// concurrency cap of 8, an honest implementation issues far fewer than 50 before
-// the loop notices the cancellation and breaks.
+// On mid-batch ctx cancellation the dispatch loop must stop issuing remaining
+// per-ID checks and report an error, not a silently-truncated partial map. The
+// handler cancels on the first query; with 50 IDs and a concurrency cap of 8, an
+// honest implementation issues far fewer than 50 before noticing the cancellation.
 func TestGetScopedEntityIDsBatchStopsDispatchingOnCancel(t *testing.T) {
 	const total = 50
 
@@ -125,7 +113,7 @@ func TestGetScopedEntityIDsBatchStopsDispatchingOnCancel(t *testing.T) {
 
 		names := operationNames(parsed.Query)
 		if len(names) > 0 && names[0] == opGetCase && slices.Contains(names, "filter") {
-			// Cancel on the first query, then keep counting so the test can assert
+			// Cancel on the first query but keep counting, so the test can assert
 			// the loop stopped dispatching the rest.
 			if queries.Add(1) == 1 {
 				cancel()

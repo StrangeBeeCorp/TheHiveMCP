@@ -10,18 +10,15 @@ import (
 	"strings"
 )
 
-// TheHiveURLAllowlist holds the set of TheHive base URLs that HTTP clients are
-// permitted to target via the X-TheHive-Url header. URLs are compared on
-// normalized scheme, host, and port — exact host match only, no suffix or
-// substring matching.
+// TheHiveURLAllowlist gates the TheHive base URLs clients may target via the
+// X-TheHive-Url header. Match is exact on normalized scheme/host/port — no
+// suffix or substring matching.
 type TheHiveURLAllowlist struct {
 	allowed map[string]struct{}
 }
 
-// normalizeTheHiveURL reduces a TheHive base URL to a canonical
-// "scheme://host:port" form for exact comparison. Default ports are made
-// explicit so "https://hive.example.com" and "https://hive.example.com:443"
-// compare equal.
+// normalizeTheHiveURL canonicalizes a URL to "scheme://host:port", making the
+// default port explicit so "https://h.example" == "https://h.example:443".
 func normalizeTheHiveURL(rawURL string) (string, error) {
 	parsed, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil {
@@ -50,11 +47,9 @@ func normalizeTheHiveURL(rawURL string) (string, error) {
 	return fmt.Sprintf("%s://%s:%s", scheme, host, port), nil
 }
 
-// NewTheHiveURLAllowlist builds an allowlist from the configured entries plus
-// the server's own TheHive URL. When no entries are configured, only the
-// server's own URL is permitted; an empty allowlist with no server URL denies
-// every request. Invalid entries are rejected at construction so
-// misconfiguration fails at startup rather than falling open at request time.
+// NewTheHiveURLAllowlist builds an allowlist from entries plus the server's own
+// URL. With neither, every request is denied. Invalid entries are rejected here
+// so misconfiguration fails at startup rather than falling open at request time.
 func NewTheHiveURLAllowlist(entries []string, serverURL string) (*TheHiveURLAllowlist, error) {
 	allowed := make(map[string]struct{}, len(entries)+1)
 
@@ -67,7 +62,6 @@ func NewTheHiveURLAllowlist(entries []string, serverURL string) (*TheHiveURLAllo
 		allowed[normalized] = struct{}{}
 	}
 
-	// The server's own configured URL is always trusted
 	if serverURL != "" {
 		normalized, err := normalizeTheHiveURL(serverURL)
 		if err != nil {
