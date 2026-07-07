@@ -16,9 +16,9 @@ func TestCreateTheHiveConfig_OrganisationHeader(t *testing.T) {
 	}{
 		{
 			name:          "Organisation set adds X-Organisation header",
-			organisation:  "my-org",
+			organisation:  testOrg,
 			expectHeader:  true,
-			expectedValue: "my-org",
+			expectedValue: testOrg,
 		},
 		{
 			name:         "Empty organisation does not add X-Organisation header",
@@ -30,7 +30,8 @@ func TestCreateTheHiveConfig_OrganisationHeader(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			creds := &TheHiveCredentials{
-				URL:          "https://thehive.example.com",
+				URL: testHiveExampleURL,
+				// #nosec G101 -- test fixture credential value, not a real secret
 				APIKey:       "valid-api-key",
 				Organisation: tt.organisation,
 			}
@@ -58,39 +59,39 @@ func TestTheHiveCredentials_Validate(t *testing.T) {
 		{
 			name: "Valid credentials with API key and no organisation",
 			creds: TheHiveCredentials{
-				URL:    "https://thehive.example.com",
-				APIKey: "valid-key",
+				URL:    testHiveExampleURL,
+				APIKey: testValidKey,
 			},
 			wantErr: nil,
 		},
 		{
 			name: "Valid credentials with API key and organisation",
 			creds: TheHiveCredentials{
-				URL:          "https://thehive.example.com",
-				APIKey:       "valid-key",
-				Organisation: "my-org",
+				URL:          testHiveExampleURL,
+				APIKey:       testValidKey,
+				Organisation: testOrg,
 			},
 			wantErr: nil,
 		},
 		{
 			name: "Missing URL",
 			creds: TheHiveCredentials{
-				APIKey: "valid-key",
+				APIKey: testValidKey,
 			},
 			wantErr: ErrMissingHiveURL,
 		},
 		{
 			name: "Missing authentication",
 			creds: TheHiveCredentials{
-				URL: "https://thehive.example.com",
+				URL: testHiveExampleURL,
 			},
 			wantErr: ErrMissingAuthentication,
 		},
 		{
 			name: "Dummy API key",
 			creds: TheHiveCredentials{
-				URL:    "https://thehive.example.com",
-				APIKey: "dummy",
+				URL:    testHiveExampleURL,
+				APIKey: dummyAPIKey,
 			},
 			wantErr: ErrInvalidAPIKey,
 		},

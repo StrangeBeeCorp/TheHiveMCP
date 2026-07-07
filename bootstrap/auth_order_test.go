@@ -2,15 +2,17 @@ package bootstrap
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/auth"
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/auth"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 func TestAuthenticationExecutionOrder(t *testing.T) {
@@ -26,7 +28,8 @@ func TestAuthenticationExecutionOrder(t *testing.T) {
 		)
 
 		testToolCalled := false
-		mcpServer.AddTool(mcp.NewTool("test-tool"), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+
+		mcpServer.AddTool(mcp.NewTool("test-tool"), func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			testToolCalled = true
 			return &mcp.CallToolResult{}, nil
 		})
@@ -45,7 +48,7 @@ func TestAuthenticationExecutionOrder(t *testing.T) {
 			}
 		}`)
 
-		req := httptest.NewRequest("POST", "/", reqBody)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", reqBody)
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set(string(types.HeaderKeyTheHiveURL), options.TheHiveURL)
 		req.Header.Set(string(types.HeaderKeyTheHiveAPIKey), options.TheHiveAPIKey)

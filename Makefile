@@ -49,7 +49,7 @@ fmt: ## Format the code
 	@echo "Code formatted"
 
 .PHONY: security
-security: vulncheck sast vetlint ## Run security checks
+security: vulncheck sast lint ## Run security checks
 
 .PHONY: help
 help: ## Display this help
@@ -199,11 +199,12 @@ vulncheck: ## Check for vulnerabilities
 	@echo $(BGreen)------------------------------$(Color_Off)
 	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@v1.3.0 && govulncheck ./...'
 
-.PHONY: vetlint
-vetlint: ## Run linter checks
+.PHONY: lint
+lint: ## Run linter checks
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Linter Checks --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
+	docker run --rm -v $(CURDIR):/app -w /app golangci/golangci-lint:v2.12.2 golangci-lint config verify
 	docker run -v $(CURDIR):/app -w /app -i --rm $(DOCKER_CACHE_MOUNTS) -v $(HOME)/.cache/golangci-lint:/root/.cache/golangci-lint golangci/golangci-lint:v2.12.2 golangci-lint run -v
 	docker build -t ${BINARY_NAME}:latest -f deployment/Dockerfile .
 .PHONY: updatedep

@@ -11,8 +11,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/stretchr/testify/require"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 func TestListOperationName(t *testing.T) {
@@ -40,8 +41,8 @@ func TestGetOperationName(t *testing.T) {
 		entityType string
 		want       string
 	}{
-		{types.EntityTypeCase, "getCase"},
-		{types.EntityTypeAlert, "getAlert"},
+		{types.EntityTypeCase, opGetCase},
+		{types.EntityTypeAlert, opGetAlert},
 		{types.EntityTypeTask, "getTask"},
 		{types.EntityTypeObservable, "getObservable"},
 		{types.EntityTypeProcedure, "getProcedure"},
@@ -62,14 +63,14 @@ func TestGetEntityIDsInScopeWithoutFilters(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, map[string]bool{"~1": true, "~2": true}, inScope)
 
-	ok, err := IsEntityInScope(context.Background(), types.EntityTypeCase, "~1", map[string]interface{}{})
+	ok, err := IsEntityInScope(context.Background(), types.EntityTypeCase, "~1", map[string]any{})
 	require.NoError(t, err)
 	require.True(t, ok)
 }
 
 // With filters configured but no IDs to check, nothing is queried.
 func TestGetEntityIDsInScopeWithoutIDs(t *testing.T) {
-	filters := map[string]interface{}{"_lte": map[string]interface{}{"_field": "tlp", "_value": 2}}
+	filters := map[string]any{opLTE: map[string]any{fieldField: fieldTLP, fieldValue: 2}}
 	inScope, err := GetEntityIDsInScope(context.Background(), types.EntityTypeCase, nil, filters)
 	require.NoError(t, err)
 	require.Empty(t, inScope)
@@ -83,7 +84,7 @@ func TestGetScopedEntityIDsBatchWithoutFilters(t *testing.T) {
 }
 
 func TestGetScopedEntityIDsBatchWithoutIDs(t *testing.T) {
-	filters := map[string]interface{}{"_lte": map[string]interface{}{"_field": "tlp", "_value": 2}}
+	filters := map[string]any{opLTE: map[string]any{fieldField: fieldTLP, fieldValue: 2}}
 	inScope, err := GetScopedEntityIDsBatch(context.Background(), types.EntityTypeCase, nil, filters)
 	require.NoError(t, err)
 	require.Empty(t, inScope)
@@ -99,25 +100,31 @@ func TestGetScopedEntityIDsBatchStopsDispatchingOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var queries int64
+	var queries atomic.Int64
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
+
 		var parsed struct {
-			Query []map[string]interface{} `json:"query"`
+			Query []map[string]any `json:"query"`
 		}
+
 		_ = json.Unmarshal(body, &parsed)
 
 		names := operationNames(parsed.Query)
-		if len(names) > 0 && names[0] == "getCase" && slices.Contains(names, "filter") {
+		if len(names) > 0 && names[0] == opGetCase && slices.Contains(names, "filter") {
 			// Cancel on the first query but keep counting, so the test can assert
 			// the loop stopped dispatching the rest.
-			if atomic.AddInt64(&queries, 1) == 1 {
+			if queries.Add(1) == 1 {
 				cancel()
 			}
+
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte("[]"))
+
 			return
 		}
+
 		http.Error(w, "unexpected query", http.StatusInternalServerError)
 	}))
 	defer srv.Close()
@@ -129,15 +136,16 @@ func TestGetScopedEntityIDsBatchStopsDispatchingOnCancel(t *testing.T) {
 	for i := range entityIDs {
 		entityIDs[i] = fmt.Sprintf("~%d", i)
 	}
-	permFilters := map[string]interface{}{
-		"_lte": map[string]interface{}{"_field": "tlp", "_value": 2},
+
+	permFilters := map[string]any{
+		opLTE: map[string]any{fieldField: fieldTLP, fieldValue: 2},
 	}
 
 	inScope, err := GetScopedEntityIDsBatch(qctx, types.EntityTypeCase, entityIDs, permFilters)
 	require.Error(t, err, "a cancelled batch must report an error, not a truncated partial map")
 	require.Nil(t, inScope, "the partial map must be discarded on cancellation")
 
-	got := atomic.LoadInt64(&queries)
+	got := queries.Load()
 	require.Less(t, got, int64(total),
 		"dispatch must stop after cancellation, not fire all %d checks (got %d)", total, got)
 }

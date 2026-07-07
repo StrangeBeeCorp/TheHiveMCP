@@ -1,9 +1,33 @@
 package testutils
 
 import (
+	"testing"
+
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
+	"github.com/stretchr/testify/require"
 )
 
+// CreateCaseWithTLP creates a case with the given title and TLP via the raw
+// TheHive API and asserts it succeeded. Shared by the manage and
+// execute_automation scope-enforcement tests.
+func CreateCaseWithTLP(t *testing.T, hiveClient *thehive.APIClient, title string, tlp int32) *thehive.OutputCase {
+	t.Helper()
+
+	authContext := GetAuthContext(NewHiveTestConfig())
+	testCase := MockInputCase()
+	testCase.Title = title
+	testCase.Tlp = &tlp
+
+	createdCase, httpResp, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+	closeResponse(httpResp)
+	require.NoError(t, err)
+	require.NotNil(t, createdCase)
+
+	return createdCase
+}
+
+// MockInputCase returns a valid InputCreateCase (with a task and custom fields)
+// for testing.
 func MockInputCase() *thehive.InputCreateCase {
 	return &thehive.InputCreateCase{
 		Title:       "Test Case",
@@ -11,13 +35,13 @@ func MockInputCase() *thehive.InputCreateCase {
 		Severity:    thehive.PtrInt32(2),
 		StartDate:   thehive.PtrInt64(1609459200),
 		EndDate:     thehive.PtrInt64(1609545600),
-		Tags:        []string{"test", "case"},
-		Flag:        thehive.PtrBool(true),
+		Tags:        []string{testTag, "case"},
+		Flag:        new(true),
 		Tlp:         thehive.PtrInt32(2),
 		Pap:         thehive.PtrInt32(2),
-		Status:      thehive.PtrString("InProgress"),
-		Summary:     thehive.PtrString("This is a summary"),
-		Assignee:    thehive.PtrString("admin@thehive.local"),
+		Status:      new("InProgress"),
+		Summary:     new("This is a summary"),
+		Assignee:    new(DefaultAdminUser),
 		CustomFields: &thehive.InputCreateAlertCustomFields{
 			ArrayOfInputCustomFieldValue: &[]thehive.InputCustomFieldValue{
 				{
@@ -33,61 +57,65 @@ func MockInputCase() *thehive.InputCreateCase {
 		Tasks: []thehive.InputCreateTask{
 			{
 				Title:       "Test Task",
-				Description: thehive.PtrString("This is a test task"),
-				Status:      thehive.PtrString("Waiting"),
-				Flag:        thehive.PtrBool(true),
+				Description: new("This is a test task"),
+				Status:      new("Waiting"),
+				Flag:        new(true),
 				StartDate:   thehive.PtrInt64(1609459200),
 				EndDate:     thehive.PtrInt64(1609545600),
-				Assignee:    thehive.PtrString("admin@thehive.local"),
+				Assignee:    new(DefaultAdminUser),
 			},
 		},
 	}
 }
 
+// MockInputAlert returns a valid InputCreateAlert for testing.
 func MockInputAlert() *thehive.InputCreateAlert {
 	return &thehive.InputCreateAlert{
 		Title:       "Test Alert",
-		Type:        "test",
+		Type:        testTag,
 		Description: "This is a test alert",
 		Severity:    thehive.PtrInt32(2),
-		Tags:        []string{"test"},
-		Flag:        thehive.PtrBool(true),
+		Tags:        []string{testTag},
+		Flag:        new(true),
 		Tlp:         thehive.PtrInt32(2),
 		Pap:         thehive.PtrInt32(2),
-		Source:      "test",
-		SourceRef:   "test",
-		Summary:     thehive.PtrString("This is a summary"),
-		Assignee:    thehive.PtrString("admin@thehive.local"),
+		Source:      testTag,
+		SourceRef:   testTag,
+		Summary:     new("This is a summary"),
+		Assignee:    new(DefaultAdminUser),
 	}
 }
 
+// MockInputUser returns a valid InputCreateUser for testing.
 func MockInputUser() *thehive.InputCreateUser {
 	return &thehive.InputCreateUser{
 		Login:        "testuser",
 		Name:         "Test User",
-		Profile:      "admin",
-		Email:        thehive.PtrString("testuser@thehive.local"),
-		Password:     thehive.PtrString("password123"),
-		Organisation: thehive.PtrString("test-org"),
+		Profile:      adminOrg,
+		Email:        new("testuser@thehive.local"),
+		Password:     new("password123"),
+		Organisation: new("test-org"),
 	}
 }
 
+// MockInputOrganisation returns a valid InputCreateOrganisation for testing.
 func MockInputOrganisation() *thehive.InputCreateOrganisation {
 	return &thehive.InputCreateOrganisation{
 		Name:           "Test Organisation",
 		Description:    "This is a test organisation",
-		TaskRule:       thehive.PtrString("BacklogTasks"),
-		ObservableRule: thehive.PtrString("ObservableStrictTLP"),
-		Locked:         thehive.PtrBool(false),
+		TaskRule:       new("BacklogTasks"),
+		ObservableRule: new("ObservableStrictTLP"),
+		Locked:         new(false),
 	}
 }
 
+// MockInputUserOrganisation returns a valid slice of InputUserOrganisation for testing.
 func MockInputUserOrganisation() []thehive.InputUserOrganisation {
 	return []thehive.InputUserOrganisation{
 		{
 			Organisation: "test-org",
-			Profile:      "admin",
-			Default:      thehive.PtrBool(true),
+			Profile:      adminOrg,
+			Default:      new(true),
 		},
 	}
 }
@@ -96,9 +124,9 @@ func MockInputUserOrganisation() []thehive.InputUserOrganisation {
 func MockInputCaseTemplate() *thehive.InputCreateCaseTemplate {
 	return &thehive.InputCreateCaseTemplate{
 		Name:        "Test Template",
-		Description: thehive.PtrString("A test case template"),
-		Tags:        []string{"test", "template"},
-		Flag:        thehive.PtrBool(false),
+		Description: new("A test case template"),
+		Tags:        []string{testTag, "template"},
+		Flag:        new(false),
 	}
 }
 
@@ -106,22 +134,22 @@ func MockInputCaseTemplate() *thehive.InputCreateCaseTemplate {
 func MockInputTask() *thehive.InputCreateTask {
 	return &thehive.InputCreateTask{
 		Title:       "Test Task",
-		Description: thehive.PtrString("This is a test task"),
-		Status:      thehive.PtrString("Waiting"),
-		Flag:        thehive.PtrBool(true),
+		Description: new("This is a test task"),
+		Status:      new("Waiting"),
+		Flag:        new(true),
 		StartDate:   thehive.PtrInt64(1609459200),
 		EndDate:     thehive.PtrInt64(1609545600),
-		Assignee:    thehive.PtrString("admin@thehive.local"),
-		Mandatory:   thehive.PtrBool(false),
+		Assignee:    new(DefaultAdminUser),
+		Mandatory:   new(false),
 	}
 }
 
 // MockInputAnalyzerJob returns a valid InputJob for testing Cortex analyzer functionality.
 func MockInputAnalyzerJob() *thehive.InputJob {
 	job := thehive.NewInputJob("file_hash", "cortex-1", "artifact-123")
-	job.SetParameters(map[string]interface{}{
+	job.SetParameters(map[string]any{
 		"timeout": 300,
-		"config": map[string]interface{}{
+		"config": map[string]any{
 			"check_tlp": true,
 		},
 	})
@@ -132,7 +160,7 @@ func MockInputAnalyzerJob() *thehive.InputJob {
 // MockInputObservable returns a valid InputObservable for testing.
 func MockInputObservable() *thehive.InputCreateObservable {
 	observable := thehive.NewInputCreateObservable("domain")
-	observable.SetData(thehive.StringAsInputObservableData(thehive.PtrString("example.com")))
+	observable.SetData(thehive.StringAsInputObservableData(new("example.com")))
 	observable.SetMessage("Suspicious domain observed")
 	observable.SetIoc(true)
 	observable.SetTlp(2)

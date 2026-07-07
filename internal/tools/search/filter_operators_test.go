@@ -4,21 +4,25 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 func resultText(t *testing.T, result *mcp.CallToolResult) string {
 	t.Helper()
+
 	var b strings.Builder
+
 	for _, c := range result.Content {
 		if tc, ok := c.(mcp.TextContent); ok {
 			b.WriteString(tc.Text)
 			b.WriteByte('\n')
 		}
 	}
+
 	return b.String()
 }
 
@@ -27,9 +31,9 @@ func TestFilterOperators(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
 	// Severities 1..4 = Low..Critical.
-	a1 := createTestAlert(t, hiveClient, "Phishing Campaign", 4, []string{"phishing", "email"})
-	createTestAlert(t, hiveClient, "Malware Detected", 3, []string{"malware", "endpoint"})
-	createTestAlert(t, hiveClient, "Network Scan", 2, []string{"network"})
+	a1 := createTestAlert(t, hiveClient, "Phishing Campaign", 4, []string{tPhishing, "email"})
+	createTestAlert(t, hiveClient, "Malware Detected", 3, []string{tMalware, "endpoint"})
+	createTestAlert(t, hiveClient, "Network Scan", 2, []string{tNetwork})
 	createTestAlert(t, hiveClient, "Low Noise Event", 1, []string{"noise"})
 
 	mcpClient := newSearchClient(t)
@@ -37,18 +41,20 @@ func TestFilterOperators(t *testing.T) {
 	// A nil filter is omitted entirely (match-all).
 	run := func(t *testing.T, filter map[string]any) []any {
 		t.Helper()
+
 		args := map[string]any{
-			"entity-type":   types.EntityTypeAlert,
-			"extra-columns": []string{"_id", "title", "severity", "tags"},
-			"limit":         100,
+			pEntityType:   types.EntityTypeAlert,
+			pExtraColumns: []string{tID, tTitle, tSeverity, tTags},
+			"limit":       100,
 		}
 		if filter != nil {
-			args["filters"] = filter
+			args[pFilters] = filter
 		}
+
 		return searchRows(t, mcpClient, args)
 	}
 
-	a1ID, ok := a1["_id"].(string)
+	a1ID, ok := a1[tID].(string)
 	require.True(t, ok)
 
 	cases := []struct {
@@ -56,45 +62,45 @@ func TestFilterOperators(t *testing.T) {
 		filter map[string]any
 		want   int
 	}{
-		{"_eq", map[string]any{"_eq": map[string]any{"_field": "severity", "_value": 4}}, 1},
-		{"_ne", map[string]any{"_ne": map[string]any{"_field": "severity", "_value": 4}}, 3},
-		{"_gt", map[string]any{"_gt": map[string]any{"_field": "severity", "_value": 3}}, 1},
-		{"_gte", map[string]any{"_gte": map[string]any{"_field": "severity", "_value": 3}}, 2},
-		{"_lt", map[string]any{"_lt": map[string]any{"_field": "severity", "_value": 2}}, 1},
-		{"_lte", map[string]any{"_lte": map[string]any{"_field": "severity", "_value": 2}}, 2},
+		{tEq, map[string]any{tEq: map[string]any{tField: tSeverity, tValue: 4}}, 1},
+		{"_ne", map[string]any{"_ne": map[string]any{tField: tSeverity, tValue: 4}}, 3},
+		{"_gt", map[string]any{"_gt": map[string]any{tField: tSeverity, tValue: 3}}, 1},
+		{tGte, map[string]any{tGte: map[string]any{tField: tSeverity, tValue: 3}}, 2},
+		{"_lt", map[string]any{"_lt": map[string]any{tField: tSeverity, tValue: 2}}, 1},
+		{tLte, map[string]any{tLte: map[string]any{tField: tSeverity, tValue: 2}}, 2},
 		// _between is half-open: _from=2,_to=4 matches severities 2 and 3, not 4.
-		{"_between", map[string]any{"_between": map[string]any{"_field": "severity", "_from": 2, "_to": 4}}, 2},
-		{"_in", map[string]any{"_in": map[string]any{"_field": "severity", "_values": []any{1, 4}}}, 2},
+		{tBetween, map[string]any{tBetween: map[string]any{tField: tSeverity, "_from": 2, "_to": 4}}, 2},
+		{tIn, map[string]any{tIn: map[string]any{tField: tSeverity, tValues: []any{1, 4}}}, 2},
 		// _contains takes a bare field name and matches entities that have it set.
-		{"_contains", map[string]any{"_contains": "title"}, 4},
+		{"_contains", map[string]any{"_contains": tTitle}, 4},
 		// _like uses * wildcards, case-insensitive.
-		{"_like", map[string]any{"_like": map[string]any{"_field": "title", "_value": "*Malware*"}}, 1},
-		{"_startsWith", map[string]any{"_startsWith": map[string]any{"_field": "title", "_value": "Network"}}, 1},
-		{"_endsWith", map[string]any{"_endsWith": map[string]any{"_field": "title", "_value": "Detected"}}, 1},
+		{tLike, map[string]any{tLike: map[string]any{tField: tTitle, tValue: "*Malware*"}}, 1},
+		{"_startsWith", map[string]any{"_startsWith": map[string]any{tField: tTitle, tValue: "Network"}}, 1},
+		{"_endsWith", map[string]any{"_endsWith": map[string]any{tField: tTitle, tValue: "Detected"}}, 1},
 		// _match is a full-text token match on the analyzed text field.
-		{"_match", map[string]any{"_match": map[string]any{"_field": "title", "_value": "Campaign"}}, 1},
-		{"_id", map[string]any{"_id": a1ID}, 1},
-		{"_not", map[string]any{"_not": map[string]any{"_eq": map[string]any{"_field": "severity", "_value": 1}}}, 3},
+		{"_match", map[string]any{"_match": map[string]any{tField: tTitle, tValue: "Campaign"}}, 1},
+		{tID, map[string]any{tID: a1ID}, 1},
+		{"_not", map[string]any{"_not": map[string]any{tEq: map[string]any{tField: tSeverity, tValue: 1}}}, 3},
 		// Date fields accept ISO 8601 strings (converted to timestamps); all 4 are recent.
-		{"iso_date_value", map[string]any{"_gte": map[string]any{"_field": "_createdAt", "_value": "2020-01-01T00:00:00"}}, 4},
-		{"_or_of_like", map[string]any{"_or": []any{
-			map[string]any{"_like": map[string]any{"_field": "title", "_value": "*malware*"}},
-			map[string]any{"_like": map[string]any{"_field": "title", "_value": "*phishing*"}},
+		{"iso_date_value", map[string]any{tGte: map[string]any{tField: tCreatedAt, tValue: "2020-01-01T00:00:00"}}, 4},
+		{"_or_of_like", map[string]any{tOr: []any{
+			map[string]any{tLike: map[string]any{tField: tTitle, tValue: "*malware*"}},
+			map[string]any{tLike: map[string]any{tField: tTitle, tValue: "*phishing*"}},
 		}}, 2},
-		{"_and", map[string]any{"_and": []any{
-			map[string]any{"_gte": map[string]any{"_field": "severity", "_value": 3}},
-			map[string]any{"_in": map[string]any{"_field": "tags", "_values": []any{"phishing"}}},
+		{tAnd, map[string]any{tAnd: []any{
+			map[string]any{tGte: map[string]any{tField: tSeverity, tValue: 3}},
+			map[string]any{tIn: map[string]any{tField: tTags, tValues: []any{tPhishing}}},
 		}}, 1},
-		{"_or", map[string]any{"_or": []any{
-			map[string]any{"_eq": map[string]any{"_field": "severity", "_value": 1}},
-			map[string]any{"_eq": map[string]any{"_field": "severity", "_value": 4}},
+		{tOr, map[string]any{tOr: []any{
+			map[string]any{tEq: map[string]any{tField: tSeverity, tValue: 1}},
+			map[string]any{tEq: map[string]any{tField: tSeverity, tValue: 4}},
 		}}, 2},
 		// Matches Phishing Campaign + Network Scan.
-		{"complex_nested", map[string]any{"_and": []any{
-			map[string]any{"_gte": map[string]any{"_field": "severity", "_value": 2}},
-			map[string]any{"_or": []any{
-				map[string]any{"_in": map[string]any{"_field": "tags", "_values": []any{"phishing"}}},
-				map[string]any{"_in": map[string]any{"_field": "tags", "_values": []any{"network"}}},
+		{"complex_nested", map[string]any{tAnd: []any{
+			map[string]any{tGte: map[string]any{tField: tSeverity, tValue: 2}},
+			map[string]any{tOr: []any{
+				map[string]any{tIn: map[string]any{tField: tTags, tValues: []any{tPhishing}}},
+				map[string]any{tIn: map[string]any{tField: tTags, tValues: []any{tNetwork}}},
 			}},
 		}}, 2},
 		{"_any_explicit", map[string]any{"_any": map[string]any{}}, 4},
@@ -117,8 +123,8 @@ func TestSearchInvalidFieldReturnsActionableError(t *testing.T) {
 	mcpClient := newSearchClient(t)
 
 	result := callSearch(t, mcpClient, map[string]any{
-		"entity-type": types.EntityTypeAlert,
-		"filters":     map[string]any{"_eq": map[string]any{"_field": "thisFieldDoesNotExist", "_value": "x"}},
+		pEntityType: types.EntityTypeAlert,
+		pFilters:    map[string]any{tEq: map[string]any{tField: "thisFieldDoesNotExist", tValue: "x"}},
 	})
 	require.True(t, result.IsError, "searching on a non-existent field should return a tool error")
 

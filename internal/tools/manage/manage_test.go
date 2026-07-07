@@ -4,47 +4,35 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/StrangeBeeCorp/thehive4go/thehive"
+	"github.com/stretchr/testify/require"
+
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
-	"github.com/StrangeBeeCorp/thehive4go/thehive"
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/stretchr/testify/require"
 )
 
 func TestManageCreateAlert(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	alertData := map[string]interface{}{
-		"type":        "test-type",
-		"source":      "test-source",
-		"sourceRef":   "test-create-alert-001",
-		"title":       "Test Alert via MCP",
-		"description": "This alert was created through the manage-entities tool",
-		"severity":    3,
-		"tlp":         2,
-		"pap":         2,
-		"tags":        []string{"test", "automated"},
+	alertData := map[string]any{
+		testFieldTypeKey:     testFieldType,
+		testFieldSource:      testValueSource,
+		testFieldSourceRef:   "test-create-alert-001",
+		testFieldTitle:       "Test Alert via MCP",
+		testFieldDescription: "This alert was created through the manage-entities tool",
+		testFieldSeverity:    3,
+		testFieldTLP:         2,
+		testFieldPAP:         2,
+		testFieldTags:        []string{"test", "automated"},
 	}
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "create",
-				"entity-type": types.EntityTypeAlert,
-				"entity-data": alertData,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "create", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpCreate,
+		testArgEntityType: types.EntityTypeAlert,
+		testArgEntityData: alertData,
+	})
+	require.Equal(t, testOpCreate, structuredData[testArgOperation])
 	require.Equal(t, types.EntityTypeAlert, structuredData["entityType"])
 
 	resultsAlert, ok := structuredData["result"].(map[string]any)
@@ -54,8 +42,10 @@ func TestManageCreateAlert(t *testing.T) {
 	alertID, ok := resultsAlert["_id"].(string)
 	require.True(t, ok)
 	require.NotEmpty(t, alertID)
-	require.Equal(t, "[UNTRUSTED_DATA]Test Alert via MCP[/UNTRUSTED_DATA]", resultsAlert["title"])
-	require.Equal(t, float64(3), resultsAlert["severity"])
+	require.Equal(t, "[UNTRUSTED_DATA]Test Alert via MCP[/UNTRUSTED_DATA]", resultsAlert[testFieldTitle])
+	severityValue, ok := resultsAlert[testFieldSeverity].(float64)
+	require.True(t, ok)
+	require.InDelta(t, float64(3), severityValue, 0.0001)
 
 	// Verify the alert exists in TheHive by fetching it
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
@@ -79,32 +69,20 @@ func TestManageUpdateCase(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdCase)
 
-	updateData := map[string]interface{}{
-		"title":       "Updated Case Title",
-		"severity":    4,
-		"description": "Updated description through MCP tool",
-		"tags":        []string{"initial", "updated"},
+	updateData := map[string]any{
+		testFieldTitle:       "Updated Case Title",
+		testFieldSeverity:    4,
+		testFieldDescription: "Updated description through MCP tool",
+		testFieldTags:        []string{"initial", "updated"},
 	}
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "update",
-				"entity-type": types.EntityTypeCase,
-				"entity-ids":  []string{createdCase.UnderscoreId},
-				"entity-data": updateData,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "update", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpUpdate,
+		testArgEntityType: types.EntityTypeCase,
+		testArgEntityIDs:  []string{createdCase.UnderscoreId},
+		testArgEntityData: updateData,
+	})
+	require.Equal(t, testOpUpdate, structuredData[testArgOperation])
 
 	updatedCase, _, err := hiveClient.CaseAPI.GetCase(authContext, createdCase.UnderscoreId).Execute()
 	require.NoError(t, err)
@@ -118,35 +96,17 @@ func TestManageDeleteAlert(t *testing.T) {
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	testAlert := testutils.MockInputAlert()
-	testAlert.Title = "Alert to Delete"
-	testAlert.SourceRef = "test-delete-alert-001"
+	createdAlert := createAlert(t, hiveClient, "Alert to Delete", "test-delete-alert-001")
 
-	createdAlert, _, err := hiveClient.AlertAPI.CreateAlert(authContext).InputCreateAlert(*testAlert).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdAlert)
-
-	_, _, err = hiveClient.AlertAPI.GetAlert(authContext, createdAlert.UnderscoreId).Execute()
+	_, _, err := hiveClient.AlertAPI.GetAlert(authContext, createdAlert.UnderscoreId).Execute()
 	require.NoError(t, err)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "delete",
-				"entity-type": types.EntityTypeAlert,
-				"entity-ids":  []string{createdAlert.UnderscoreId},
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "delete", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpDelete,
+		testArgEntityType: types.EntityTypeAlert,
+		testArgEntityIDs:  []string{createdAlert.UnderscoreId},
+	})
+	require.Equal(t, testOpDelete, structuredData[testArgOperation])
 
 	_, resp, err := hiveClient.AlertAPI.GetAlert(authContext, createdAlert.UnderscoreId).Execute()
 	require.Error(t, err)
@@ -159,34 +119,17 @@ func TestManageAddCommentToCase(t *testing.T) {
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	testCase := testutils.MockInputCase()
-	testCase.Title = "Case for Comment Testing"
-
-	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdCase)
+	createdCase := createCase(t, hiveClient, "Case for Comment Testing")
 
 	commentText := "This is a test comment added via the MCP tool. Investigation is ongoing."
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "comment",
-				"entity-type": types.EntityTypeCase,
-				"entity-ids":  []string{createdCase.UnderscoreId},
-				"comment":     commentText,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "comment", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpComment,
+		testArgEntityType: types.EntityTypeCase,
+		testArgEntityIDs:  []string{createdCase.UnderscoreId},
+		testOpComment:     commentText,
+	})
+	require.Equal(t, testOpComment, structuredData[testArgOperation])
 	require.Equal(t, types.EntityTypeCase, structuredData["entityType"])
 
 	resultsArray, ok := structuredData["results"].([]any)
@@ -200,9 +143,9 @@ func TestManageAddCommentToCase(t *testing.T) {
 	require.True(t, ok)
 
 	listOp := thehive.NewInputQueryGenericOperation("listComment")
-	filterOp := map[string]interface{}{
+	filterOp := map[string]any{
 		"_name": "filter",
-		"_eq": map[string]interface{}{
+		"_eq": map[string]any{
 			"_field": "_id",
 			"_value": commentID,
 		},
@@ -217,13 +160,12 @@ func TestManageAddCommentToCase(t *testing.T) {
 	results, _, err := hiveClient.QueryAndExportAPI.QueryAPI(authContext).InputQuery(hiveQuery).Execute()
 	require.NoError(t, err)
 
-	fetchedComments, ok := results.([]interface{})
+	fetchedComments, ok := results.([]any)
 	require.True(t, ok)
 	require.NotEmpty(t, fetchedComments)
-	fetchedComment, ok := fetchedComments[0].(map[string]interface{})
+	fetchedComment, ok := fetchedComments[0].(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, commentText, fetchedComment["message"])
-
+	require.Equal(t, commentText, fetchedComment[testFieldMessage])
 }
 
 func TestManageCreateTaskInCase(t *testing.T) {
@@ -231,39 +173,22 @@ func TestManageCreateTaskInCase(t *testing.T) {
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	testCase := testutils.MockInputCase()
-	testCase.Title = "Case for Task Creation"
+	createdCase := createCase(t, hiveClient, "Case for Task Creation")
 
-	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdCase)
-
-	taskData := map[string]interface{}{
-		"title":       "Investigate suspicious IP address",
-		"description": "Check logs for connections to 192.168.1.100",
-		"status":      "Waiting",
-		"mandatory":   true,
+	taskData := map[string]any{
+		testFieldTitle:       "Investigate suspicious IP address",
+		testFieldDescription: "Check logs for connections to 192.168.1.100",
+		"status":             "Waiting",
+		"mandatory":          true,
 	}
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "create",
-				"entity-type": types.EntityTypeTask,
-				"entity-ids":  []string{createdCase.UnderscoreId},
-				"entity-data": taskData,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "create", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpCreate,
+		testArgEntityType: types.EntityTypeTask,
+		testArgEntityIDs:  []string{createdCase.UnderscoreId},
+		testArgEntityData: taskData,
+	})
+	require.Equal(t, testOpCreate, structuredData[testArgOperation])
 	require.Equal(t, types.EntityTypeTask, structuredData["entityType"])
 
 	resultCase, ok := structuredData["result"].(map[string]any)
@@ -272,7 +197,7 @@ func TestManageCreateTaskInCase(t *testing.T) {
 	taskID, ok := resultCase["_id"].(string)
 	require.True(t, ok)
 	require.NotEmpty(t, taskID)
-	require.Equal(t, "[UNTRUSTED_DATA]Investigate suspicious IP address[/UNTRUSTED_DATA]", resultCase["title"])
+	require.Equal(t, "[UNTRUSTED_DATA]Investigate suspicious IP address[/UNTRUSTED_DATA]", resultCase[testFieldTitle])
 
 	fetchedTask, _, err := hiveClient.TaskAPI.GetTask(authContext, taskID).Execute()
 	require.NoError(t, err)
@@ -286,42 +211,25 @@ func TestManageCreateObservableInCase(t *testing.T) {
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	testCase := testutils.MockInputCase()
-	testCase.Title = "Case for Observable Creation"
+	createdCase := createCase(t, hiveClient, "Case for Observable Creation")
 
-	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdCase)
-
-	observableData := map[string]interface{}{
-		"dataType": "ip",
-		"data":     "192.168.1.100",
-		"message":  "Suspicious IP address detected in firewall logs",
-		"tlp":      2,
-		"ioc":      true,
-		"sighted":  true,
-		"tags":     []string{"malicious", "firewall"},
+	observableData := map[string]any{
+		testFieldDataType: "ip",
+		testFieldData:     "192.168.1.100",
+		testFieldMessage:  "Suspicious IP address detected in firewall logs",
+		testFieldTLP:      2,
+		"ioc":             true,
+		"sighted":         true,
+		testFieldTags:     []string{"malicious", "firewall"},
 	}
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "create",
-				"entity-type": types.EntityTypeObservable,
-				"entity-ids":  []string{createdCase.UnderscoreId},
-				"entity-data": observableData,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "create", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpCreate,
+		testArgEntityType: types.EntityTypeObservable,
+		testArgEntityIDs:  []string{createdCase.UnderscoreId},
+		testArgEntityData: observableData,
+	})
+	require.Equal(t, testOpCreate, structuredData[testArgOperation])
 	require.Equal(t, types.EntityTypeObservable, structuredData["entityType"])
 
 	resultArray, ok := structuredData["result"].([]any)
@@ -334,7 +242,7 @@ func TestManageCreateObservableInCase(t *testing.T) {
 	observableID, ok := resultData["_id"].(string)
 	require.True(t, ok)
 	require.NotEmpty(t, observableID)
-	require.Equal(t, "ip", resultData["dataType"])
+	require.Equal(t, "ip", resultData[testFieldDataType])
 
 	fetchedObservable, _, err := hiveClient.ObservableAPI.GetObservable(authContext, observableID).Execute()
 	require.NoError(t, err)
@@ -350,40 +258,20 @@ func TestManageCreateObservableInCaseReportsSuccess(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	testCase := testutils.MockInputCase()
-	testCase.Title = "Case for Observable Success Reporting"
-
-	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdCase)
+	createdCase := createCase(t, hiveClient, "Case for Observable Success Reporting")
 
 	// Parent is a case ID, not an alert ID.
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "create",
-				"entity-type": types.EntityTypeObservable,
-				"entity-ids":  []string{createdCase.UnderscoreId},
-				"entity-data": map[string]interface{}{
-					"dataType": "ip",
-					"data":     "10.77.77.77",
-					"message":  "test observable",
-				},
-			},
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpCreate,
+		testArgEntityType: types.EntityTypeObservable,
+		testArgEntityIDs:  []string{createdCase.UnderscoreId},
+		testArgEntityData: map[string]any{
+			testFieldDataType: "ip",
+			testFieldData:     "10.77.77.77",
+			testFieldMessage:  "test observable",
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	require.False(t, result.IsError, "Creating an observable in a valid case must not return IsError=true")
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "create", structuredData["operation"])
+	})
+	require.Equal(t, testOpCreate, structuredData[testArgOperation])
 
 	resultArray, ok := structuredData["result"].([]any)
 	require.True(t, ok)
@@ -391,7 +279,7 @@ func TestManageCreateObservableInCaseReportsSuccess(t *testing.T) {
 
 	obs, ok := resultArray[0].(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, "ip", obs["dataType"])
+	require.Equal(t, "ip", obs[testFieldDataType])
 	require.NotEmpty(t, obs["_id"])
 }
 
@@ -400,6 +288,7 @@ func TestManageUpdateMultipleEntities(t *testing.T) {
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+
 	var caseIDs []string
 
 	for i := 1; i <= 3; i++ {
@@ -410,33 +299,22 @@ func TestManageUpdateMultipleEntities(t *testing.T) {
 
 		createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
 		require.NoError(t, err)
+
 		caseIDs = append(caseIDs, createdCase.UnderscoreId)
 	}
 
-	updateData := map[string]interface{}{
-		"severity": 4,
-		"tags":     []string{"batch-updated", "urgent"},
+	updateData := map[string]any{
+		testFieldSeverity: 4,
+		testFieldTags:     []string{"batch-updated", "urgent"},
 	}
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "update",
-				"entity-type": types.EntityTypeCase,
-				"entity-ids":  caseIDs,
-				"entity-data": updateData,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "update", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpUpdate,
+		testArgEntityType: types.EntityTypeCase,
+		testArgEntityIDs:  caseIDs,
+		testArgEntityData: updateData,
+	})
+	require.Equal(t, testOpUpdate, structuredData[testArgOperation])
 
 	for _, caseID := range caseIDs {
 		updatedCase, _, err := hiveClient.CaseAPI.GetCase(authContext, caseID).Execute()
@@ -452,55 +330,36 @@ func TestManageWithAnalystPermissions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
-	alertData := map[string]interface{}{
-		"type":        "test-type",
-		"source":      "test-source",
-		"sourceRef":   "test-analyst-create-001",
-		"title":       "Analyst Test Alert",
-		"description": "Testing analyst permissions",
-		"severity":    2,
-		"tlp":         2,
-		"pap":         2,
-		"tags":        []string{"analyst-test"},
+	alertData := map[string]any{
+		testFieldTypeKey:     testFieldType,
+		testFieldSource:      testValueSource,
+		testFieldSourceRef:   "test-analyst-create-001",
+		testFieldTitle:       "Analyst Test Alert",
+		testFieldDescription: "Testing analyst permissions",
+		testFieldSeverity:    2,
+		testFieldTLP:         2,
+		testFieldPAP:         2,
+		testFieldTags:        []string{"analyst-test"},
 	}
 
-	createRequest := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "create",
-				"entity-type": types.EntityTypeAlert,
-				"entity-data": alertData,
-			},
-		},
-	}
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpCreate,
+		testArgEntityType: types.EntityTypeAlert,
+		testArgEntityData: alertData,
+	})
 
-	result, err := mcpClient.CallTool(t.Context(), createRequest)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError, "Create should succeed with analyst permissions")
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
 	resultsAlert, ok := structuredData["result"].(map[string]any)
 	require.True(t, ok)
-	alertID := resultsAlert["_id"].(string)
+
+	alertID, ok := resultsAlert["_id"].(string)
+	require.True(t, ok)
 	require.NotEmpty(t, alertID)
 
-	deleteRequest := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "delete",
-				"entity-type": types.EntityTypeAlert,
-				"entity-ids":  []string{alertID},
-			},
-		},
-	}
-
-	result, err = mcpClient.CallTool(t.Context(), deleteRequest)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	result := testutils.CallTool(t, mcpClient, testToolName, map[string]any{
+		testArgOperation:  testOpDelete,
+		testArgEntityType: types.EntityTypeAlert,
+		testArgEntityIDs:  []string{alertID},
+	})
 	testutils.RequirePermissionDenied(t, result)
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
@@ -514,48 +373,30 @@ func TestManageWithReadOnlyPermissions(t *testing.T) {
 	testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "")
 
-	alertData := map[string]interface{}{
-		"type":        "test-type",
-		"source":      "test-source",
-		"sourceRef":   "test-readonly-create-001",
-		"title":       "ReadOnly Test Alert",
-		"description": "Testing read-only permissions",
-		"severity":    2,
-		"tlp":         2,
-		"pap":         2,
+	alertData := map[string]any{
+		testFieldTypeKey:     testFieldType,
+		testFieldSource:      testValueSource,
+		testFieldSourceRef:   "test-readonly-create-001",
+		testFieldTitle:       "ReadOnly Test Alert",
+		testFieldDescription: "Testing read-only permissions",
+		testFieldSeverity:    2,
+		testFieldTLP:         2,
+		testFieldPAP:         2,
 	}
 
-	createRequest := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "create",
-				"entity-type": types.EntityTypeAlert,
-				"entity-data": alertData,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), createRequest)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	result := testutils.CallTool(t, mcpClient, testToolName, map[string]any{
+		testArgOperation:  testOpCreate,
+		testArgEntityType: types.EntityTypeAlert,
+		testArgEntityData: alertData,
+	})
 	testutils.RequirePermissionDenied(t, result)
 
-	commentRequest := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "comment",
-				"entity-type": types.EntityTypeCase,
-				"entity-ids":  []string{"~123"},
-				"comment":     "Test comment",
-			},
-		},
-	}
-
-	result, err = mcpClient.CallTool(t.Context(), commentRequest)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	result = testutils.CallTool(t, mcpClient, testToolName, map[string]any{
+		testArgOperation:  testOpComment,
+		testArgEntityType: types.EntityTypeCase,
+		testArgEntityIDs:  []string{testEntityID},
+		testOpComment:     "Test comment",
+	})
 	testutils.RequirePermissionDenied(t, result)
 }
 
@@ -564,32 +405,14 @@ func TestManagePromoteAlert(t *testing.T) {
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	testAlert := testutils.MockInputAlert()
-	testAlert.Title = "Alert to Promote"
-	testAlert.SourceRef = "test-promote-alert-001"
+	createdAlert := createAlert(t, hiveClient, "Alert to Promote", "test-promote-alert-001")
 
-	createdAlert, _, err := hiveClient.AlertAPI.CreateAlert(authContext).InputCreateAlert(*testAlert).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdAlert)
-
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "promote",
-				"entity-type": types.EntityTypeAlert,
-				"entity-ids":  []string{createdAlert.UnderscoreId},
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "promote", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpPromote,
+		testArgEntityType: types.EntityTypeAlert,
+		testArgEntityIDs:  []string{createdAlert.UnderscoreId},
+	})
+	require.Equal(t, testOpPromote, structuredData[testArgOperation])
 	require.Equal(t, types.EntityTypeCase, structuredData["entityType"])
 
 	caseResult, ok := structuredData["result"].(map[string]any)
@@ -609,35 +432,15 @@ func TestManageMergeCases(t *testing.T) {
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	var caseIDs []string
 
-	for i := 1; i <= 2; i++ {
-		testCase := testutils.MockInputCase()
-		testCase.Title = fmt.Sprintf("Case %d for Merging", i)
+	caseIDs := createCases(t, hiveClient, 2, "Case %d for Merging")
 
-		createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-		require.NoError(t, err)
-		caseIDs = append(caseIDs, createdCase.UnderscoreId)
-	}
-
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "merge",
-				"entity-type": types.EntityTypeCase,
-				"entity-ids":  caseIDs,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "merge", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpMerge,
+		testArgEntityType: types.EntityTypeCase,
+		testArgEntityIDs:  caseIDs,
+	})
+	require.Equal(t, testOpMerge, structuredData[testArgOperation])
 	require.Equal(t, types.EntityTypeCase, structuredData["entityType"])
 
 	caseResult, ok := structuredData["result"].(map[string]any)
@@ -656,45 +459,22 @@ func TestManageMergeAlertsIntoCase(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-
-	testCase := testutils.MockInputCase()
-	testCase.Title = "Target Case for Alert Merge"
-
-	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdCase)
+	createdCase := createCase(t, hiveClient, "Target Case for Alert Merge")
 
 	var alertIDs []string
-	for i := 1; i <= 2; i++ {
-		testAlert := testutils.MockInputAlert()
-		testAlert.Title = fmt.Sprintf("Alert %d to Merge", i)
-		testAlert.SourceRef = fmt.Sprintf("test-merge-alert-%03d", i)
 
-		createdAlert, _, err := hiveClient.AlertAPI.CreateAlert(authContext).InputCreateAlert(*testAlert).Execute()
-		require.NoError(t, err)
+	for i := 1; i <= 2; i++ {
+		createdAlert := createAlert(t, hiveClient, fmt.Sprintf("Alert %d to Merge", i), fmt.Sprintf("test-merge-alert-%03d", i))
 		alertIDs = append(alertIDs, createdAlert.UnderscoreId)
 	}
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "merge",
-				"entity-type": types.EntityTypeAlert,
-				"entity-ids":  alertIDs,
-				"target-id":   createdCase.UnderscoreId,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "merge", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpMerge,
+		testArgEntityType: types.EntityTypeAlert,
+		testArgEntityIDs:  alertIDs,
+		testArgTargetID:   createdCase.UnderscoreId,
+	})
+	require.Equal(t, testOpMerge, structuredData[testArgOperation])
 	require.Equal(t, types.EntityTypeCase, structuredData["entityType"])
 
 	resultCase, ok := structuredData["result"].(map[string]any)
@@ -709,58 +489,31 @@ func TestManageMergeObservables(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-
-	testCase := testutils.MockInputCase()
-	testCase.Title = "Case for Observable Merge"
-
-	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdCase)
+	createdCase := createCase(t, hiveClient, "Case for Observable Merge")
 
 	// Duplicate observables so the merge has something to deduplicate.
 	for i := 1; i <= 2; i++ {
-		observableData := map[string]interface{}{
-			"dataType": "ip",
-			"data":     "192.168.1.100",
-			"message":  "Duplicate IP for testing merge",
-			"ioc":      true,
+		observableData := map[string]any{
+			testFieldDataType: "ip",
+			testFieldData:     "192.168.1.100",
+			testFieldMessage:  "Duplicate IP for testing merge",
+			"ioc":             true,
 		}
 
-		createRequest := mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name: "manage-entities",
-				Arguments: map[string]any{
-					"operation":   "create",
-					"entity-type": types.EntityTypeObservable,
-					"entity-ids":  []string{createdCase.UnderscoreId},
-					"entity-data": observableData,
-				},
-			},
-		}
-
-		_, err := mcpClient.CallTool(t.Context(), createRequest)
-		require.NoError(t, err)
+		testutils.CallTool(t, mcpClient, testToolName, map[string]any{
+			testArgOperation:  testOpCreate,
+			testArgEntityType: types.EntityTypeObservable,
+			testArgEntityIDs:  []string{createdCase.UnderscoreId},
+			testArgEntityData: observableData,
+		})
 	}
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "merge",
-				"entity-type": types.EntityTypeObservable,
-				"target-id":   createdCase.UnderscoreId,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "merge", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpMerge,
+		testArgEntityType: types.EntityTypeObservable,
+		testArgTargetID:   createdCase.UnderscoreId,
+	})
+	require.Equal(t, testOpMerge, structuredData[testArgOperation])
 	require.Equal(t, types.EntityTypeObservable, structuredData["entityType"])
 
 	targetCaseID, ok := structuredData["targetId"].(string)
@@ -773,34 +526,14 @@ func TestManagePromoteWithAnalystPermissions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	testAlert := testutils.MockInputAlert()
-	testAlert.Title = "Alert for Analyst Promote Test"
-	testAlert.SourceRef = "test-analyst-promote-001"
+	createdAlert := createAlert(t, hiveClient, "Alert for Analyst Promote Test", "test-analyst-promote-001")
 
-	createdAlert, _, err := hiveClient.AlertAPI.CreateAlert(authContext).InputCreateAlert(*testAlert).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdAlert)
-
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "promote",
-				"entity-type": types.EntityTypeAlert,
-				"entity-ids":  []string{createdAlert.UnderscoreId},
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError, "Promote should succeed with analyst permissions")
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "promote", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpPromote,
+		testArgEntityType: types.EntityTypeAlert,
+		testArgEntityIDs:  []string{createdAlert.UnderscoreId},
+	})
+	require.Equal(t, testOpPromote, structuredData[testArgOperation])
 }
 
 // Merge is allowed with analyst permissions.
@@ -808,57 +541,25 @@ func TestManageMergeWithAnalystPermissions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	caseIDs := createCases(t, hiveClient, 2, "Case %d for Analyst Merge Test")
 
-	var caseIDs []string
-	for i := 1; i <= 2; i++ {
-		testCase := testutils.MockInputCase()
-		testCase.Title = fmt.Sprintf("Case %d for Analyst Merge Test", i)
-
-		createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-		require.NoError(t, err)
-		caseIDs = append(caseIDs, createdCase.UnderscoreId)
-	}
-
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "merge",
-				"entity-type": types.EntityTypeCase,
-				"entity-ids":  caseIDs,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError, "Merge should succeed with analyst permissions")
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "merge", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpMerge,
+		testArgEntityType: types.EntityTypeCase,
+		testArgEntityIDs:  caseIDs,
+	})
+	require.Equal(t, testOpMerge, structuredData[testArgOperation])
 }
 
 func TestManagePromoteWithReadOnlyPermissions(t *testing.T) {
 	testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "")
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "promote",
-				"entity-type": types.EntityTypeAlert,
-				"entity-ids":  []string{"~123"},
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	result := testutils.CallTool(t, mcpClient, testToolName, map[string]any{
+		testArgOperation:  testOpPromote,
+		testArgEntityType: types.EntityTypeAlert,
+		testArgEntityIDs:  []string{testEntityID},
+	})
 	testutils.RequirePermissionDenied(t, result)
 }
 
@@ -866,42 +567,23 @@ func TestManageCreateProcedureInCase(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	testCase := testutils.MockInputCase()
-	testCase.Title = "Case for Procedure Creation"
-
-	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdCase)
+	createdCase := createCase(t, hiveClient, "Case for Procedure Creation")
 
 	// Use ISO date strings — the MCP tool must handle conversion to timestamps internally
-	procedureData := map[string]interface{}{
-		"patternId":   testutils.TestMITREPatternID,
-		"occurDate":   "2023-11-14T22:13:20",
-		"tactic":      "execution",
-		"description": "Test procedure for Command and Scripting Interpreter",
+	procedureData := map[string]any{
+		"patternId":          testutils.TestMITREPatternID,
+		"occurDate":          "2023-11-14T22:13:20",
+		"tactic":             "execution",
+		testFieldDescription: "Test procedure for Command and Scripting Interpreter",
 	}
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "create",
-				"entity-type": types.EntityTypeProcedure,
-				"entity-ids":  []string{createdCase.UnderscoreId},
-				"entity-data": procedureData,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError, "create procedure should succeed")
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "create", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpCreate,
+		testArgEntityType: types.EntityTypeProcedure,
+		testArgEntityIDs:  []string{createdCase.UnderscoreId},
+		testArgEntityData: procedureData,
+	})
+	require.Equal(t, testOpCreate, structuredData[testArgOperation])
 	require.Equal(t, types.EntityTypeProcedure, structuredData["entityType"])
 
 	procedureResult, ok := structuredData["result"].(map[string]any)
@@ -916,12 +598,7 @@ func TestManageUpdateProcedure(t *testing.T) {
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	testCase := testutils.MockInputCase()
-	testCase.Title = "Case for Procedure Update"
-
-	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdCase)
+	createdCase := createCase(t, hiveClient, "Case for Procedure Update")
 
 	// Set up via the raw API; the MCP update is under test.
 	input := thehive.NewInputProcedure(testutils.TestMITREPatternID, int64(1700000000000))
@@ -933,31 +610,18 @@ func TestManageUpdateProcedure(t *testing.T) {
 	require.NotNil(t, createdProcedure)
 
 	// ISO date strings: the MCP converts them to timestamps.
-	updateData := map[string]interface{}{
-		"description": "Updated description via MCP",
-		"occurDate":   "2023-11-15T10:00:00",
+	updateData := map[string]any{
+		testFieldDescription: "Updated description via MCP",
+		"occurDate":          "2023-11-15T10:00:00",
 	}
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "update",
-				"entity-type": types.EntityTypeProcedure,
-				"entity-ids":  []string{createdProcedure.UnderscoreId},
-				"entity-data": updateData,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError, "update procedure should succeed")
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "update", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpUpdate,
+		testArgEntityType: types.EntityTypeProcedure,
+		testArgEntityIDs:  []string{createdProcedure.UnderscoreId},
+		testArgEntityData: updateData,
+	})
+	require.Equal(t, testOpUpdate, structuredData[testArgOperation])
 	require.Equal(t, types.EntityTypeProcedure, structuredData["entityType"])
 }
 
@@ -966,12 +630,7 @@ func TestManageDeleteProcedure(t *testing.T) {
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	testCase := testutils.MockInputCase()
-	testCase.Title = "Case for Procedure Deletion"
-
-	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdCase)
+	createdCase := createCase(t, hiveClient, "Case for Procedure Deletion")
 
 	// Set up via the raw API; the MCP delete is under test.
 	input := thehive.NewInputProcedure(testutils.TestMITREPatternID, int64(1700000000000))
@@ -981,25 +640,12 @@ func TestManageDeleteProcedure(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdProcedure)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "delete",
-				"entity-type": types.EntityTypeProcedure,
-				"entity-ids":  []string{createdProcedure.UnderscoreId},
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError, "delete procedure should succeed")
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "delete", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpDelete,
+		testArgEntityType: types.EntityTypeProcedure,
+		testArgEntityIDs:  []string{createdProcedure.UnderscoreId},
+	})
+	require.Equal(t, testOpDelete, structuredData[testArgOperation])
 	require.Equal(t, types.EntityTypeProcedure, structuredData["entityType"])
 
 	resp, err := hiveClient.TTPAPI.DeleteProcedure(authContext, createdProcedure.UnderscoreId).Execute()
@@ -1011,20 +657,11 @@ func TestManageMergeWithReadOnlyPermissions(t *testing.T) {
 	testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "")
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "merge",
-				"entity-type": types.EntityTypeCase,
-				"entity-ids":  []string{"~123", "~456"},
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	result := testutils.CallTool(t, mcpClient, testToolName, map[string]any{
+		testArgOperation:  testOpMerge,
+		testArgEntityType: types.EntityTypeCase,
+		testArgEntityIDs:  []string{testEntityID, "~456"},
+	})
 	testutils.RequirePermissionDenied(t, result)
 }
 
@@ -1032,36 +669,23 @@ func TestManageCreateCaseTemplate(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	templateData := map[string]interface{}{
-		"name":        "Test-MCP-Template",
-		"displayName": "Test MCP Template",
-		"description": "A case template created via MCP for testing",
-		"severity":    2,
-		"tags":        []string{"test", "mcp"},
-		"tasks": []map[string]interface{}{
-			{"title": "Initial triage", "description": "Perform initial triage of the incident"},
+	templateData := map[string]any{
+		"name":               "Test-MCP-Template",
+		"displayName":        "Test MCP Template",
+		testFieldDescription: "A case template created via MCP for testing",
+		testFieldSeverity:    2,
+		testFieldTags:        []string{"test", "mcp"},
+		"tasks": []map[string]any{
+			{testFieldTitle: "Initial triage", testFieldDescription: "Perform initial triage of the incident"},
 		},
 	}
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "create",
-				"entity-type": types.EntityTypeCaseTemplate,
-				"entity-data": templateData,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError, "Case template creation should succeed")
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "create", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpCreate,
+		testArgEntityType: types.EntityTypeCaseTemplate,
+		testArgEntityData: templateData,
+	})
+	require.Equal(t, testOpCreate, structuredData[testArgOperation])
 	require.Equal(t, types.EntityTypeCaseTemplate, structuredData["entityType"])
 
 	resultData, ok := structuredData["result"].(map[string]any)
@@ -1092,32 +716,19 @@ func TestManageUpdateCaseTemplate(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdTemplate)
 
-	updateData := map[string]interface{}{
-		"displayName": "Updated Display Name",
-		"description": "Updated description via MCP",
-		"severity":    3,
+	updateData := map[string]any{
+		"displayName":        "Updated Display Name",
+		testFieldDescription: "Updated description via MCP",
+		testFieldSeverity:    3,
 	}
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "update",
-				"entity-type": types.EntityTypeCaseTemplate,
-				"entity-ids":  []string{createdTemplate.UnderscoreId},
-				"entity-data": updateData,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError, "Case template update should succeed")
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "update", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpUpdate,
+		testArgEntityType: types.EntityTypeCaseTemplate,
+		testArgEntityIDs:  []string{createdTemplate.UnderscoreId},
+		testArgEntityData: updateData,
+	})
+	require.Equal(t, testOpUpdate, structuredData[testArgOperation])
 
 	fetchedTemplate, _, err := hiveClient.CaseTemplateAPI.GetCaseTemplate(authContext, createdTemplate.UnderscoreId).Execute()
 	require.NoError(t, err)
@@ -1137,25 +748,12 @@ func TestManageDeleteCaseTemplate(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdTemplate)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "delete",
-				"entity-type": types.EntityTypeCaseTemplate,
-				"entity-ids":  []string{createdTemplate.UnderscoreId},
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError, "Case template deletion should succeed")
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "delete", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpDelete,
+		testArgEntityType: types.EntityTypeCaseTemplate,
+		testArgEntityIDs:  []string{createdTemplate.UnderscoreId},
+	})
+	require.Equal(t, testOpDelete, structuredData[testArgOperation])
 
 	_, resp, err := hiveClient.CaseTemplateAPI.GetCaseTemplate(authContext, createdTemplate.UnderscoreId).Execute()
 	require.Error(t, err)
@@ -1180,37 +778,19 @@ func TestManageApplyTemplateToCase(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, createdTemplate)
 
-	testCase := testutils.MockInputCase()
-	testCase.Title = "Case for Template Application"
+	createdCase := createCase(t, hiveClient, "Case for Template Application")
 
-	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdCase)
-
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "apply-template",
-				"entity-type": types.EntityTypeCase,
-				"entity-ids":  []string{createdCase.UnderscoreId},
-				"target-id":   createdTemplate.UnderscoreId,
-				"entity-data": map[string]interface{}{
-					"updateSeverity": true,
-					"importTasks":    []string{"Template task to import"},
-				},
-			},
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  "apply-template",
+		testArgEntityType: types.EntityTypeCase,
+		testArgEntityIDs:  []string{createdCase.UnderscoreId},
+		testArgTargetID:   createdTemplate.UnderscoreId,
+		testArgEntityData: map[string]any{
+			"updateSeverity": true,
+			"importTasks":    []string{"Template task to import"},
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError, "Apply template should succeed")
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "apply-template", structuredData["operation"])
+	})
+	require.Equal(t, "apply-template", structuredData[testArgOperation])
 	require.Equal(t, createdTemplate.UnderscoreId, structuredData["templateId"])
 
 	caseIDs, ok := structuredData["caseIds"].([]any)
@@ -1231,28 +811,15 @@ func TestManageApplyTemplateWithAnalystPermissions(t *testing.T) {
 	createdTemplate, _, err := hiveClient.CaseTemplateAPI.CreateCaseTemplate(authContext).InputCreateCaseTemplate(*input).Execute()
 	require.NoError(t, err)
 
-	testCase := testutils.MockInputCase()
-	testCase.Title = "Case for Analyst Apply Template Test"
+	createdCase := createCase(t, hiveClient, "Case for Analyst Apply Template Test")
 
-	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-	require.NoError(t, err)
-
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "apply-template",
-				"entity-type": types.EntityTypeCase,
-				"entity-ids":  []string{createdCase.UnderscoreId},
-				"target-id":   createdTemplate.UnderscoreId,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError, "Apply template should succeed with analyst permissions")
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  "apply-template",
+		testArgEntityType: types.EntityTypeCase,
+		testArgEntityIDs:  []string{createdCase.UnderscoreId},
+		testArgTargetID:   createdTemplate.UnderscoreId,
+	})
+	require.Equal(t, "apply-template", structuredData[testArgOperation])
 }
 
 // Creating case templates is denied for analysts.
@@ -1260,22 +827,13 @@ func TestManageCaseTemplateCreateDeniedWithAnalystPermissions(t *testing.T) {
 	testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "create",
-				"entity-type": types.EntityTypeCaseTemplate,
-				"entity-data": map[string]interface{}{
-					"name": "Analyst-Created-Template",
-				},
-			},
+	result := testutils.CallTool(t, mcpClient, testToolName, map[string]any{
+		testArgOperation:  testOpCreate,
+		testArgEntityType: types.EntityTypeCaseTemplate,
+		testArgEntityData: map[string]any{
+			"name": "Analyst-Created-Template",
 		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	})
 	testutils.RequirePermissionDenied(t, result)
 }
 
@@ -1283,40 +841,21 @@ func TestManageCreatePageInCase(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	testCase := testutils.MockInputCase()
-	testCase.Title = "Case for Page Creation"
+	createdCase := createCase(t, hiveClient, "Case for Page Creation")
 
-	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdCase)
-
-	pageData := map[string]interface{}{
-		"title":    "Investigation Notes",
-		"content":  "## Summary\nInitial findings from the investigation.",
-		"category": "Default",
+	pageData := map[string]any{
+		testFieldTitle:    "Investigation Notes",
+		testFieldContent:  "## Summary\nInitial findings from the investigation.",
+		testFieldCategory: testCategoryDefault,
 	}
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "create",
-				"entity-type": types.EntityTypePage,
-				"entity-ids":  []string{createdCase.UnderscoreId},
-				"entity-data": pageData,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "create", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpCreate,
+		testArgEntityType: types.EntityTypePage,
+		testArgEntityIDs:  []string{createdCase.UnderscoreId},
+		testArgEntityData: pageData,
+	})
+	require.Equal(t, testOpCreate, structuredData[testArgOperation])
 	require.Equal(t, types.EntityTypePage, structuredData["entityType"])
 
 	resultData, ok := structuredData["result"].(map[string]any)
@@ -1325,40 +864,27 @@ func TestManageCreatePageInCase(t *testing.T) {
 	pageID, ok := resultData["_id"].(string)
 	require.True(t, ok)
 	require.NotEmpty(t, pageID)
-	require.Equal(t, "[UNTRUSTED_DATA]Investigation Notes[/UNTRUSTED_DATA]", resultData["title"])
-	// DL-6006: "category" is a user-defined label, so it is wrapped.
-	require.Equal(t, "[UNTRUSTED_DATA]Default[/UNTRUSTED_DATA]", resultData["category"])
+	require.Equal(t, "[UNTRUSTED_DATA]Investigation Notes[/UNTRUSTED_DATA]", resultData[testFieldTitle])
+	// DL-6006: testFieldCategory is a user-defined label, so it is wrapped.
+	require.Equal(t, "[UNTRUSTED_DATA]Default[/UNTRUSTED_DATA]", resultData[testFieldCategory])
 }
 
 func TestManageCreateStandalonePage(t *testing.T) {
 	testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	pageData := map[string]interface{}{
-		"title":    "Incident Response Runbook",
-		"content":  "## Procedure\n1. Identify scope\n2. Contain threat\n3. Eradicate.",
-		"category": "Default",
+	pageData := map[string]any{
+		testFieldTitle:    "Incident Response Runbook",
+		testFieldContent:  "## Procedure\n1. Identify scope\n2. Contain threat\n3. Eradicate.",
+		testFieldCategory: testCategoryDefault,
 	}
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "create",
-				"entity-type": types.EntityTypePage,
-				"entity-data": pageData,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "create", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpCreate,
+		testArgEntityType: types.EntityTypePage,
+		testArgEntityData: pageData,
+	})
+	require.Equal(t, testOpCreate, structuredData[testArgOperation])
 	require.Equal(t, types.EntityTypePage, structuredData["entityType"])
 
 	resultData, ok := structuredData["result"].(map[string]any)
@@ -1367,55 +893,31 @@ func TestManageCreateStandalonePage(t *testing.T) {
 	pageID, ok := resultData["_id"].(string)
 	require.True(t, ok)
 	require.NotEmpty(t, pageID)
-	require.Equal(t, "[UNTRUSTED_DATA]Incident Response Runbook[/UNTRUSTED_DATA]", resultData["title"])
+	require.Equal(t, "[UNTRUSTED_DATA]Incident Response Runbook[/UNTRUSTED_DATA]", resultData[testFieldTitle])
 }
 
 func TestManageUpdatePage(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	testCase := testutils.MockInputCase()
-	testCase.Title = "Case for Page Update"
-
-	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdCase)
-
-	inputPage := thehive.InputCreatePage{
+	createdPage := createPageInCase(t, hiveClient, "Case for Page Update", thehive.InputCreatePage{
 		Title:    "Original Page Title",
-		Content:  "## Original\nOriginal content.",
-		Category: "Default",
-	}
-	createdPage, _, err := hiveClient.PageAPI.CreateAPageInACase(authContext, createdCase.UnderscoreId).InputCreatePage(inputPage).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdPage)
+		Content:  "## Original\ncontent.",
+		Category: testCategoryDefault,
+	})
 
-	updateData := map[string]interface{}{
-		"title":   "Updated Page Title",
-		"content": "## Updated\nNew content after update.",
+	updateData := map[string]any{
+		testFieldTitle:   "Updated Page Title",
+		testFieldContent: "## Updated\nNew content after update.",
 	}
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "update",
-				"entity-type": types.EntityTypePage,
-				"entity-ids":  []string{createdPage.UnderscoreId},
-				"entity-data": updateData,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "update", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpUpdate,
+		testArgEntityType: types.EntityTypePage,
+		testArgEntityIDs:  []string{createdPage.UnderscoreId},
+		testArgEntityData: updateData,
+	})
+	require.Equal(t, testOpUpdate, structuredData[testArgOperation])
 	require.Equal(t, types.EntityTypePage, structuredData["entityType"])
 }
 
@@ -1423,42 +925,18 @@ func TestManageDeletePage(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	testCase := testutils.MockInputCase()
-	testCase.Title = "Case for Page Deletion"
-
-	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdCase)
-
-	inputPage := thehive.InputCreatePage{
+	createdPage := createPageInCase(t, hiveClient, "Case for Page Deletion", thehive.InputCreatePage{
 		Title:    "Page to Delete",
 		Content:  "This page will be deleted.",
-		Category: "Default",
-	}
-	createdPage, _, err := hiveClient.PageAPI.CreateAPageInACase(authContext, createdCase.UnderscoreId).InputCreatePage(inputPage).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdPage)
+		Category: testCategoryDefault,
+	})
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "delete",
-				"entity-type": types.EntityTypePage,
-				"entity-ids":  []string{createdPage.UnderscoreId},
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.IsError)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "delete", structuredData["operation"])
+	structuredData := manageStructured(t, mcpClient, map[string]any{
+		testArgOperation:  testOpDelete,
+		testArgEntityType: types.EntityTypePage,
+		testArgEntityIDs:  []string{createdPage.UnderscoreId},
+	})
+	require.Equal(t, testOpDelete, structuredData[testArgOperation])
 	require.Equal(t, types.EntityTypePage, structuredData["entityType"])
 }
 
@@ -1467,57 +945,29 @@ func TestManagePageWithAnalystPermissions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-
-	pageData := map[string]interface{}{
-		"title":    "Analyst Created Page",
-		"content":  "## Content\nPage created by analyst.",
-		"category": "Default",
+	pageData := map[string]any{
+		testFieldTitle:    "Analyst Created Page",
+		testFieldContent:  "## Content\nPage created by analyst.",
+		testFieldCategory: testCategoryDefault,
 	}
 
-	createRequest := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "create",
-				"entity-type": types.EntityTypePage,
-				"entity-data": pageData,
-			},
-		},
-	}
-
-	result, err := mcpClient.CallTool(t.Context(), createRequest)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	result := testutils.CallToolOK(t, mcpClient, testToolName, map[string]any{
+		testArgOperation:  testOpCreate,
+		testArgEntityType: types.EntityTypePage,
+		testArgEntityData: pageData,
+	})
 	require.False(t, result.IsError, "Page creation should succeed with analyst permissions")
 
-	testCase := testutils.MockInputCase()
-	testCase.Title = "Case for Analyst Page Permission Test"
-
-	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-	require.NoError(t, err)
-
-	inputPage := thehive.InputCreatePage{
+	createdPage := createPageInCase(t, hiveClient, "Case for Analyst Page Permission Test", thehive.InputCreatePage{
 		Title:    "Page for Analyst Delete Test",
 		Content:  "Content",
-		Category: "Default",
-	}
-	createdPage, _, err := hiveClient.PageAPI.CreateAPageInACase(authContext, createdCase.UnderscoreId).InputCreatePage(inputPage).Execute()
-	require.NoError(t, err)
+		Category: testCategoryDefault,
+	})
 
-	deleteRequest := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "manage-entities",
-			Arguments: map[string]any{
-				"operation":   "delete",
-				"entity-type": types.EntityTypePage,
-				"entity-ids":  []string{createdPage.UnderscoreId},
-			},
-		},
-	}
-
-	result, err = mcpClient.CallTool(t.Context(), deleteRequest)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	testutils.RequirePermissionDenied(t, result)
+	deleteResult := testutils.CallTool(t, mcpClient, testToolName, map[string]any{
+		testArgOperation:  testOpDelete,
+		testArgEntityType: types.EntityTypePage,
+		testArgEntityIDs:  []string{createdPage.UnderscoreId},
+	})
+	testutils.RequirePermissionDenied(t, deleteResult)
 }

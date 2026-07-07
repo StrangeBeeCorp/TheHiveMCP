@@ -1,9 +1,32 @@
+// Package permissions defines the permissions configuration model and the
+// access-control checks (tools, entity operations, analyzers, responders and
+// filters) applied to TheHive MCP requests.
 package permissions
 
 import (
 	"embed"
 	"fmt"
+	"slices"
 )
+
+// Configuration schema version and permission modes.
+const (
+	// versionV1 is the only supported permissions schema version.
+	versionV1 = "1.0"
+	// modeAllowList only permits items listed in the allowed list.
+	modeAllowList = "allow_list"
+	// modeBlockList permits every item except those in the blocked list.
+	modeBlockList = "block_list"
+)
+
+// Tool names recognized in the permissions configuration.
+const (
+	toolSearchEntities = "search-entities"
+	toolManageEntities = "manage-entities"
+)
+
+// operationCreate is the entity "create" operation name.
+const operationCreate = "create"
 
 //go:embed embedded/*.yaml
 var embeddedFS embed.FS
@@ -14,26 +37,31 @@ func GetDefaultPermissions() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read default permissions: %w", err)
 	}
+
 	return data, nil
 }
 
+// Config represents the complete permissions configuration
 type Config struct {
-	Version     string             `yaml:"version"`
-	Permissions PermissionsSection `yaml:"permissions"`
+	Version     string  `yaml:"version"`
+	Permissions Section `yaml:"permissions"`
 }
 
-type PermissionsSection struct {
+// Section contains all permission categories
+type Section struct {
 	Tools      map[string]ToolPermission `yaml:"tools"`
 	Analyzers  AutomationPermissions     `yaml:"analyzers"`
 	Responders AutomationPermissions     `yaml:"responders"`
 }
 
+// ToolPermission defines access and filtering for a specific tool
 type ToolPermission struct {
 	Allowed           bool                       `yaml:"allowed"`
-	Filters           map[string]interface{}     `yaml:"filters,omitempty"`
+	Filters           map[string]any             `yaml:"filters,omitempty"`
 	EntityPermissions map[string]EntityOperation `yaml:"entity_permissions,omitempty"` // For manage-entities tool
 }
 
+// EntityOperation defines which operations are allowed for an entity type
 type EntityOperation struct {
 	Create        bool `yaml:"create"`
 	Update        bool `yaml:"update"`
@@ -44,6 +72,7 @@ type EntityOperation struct {
 	ApplyTemplate bool `yaml:"apply-template"`
 }
 
+// AutomationPermissions defines analyzer or responder access
 type AutomationPermissions struct {
 	Mode    string   `yaml:"mode"` // "allow_list" or "block_list"
 	Allowed []string `yaml:"allowed"`
@@ -55,10 +84,12 @@ func (c *Config) IsToolAllowed(toolName string) bool {
 	if c == nil || c.Permissions.Tools == nil {
 		return false
 	}
+
 	perm, exists := c.Permissions.Tools[toolName]
 	if !exists {
 		return false
 	}
+
 	return perm.Allowed
 }
 
@@ -69,7 +100,7 @@ func (c *Config) IsEntityOperationAllowed(entityType, operation string) bool {
 		return false
 	}
 
-	toolPerm, exists := c.Permissions.Tools["manage-entities"]
+	toolPerm, exists := c.Permissions.Tools[toolManageEntities]
 	if !exists || !toolPerm.Allowed {
 		return false
 	}
@@ -85,7 +116,7 @@ func (c *Config) IsEntityOperationAllowed(entityType, operation string) bool {
 	}
 
 	switch operation {
-	case "create":
+	case operationCreate:
 		return entityPerm.Create
 	case "update":
 		return entityPerm.Update
@@ -104,84 +135,88 @@ func (c *Config) IsEntityOperationAllowed(entityType, operation string) bool {
 	}
 }
 
-func (c *Config) GetToolFilters(toolName string) map[string]interface{} {
+// GetToolFilters returns the filters for a specific tool
+func (c *Config) GetToolFilters(toolName string) map[string]any {
 	if c == nil || c.Permissions.Tools == nil {
 		return nil
 	}
+
 	perm, exists := c.Permissions.Tools[toolName]
 	if !exists {
 		return nil
 	}
+
 	return perm.Filters
 }
 
+// IsAnalyzerAllowed checks if an analyzer is permitted based on global rules
 func (c *Config) IsAnalyzerAllowed(analyzerName string) bool {
 	if c == nil {
 		return false
 	}
+
 	return isAutomationAllowed(analyzerName, c.Permissions.Analyzers.Mode, c.Permissions.Analyzers.Allowed, c.Permissions.Analyzers.Blocked)
 }
 
+// IsResponderAllowed checks if a responder is permitted based on global rules
 func (c *Config) IsResponderAllowed(responderName string) bool {
 	if c == nil {
 		return false
 	}
+
 	return isAutomationAllowed(responderName, c.Permissions.Responders.Mode, c.Permissions.Responders.Allowed, c.Permissions.Responders.Blocked)
 }
 
+// GetAllowedAnalyzers returns list of allowed analyzer names
 func (c *Config) GetAllowedAnalyzers(allAnalyzers []string) []string {
 	if c == nil {
 		return []string{}
 	}
 
 	var allowed []string
+
 	for _, analyzer := range allAnalyzers {
 		if c.IsAnalyzerAllowed(analyzer) {
 			allowed = append(allowed, analyzer)
 		}
 	}
+
 	return allowed
 }
 
+// GetAllowedResponders returns list of allowed responder names
 func (c *Config) GetAllowedResponders(allResponders []string) []string {
 	if c == nil {
 		return []string{}
 	}
 
 	var allowed []string
+
 	for _, responder := range allResponders {
 		if c.IsResponderAllowed(responder) {
 			allowed = append(allowed, responder)
 		}
 	}
+
 	return allowed
 }
 
 func isAutomationAllowed(name, mode string, allowed, blocked []string) bool {
 	switch mode {
-	case "allow_list":
+	case modeAllowList:
 		if len(allowed) == 0 {
 			return false
 		}
-		for _, a := range allowed {
-			if a == "*" {
-				return true
-			}
+		// Check for wildcard
+		if slices.Contains(allowed, "*") {
+			return true
 		}
-		for _, a := range allowed {
-			if a == name {
-				return true
-			}
-		}
-		return false
+		// Check if explicitly allowed
+		return slices.Contains(allowed, name)
 
-	case "block_list":
-		for _, b := range blocked {
-			if b == name {
-				return false
-			}
-		}
-		return true
+	case modeBlockList:
+		// Check if explicitly blocked
+		return !slices.Contains(blocked, name)
 
 	default:
 		return false

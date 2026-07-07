@@ -2,18 +2,22 @@ package utils
 
 import (
 	"context"
-	"fmt"
+	"errors"
+
+	"github.com/StrangeBeeCorp/thehive4go/thehive"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/permissions"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
-	"github.com/StrangeBeeCorp/thehive4go/thehive"
 )
 
+// GetHiveClientFromContext returns the TheHive API client stored in the context,
+// or an error when none is present.
 func GetHiveClientFromContext(ctx context.Context) (*thehive.APIClient, error) {
 	client, ok := ctx.Value(types.HiveClientCtxKey).(*thehive.APIClient)
 	if !ok || client == nil {
-		return nil, fmt.Errorf("hive client not found in context")
+		return nil, errors.New("hive client not found in context")
 	}
+
 	return client, nil
 }
 
@@ -22,6 +26,7 @@ func GetDefaultCortexIDFromContext(ctx context.Context) string {
 	if id, ok := ctx.Value(types.DefaultCortexIDCtxKey).(string); ok {
 		return id
 	}
+
 	return types.DefaultCortexID
 }
 
@@ -34,7 +39,8 @@ func AddPermissionsToContext(ctx context.Context, perms *permissions.Config) con
 func GetPermissionsFromContext(ctx context.Context) (*permissions.Config, error) {
 	perms, ok := ctx.Value(types.PermissionsCtxKey).(*permissions.Config)
 	if !ok || perms == nil {
-		return nil, fmt.Errorf("permissions not found in context")
+		return nil, errors.New("permissions not found in context")
 	}
+
 	return perms, nil
 }

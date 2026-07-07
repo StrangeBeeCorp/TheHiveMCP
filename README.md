@@ -576,9 +576,9 @@ break against any of them fails the PR. The image is a single source of truth: s
 **Quality and security:**
 
 - `make fmt` - Format code using Docker
-- `make security` - Run all security checks (vulncheck, sast, vetlint)
+- `make security` - Run all security checks (vulncheck, sast, lint)
 - `make sast` - Static application security testing
-- `make vetlint` - Linting checks
+- `make lint` - Linting checks (config schema verify + golangci-lint run)
 - `make vulncheck` - Vulnerability scanning
 
 **Docker operations:**

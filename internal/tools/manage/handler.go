@@ -3,28 +3,29 @@ package manage
 import (
 	"context"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 )
 
-func (t *ManageTool) Handle(ctx context.Context, request mcp.CallToolRequest, params ManageEntityParams) (ManageEntityResult, error) {
-
+// Handle dispatches the manage-entities request to the handler for the requested operation.
+func (t *Tool) Handle(ctx context.Context, _ mcp.CallToolRequest, params EntityParams) (EntityResult, error) {
 	switch params.Operation {
-	case "create":
+	case OperationCreate:
 		return t.handleCreate(ctx, &params)
-	case "update":
+	case OperationUpdate:
 		return t.handleUpdate(ctx, &params)
-	case "delete":
+	case OperationDelete:
 		return t.handleDelete(ctx, &params)
-	case "comment":
+	case OperationComment:
 		return t.handleComment(ctx, &params)
-	case "promote":
+	case OperationPromote:
 		return t.handlePromote(ctx, &params)
-	case "merge":
+	case OperationMerge:
 		return t.handleMerge(ctx, &params)
-	case "apply-template":
+	case OperationApplyTemplate:
 		return t.handleApplyTemplate(ctx, &params)
 	default:
-		return ManageEntityResult{}, tools.NewToolErrorf("unsupported operation: %s", params.Operation)
+		return EntityResult{}, tools.NewToolErrorf("unsupported operation: %s", params.Operation)
 	}
 }

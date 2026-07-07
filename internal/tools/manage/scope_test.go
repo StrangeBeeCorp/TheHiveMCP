@@ -3,11 +3,12 @@ package manage_test
 import (
 	"testing"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 // scopedPermissionsYAML restricts manage-entities to entities with TLP <= 2
@@ -40,20 +41,6 @@ func scopedManageClient(t *testing.T) *thehive.APIClient {
 	return testutils.SetupTestWithCleanup(t)
 }
 
-func createCaseWithTLP(t *testing.T, hiveClient *thehive.APIClient, title string, tlp int32) *thehive.OutputCase {
-	t.Helper()
-
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	testCase := testutils.MockInputCase()
-	testCase.Title = title
-	testCase.Tlp = &tlp
-
-	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdCase)
-	return createdCase
-}
-
 func createAlertWithTLP(t *testing.T, hiveClient *thehive.APIClient, sourceRef string, tlp int32) *thehive.OutputAlert {
 	t.Helper()
 
@@ -66,13 +53,13 @@ func createAlertWithTLP(t *testing.T, hiveClient *thehive.APIClient, sourceRef s
 	createdAlert, _, err := hiveClient.AlertAPI.CreateAlert(authContext).InputCreateAlert(*testAlert).Execute()
 	require.NoError(t, err)
 	require.NotNil(t, createdAlert)
+
 	return createdAlert
 }
 
 func requireScopeDenied(t *testing.T, result *mcp.CallToolResult) {
 	t.Helper()
-	require.True(t, result.IsError, "operation on an out-of-scope entity must be denied")
-	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not within the scope")
+	testutils.RequireScopeDenied(t, result, "not within the scope")
 }
 
 // Out-of-scope update is denied without mutating; in-scope update succeeds.
@@ -82,18 +69,18 @@ func TestManageScopeUpdateDeniedOutOfScope(t *testing.T) {
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 
-	outOfScopeCase := createCaseWithTLP(t, hiveClient, "Out of scope case", 3)
-	inScopeCase := createCaseWithTLP(t, hiveClient, "In scope case", 2)
+	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope case", 3)
+	inScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "In scope case", 2)
 
 	updateRequest := func(caseID string) mcp.CallToolRequest {
 		return mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
-				Name: "manage-entities",
+				Name: testToolName,
 				Arguments: map[string]any{
-					"operation":   "update",
-					"entity-type": types.EntityTypeCase,
-					"entity-ids":  []string{caseID},
-					"entity-data": map[string]interface{}{"title": "Title changed by MCP"},
+					testArgOperation:  testOpUpdate,
+					testArgEntityType: types.EntityTypeCase,
+					testArgEntityIDs:  []string{caseID},
+					testArgEntityData: map[string]any{testFieldTitle: "Title changed by MCP"},
 				},
 			},
 		}
@@ -123,17 +110,17 @@ func TestManageScopeBatchUpdateDeniedWhenAnyOutOfScope(t *testing.T) {
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 
-	inScopeCase := createCaseWithTLP(t, hiveClient, "In scope batch case", 2)
-	outOfScopeCase := createCaseWithTLP(t, hiveClient, "Out of scope batch case", 3)
+	inScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "In scope batch case", 2)
+	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope batch case", 3)
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "manage-entities",
+			Name: testToolName,
 			Arguments: map[string]any{
-				"operation":   "update",
-				"entity-type": types.EntityTypeCase,
-				"entity-ids":  []string{inScopeCase.UnderscoreId, outOfScopeCase.UnderscoreId},
-				"entity-data": map[string]interface{}{"title": "Batch title"},
+				testArgOperation:  testOpUpdate,
+				testArgEntityType: types.EntityTypeCase,
+				testArgEntityIDs:  []string{inScopeCase.UnderscoreId, outOfScopeCase.UnderscoreId},
+				testArgEntityData: map[string]any{testFieldTitle: "Batch title"},
 			},
 		},
 	}
@@ -161,11 +148,11 @@ func TestManageScopeDeleteDeniedOutOfScope(t *testing.T) {
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "manage-entities",
+			Name: testToolName,
 			Arguments: map[string]any{
-				"operation":   "delete",
-				"entity-type": types.EntityTypeAlert,
-				"entity-ids":  []string{outOfScopeAlert.UnderscoreId},
+				testArgOperation:  testOpDelete,
+				testArgEntityType: types.EntityTypeAlert,
+				testArgEntityIDs:  []string{outOfScopeAlert.UnderscoreId},
 			},
 		},
 	}
@@ -185,18 +172,18 @@ func TestManageScopeCommentDeniedOutOfScope(t *testing.T) {
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
 
-	outOfScopeCase := createCaseWithTLP(t, hiveClient, "Out of scope comment case", 3)
-	inScopeCase := createCaseWithTLP(t, hiveClient, "In scope comment case", 2)
+	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope comment case", 3)
+	inScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "In scope comment case", 2)
 
 	commentRequest := func(caseID string) mcp.CallToolRequest {
 		return mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
-				Name: "manage-entities",
+				Name: testToolName,
 				Arguments: map[string]any{
-					"operation":   "comment",
-					"entity-type": types.EntityTypeCase,
-					"entity-ids":  []string{caseID},
-					"comment":     "Scope enforcement test comment",
+					testArgOperation:  testOpComment,
+					testArgEntityType: types.EntityTypeCase,
+					testArgEntityIDs:  []string{caseID},
+					testOpComment:     "Scope enforcement test comment",
 				},
 			},
 		}
@@ -217,18 +204,18 @@ func TestManageScopeCreateChildDeniedOutOfScopeParent(t *testing.T) {
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
 
-	outOfScopeCase := createCaseWithTLP(t, hiveClient, "Out of scope parent case", 3)
-	inScopeCase := createCaseWithTLP(t, hiveClient, "In scope parent case", 2)
+	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope parent case", 3)
+	inScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "In scope parent case", 2)
 
 	createTaskRequest := func(caseID string) mcp.CallToolRequest {
 		return mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
-				Name: "manage-entities",
+				Name: testToolName,
 				Arguments: map[string]any{
-					"operation":   "create",
-					"entity-type": types.EntityTypeTask,
-					"entity-ids":  []string{caseID},
-					"entity-data": map[string]interface{}{"title": "Scope test task"},
+					testArgOperation:  testOpCreate,
+					testArgEntityType: types.EntityTypeTask,
+					testArgEntityIDs:  []string{caseID},
+					testArgEntityData: map[string]any{testFieldTitle: "Scope test task"},
 				},
 			},
 		}
@@ -256,15 +243,15 @@ func TestManageScopeCreateObservableInScopeAlertParent(t *testing.T) {
 	createObservableRequest := func(parentID, data string) mcp.CallToolRequest {
 		return mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
-				Name: "manage-entities",
+				Name: testToolName,
 				Arguments: map[string]any{
-					"operation":   "create",
-					"entity-type": types.EntityTypeObservable,
-					"entity-ids":  []string{parentID},
-					"entity-data": map[string]interface{}{
-						"dataType": "ip",
-						"data":     data,
-						"message":  "scope test observable",
+					testArgOperation:  testOpCreate,
+					testArgEntityType: types.EntityTypeObservable,
+					testArgEntityIDs:  []string{parentID},
+					testArgEntityData: map[string]any{
+						testFieldDataType: "ip",
+						testFieldData:     data,
+						testFieldMessage:  "scope test observable",
 					},
 				},
 			},
@@ -290,11 +277,11 @@ func TestManageScopePromoteDeniedOutOfScope(t *testing.T) {
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "manage-entities",
+			Name: testToolName,
 			Arguments: map[string]any{
-				"operation":   "promote",
-				"entity-type": types.EntityTypeAlert,
-				"entity-ids":  []string{outOfScopeAlert.UnderscoreId},
+				testArgOperation:  testOpPromote,
+				testArgEntityType: types.EntityTypeAlert,
+				testArgEntityIDs:  []string{outOfScopeAlert.UnderscoreId},
 			},
 		},
 	}
@@ -310,16 +297,16 @@ func TestManageScopeMergeDeniedWhenAnyCaseOutOfScope(t *testing.T) {
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
 
-	inScopeCase := createCaseWithTLP(t, hiveClient, "In scope merge case", 2)
-	outOfScopeCase := createCaseWithTLP(t, hiveClient, "Out of scope merge case", 3)
+	inScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "In scope merge case", 2)
+	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope merge case", 3)
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "manage-entities",
+			Name: testToolName,
 			Arguments: map[string]any{
-				"operation":   "merge",
-				"entity-type": types.EntityTypeCase,
-				"entity-ids":  []string{inScopeCase.UnderscoreId, outOfScopeCase.UnderscoreId},
+				testArgOperation:  testOpMerge,
+				testArgEntityType: types.EntityTypeCase,
+				testArgEntityIDs:  []string{inScopeCase.UnderscoreId, outOfScopeCase.UnderscoreId},
 			},
 		},
 	}
@@ -335,16 +322,16 @@ func TestManageScopeNoFiltersBackwardCompatible(t *testing.T) {
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 
-	highTLPCase := createCaseWithTLP(t, hiveClient, "High TLP case", 3)
+	highTLPCase := testutils.CreateCaseWithTLP(t, hiveClient, "High TLP case", 3)
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "manage-entities",
+			Name: testToolName,
 			Arguments: map[string]any{
-				"operation":   "update",
-				"entity-type": types.EntityTypeCase,
-				"entity-ids":  []string{highTLPCase.UnderscoreId},
-				"entity-data": map[string]interface{}{"title": "Updated without filters"},
+				testArgOperation:  testOpUpdate,
+				testArgEntityType: types.EntityTypeCase,
+				testArgEntityIDs:  []string{highTLPCase.UnderscoreId},
+				testArgEntityData: map[string]any{testFieldTitle: "Updated without filters"},
 			},
 		},
 	}

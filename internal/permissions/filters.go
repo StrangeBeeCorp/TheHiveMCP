@@ -5,7 +5,7 @@ import (
 )
 
 // MergeFilters ANDs permission filters into the user query; the bool reports whether any were applied.
-func MergeFilters(userQuery map[string]interface{}, permissionFilters map[string]interface{}) (map[string]interface{}, bool) {
+func MergeFilters(userQuery, permissionFilters map[string]any) (map[string]any, bool) {
 	if len(permissionFilters) == 0 {
 		return userQuery, false
 	}
@@ -14,8 +14,8 @@ func MergeFilters(userQuery map[string]interface{}, permissionFilters map[string
 		return permissionFilters, true
 	}
 
-	merged := map[string]interface{}{
-		"_and": []interface{}{
+	merged := map[string]any{
+		"_and": []any{
 			userQuery,
 			permissionFilters,
 		},
@@ -24,6 +24,7 @@ func MergeFilters(userQuery map[string]interface{}, permissionFilters map[string
 	return merged, true
 }
 
+// PermissionInfo describes how permissions affected a response
 type PermissionInfo struct {
 	Applied       bool     `json:"applied"`
 	FilterApplied bool     `json:"filter_applied,omitempty"`
@@ -31,10 +32,12 @@ type PermissionInfo struct {
 	Restrictions  []string `json:"restrictions,omitempty"`
 }
 
+// NewPermissionInfo creates a PermissionInfo with applied=false
 func NewPermissionInfo() PermissionInfo {
 	return PermissionInfo{Applied: false}
 }
 
+// NewPermissionInfoDenied creates a PermissionInfo for a denied operation
 func NewPermissionInfoDenied(message string) PermissionInfo {
 	return PermissionInfo{
 		Applied: true,
@@ -42,6 +45,7 @@ func NewPermissionInfoDenied(message string) PermissionInfo {
 	}
 }
 
+// NewPermissionInfoFiltered creates a PermissionInfo for a filtered operation
 func NewPermissionInfoFiltered(message string) PermissionInfo {
 	return PermissionInfo{
 		Applied:       true,
@@ -50,6 +54,7 @@ func NewPermissionInfoFiltered(message string) PermissionInfo {
 	}
 }
 
+// NewPermissionInfoRestricted creates a PermissionInfo with restrictions list
 func NewPermissionInfoRestricted(restrictions []string) PermissionInfo {
 	return PermissionInfo{
 		Applied:      true,

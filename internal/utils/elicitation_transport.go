@@ -15,6 +15,15 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+// JSON schema and HTTP-method literals used when building the elicitation
+// confirmation prompt.
+const (
+	methodDelete  = "DELETE"
+	methodPatch   = "PATCH"
+	schemaKeyType = "type"
+	schemaKeyDesc = "description"
+)
+
 // ElicitationTransport wraps an http.RoundTripper to require user confirmation
 // for modifying operations.
 type ElicitationTransport struct {
@@ -26,37 +35,54 @@ func (e *ElicitationTransport) RoundTrip(req *http.Request) (*http.Response, err
 	slog.Debug("ElicitationTransport RoundTrip called",
 		slog.String("method", req.Method),
 		slog.String("url", req.URL.String()))
+
 	if e.requiresElicitation(req.Method, req.URL.Path) {
 		slog.Debug("Request requires elicitation",
 			slog.String("method", req.Method),
 			slog.String("url", req.URL.String()))
+
 		if !e.clientSupportsElicitation(req.Context()) {
 			slog.Warn("Client does not support elicitation, allowing request by default",
 				slog.String("method", req.Method),
 				slog.String("url", req.URL.String()))
-			return e.transport().RoundTrip(req)
+
+			return e.roundTrip(req)
 		}
-		if err := e.handleElicitation(req); err != nil {
+
+		err := e.handleElicitation(req)
+		if err != nil {
 			return nil, err
 		}
 	}
 
-	return e.transport().RoundTrip(req)
+	return e.roundTrip(req)
+}
+
+// roundTrip delegates to the underlying transport, wrapping any error with request context.
+func (e *ElicitationTransport) roundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := e.transport().RoundTrip(req)
+	if err != nil {
+		return resp, fmt.Errorf("round trip %s %s: %w", req.Method, req.URL, err)
+	}
+
+	return resp, nil
 }
 
 func (e *ElicitationTransport) transport() http.RoundTripper {
 	if e.Transport != nil {
 		return e.Transport
 	}
+
 	return http.DefaultTransport
 }
 
-func (e *ElicitationTransport) requiresElicitation(method string, endpoint string) bool {
+func (e *ElicitationTransport) requiresElicitation(method, endpoint string) bool {
 	switch strings.ToUpper(method) {
-	case "POST", "PATCH", "DELETE":
+	case "POST", methodPatch, methodDelete:
 		if strings.HasSuffix(endpoint, "/api/v1/query") { // read-only despite POST
 			return false
 		}
+
 		return true
 	default:
 		return false
@@ -65,12 +91,15 @@ func (e *ElicitationTransport) requiresElicitation(method string, endpoint strin
 
 func (e *ElicitationTransport) clientSupportsElicitation(ctx context.Context) bool {
 	session := server.ClientSessionFromContext(ctx)
+
 	sessionWithInfo, ok := session.(server.SessionWithClientInfo)
 	if !ok {
 		slog.Warn("Client session does not support client info interface")
 		return false
 	}
+
 	clientCaps := sessionWithInfo.GetClientCapabilities()
+
 	return clientCaps.Elicitation != nil
 }
 
@@ -80,12 +109,15 @@ func (e *ElicitationTransport) handleElicitation(req *http.Request) error {
 	mcpServer := server.ServerFromContext(ctx)
 
 	var bodyBytes []byte
+
 	if req.Body != nil {
 		var err error
+
 		bodyBytes, err = io.ReadAll(req.Body)
 		if err != nil {
 			return fmt.Errorf("failed to read request body: %w", err)
 		}
+
 		req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 	}
 
@@ -94,12 +126,12 @@ func (e *ElicitationTransport) handleElicitation(req *http.Request) error {
 	elicitationRequest := mcp.ElicitationRequest{
 		Params: mcp.ElicitationParams{
 			Message: fmt.Sprintf("Confirm %s request to TheHive API?\n\n%s", req.Method, requestDetails),
-			RequestedSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"confirm": map[string]interface{}{
-						"type":        "boolean",
-						"description": fmt.Sprintf("Confirm execution of %s request", req.Method),
+			RequestedSchema: map[string]any{
+				schemaKeyType: "object",
+				"properties": map[string]any{
+					"confirm": map[string]any{
+						schemaKeyType: "boolean",
+						schemaKeyDesc: fmt.Sprintf("Confirm execution of %s request", req.Method),
 					},
 				},
 				"required": []string{"confirm"},
@@ -110,8 +142,8 @@ func (e *ElicitationTransport) handleElicitation(req *http.Request) error {
 	slog.Info("Requesting elicitation from user",
 		slog.String("method", req.Method),
 		slog.String("url", req.URL.String()))
-	result, err := mcpServer.RequestElicitation(ctx, elicitationRequest)
 
+	result, err := mcpServer.RequestElicitation(ctx, elicitationRequest)
 	if err != nil {
 		// Client advertised elicitation but the prompt could not complete: fail
 		// closed rather than proceed unconfirmed (DL-6005).
@@ -119,6 +151,7 @@ func (e *ElicitationTransport) handleElicitation(req *http.Request) error {
 			slog.Warn("Refusing modifying operation: client advertised elicitation but the confirmation prompt could not be completed",
 				slog.String("method", req.Method),
 				slog.String("url", req.URL.String()))
+
 			return fmt.Errorf("operation refused: this MCP client advertises elicitation support but the confirmation prompt could not be completed, so the %s %s request was not sent. Use an MCP client that can complete elicitation prompts to confirm this operation", req.Method, req.URL.Path)
 		}
 
@@ -130,13 +163,15 @@ func (e *ElicitationTransport) handleElicitation(req *http.Request) error {
 		slog.Info("User confirmed request",
 			slog.String("method", req.Method),
 			slog.String("url", req.URL.String()))
+
 		return nil
 
 	case mcp.ElicitationResponseActionDecline, mcp.ElicitationResponseActionCancel:
 		slog.Info("User declined request",
 			slog.String("method", req.Method),
 			slog.String("url", req.URL.String()))
-		return fmt.Errorf("request declined by user")
+
+		return errors.New("request declined by user")
 
 	default:
 		return fmt.Errorf("unexpected elicitation response action: %s", result.Action)
@@ -154,16 +189,19 @@ func (e *ElicitationTransport) formatRequestDetails(req *http.Request, bodyBytes
 
 		if e.isJSONContent(req) {
 			var prettyJSON bytes.Buffer
-			if err := json.Indent(&prettyJSON, bodyBytes, "", "  "); err == nil {
+
+			err := json.Indent(&prettyJSON, bodyBytes, "", "  ")
+			if err == nil {
 				details.WriteString(prettyJSON.String())
 			} else {
-				details.WriteString(string(bodyBytes))
+				details.Write(bodyBytes)
 			}
 		} else {
 			body := string(bodyBytes)
 			if len(body) > 500 {
 				body = body[:500] + "... (truncated)"
 			}
+
 			details.WriteString(body)
 		}
 	} else {

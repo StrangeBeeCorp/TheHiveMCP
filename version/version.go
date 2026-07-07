@@ -1,3 +1,5 @@
+// Package version exposes build-time version metadata (git version, commit,
+// and build date) injected via -ldflags.
 package version
 
 import (
@@ -35,5 +37,6 @@ func GetFullVersion() string {
 	if !strings.HasPrefix(gitVersion, "v") {
 		return "v" + gitVersion
 	}
+
 	return gitVersion
 }

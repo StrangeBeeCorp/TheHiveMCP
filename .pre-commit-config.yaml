@@ -18,7 +18,7 @@ repos:
 
       - id: go-lint
         name: Go Lint
-        entry: make vetlint
+        entry: make lint
         language: system
         types: [go]
         pass_filenames: false

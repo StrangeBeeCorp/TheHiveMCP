@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -12,18 +13,19 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/stretchr/testify/require"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 // fakeHiveServer replaces a real TheHive (no Docker). Every SDK call hits POST
 // /api/v1/query; handle routes on the operation names in the body. scopeQueries
 // counts scope checks so tests can assert hits were re-scoped.
 type fakeHiveServer struct {
-	similarCases []map[string]interface{}
+	similarCases []map[string]any
 	// Per-parent similar cases (keyed by parent idOrName); falls back to similarCases when nil.
-	similarCasesByParent map[string][]map[string]interface{}
+	similarCasesByParent map[string][]map[string]any
 	scopeIDs             map[string]bool
 
 	// Concurrent handler goroutines update these: scopeQueries atomic; mu guards
@@ -39,34 +41,41 @@ func (f *fakeHiveServer) handle(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
 
 	var parsed struct {
-		Query []map[string]interface{} `json:"query"`
+		Query []map[string]any `json:"query"`
 	}
-	if err := json.Unmarshal(body, &parsed); err != nil {
+
+	err := json.Unmarshal(body, &parsed)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	names := operationNames(parsed.Query)
+
 	w.Header().Set("Content-Type", "application/json")
 
 	switch {
 	// Parent scope check (GetEntityIDsInScope).
-	case names[0] == "getAlert" && slices.Contains(names, "filter"):
+	case names[0] == opGetAlert && slices.Contains(names, "filter"):
 		idOrName, _ := parsed.Query[0]["idOrName"].(string)
 		f.recordScopeCheck(idOrName)
 		f.encodeScopeRows(w, f.inScopeSubset([]string{idOrName}))
 
 	// Per-hit scope check, fanned out concurrently one per hit (a single listCase
 	// _id-filter query was unreliable on real TheHive) — tests see one query per hit.
-	case names[0] == "getCase" && slices.Contains(names, "filter"):
+	case names[0] == opGetCase && slices.Contains(names, "filter"):
 		idOrName, _ := parsed.Query[0]["idOrName"].(string)
 		f.recordScopeCheck(idOrName)
 		f.encodeScopeRows(w, f.inScopeSubset([]string{idOrName}))
 
 	// The MCP sends the *Light op; its MCP-facing query name stays "similarCases".
-	case names[0] == "getAlert" && slices.Contains(names, "similarCasesLight"):
+	case names[0] == opGetAlert && slices.Contains(names, "similarCasesLight"):
 		idOrName, _ := parsed.Query[0]["idOrName"].(string)
-		_ = json.NewEncoder(w).Encode(f.similarCasesFor(idOrName))
+
+		encErr := json.NewEncoder(w).Encode(f.similarCasesFor(idOrName))
+		if encErr != nil {
+			http.Error(w, encErr.Error(), http.StatusInternalServerError)
+		}
 
 	default:
 		http.Error(w, "unexpected query: "+strings.Join(names, ","), http.StatusInternalServerError)
@@ -77,15 +86,17 @@ func (f *fakeHiveServer) recordScopeCheck(id string) {
 	f.scopeQueries.Add(1)
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	if f.scopeCheckedIDs != nil {
 		f.scopeCheckedIDs[id]++
 	}
 }
 
-func (f *fakeHiveServer) similarCasesFor(parentID string) []map[string]interface{} {
+func (f *fakeHiveServer) similarCasesFor(parentID string) []map[string]any {
 	if f.similarCasesByParent != nil {
 		return f.similarCasesByParent[parentID]
 	}
+
 	return f.similarCases
 }
 
@@ -96,61 +107,74 @@ func (f *fakeHiveServer) inScopeSubset(ids []string) []string {
 			kept = append(kept, id)
 		}
 	}
+
 	return kept
 }
 
 func (f *fakeHiveServer) encodeScopeRows(w http.ResponseWriter, ids []string) {
-	rows := make([]map[string]interface{}, 0, len(ids))
+	rows := make([]map[string]any, 0, len(ids))
 	for _, id := range ids {
-		rows = append(rows, map[string]interface{}{"_id": id})
+		rows = append(rows, map[string]any{fieldID: id})
 	}
-	_ = json.NewEncoder(w).Encode(rows)
+
+	encErr := json.NewEncoder(w).Encode(rows)
+	if encErr != nil {
+		http.Error(w, encErr.Error(), http.StatusInternalServerError)
+	}
 }
 
-func operationNames(query []map[string]interface{}) []string {
+func operationNames(query []map[string]any) []string {
 	names := make([]string, 0, len(query))
 	for _, op := range query {
 		if name, ok := op["_name"].(string); ok {
 			names = append(names, name)
 		}
 	}
+
 	return names
 }
 
 func newFakeHiveClient(t *testing.T, srv *httptest.Server) *thehive.APIClient {
 	t.Helper()
+
 	cfg := thehive.NewConfiguration()
 	cfg.Host = strings.TrimPrefix(srv.URL, "http://")
 	cfg.Scheme = "http"
+
 	return thehive.NewAPIClient(cfg)
 }
 
 // startFakeHive returns a context carrying a client wired to the fake server.
 func startFakeHive(t *testing.T, fake *fakeHiveServer) context.Context {
 	t.Helper()
+
 	srv := httptest.NewServer(http.HandlerFunc(fake.handle))
 	t.Cleanup(srv.Close)
 	client := newFakeHiveClient(t, srv)
+
 	return context.WithValue(context.Background(), types.HiveClientCtxKey, client)
 }
 
 // tlpLTE2Filters is the analyst permission filter shared by every scope test.
-func tlpLTE2Filters() map[string]interface{} {
-	return map[string]interface{}{
-		"_lte": map[string]interface{}{"_field": "tlp", "_value": 2},
+func tlpLTE2Filters() map[string]any {
+	return map[string]any{
+		opLTE: map[string]any{fieldField: fieldTLP, fieldValue: 2},
 	}
 }
 
-func hitIDs(t *testing.T, entity map[string]interface{}, queryName string) []string {
+func hitIDs(t *testing.T, entity map[string]any, queryName string) []string {
 	t.Helper()
-	hits, ok := entity[queryName].([]map[string]interface{})
+
+	hits, ok := entity[queryName].([]map[string]any)
 	require.True(t, ok, "%s must be present on the expanded entity", queryName)
+
 	ids := make([]string, 0, len(hits))
 	for _, h := range hits {
-		if id, ok := h["_id"].(string); ok {
+		if id, ok := h[fieldID].(string); ok {
 			ids = append(ids, id)
 		}
 	}
+
 	return ids
 }
 
@@ -166,18 +190,18 @@ func TestExpandSimilarityHitsAreScoped(t *testing.T) {
 
 	fake := &fakeHiveServer{
 		// Both cases, flat like the *Light op (no "case" wrapper).
-		similarCases: []map[string]interface{}{
+		similarCases: []map[string]any{
 			{
-				"_id":                    inScopeCaseID,
-				"title":                  "In scope case",
-				"tlp":                    2,
-				"similarObservableCount": 3,
+				fieldID:                     inScopeCaseID,
+				fieldTitle:                  "In scope case",
+				fieldTLP:                    2,
+				fieldSimilarObservableCount: 3,
 			},
 			{
-				"_id":                    outOfScopeID,
-				"title":                  "Secret RED case",
-				"tlp":                    3,
-				"similarObservableCount": 1,
+				fieldID:                     outOfScopeID,
+				fieldTitle:                  "Secret RED case",
+				fieldTLP:                    3,
+				fieldSimilarObservableCount: 1,
 			},
 		},
 		scopeIDs: map[string]bool{
@@ -188,14 +212,14 @@ func TestExpandSimilarityHitsAreScoped(t *testing.T) {
 
 	ctx := startFakeHive(t, fake)
 
-	entities := []map[string]interface{}{{"_id": parentAlertID}}
+	entities := []map[string]any{{fieldID: parentAlertID}}
 
 	expanded, err := ExpandEntitiesWithQueries(ctx, types.EntityTypeAlert,
-		entities, []string{"similarCases"}, tlpLTE2Filters())
+		entities, []string{querySimilarCases}, tlpLTE2Filters())
 	require.NoError(t, err)
 	require.Len(t, expanded, 1)
 
-	gotIDs := hitIDs(t, expanded[0], "similarCases")
+	gotIDs := hitIDs(t, expanded[0], querySimilarCases)
 
 	require.Contains(t, gotIDs, inScopeCaseID, "the in-scope (TLP:AMBER) case must be returned")
 	require.NotContains(t, gotIDs, outOfScopeID,
@@ -223,14 +247,14 @@ func TestExpandSimilarityHitsScopedAcrossParentsAreBatched(t *testing.T) {
 	)
 
 	fake := &fakeHiveServer{
-		similarCasesByParent: map[string][]map[string]interface{}{
+		similarCasesByParent: map[string][]map[string]any{
 			parentA: {
-				{"_id": sharedCaseID, "title": "Shared case", "tlp": 2, "similarObservableCount": 3},
-				{"_id": outOfScopeID, "title": "Secret RED case", "tlp": 3, "similarObservableCount": 1},
+				{fieldID: sharedCaseID, fieldTitle: "Shared case", fieldTLP: 2, fieldSimilarObservableCount: 3},
+				{fieldID: outOfScopeID, fieldTitle: "Secret RED case", fieldTLP: 3, fieldSimilarObservableCount: 1},
 			},
 			parentB: {
-				{"_id": sharedCaseID, "title": "Shared case", "tlp": 2, "similarObservableCount": 3},
-				{"_id": onlyBCaseID, "title": "Only B case", "tlp": 1, "similarObservableCount": 2},
+				{fieldID: sharedCaseID, fieldTitle: "Shared case", fieldTLP: 2, fieldSimilarObservableCount: 3},
+				{fieldID: onlyBCaseID, fieldTitle: "Only B case", fieldTLP: 1, fieldSimilarObservableCount: 2},
 			},
 		},
 		scopeIDs: map[string]bool{
@@ -245,19 +269,19 @@ func TestExpandSimilarityHitsScopedAcrossParentsAreBatched(t *testing.T) {
 
 	ctx := startFakeHive(t, fake)
 
-	entities := []map[string]interface{}{{"_id": parentA}, {"_id": parentB}}
+	entities := []map[string]any{{fieldID: parentA}, {fieldID: parentB}}
 
 	expanded, err := ExpandEntitiesWithQueries(ctx, types.EntityTypeAlert,
-		entities, []string{"similarCases"}, tlpLTE2Filters())
+		entities, []string{querySimilarCases}, tlpLTE2Filters())
 	require.NoError(t, err)
 	require.Len(t, expanded, 2)
 
-	aIDs := hitIDs(t, expanded[0], "similarCases")
+	aIDs := hitIDs(t, expanded[0], querySimilarCases)
 	require.Contains(t, aIDs, sharedCaseID, "parent A must keep the shared in-scope case")
 	require.NotContains(t, aIDs, outOfScopeID,
 		"PERMISSION BYPASS: the out-of-scope (TLP:RED) case leaked through parent A's expansion")
 
-	bIDs := hitIDs(t, expanded[1], "similarCases")
+	bIDs := hitIDs(t, expanded[1], querySimilarCases)
 	require.Contains(t, bIDs, sharedCaseID, "parent B must keep the shared in-scope case")
 	require.Contains(t, bIDs, onlyBCaseID, "parent B must keep its own in-scope case")
 
@@ -285,24 +309,24 @@ func TestExpandIndependentNonSimilarityQueryIsScoped(t *testing.T) {
 		queryName     = "linkedCasesTest" // deliberately NOT a similar* name
 	)
 
-	cannedHits := []map[string]interface{}{
-		{"_id": inScopeCaseID, "title": "In scope linked case"},
-		{"_id": outOfScopeID, "title": "Out of scope linked case"},
+	cannedHits := []map[string]any{
+		{fieldID: inScopeCaseID, fieldTitle: "In scope linked case"},
+		{fieldID: outOfScopeID, fieldTitle: "Out of scope linked case"},
 	}
 
 	// Synthetic independent, non-similarity descriptor: Func returns canned hits with
 	// no network call; per-hit scope checks still hit the fake server. Restored via defer.
 	queryRegistry[types.EntityTypeAlert][queryName] = QueryDescriptor{
-		Func: func(_ context.Context, _ *thehive.APIClient, _ string) ([]map[string]interface{}, error) {
+		Func: func(_ context.Context, _ *thehive.APIClient, _ string) ([]map[string]any, error) {
 			// Fresh copy so the test's input is not mutated by projection.
-			out := make([]map[string]interface{}, len(cannedHits))
+			out := make([]map[string]any, len(cannedHits))
 			for i, h := range cannedHits {
-				cp := make(map[string]interface{}, len(h))
-				for k, v := range h {
-					cp[k] = v
-				}
+				cp := make(map[string]any, len(h))
+				maps.Copy(cp, h)
+
 				out[i] = cp
 			}
+
 			return out, nil
 		},
 		EntityType:            types.EntityTypeCase,
@@ -318,7 +342,7 @@ func TestExpandIndependentNonSimilarityQueryIsScoped(t *testing.T) {
 	}
 	ctx := startFakeHive(t, fake)
 
-	entities := []map[string]interface{}{{"_id": parentAlertID}}
+	entities := []map[string]any{{fieldID: parentAlertID}}
 
 	expanded, err := ExpandEntitiesWithQueries(ctx, types.EntityTypeAlert,
 		entities, []string{queryName}, tlpLTE2Filters())
@@ -346,8 +370,8 @@ func TestExpandChildQueryIsNotRescoped(t *testing.T) {
 	)
 
 	queryRegistry[types.EntityTypeAlert][queryName] = QueryDescriptor{
-		Func: func(_ context.Context, _ *thehive.APIClient, _ string) ([]map[string]interface{}, error) {
-			return []map[string]interface{}{{"_id": childID, "dataType": "ip"}}, nil
+		Func: func(_ context.Context, _ *thehive.APIClient, _ string) ([]map[string]any, error) {
+			return []map[string]any{{fieldID: childID, fieldDataType: "ip"}}, nil
 		},
 		EntityType:            types.EntityTypeObservable,
 		ResultsAreIndependent: false,
@@ -359,7 +383,7 @@ func TestExpandChildQueryIsNotRescoped(t *testing.T) {
 	}
 	ctx := startFakeHive(t, fake)
 
-	entities := []map[string]interface{}{{"_id": parentAlertID}}
+	entities := []map[string]any{{fieldID: parentAlertID}}
 
 	expanded, err := ExpandEntitiesWithQueries(ctx, types.EntityTypeAlert,
 		entities, []string{queryName}, tlpLTE2Filters())

@@ -6,22 +6,26 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/mark3labs/mcp-go/mcp"
+
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func (t *ResourceTool) Handle(ctx context.Context, req mcp.CallToolRequest, params GetResourceParams) (GetResourceResult, error) {
+// Handle fetches the resource or category identified by params.URI.
+func (t *Tool) Handle(ctx context.Context, _ mcp.CallToolRequest, params GetResourceParams) (GetResourceResult, error) {
 	slog.Info("Fetching resource", "uri", params.URI)
 
 	return t.fetchUnified(ctx, params.URI)
 }
 
-func (t *ResourceTool) fetchUnified(ctx context.Context, uri string) (GetResourceResult, error) {
+func (t *Tool) fetchUnified(ctx context.Context, uri string) (GetResourceResult, error) {
 	category := strings.TrimPrefix(uri, "hive://")
 
-	var parameters map[string]any
-	var err error
+	var (
+		parameters map[string]any
+		err        error
+	)
 	if strings.Contains(uri, "?") {
 		uri, parameters, err = utils.ParseURIParameters(uri)
 		if err != nil {
@@ -31,7 +35,6 @@ func (t *ResourceTool) fetchUnified(ctx context.Context, uri string) (GetResourc
 
 	// Try to fetch as a specific resource before falling back to category browse
 	resource, handler, resourceErr := t.resourceRegistry.Get(uri)
-
 	if resourceErr == nil {
 		readRequest := mcp.ReadResourceRequest{
 			Params: mcp.ReadResourceParams{
@@ -61,10 +64,12 @@ func (t *ResourceTool) fetchUnified(ctx context.Context, uri string) (GetResourc
 		contentText := textContent.Text
 		mimeType := textContent.MIMEType
 
-		var data interface{}
+		var data any
+
 		resourceContent := NewResourceContent(uri, resource.Name, mimeType)
 
-		if err := json.Unmarshal([]byte(contentText), &data); err != nil {
+		err = json.Unmarshal([]byte(contentText), &data)
+		if err != nil {
 			resourceContent.SetTextContent(contentText)
 		} else {
 			resourceContent.SetDataContent(data)

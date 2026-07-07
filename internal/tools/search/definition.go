@@ -1,32 +1,41 @@
+// Package search implements the MCP search tool that queries TheHive entities
+// using the TheHive filter DSL.
 package search
 
 import (
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 )
 
-type SearchTool struct{}
+// Tool is the MCP tool that searches TheHive entities.
+type Tool struct{}
 
-func NewSearchTool() *SearchTool {
-	return &SearchTool{}
+// NewSearchTool returns a new Tool.
+func NewSearchTool() *Tool {
+	return &Tool{}
 }
 
-func (t *SearchTool) Name() string {
+// Name returns the MCP tool name.
+func (t *Tool) Name() string {
 	return tools.ToolNameSearchEntities
 }
 
-func (t *SearchTool) Handler() server.ToolHandlerFunc {
+// Handler returns the validated MCP tool handler.
+func (t *Tool) Handler() server.ToolHandlerFunc {
 	return tools.WithValidation(t)
 }
 
-func (t *SearchTool) HasUntrustedData() bool { return true }
+// HasUntrustedData reports that results may contain untrusted user data.
+func (t *Tool) HasUntrustedData() bool { return true }
 
-func (t *SearchTool) Definition() mcp.Tool {
+// Definition returns the MCP tool definition.
+func (t *Tool) Definition() mcp.Tool {
 	return mcp.NewTool(
 		t.Name(),
 		mcp.WithDescription(SearchEntitiesToolDescription),
-		mcp.WithInputSchema[SearchEntitiesParams](),
-		mcp.WithOutputSchema[SearchEntitiesResult](),
+		mcp.WithInputSchema[EntitiesParams](),
+		mcp.WithOutputSchema[EntitiesResult](),
 	)
 }

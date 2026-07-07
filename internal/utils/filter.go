@@ -2,16 +2,21 @@ package utils
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 )
 
+// CreateFilterFromJSONString parses a JSON object string into a TheHive named
+// filter operation.
 func CreateFilterFromJSONString(filterString string) (thehive.InputQueryNamedOperation, error) {
-	var filterMap map[string]interface{}
-	if err := json.Unmarshal([]byte(filterString), &filterMap); err != nil {
-		return thehive.InputQueryNamedOperation{}, err
+	var filterMap map[string]any
+
+	err := json.Unmarshal([]byte(filterString), &filterMap)
+	if err != nil {
+		return thehive.InputQueryNamedOperation{}, fmt.Errorf("parsing filter JSON: %w", err)
 	}
 
 	return thehive.MapmapOfStringAnyAsInputQueryNamedOperation(&filterMap), nil
@@ -20,10 +25,12 @@ func CreateFilterFromJSONString(filterString string) (thehive.InputQueryNamedOpe
 // parseDateStringToTimestamp returns epoch millis.
 func parseDateStringToTimestamp(dateStr string) (int64, error) {
 	layout := "2006-01-02T15:04:05"
+
 	t, err := time.Parse(layout, dateStr)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("parsing date %q: %w", dateStr, err)
 	}
+
 	return t.UnixMilli(), nil
 }
 
@@ -39,6 +46,7 @@ func normalizeFilterKey(key string) string {
 	if len(key) >= 2 && strings.HasPrefix(key, `"`) && strings.HasSuffix(key, `"`) {
 		key = strings.TrimSpace(key[1 : len(key)-1])
 	}
+
 	return key
 }
 
@@ -49,57 +57,64 @@ func normalizeFilterKey(key string) string {
 //
 // Apply only to FILTER maps, never to entity-write payloads — a created entity
 // may legitimately carry a field whose name needs no repair.
-func NormalizeFilterKeys(filterMap map[string]interface{}) map[string]interface{} {
+func NormalizeFilterKeys(filterMap map[string]any) map[string]any {
 	// Collect renames first: mutating a map while ranging over it is UB for
 	// newly-added keys in Go. Recursion is safe in the same pass (mutates the
 	// nested map, not filterMap).
 	renames := make(map[string]string)
+
 	for key, value := range filterMap {
 		if normalized := normalizeFilterKey(key); normalized != key {
 			renames[key] = normalized
 		}
+
 		switch v := value.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			NormalizeFilterKeys(v)
-		case []interface{}:
+		case []any:
 			for i, item := range v {
-				if itemMap, ok := item.(map[string]interface{}); ok {
+				if itemMap, ok := item.(map[string]any); ok {
 					NormalizeFilterKeys(itemMap)
 					v[i] = itemMap
 				}
 			}
 		}
 	}
+
 	for old, normalized := range renames {
 		// If the clean key already exists (both `_field` and `"_field"` present),
 		// keep it and drop the malformed duplicate rather than clobbering.
 		if _, clean := filterMap[normalized]; !clean {
 			filterMap[normalized] = filterMap[old]
 		}
+
 		delete(filterMap, old)
 	}
+
 	return filterMap
 }
 
 // TranslateDatesToTimestamps recursively converts date strings in a filter map
 // to epoch millis.
-func TranslateDatesToTimestamps(filterMap map[string]interface{}) map[string]interface{} {
+func TranslateDatesToTimestamps(filterMap map[string]any) map[string]any {
 	for key, value := range filterMap {
 		switch v := value.(type) {
 		case string:
-			if timestamp, err := parseDateStringToTimestamp(v); err == nil {
+			timestamp, err := parseDateStringToTimestamp(v)
+			if err == nil {
 				filterMap[key] = timestamp
 			}
-		case map[string]interface{}:
+		case map[string]any:
 			TranslateDatesToTimestamps(v)
-		case []interface{}:
+		case []any:
 			for i, item := range v {
-				if itemMap, ok := item.(map[string]interface{}); ok {
+				if itemMap, ok := item.(map[string]any); ok {
 					TranslateDatesToTimestamps(itemMap)
 					v[i] = itemMap
 				}
 			}
 		}
 	}
+
 	return filterMap
 }

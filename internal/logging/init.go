@@ -1,17 +1,29 @@
+// Package logging provides logger initialization, MCP server logging hooks,
+// and an HTTP round-tripper that logs TheHive requests and responses.
 package logging
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 )
 
+// ParseLevel parses a textual log level (e.g. "info") into a slog.Level.
 func ParseLevel(s string) (slog.Level, error) {
 	var level slog.Level
-	var err = level.UnmarshalText([]byte(s))
-	return level, err
+
+	err := level.UnmarshalText([]byte(s))
+	if err != nil {
+		return level, fmt.Errorf("parsing log level %q: %w", s, err)
+	}
+
+	return level, nil
 }
 
-func InitLogger(levelStr string, transportType string) *slog.Logger {
+// InitLogger builds a JSON slog.Logger at the given level, sets it as the
+// default, and returns it. In stdio transport mode it writes to stderr so
+// stdout stays reserved for JSON-RPC.
+func InitLogger(levelStr, transportType string) *slog.Logger {
 	level, err := ParseLevel(levelStr)
 	if err != nil {
 		slog.Error("Invalid log level", "level", levelStr, "error", err)
@@ -30,5 +42,6 @@ func InitLogger(levelStr string, transportType string) *slog.Logger {
 		Level: level,
 	}))
 	slog.SetDefault(logger)
+
 	return logger
 }

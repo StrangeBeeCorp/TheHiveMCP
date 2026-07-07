@@ -10,6 +10,7 @@ import (
 
 func TestMain(m *testing.M) {
 	code := m.Run()
+
 	testutils.TeardownContainers(context.Background())
 	os.Exit(code)
 }

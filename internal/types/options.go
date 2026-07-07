@@ -1,6 +1,7 @@
 package types
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -10,6 +11,8 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/version"
 )
 
+// TheHiveMcpDefaultOptions holds the resolved server configuration built from
+// CLI flags and environment variables.
 type TheHiveMcpDefaultOptions struct {
 	TheHiveURL          string
 	TheHiveAPIKey       string
@@ -38,45 +41,55 @@ func defaultToEnv(envKey EnvKey, defaultValue string) string {
 	if value, exists := os.LookupEnv(string(envKey)); exists {
 		return value
 	}
+
 	return defaultValue
 }
 
 func defaultToEnvBool(envKey EnvKey, defaultValue bool) bool {
 	if value, exists := os.LookupEnv(string(envKey)); exists {
-		if boolValue, err := strconv.ParseBool(value); err == nil {
+		boolValue, err := strconv.ParseBool(value)
+		if err == nil {
 			return boolValue
 		}
 	}
+
 	return defaultValue
 }
 
 func splitCommaSeparated(value string) []string {
 	var entries []string
-	for _, entry := range strings.Split(value, ",") {
+
+	for entry := range strings.SplitSeq(value, ",") {
 		if trimmed := strings.TrimSpace(entry); trimmed != "" {
 			entries = append(entries, trimmed)
 		}
 	}
+
 	return entries
 }
 
+// NewTheHiveMcpDefaultOptions parses CLI flags (falling back to environment
+// variables) and returns the resolved server options.
 func NewTheHiveMcpDefaultOptions() (*TheHiveMcpDefaultOptions, error) {
-	var showVersion bool
-	var transport string
-	var bindAddr string
-	var theHiveURL string
-	var theHiveAPIKey string
-	var theHiveUsername string
-	var theHivePassword string
-	var theHiveOrganisation string
-	var theHiveURLAllowlist string
-	var allowEnvCredentialFallback bool
-	var authValidationCacheTTL string
-	var permissionsConfigPath string
-	var mcpEndpointPath string
-	var mcpHeartbeatInterval string
-	var logLevel string
-	var cortexID string
+	var (
+		showVersion                bool
+		transport                  string
+		bindAddr                   string
+		theHiveURL                 string
+		theHiveAPIKey              string
+		theHiveUsername            string
+		theHivePassword            string
+		theHiveOrganisation        string
+		theHiveURLAllowlist        string
+		allowEnvCredentialFallback bool
+		authValidationCacheTTL     string
+		permissionsConfigPath      string
+		mcpEndpointPath            string
+		mcpHeartbeatInterval       string
+		logLevel                   string
+		cortexID                   string
+	)
+
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
 	flag.StringVar(&transport, string(FlagVarTransportType), "http", "Transport type (stdio, or http)")
 	flag.StringVar(&bindAddr, string(FlagVarBindAddr), "", "Address to listen on for HTTP server (overrides env vars)")
@@ -102,10 +115,12 @@ func NewTheHiveMcpDefaultOptions() (*TheHiveMcpDefaultOptions, error) {
 
 	if bindAddr == "" && transport == "http" {
 		host := os.Getenv(string(EnvKeyBindHost))
+
 		port := os.Getenv(string(EnvKeyMCPPort))
 		if host == "" || port == "" {
-			return nil, fmt.Errorf("MCP server address and port must be set to use http mode, either via env vars MCP_URL and MCP_PORT, or by omitting the -addr flag")
+			return nil, errors.New("MCP server address and port must be set to use http mode, either via env vars MCP_URL and MCP_PORT, or by omitting the -addr flag")
 		}
+
 		bindAddr = fmt.Sprintf("%s:%s", host, port)
 	}
 

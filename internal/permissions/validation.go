@@ -1,30 +1,36 @@
 package permissions
 
 import (
+	"errors"
 	"fmt"
 )
 
+// Validate validates a permissions configuration
 func Validate(config *Config) error {
 	if config == nil {
-		return fmt.Errorf("config is nil")
+		return errors.New("config is nil")
 	}
 
 	if config.Version == "" {
-		return fmt.Errorf("version is required")
-	}
-	if config.Version != "1.0" {
-		return fmt.Errorf("unsupported version: %s (supported: 1.0)", config.Version)
+		return errors.New("version is required")
 	}
 
-	if err := validateTools(config.Permissions.Tools); err != nil {
+	if config.Version != versionV1 {
+		return fmt.Errorf("unsupported version: %s (supported: %s)", config.Version, versionV1)
+	}
+
+	err := validateTools(config.Permissions.Tools)
+	if err != nil {
 		return fmt.Errorf("invalid tools configuration: %w", err)
 	}
 
-	if err := validateAutomationPermissions("analyzers", config.Permissions.Analyzers); err != nil {
+	err = validateAutomationPermissions("analyzers", config.Permissions.Analyzers)
+	if err != nil {
 		return err
 	}
 
-	if err := validateAutomationPermissions("responders", config.Permissions.Responders); err != nil {
+	err = validateAutomationPermissions("responders", config.Permissions.Responders)
+	if err != nil {
 		return err
 	}
 
@@ -33,8 +39,8 @@ func Validate(config *Config) error {
 
 func validateTools(tools map[string]ToolPermission) error {
 	validTools := map[string]bool{
-		"search-entities":    true,
-		"manage-entities":    true,
+		toolSearchEntities:   true,
+		toolManageEntities:   true,
 		"execute-automation": true,
 		"get-resource":       true,
 	}
@@ -49,15 +55,15 @@ func validateTools(tools map[string]ToolPermission) error {
 }
 
 func validateAutomationPermissions(name string, perms AutomationPermissions) error {
-	if perms.Mode != "" && perms.Mode != "allow_list" && perms.Mode != "block_list" {
+	if perms.Mode != "" && perms.Mode != modeAllowList && perms.Mode != modeBlockList {
 		return fmt.Errorf("invalid %s mode: %s (must be 'allow_list' or 'block_list')", name, perms.Mode)
 	}
 
-	if perms.Mode == "allow_list" && len(perms.Blocked) > 0 {
+	if perms.Mode == modeAllowList && len(perms.Blocked) > 0 {
 		return fmt.Errorf("%s: cannot specify 'blocked' list when mode is 'allow_list'", name)
 	}
 
-	if perms.Mode == "block_list" && len(perms.Allowed) > 0 {
+	if perms.Mode == modeBlockList && len(perms.Allowed) > 0 {
 		return fmt.Errorf("%s: cannot specify 'allowed' list when mode is 'block_list'", name)
 	}
 

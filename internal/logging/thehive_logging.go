@@ -10,11 +10,13 @@ import (
 	"time"
 )
 
-type LoggingTransport struct {
+// Transport wraps an http.RoundTripper to add structured logging
+type Transport struct {
 	Transport http.RoundTripper
 }
 
-func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+// RoundTrip implements http.RoundTripper interface
+func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	start := time.Now()
 
 	t.logRequest(req, start)
@@ -25,17 +27,22 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 
 	t.logResponse(req, resp, err, duration)
 
-	return resp, err
+	if err != nil {
+		return resp, fmt.Errorf("round trip %s %s: %w", req.Method, req.URL, err)
+	}
+
+	return resp, nil
 }
 
-func (t *LoggingTransport) transport() http.RoundTripper {
+func (t *Transport) transport() http.RoundTripper {
 	if t.Transport != nil {
 		return t.Transport
 	}
+
 	return http.DefaultTransport
 }
 
-func (t *LoggingTransport) logRequest(req *http.Request, start time.Time) {
+func (t *Transport) logRequest(req *http.Request, start time.Time) {
 	// Restore body after reading so the transport can still send it.
 	var bodyBytes []byte
 	if req.Body != nil {
@@ -53,7 +60,7 @@ func (t *LoggingTransport) logRequest(req *http.Request, start time.Time) {
 	)
 }
 
-func (t *LoggingTransport) logResponse(req *http.Request, resp *http.Response, err error, duration time.Duration) {
+func (t *Transport) logResponse(req *http.Request, resp *http.Response, err error, duration time.Duration) {
 	if err != nil {
 		slog.Error("HTTP request failed",
 			slog.String("method", req.Method),
@@ -62,14 +69,16 @@ func (t *LoggingTransport) logResponse(req *http.Request, resp *http.Response, e
 			slog.Duration("duration", duration),
 			slog.String("request_id", t.getRequestID(req)),
 		)
+
 		return
 	}
 
 	level := slog.LevelInfo
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= http.StatusBadRequest {
 		level = slog.LevelWarn
 	}
-	if resp.StatusCode >= 500 {
+
+	if resp.StatusCode >= http.StatusInternalServerError {
 		level = slog.LevelError
 	}
 
@@ -85,9 +94,10 @@ func (t *LoggingTransport) logResponse(req *http.Request, resp *http.Response, e
 	)
 }
 
-func (t *LoggingTransport) getRequestID(req *http.Request) string {
+func (t *Transport) getRequestID(req *http.Request) string {
 	if id := req.Header.Get("X-Request-ID"); id != "" {
 		return id
 	}
+
 	return fmt.Sprintf("%p", req)
 }

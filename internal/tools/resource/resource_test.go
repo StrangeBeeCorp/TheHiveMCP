@@ -3,45 +3,20 @@ package resource_test
 import (
 	"testing"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGetResourceCatalog(t *testing.T) {
-	testutils.SetupTestWithCleanup(t)
-	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+	mcpClient := newResourceClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name:      "get-resource",
-			Arguments: map[string]any{},
-		},
-	}
+	structuredData := getResourceStructured(t, mcpClient, "")
 
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	requireResourceMeta(t, structuredData, "hive://catalog", "Resource Catalog", mimeJSON)
 
-	structuredData, ok := result.StructuredContent.(map[string]any)
+	data, ok := structuredData[fieldData].(map[string]any)
 	require.True(t, ok)
 
-	require.Equal(t, "hive://catalog", structuredData["uri"])
-	require.Equal(t, "Resource Catalog", structuredData["name"])
-	require.Equal(t, "application/json", structuredData["mimeType"])
-
-	data, ok := structuredData["data"].(map[string]any)
-	require.True(t, ok)
-
-	categories, ok := data["categories"].([]any)
-	require.True(t, ok)
-	require.NotEmpty(t, categories)
-
-	categoryNames := make([]string, 0)
-	for _, cat := range categories {
-		catMap := cat.(map[string]any)
-		categoryNames = append(categoryNames, catMap["name"].(string))
-	}
+	categoryNames := collectNames(t, data, fieldCategories, fieldName)
 
 	require.Contains(t, categoryNames, "config")
 	require.Contains(t, categoryNames, "schema")
@@ -50,36 +25,13 @@ func TestGetResourceCatalog(t *testing.T) {
 }
 
 func TestGetResourceBrowseSchemaCategory(t *testing.T) {
-	testutils.SetupTestWithCleanup(t)
-	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+	mcpClient := newResourceClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "get-resource",
-			Arguments: map[string]any{
-				"uri": "schema",
-			},
-		},
-	}
+	structuredData := getResourceStructured(t, mcpClient, "schema")
 
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	require.Equal(t, "hive://schema", structuredData[argURI])
 
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	require.Equal(t, "hive://schema", structuredData["uri"])
-
-	resources, ok := structuredData["resources"].([]any)
-	require.True(t, ok)
-	require.NotEmpty(t, resources)
-
-	resourceNames := make([]string, 0)
-	for _, res := range resources {
-		resMap := res.(map[string]any)
-		resourceNames = append(resourceNames, resMap["name"].(string))
-	}
+	resourceNames := collectNames(t, structuredData, fieldResources, fieldName)
 
 	require.Contains(t, resourceNames, "Alert Output Schema")
 	require.Contains(t, resourceNames, "Case Output Schema")
@@ -88,30 +40,13 @@ func TestGetResourceBrowseSchemaCategory(t *testing.T) {
 }
 
 func TestGetResourceFetchAlertSchema(t *testing.T) {
-	testutils.SetupTestWithCleanup(t)
-	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+	mcpClient := newResourceClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "get-resource",
-			Arguments: map[string]any{
-				"uri": "hive://schema/alert",
-			},
-		},
-	}
+	structuredData := getResourceStructured(t, mcpClient, "hive://schema/alert")
 
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	requireResourceMeta(t, structuredData, "hive://schema/alert", "Alert Output Schema", mimeJSON)
 
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	require.Equal(t, "hive://schema/alert", structuredData["uri"])
-	require.Equal(t, "Alert Output Schema", structuredData["name"])
-	require.Equal(t, "application/json", structuredData["mimeType"])
-
-	data, ok := structuredData["data"].(map[string]any)
+	data, ok := structuredData[fieldData].(map[string]any)
 	require.True(t, ok)
 
 	fields, ok := data["properties"].(map[string]any)
@@ -119,8 +54,8 @@ func TestGetResourceFetchAlertSchema(t *testing.T) {
 	require.NotEmpty(t, fields)
 
 	fieldNames := make([]string, 0)
-	for fieldName := range fields {
-		fieldNames = append(fieldNames, fieldName)
+	for name := range fields {
+		fieldNames = append(fieldNames, name)
 	}
 
 	require.Contains(t, fieldNames, "title")
@@ -130,30 +65,13 @@ func TestGetResourceFetchAlertSchema(t *testing.T) {
 }
 
 func TestGetResourceFetchCurrentUser(t *testing.T) {
-	testutils.SetupTestWithCleanup(t)
-	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+	mcpClient := newResourceClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "get-resource",
-			Arguments: map[string]any{
-				"uri": "hive://config/current-user",
-			},
-		},
-	}
+	structuredData := getResourceStructured(t, mcpClient, "hive://config/current-user")
 
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	requireResourceMeta(t, structuredData, "hive://config/current-user", "Current User", mimeJSON)
 
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	require.Equal(t, "hive://config/current-user", structuredData["uri"])
-	require.Equal(t, "Current User", structuredData["name"])
-	require.Equal(t, "application/json", structuredData["mimeType"])
-
-	data, ok := structuredData["data"].(map[string]any)
+	data, ok := structuredData[fieldData].(map[string]any)
 	require.True(t, ok)
 
 	require.Contains(t, data, "login")
@@ -165,28 +83,11 @@ func TestGetResourceFetchCurrentUser(t *testing.T) {
 }
 
 func TestGetResourceFetchDocumentation(t *testing.T) {
-	testutils.SetupTestWithCleanup(t)
-	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+	mcpClient := newResourceClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "get-resource",
-			Arguments: map[string]any{
-				"uri": "hive://docs/entities/case",
-			},
-		},
-	}
+	structuredData := getResourceStructured(t, mcpClient, "hive://docs/entities/case")
 
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	require.Equal(t, "hive://docs/entities/case", structuredData["uri"])
-	require.Equal(t, "Case Documentation", structuredData["name"])
-	require.Equal(t, "text/plain", structuredData["mimeType"])
+	requireResourceMeta(t, structuredData, "hive://docs/entities/case", "Case Documentation", "text/plain")
 
 	data, ok := structuredData["content"].(string)
 	require.True(t, ok)
@@ -196,36 +97,13 @@ func TestGetResourceFetchDocumentation(t *testing.T) {
 }
 
 func TestGetResourceBrowseMetadataCategory(t *testing.T) {
-	testutils.SetupTestWithCleanup(t)
-	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+	mcpClient := newResourceClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "get-resource",
-			Arguments: map[string]any{
-				"uri": "metadata",
-			},
-		},
-	}
+	structuredData := getResourceStructured(t, mcpClient, "metadata")
 
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	require.Equal(t, "hive://metadata", structuredData[argURI])
 
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	require.Equal(t, "hive://metadata", structuredData["uri"])
-
-	subcategories, ok := structuredData["subcategories"].([]any)
-	require.True(t, ok)
-	require.NotEmpty(t, subcategories)
-
-	subcategoryNames := make([]string, 0)
-	for _, subcat := range subcategories {
-		subcatMap := subcat.(map[string]any)
-		subcategoryNames = append(subcategoryNames, subcatMap["name"].(string))
-	}
+	subcategoryNames := collectNames(t, structuredData, fieldSubcategories, fieldName)
 
 	require.Contains(t, subcategoryNames, "entities")
 	require.Contains(t, subcategoryNames, "automation")
@@ -233,128 +111,70 @@ func TestGetResourceBrowseMetadataCategory(t *testing.T) {
 }
 
 func TestGetResourceFetchCaseStatuses(t *testing.T) {
-	testutils.SetupTestWithCleanup(t)
-	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+	mcpClient := newResourceClient(t)
 
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "get-resource",
-			Arguments: map[string]any{
-				"uri": "hive://metadata/entities/case/statuses",
-			},
-		},
-	}
+	structuredData := getResourceStructured(t, mcpClient, "hive://metadata/entities/case/statuses")
 
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	require.Equal(t, "hive://metadata/entities/case/statuses", structuredData[argURI])
+	require.Equal(t, "Case Statuses", structuredData[fieldName])
 
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	require.Equal(t, "hive://metadata/entities/case/statuses", structuredData["uri"])
-	require.Equal(t, "Case Statuses", structuredData["name"])
-
-	statuses, ok := structuredData["data"].([]any)
-	require.True(t, ok)
-	require.NotEmpty(t, statuses)
-
-	statusValues := make([]string, 0)
-	for _, status := range statuses {
-		statusMap := status.(map[string]any)
-		statusValues = append(statusValues, statusMap["value"].(string))
-	}
+	statusValues := collectNames(t, structuredData, fieldData, fieldValue)
 
 	require.Contains(t, statusValues, "New")
 	require.Contains(t, statusValues, "InProgress")
 }
 
 func TestGetResourceTrailingSlashEquivalence(t *testing.T) {
-	testutils.SetupTestWithCleanup(t)
-	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+	mcpClient := newResourceClient(t)
 
-	noSlashRequest := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "get-resource",
-			Arguments: map[string]any{
-				"uri": "metadata/automation",
-			},
-		},
-	}
+	noSlashData := getResourceStructured(t, mcpClient, "metadata/automation")
+	withSlashData := getResourceStructured(t, mcpClient, "hive://metadata/automation/")
 
-	noSlashResult, err := mcpClient.CallTool(t.Context(), noSlashRequest)
-	require.NoError(t, err, "URI without trailing slash should work")
-	require.NotNil(t, noSlashResult)
-
-	noSlashData, ok := noSlashResult.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	withSlashRequest := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "get-resource",
-			Arguments: map[string]any{
-				"uri": "hive://metadata/automation/",
-			},
-		},
-	}
-
-	withSlashResult, err := mcpClient.CallTool(t.Context(), withSlashRequest)
-	require.NoError(t, err, "URI with trailing slash should work")
-	require.NotNil(t, withSlashResult)
-
-	withSlashData, ok := withSlashResult.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	require.Equal(t, "hive://metadata/automation", noSlashData["uri"])
-	require.Equal(t, "hive://metadata/automation", withSlashData["uri"])
-	require.Equal(t, noSlashData["subcategories"], withSlashData["subcategories"])
+	require.Equal(t, "hive://metadata/automation", noSlashData[argURI])
+	require.Equal(t, "hive://metadata/automation", withSlashData[argURI])
+	require.Equal(t, noSlashData[fieldSubcategories], withSlashData[fieldSubcategories])
 
 	// Compare resources as sets: order may vary.
-	noSlashResources, ok := noSlashData["resources"].([]any)
+	noSlashResources, ok := noSlashData[fieldResources].([]any)
 	require.True(t, ok)
-	withSlashResources, ok := withSlashData["resources"].([]any)
+	withSlashResources, ok := withSlashData[fieldResources].([]any)
 	require.True(t, ok)
 
-	require.Equal(t, len(noSlashResources), len(withSlashResources), "should have same number of resources")
+	require.Len(t, withSlashResources, len(noSlashResources), "should have same number of resources")
 
 	noSlashResourcesMap := make(map[string]any)
 	withSlashResourcesMap := make(map[string]any)
 
 	for _, res := range noSlashResources {
-		resMap := res.(map[string]any)
-		noSlashResourcesMap[resMap["name"].(string)] = resMap
+		resMap, ok := res.(map[string]any)
+		require.True(t, ok)
+
+		name, ok := resMap[fieldName].(string)
+		require.True(t, ok)
+
+		noSlashResourcesMap[name] = resMap
 	}
 
 	for _, res := range withSlashResources {
-		resMap := res.(map[string]any)
-		withSlashResourcesMap[resMap["name"].(string)] = resMap
+		resMap, ok := res.(map[string]any)
+		require.True(t, ok)
+
+		name, ok := resMap[fieldName].(string)
+		require.True(t, ok)
+
+		withSlashResourcesMap[name] = resMap
 	}
 
 	require.Equal(t, noSlashResourcesMap, withSlashResourcesMap, "resources should be equivalent regardless of order")
 }
 
 func TestGetResourceResourcesFieldBehavior(t *testing.T) {
-	testutils.SetupTestWithCleanup(t)
-	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+	mcpClient := newResourceClient(t)
 
 	// Browse a category that has only subcategories (no direct resources)
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "get-resource",
-			Arguments: map[string]any{
-				"uri": "metadata",
-			},
-		},
-	}
+	structuredData := getResourceStructured(t, mcpClient, "metadata")
 
-	result, err := mcpClient.CallTool(t.Context(), request)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	structuredData, ok := result.StructuredContent.(map[string]any)
-	require.True(t, ok)
-
-	subcategories, exists := structuredData["subcategories"]
+	subcategories, exists := structuredData[fieldSubcategories]
 	require.True(t, exists, "subcategories field should exist")
 	require.NotNil(t, subcategories, "subcategories should not be null")
 

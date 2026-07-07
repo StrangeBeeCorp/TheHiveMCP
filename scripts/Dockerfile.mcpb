@@ -1,11 +1,13 @@
 # Dockerfile for MCPB generation in CI
 FROM node:24-alpine
 
-# Install required tools
-RUN apk add --no-cache bash git
-
-# Install MCPB tool
-RUN npm install -g @anthropic-ai/mcpb
+# Install required tools and the MCPB packer.
+# apk versions are intentionally unpinned (DL3018): node:24-alpine floats its
+# Alpine minor, so a pinned bash=<rev>/git=<rev> would break the build on the
+# next repo bump. The npm packer is pinned for reproducible CI artifacts.
+# hadolint ignore=DL3018
+RUN apk add --no-cache bash git \
+    && npm install -g @anthropic-ai/mcpb@2.1.2
 
 # Copy logo and scripts to /usr/local/bin
 COPY docs/images/theHivelogo.png /usr/local/share/icon.png

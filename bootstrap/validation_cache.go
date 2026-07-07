@@ -23,15 +23,11 @@ func newValidationCache(ttl time.Duration) *validationCache {
 	if ttl <= 0 {
 		ttl = DefaultAuthValidationCacheTTL
 	}
+
 	return &validationCache{
 		ttl:     ttl,
 		expires: make(map[[sha256.Size]byte]time.Time),
 	}
-}
-
-// key hashes the credentials so the raw API key isn't retained in memory.
-func (c *validationCache) key(creds *TheHiveCredentials) [sha256.Size]byte {
-	return sha256.Sum256([]byte(fmt.Sprintf("%s\x00%s\x00%s", creds.URL, creds.APIKey, creds.Organisation)))
 }
 
 // IsValid reports whether the credentials were successfully validated within
@@ -46,10 +42,12 @@ func (c *validationCache) IsValid(creds *TheHiveCredentials) bool {
 	if !ok {
 		return false
 	}
+
 	if time.Now().After(expiry) {
 		delete(c.expires, key)
 		return false
 	}
+
 	return true
 }
 
@@ -60,4 +58,10 @@ func (c *validationCache) MarkValid(creds *TheHiveCredentials) {
 	defer c.mu.Unlock()
 
 	c.expires[key] = time.Now().Add(c.ttl)
+}
+
+// key derives the cache key from the credentials. The raw API key is hashed so
+// it is not kept in memory longer than necessary.
+func (c *validationCache) key(creds *TheHiveCredentials) [sha256.Size]byte {
+	return sha256.Sum256(fmt.Appendf(nil, "%s\x00%s\x00%s", creds.URL, creds.APIKey, creds.Organisation))
 }

@@ -27,15 +27,23 @@ ARG VERSION
 
 # Build with version information injected via ldflags
 RUN go build \
-    -ldflags="-s -w -X 'github.com/StrangeBeeCorp/TheHiveMCP/version.buildDate=${BUILD_DATE}' -X 'github.com/StrangeBeeCorp/TheHiveMCP/version.gitCommit=${GIT_COMMIT}' -X 'github.com/StrangeBeeCorp/TheHiveMCP/version.gitVersion=${VERSION}'" \
+    -ldflags="-s -w \
+        -X 'github.com/StrangeBeeCorp/TheHiveMCP/version.buildDate=${BUILD_DATE}' \
+        -X 'github.com/StrangeBeeCorp/TheHiveMCP/version.gitCommit=${GIT_COMMIT}' \
+        -X 'github.com/StrangeBeeCorp/TheHiveMCP/version.gitVersion=${VERSION}'" \
     -o /binary ./cmd/${BINARY}/main.go
 
 # Build the standalone healthcheck probe. It is a separate static binary so the
-# distroless runtime needs no shell or HTTP client for its HEALTHCHECK.
+# distroless runtime needs no shell or HTTP client for its HEALTHCHECK. Kept as a
+# distinct RUN (not merged with the server build) for build-cache granularity and
+# clarity — the two produce different binaries.
+# hadolint ignore=DL3059
 RUN go build -ldflags="-s -w" -o /healthcheck ./cmd/healthcheck/main.go
 
 # Stage 2: Runtime image
-FROM gcr.io/distroless/static-debian12
+# Pinned by digest for reproducible builds. Bump the digest to pick up a newer
+# distroless/static-debian12 base.
+FROM gcr.io/distroless/static-debian12@sha256:7d14daf425206f9e79b463e57226c1d6500a6b42f4923d5f0a9a413657f5774f
 LABEL io.modelcontextprotocol.server.name="io.github.StrangeBeeCorp/TheHiveMCP"
 
 # Copy the server and the standalone healthcheck probe. No shell or HTTP client

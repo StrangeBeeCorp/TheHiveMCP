@@ -1,3 +1,5 @@
+// Package testutils provides helpers for the integration test suite: the
+// docker-compose-managed TheHive bootstrap, API/MCP test clients, and fixtures.
 package testutils
 
 import (
@@ -24,9 +26,19 @@ const defaultTheHiveTestURL = "http://localhost:9000"
 // statusReadinessTimeout: cold boot of heavier versions takes several minutes.
 const statusReadinessTimeout = 8 * time.Minute
 
+const (
+	// testAdminPassword is the default password of the built-in TheHive
+	// superadmin in the integration stack. #nosec G101 -- test fixture, not a real secret
+	testAdminPassword = "secret"
+	// adminOrg is the built-in TheHive administration organisation / profile name.
+	adminOrg = "admin"
+	// testTag is the shared tag/type/source literal used by the mock fixtures.
+	testTag = "test"
+)
+
 var (
 	initOnce sync.Once
-	initErr  error
+	errInit  error
 	hiveURL  string
 )
 
@@ -36,9 +48,12 @@ func TheHiveTestURL() string {
 	if u := os.Getenv("THEHIVE_TEST_URL"); u != "" {
 		return u
 	}
+
 	return defaultTheHiveTestURL
 }
 
+// Config holds the connection settings for a single-organisation TheHive API
+// client used by the integration helpers.
 type Config struct {
 	URL      string
 	Username string
@@ -59,17 +74,30 @@ func StartTheHiveContainer(t *testing.T) (string, error) {
 
 	initOnce.Do(func() {
 		hiveURL = TheHiveTestURL()
-		if err := waitForStatus(hiveURL, statusReadinessTimeout); err != nil {
-			initErr = err
+
+		err := waitForStatus(hiveURL, statusReadinessTimeout)
+		if err != nil {
+			errInit = err
 			return
 		}
-		initErr = initHiveInstance(t, hiveURL)
+
+		errInit = initHiveInstance(t, hiveURL)
 	})
-	if initErr != nil {
-		return "", fmt.Errorf("failed to initialize hive instance at %s: %w", hiveURL, initErr)
+
+	if errInit != nil {
+		return "", fmt.Errorf("failed to initialize hive instance at %s: %w", hiveURL, errInit)
 	}
 
 	return hiveURL, nil
+}
+
+// closeResponse closes an HTTP response body if the response is non-nil. The
+// thehive4go SDK returns the raw *http.Response alongside the decoded payload;
+// closing it here keeps the connection reusable and satisfies bodyclose.
+func closeResponse(resp *http.Response) {
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
 }
 
 // waitForStatus probes /api/status over HTTP from the test process, so it needs
@@ -77,9 +105,16 @@ func StartTheHiveContainer(t *testing.T) (string, error) {
 func waitForStatus(url string, timeout time.Duration) error {
 	client := &http.Client{Timeout: 10 * time.Second}
 	deadline := time.Now().Add(timeout)
+
 	var lastErr error
+
 	for {
-		resp, err := client.Get(url + "/api/status")
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url+"/api/status", http.NoBody)
+		if err != nil {
+			return fmt.Errorf("build status request for %s: %w", url, err)
+		}
+
+		resp, err := client.Do(req)
 		switch {
 		case err != nil:
 			lastErr = err
@@ -90,20 +125,22 @@ func waitForStatus(url string, timeout time.Duration) error {
 			_ = resp.Body.Close()
 			lastErr = fmt.Errorf("unexpected status %d", resp.StatusCode)
 		}
+
 		if time.Now().After(deadline) {
 			return fmt.Errorf("TheHive at %s not ready within %s: %w", url, timeout, lastErr)
 		}
+
 		time.Sleep(3 * time.Second)
 	}
 }
 
+// CreateOrgClient creates a client configured for a specific organisation
 func CreateOrgClient(t *testing.T, cfg *Config) *thehive.APIClient {
-	if t != nil {
-		t.Helper()
-	}
+	t.Helper()
 
 	clientCfg := thehive.NewConfiguration()
 	clientCfg.Host = strings.TrimPrefix(strings.TrimPrefix(cfg.URL, "http://"), "https://")
+
 	clientCfg.Scheme = "http"
 	if strings.HasPrefix(cfg.URL, "https://") {
 		clientCfg.Scheme = "https"
@@ -115,14 +152,17 @@ func CreateOrgClient(t *testing.T, cfg *Config) *thehive.APIClient {
 	clientCfg.HTTPClient = &http.Client{Timeout: 90 * time.Second}
 
 	clientCfg.AddDefaultHeader("X-Organisation", cfg.OrgName)
+
 	return thehive.NewAPIClient(clientCfg)
 }
 
+// CreateAuthContext creates an authentication context for API calls
 func CreateAuthContext(username, password string) context.Context {
 	auth := thehive.BasicAuth{
 		UserName: username,
 		Password: password,
 	}
+
 	return context.WithValue(context.Background(), thehive.ContextBasicAuth, auth)
 }
 
@@ -130,32 +170,38 @@ func CreateAuthContext(username, password string) context.Context {
 // docker compose owns the stack lifecycle (`make test` runs `compose down`).
 func TeardownContainers(_ context.Context) {}
 
-func ResetHiveInstance(t *testing.T, hiveUrl string, testConfig *HiveTestConfig) error {
+// ResetHiveInstance clears all data from the test organisations
+func ResetHiveInstance(t *testing.T, hiveURL string, testConfig *HiveTestConfig) error {
 	t.Helper()
 
 	for _, org := range []string{testConfig.MainOrg, testConfig.AdminOrg} {
-		if err := resetOrganisation(t, hiveUrl, org); err != nil {
+		err := resetOrganisation(t, hiveURL, org)
+		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
 func initHiveInstance(t *testing.T, url string) error {
+	t.Helper()
+
 	adminConfig := &Config{
 		URL:      url,
-		Username: "admin@thehive.local",
-		Password: "secret",
-		OrgName:  "admin",
+		Username: DefaultAdminUser,
+		Password: testAdminPassword,
+		OrgName:  adminOrg,
 	}
 
 	client, ctx := createClientAndContext(t, adminConfig)
 	testConfig := NewHiveTestConfig()
 
-	ensureTestOrganisation(t, client, ctx, testConfig.MainOrg)
-	setupUserPermissions(t, client, ctx, testConfig.MainOrg)
+	ensureTestOrganisation(ctx, t, client, testConfig.MainOrg)
+	setupUserPermissions(ctx, t, client, testConfig.MainOrg)
 
-	if err := setupAttackPatterns(ctx, client); err != nil {
+	err := setupAttackPatterns(ctx, client)
+	if err != nil {
 		return fmt.Errorf("failed to setup ATT&CK patterns: %w", err)
 	}
 
@@ -170,16 +216,18 @@ func setupAttackPatterns(ctx context.Context, client *thehive.APIClient) error {
 	input := thehive.NewInputPatternImportMitre("mitre-attack")
 	input.SetUrl(mitreServerURL)
 
-	if _, _, err := client.AttckAPI.ImportMITREAttckFile(ctx).InputPatternImportMitre(*input).Execute(); err != nil {
+	_, httpResp, err := client.AttckAPI.ImportMITREAttckFile(ctx).InputPatternImportMitre(*input).Execute()
+	closeResponse(httpResp)
+
+	if err != nil {
 		return fmt.Errorf("failed to import MITRE ATT&CK patterns from %s: %w", mitreServerURL, err)
 	}
+
 	return nil
 }
 
 func createClientAndContext(t *testing.T, cfg *Config) (*thehive.APIClient, context.Context) {
-	if t != nil {
-		t.Helper()
-	}
+	t.Helper()
 
 	var client *thehive.APIClient
 	if cfg.URL != "" {
@@ -196,25 +244,30 @@ func createClientAndContext(t *testing.T, cfg *Config) (*thehive.APIClient, cont
 	return client, context.WithValue(baseCtx, thehive.ContextBasicAuth, auth)
 }
 
-func ensureTestOrganisation(t *testing.T, client *thehive.APIClient, ctx context.Context, orgName string) string {
+func ensureTestOrganisation(ctx context.Context, t *testing.T, client *thehive.APIClient, orgName string) string {
 	t.Helper()
 
 	// /api/status returns 200 before schema migration completes, so early org
 	// setup can transiently 5xx (worse when several containers boot in parallel).
 	// Retry those; fail fast on non-retriable errors.
 	const readinessTimeout = 4 * time.Minute
+
 	deadline := time.Now().Add(readinessTimeout)
+
 	for {
-		id, retry, err := tryEnsureTestOrganisation(client, ctx, orgName)
+		id, retry, err := tryEnsureTestOrganisation(ctx, client, orgName)
 		if err == nil {
 			return id
 		}
+
 		if !retry {
 			t.Fatalf("organisation %q setup failed: %v", orgName, err)
 		}
+
 		if time.Now().After(deadline) {
 			t.Fatalf("TheHive not ready to create organisation %q within %s: %v", orgName, readinessTimeout, err)
 		}
+
 		time.Sleep(3 * time.Second)
 	}
 }
@@ -224,21 +277,24 @@ func findOrganisationID(resp any, orgName string) (string, bool) {
 	if err != nil || jsonBytes == nil {
 		return "", false
 	}
+
 	var orgs []thehive.OutputOrganisation
 	if json.Unmarshal(jsonBytes, &orgs) != nil {
 		return "", false
 	}
+
 	for _, org := range orgs {
 		if org.GetName() == orgName {
 			return org.GetUnderscoreId(), true
 		}
 	}
+
 	return "", false
 }
 
 // tryEnsureTestOrganisation makes one lookup-or-create attempt. retry is true
 // for transient startup errors (5xx / transport failure), false for 4xx.
-func tryEnsureTestOrganisation(client *thehive.APIClient, ctx context.Context, orgName string) (id string, retry bool, err error) {
+func tryEnsureTestOrganisation(ctx context.Context, client *thehive.APIClient, orgName string) (id string, retry bool, err error) {
 	genericOp := thehive.NewInputQueryGenericOperation("listOrganisation")
 	query := thehive.NewInputQuery()
 	query.SetQuery([]thehive.InputQueryNamedOperation{
@@ -246,19 +302,25 @@ func tryEnsureTestOrganisation(client *thehive.APIClient, ctx context.Context, o
 	})
 
 	resp, httpResp, listErr := client.QueryAndExportAPI.QueryAPI(ctx).InputQuery(*query).Execute()
-	if listErr == nil && httpResp != nil && httpResp.StatusCode == 200 && resp != nil {
+	closeResponse(httpResp)
+
+	if listErr == nil && httpResp != nil && httpResp.StatusCode == http.StatusOK && resp != nil {
 		if id, found := findOrganisationID(resp, orgName); found {
 			return id, false, nil
 		}
 	}
 
 	createOrgInput := thehive.NewInputCreateOrganisation(orgName, "Integration test organisation")
+
 	createResp, httpResp, createErr := client.OrganisationAPI.CreateOrganisation(ctx).
 		InputCreateOrganisation(*createOrgInput).Execute()
-	if createErr == nil && httpResp != nil && httpResp.StatusCode == 201 {
+	closeResponse(httpResp)
+
+	if createErr == nil && httpResp != nil && httpResp.StatusCode == http.StatusCreated {
 		return createResp.GetUnderscoreId(), false, nil
 	}
-	if httpResp != nil && (httpResp.StatusCode == 409 || httpResp.StatusCode == 403) {
+
+	if httpResp != nil && (httpResp.StatusCode == http.StatusConflict || httpResp.StatusCode == http.StatusForbidden) {
 		// Already exists / created concurrently — good enough for test setup.
 		return orgName, false, nil
 	}
@@ -267,17 +329,21 @@ func tryEnsureTestOrganisation(client *thehive.APIClient, ctx context.Context, o
 	if httpResp != nil {
 		status = httpResp.StatusCode
 	}
+
 	transient := httpResp == nil || status >= 500
 	if createErr != nil {
 		return "", transient, fmt.Errorf("create organisation %q (status %d): %w", orgName, status, createErr)
 	}
+
 	return "", transient, fmt.Errorf("create organisation %q: unexpected status %d", orgName, status)
 }
 
-func setupUserPermissions(t *testing.T, client *thehive.APIClient, ctx context.Context, orgName string) {
+func setupUserPermissions(ctx context.Context, t *testing.T, client *thehive.APIClient, orgName string) {
 	t.Helper()
 
 	userResp, httpResp, err := client.UserAPI.GetCurrentUserInfo(ctx).Execute()
+	closeResponse(httpResp)
+
 	if err != nil || httpResp.StatusCode != http.StatusOK || userResp == nil {
 		t.Fatalf("Could not get current user info: %v", err)
 	}
@@ -285,7 +351,7 @@ func setupUserPermissions(t *testing.T, client *thehive.APIClient, ctx context.C
 	userID := userResp.GetUnderscoreId()
 	orgAssignments := []thehive.InputUserOrganisation{
 		{Organisation: orgName, Profile: "org-admin"},
-		{Organisation: "admin", Profile: "admin"},
+		{Organisation: adminOrg, Profile: adminOrg},
 	}
 
 	updateInput := thehive.NewInputSetUserOrganisations()
@@ -293,19 +359,20 @@ func setupUserPermissions(t *testing.T, client *thehive.APIClient, ctx context.C
 
 	_, httpResp, err = client.UserAPI.SetUserOrganisations(ctx, userID).
 		InputSetUserOrganisations(*updateInput).Execute()
+	closeResponse(httpResp)
 
 	if err != nil || httpResp.StatusCode != http.StatusOK {
 		t.Fatalf("Failed to set user organisations: %v, status: %d", err, httpResp.StatusCode)
 	}
 }
 
-func resetOrganisation(t *testing.T, hiveUrl string, org string) error {
+func resetOrganisation(t *testing.T, hiveURL string, org string) error {
 	t.Helper()
 
 	cfg := &Config{
-		URL:      hiveUrl,
-		Username: "admin@thehive.local",
-		Password: "secret",
+		URL:      hiveURL,
+		Username: DefaultAdminUser,
+		Password: testAdminPassword,
 		OrgName:  org,
 	}
 
@@ -314,24 +381,25 @@ func resetOrganisation(t *testing.T, hiveUrl string, org string) error {
 	entityTypes := []struct {
 		name      string
 		operation string
-		deleteAPI func(*thehive.APIClient, context.Context, string) (*http.Response, error)
+		deleteAPI func(context.Context, *thehive.APIClient, string) (*http.Response, error)
 	}{
-		{"alerts", "listAlert", func(c *thehive.APIClient, ctx context.Context, id string) (*http.Response, error) {
+		{"alerts", "listAlert", func(ctx context.Context, c *thehive.APIClient, id string) (*http.Response, error) {
 			return c.AlertAPI.DeleteAlert(ctx, id).Execute()
 		}},
-		{"cases", "listCase", func(c *thehive.APIClient, ctx context.Context, id string) (*http.Response, error) {
+		{"cases", "listCase", func(ctx context.Context, c *thehive.APIClient, id string) (*http.Response, error) {
 			return c.CaseAPI.DeleteCase(ctx, id).Execute()
 		}},
-		{"case templates", "listCaseTemplate", func(c *thehive.APIClient, ctx context.Context, id string) (*http.Response, error) {
+		{"case templates", "listCaseTemplate", func(ctx context.Context, c *thehive.APIClient, id string) (*http.Response, error) {
 			return c.CaseTemplateAPI.DeleteCaseTemplate(ctx, id).Execute()
 		}},
-		{"tasks", "listTask", func(c *thehive.APIClient, ctx context.Context, id string) (*http.Response, error) {
+		{"tasks", "listTask", func(ctx context.Context, c *thehive.APIClient, id string) (*http.Response, error) {
 			return c.TaskAPI.DeleteTask(ctx, id).Execute()
 		}},
 	}
 
 	for _, entity := range entityTypes {
-		if err := deleteAllEntities(t, client, ctx, entity.name, entity.operation, entity.deleteAPI); err != nil {
+		err := deleteAllEntities(ctx, t, client, entity.name, entity.operation, entity.deleteAPI)
+		if err != nil {
 			return err
 		}
 	}
@@ -340,12 +408,12 @@ func resetOrganisation(t *testing.T, hiveUrl string, org string) error {
 }
 
 func deleteAllEntities(
+	ctx context.Context,
 	t *testing.T,
 	client *thehive.APIClient,
-	ctx context.Context,
 	entityName string,
 	listOperation string,
-	deleteFunc func(*thehive.APIClient, context.Context, string) (*http.Response, error),
+	deleteFunc func(context.Context, *thehive.APIClient, string) (*http.Response, error),
 ) error {
 	t.Helper()
 
@@ -357,7 +425,9 @@ func deleteAllEntities(
 		},
 	}
 
-	resp, _, err := client.QueryAndExportAPI.QueryAPI(ctx).InputQuery(query).Execute()
+	resp, httpResp, err := client.QueryAndExportAPI.QueryAPI(ctx).InputQuery(query).Execute()
+	closeResponse(httpResp)
+
 	if err != nil {
 		return fmt.Errorf("error listing %s: %w", entityName, err)
 	}
@@ -365,8 +435,10 @@ func deleteAllEntities(
 	respBytes, err := json.Marshal(resp)
 	require.NoError(t, err)
 
-	var entities []map[string]interface{}
-	if err := json.Unmarshal(respBytes, &entities); err != nil {
+	var entities []map[string]any
+
+	err = json.Unmarshal(respBytes, &entities)
+	if err != nil {
 		return fmt.Errorf("error parsing %s: %w", entityName, err)
 	}
 
@@ -378,11 +450,14 @@ func deleteAllEntities(
 			continue
 		}
 
-		resp, err := deleteFunc(client, ctx, id)
+		resp, err := deleteFunc(ctx, client, id)
+		closeResponse(resp)
+
 		if err != nil {
 			if resp != nil && resp.StatusCode == http.StatusNotFound {
 				continue
 			}
+
 			return fmt.Errorf("error deleting %s %s: %w", entityName, id, err)
 		}
 	}

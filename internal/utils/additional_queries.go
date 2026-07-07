@@ -1,18 +1,23 @@
+// Package utils provides shared helpers for the MCP server: TheHive query
+// building, entity-scope permission checks, filter normalization, result
+// date/untrusted-data processing, and the elicitation HTTP transport.
 package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
 	"slices"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 // QueryFunc queries data for a single entity.
-type QueryFunc func(ctx context.Context, client *thehive.APIClient, entityID string) ([]map[string]interface{}, error)
+type QueryFunc func(ctx context.Context, client *thehive.APIClient, entityID string) ([]map[string]any, error)
 
 // QueryDescriptor is the single source of truth for one additional query.
 //
@@ -36,9 +41,16 @@ type QueryDescriptor struct {
 	MetaFields []string
 }
 
+// EntityQueryConfig maps query names to their descriptors.
 type EntityQueryConfig map[string]QueryDescriptor
 
-var similarityMetaFields = []string{"similarObservableCount", "observableCount"}
+// similarityMetaFields are preserved alongside the entity to give the LLM
+// observable-match context without requiring follow-up fetches. The *Light
+// similarity ops emit a single FLAT object per hit — entity fields and meta
+// side by side, with no {"case"|"alert": {...}} wrapper — so these are lifted
+// onto the projected entity (see projectFields). Shared by the four similarity
+// descriptors below.
+var similarityMetaFields = []string{"similarObservableCount", fieldObservableCount}
 
 var queryRegistry = map[string]EntityQueryConfig{
 	types.EntityTypeCase: {
@@ -48,11 +60,11 @@ var queryRegistry = map[string]EntityQueryConfig{
 		"pages":       {Func: GetPagesFromCaseID, EntityType: types.EntityTypePage},
 		"attachments": {Func: GetAttachmentsFromCaseID, EntityType: types.EntityTypeAttachment},
 		"procedures":  {Func: GetProceduresFromCaseID, EntityType: types.EntityTypeProcedure},
-		"similarCases": {
+		querySimilarCases: {
 			Func: GetSimilarCasesFromCaseID, EntityType: types.EntityTypeCase,
 			ResultsAreIndependent: true, MetaFields: similarityMetaFields,
 		},
-		"similarAlerts": {
+		querySimilarAlerts: {
 			Func: GetSimilarAlertsFromCaseID, EntityType: types.EntityTypeAlert,
 			ResultsAreIndependent: true, MetaFields: similarityMetaFields,
 		},
@@ -63,11 +75,11 @@ var queryRegistry = map[string]EntityQueryConfig{
 		"pages":       {Func: GetPagesFromAlertID, EntityType: types.EntityTypePage},
 		"attachments": {Func: GetAttachmentsFromAlertID, EntityType: types.EntityTypeAttachment},
 		"procedures":  {Func: GetProceduresFromAlertID, EntityType: types.EntityTypeProcedure},
-		"similarCases": {
+		querySimilarCases: {
 			Func: GetSimilarCasesFromAlertID, EntityType: types.EntityTypeCase,
 			ResultsAreIndependent: true, MetaFields: similarityMetaFields,
 		},
-		"similarAlerts": {
+		querySimilarAlerts: {
 			Func: GetSimilarAlertsFromAlertID, EntityType: types.EntityTypeAlert,
 			ResultsAreIndependent: true, MetaFields: similarityMetaFields,
 		},
@@ -86,18 +98,19 @@ var queryRegistry = map[string]EntityQueryConfig{
 	},
 }
 
-func filterAdditionalQueryResults(results []map[string]interface{}, descriptor QueryDescriptor) ([]map[string]interface{}, error) {
+func filterAdditionalQueryResults(results []map[string]any, descriptor QueryDescriptor) ([]map[string]any, error) {
 	if descriptor.EntityType == "" {
-		return nil, fmt.Errorf("query descriptor missing result entity type")
+		return nil, errors.New("query descriptor missing result entity type")
 	}
 
 	fields := types.DefaultFields[descriptor.EntityType]
 	includeMeta := descriptor.ResultsAreIndependent
 
-	filtered := make([]map[string]interface{}, 0, len(results))
+	filtered := make([]map[string]any, 0, len(results))
 	for _, item := range results {
 		filtered = append(filtered, projectFields(item, fields, includeMeta, descriptor.MetaFields))
 	}
+
 	return filtered, nil
 }
 
@@ -105,21 +118,25 @@ func filterAdditionalQueryResults(results []map[string]interface{}, descriptor Q
 // a fresh map. *Light similarity ops emit one FLAT object per hit (entity fields
 // and meta side by side, no {"case"|"alert":{...}} wrapper), so both are lifted
 // from the same source.
-func projectFields(item map[string]interface{}, fields []string, includeMeta bool, metaFields []string) map[string]interface{} {
-	filteredItem := make(map[string]interface{})
+func projectFields(item map[string]any, fields []string, includeMeta bool, metaFields []string) map[string]any {
+	filteredItem := make(map[string]any)
+
 	for _, field := range fields {
 		if value, exists := item[field]; exists {
 			filteredItem[field] = value
 		}
 	}
+
 	if !includeMeta {
 		return filteredItem
 	}
+
 	for _, metaField := range metaFields {
 		if value, exists := item[metaField]; exists {
 			filteredItem[metaField] = value
 		}
 	}
+
 	return filteredItem
 }
 
@@ -131,23 +148,28 @@ func projectFields(item map[string]interface{}, fields []string, includeMeta boo
 // Such drops log keys only (never values) at Debug so a future *Light shape
 // change that nests or retypes _id is diagnosable rather than silently emptying
 // results; out-of-scope drops are expected and not logged.
-func filterSimilarityHitsByScope(ctx context.Context, queryName, targetType string, results []map[string]interface{}, inScope map[string]bool) []map[string]interface{} {
-	kept := make([]map[string]interface{}, 0, len(results))
+func filterSimilarityHitsByScope(ctx context.Context, queryName, targetType string, results []map[string]any, inScope map[string]bool) []map[string]any {
+	kept := make([]map[string]any, 0, len(results))
 	unresolvable := 0
+
 	for _, item := range results {
 		id := similarityHitID(item)
 		if id == "" {
 			unresolvable++
+
 			slog.DebugContext(ctx, "Dropping similarity hit with no resolvable _id",
 				slog.String("query", queryName),
 				slog.String("targetType", targetType),
 				slog.Any("hitKeys", slices.Sorted(maps.Keys(item))))
+
 			continue
 		}
+
 		if inScope[id] {
 			kept = append(kept, item)
 		}
 	}
+
 	if unresolvable > 0 {
 		slog.DebugContext(ctx, "Dropped similarity hits with no resolvable _id",
 			slog.String("query", queryName),
@@ -155,13 +177,15 @@ func filterSimilarityHitsByScope(ctx context.Context, queryName, targetType stri
 			slog.Int("droppedCount", unresolvable),
 			slog.Int("totalHits", len(results)))
 	}
+
 	return kept
 }
 
-func similarityHitID(item map[string]interface{}) string {
-	if id, ok := item["_id"].(string); ok {
+func similarityHitID(item map[string]any) string {
+	if id, ok := item[fieldID].(string); ok {
 		return id
 	}
+
 	return ""
 }
 
@@ -171,10 +195,10 @@ func similarityHitID(item map[string]interface{}) string {
 func ExpandEntitiesWithQueries(
 	ctx context.Context,
 	entityType string,
-	entities []map[string]interface{},
+	entities []map[string]any,
 	additionalQueries []string,
-	permFilters map[string]interface{},
-) ([]map[string]interface{}, error) {
+	permFilters map[string]any,
+) ([]map[string]any, error) {
 	if len(additionalQueries) == 0 {
 		return entities, nil
 	}
@@ -200,16 +224,19 @@ func ExpandEntitiesWithQueries(
 	if len(permFilters) > 0 {
 		entityIDs := make([]string, 0, len(entities))
 		for i, entity := range entities {
-			entityID, ok := entity["_id"].(string)
+			entityID, ok := entity[fieldID].(string)
 			if !ok {
 				return nil, fmt.Errorf("entity at index %d missing _id field", i)
 			}
+
 			entityIDs = append(entityIDs, entityID)
 		}
+
 		inScope, err := GetEntityIDsInScope(ctx, entityType, entityIDs, permFilters)
 		if err != nil {
 			return nil, fmt.Errorf("failed to verify entity scope before expansion: %w", err)
 		}
+
 		for _, entityID := range entityIDs {
 			if !inScope[entityID] {
 				return nil, fmt.Errorf("%s %s was not found or is not within the scope permitted by your permissions configuration", entityType, entityID)
@@ -223,15 +250,16 @@ func ExpandEntitiesWithQueries(
 
 	// Pass 1: run every query, stash raw rows, collect the deduped union of
 	// similarity hit _ids per target type.
-	rawResults := make([]map[string][]map[string]interface{}, len(entities))
+	rawResults := make([]map[string][]map[string]any, len(entities))
 	idsByType := make(map[string]map[string]struct{})
 
 	for i, entity := range entities {
-		entityID, ok := entity["_id"].(string)
+		entityID, ok := entity[fieldID].(string)
 		if !ok {
 			return nil, fmt.Errorf("entity at index %d missing _id field", i)
 		}
-		rawResults[i] = make(map[string][]map[string]interface{}, len(additionalQueries))
+
+		rawResults[i] = make(map[string][]map[string]any, len(additionalQueries))
 
 		for _, queryName := range additionalQueries {
 			descriptor := queryConfig[queryName]
@@ -240,17 +268,21 @@ func ExpandEntitiesWithQueries(
 			if err != nil {
 				return nil, fmt.Errorf("failed to get %s for %s ID %s: %w", queryName, entityType, entityID, err)
 			}
+
 			rawResults[i][queryName] = data
 
 			if !descriptor.ResultsAreIndependent || len(permFilters) == 0 {
 				continue
 			}
+
 			targetType := descriptor.EntityType
+
 			set := idsByType[targetType]
 			if set == nil {
 				set = make(map[string]struct{})
 				idsByType[targetType] = set
 			}
+
 			for _, item := range data {
 				if id := similarityHitID(item); id != "" {
 					set[id] = struct{}{}
@@ -267,15 +299,17 @@ func ExpandEntitiesWithQueries(
 		for id := range set {
 			ids = append(ids, id)
 		}
+
 		inScope, err := GetScopedEntityIDsBatch(ctx, targetType, ids, permFilters)
 		if err != nil {
 			return nil, fmt.Errorf("failed to verify similarity hit scope: %w", err)
 		}
+
 		scopeByType[targetType] = inScope
 	}
 
 	// Pass 2: drop out-of-scope hits per the precomputed verdicts, project, attach.
-	for i := range entities {
+	for i, entity := range entities {
 		for _, queryName := range additionalQueries {
 			descriptor := queryConfig[queryName]
 			data := rawResults[i][queryName]
@@ -286,15 +320,17 @@ func ExpandEntitiesWithQueries(
 
 			filteredData, err := filterAdditionalQueryResults(data, descriptor)
 			if err != nil {
-				return nil, fmt.Errorf("failed to filter additional query results for %s ID %s: %w", entityType, entities[i]["_id"], err)
+				return nil, fmt.Errorf("failed to filter additional query results for %s ID %s: %w", entityType, entity[fieldID], err)
 			}
-			entities[i][queryName] = filteredData
+
+			entity[queryName] = filteredData
 		}
 	}
 
 	return entities, nil
 }
 
+// GetSupportedQueries returns the list of supported queries for an entity type
 func GetSupportedQueries(entityType string) []string {
 	queryConfig, exists := queryRegistry[entityType]
 	if !exists {
@@ -305,9 +341,11 @@ func GetSupportedQueries(entityType string) []string {
 	for queryName := range queryConfig {
 		queries = append(queries, queryName)
 	}
+
 	return queries
 }
 
+// ValidateQuery checks if a query is supported for an entity type
 func ValidateQuery(entityType, queryName string) error {
 	queryConfig, exists := queryRegistry[entityType]
 	if !exists {

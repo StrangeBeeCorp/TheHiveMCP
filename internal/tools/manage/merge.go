@@ -4,17 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
+
+	"github.com/StrangeBeeCorp/thehive4go/thehive"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
-	"github.com/StrangeBeeCorp/thehive4go/thehive"
 )
 
-func (t *ManageTool) handleMerge(ctx context.Context, params *ManageEntityParams) (ManageEntityResult, error) {
+func (t *Tool) handleMerge(ctx context.Context, params *EntityParams) (EntityResult, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
-		return ManageEntityResult{}, tools.NewToolError("failed to get TheHive client").Cause(err).
+		return EntityResult{}, tools.NewToolError("failed to get TheHive client").Cause(err).
 			Hint("Check your authentication and connection settings")
 	}
 
@@ -26,64 +28,84 @@ func (t *ManageTool) handleMerge(ctx context.Context, params *ManageEntityParams
 	case types.EntityTypeObservable:
 		return t.mergeObservables(ctx, hiveClient, params.TargetID)
 	default:
-		return ManageEntityResult{}, tools.NewToolErrorf("merge operation not supported for entity type: %s", params.EntityType)
+		return EntityResult{}, tools.NewToolErrorf("merge operation not supported for entity type: %s", params.EntityType)
 	}
 }
 
-func (t *ManageTool) mergeCases(ctx context.Context, client *thehive.APIClient, caseIDs []string) (ManageEntityResult, error) {
+func (t *Tool) mergeCases(ctx context.Context, client *thehive.APIClient, caseIDs []string) (EntityResult, error) {
 	// MergeCases expects comma-separated case IDs as a string
 	idsString := ""
+
+	var idsStringSb36 strings.Builder
+
 	for i, id := range caseIDs {
 		if i > 0 {
-			idsString += ","
+			idsStringSb36.WriteString(",")
 		}
-		idsString += id
+
+		idsStringSb36.WriteString(id)
 	}
 
+	idsString += idsStringSb36.String()
+
 	result, resp, err := client.CaseAPI.MergeCases(ctx, idsString).Execute()
+	defer closeResponse(resp)
+
 	if err != nil {
-		return ManageEntityResult{}, tools.NewToolErrorf("failed to merge cases %v", caseIDs).Cause(err).
+		return EntityResult{}, tools.NewToolErrorf("failed to merge cases %v", caseIDs).Cause(err).
 			Hint("Check that all cases exist and you have permissions").API(resp)
 	}
 
-	return ManageEntityResult{
+	return EntityResult{
 		MergeCasesResult: NewMergeCasesResult(result, caseIDs),
 	}, nil
 }
 
-func (t *ManageTool) mergeAlertsIntoCase(ctx context.Context, client *thehive.APIClient, alertIDs []string, targetCaseID string) (ManageEntityResult, error) {
-	var result *thehive.OutputCase
-	var resp *http.Response
-	var err error
+func (t *Tool) mergeAlertsIntoCase(ctx context.Context, client *thehive.APIClient, alertIDs []string, targetCaseID string) (EntityResult, error) {
+	var (
+		result *thehive.OutputCase
+		resp   *http.Response
+		err    error
+	)
 
 	if len(alertIDs) == 1 {
-		result, resp, err = client.AlertAPI.MergeAlertWithCase(ctx, alertIDs[0], targetCaseID).Execute()
+		singleResult, singleResp, singleErr := client.AlertAPI.MergeAlertWithCase(ctx, alertIDs[0], targetCaseID).Execute()
+		defer closeResponse(singleResp)
+
+		result, resp, err = singleResult, singleResp, singleErr
 	} else {
 		inputMerge := thehive.InputAlertsMergeWithCase{
 			AlertIds: alertIDs,
 			CaseId:   targetCaseID,
 		}
-		result, resp, err = client.AlertAPI.MergeBulkAlertsWithCase(ctx).InputAlertsMergeWithCase(inputMerge).Execute()
+
+		bulkResult, bulkResp, bulkErr := client.AlertAPI.MergeBulkAlertsWithCase(ctx).InputAlertsMergeWithCase(inputMerge).Execute()
+		defer closeResponse(bulkResp)
+
+		result, resp, err = bulkResult, bulkResp, bulkErr
 	}
 
 	if err != nil {
-		return ManageEntityResult{}, tools.NewToolErrorf("failed to merge alerts %v into case %s", alertIDs, targetCaseID).Cause(err).
+		return EntityResult{}, tools.NewToolErrorf("failed to merge alerts %v into case %s", alertIDs, targetCaseID).Cause(err).
 			Hint("Check that alerts and case exist and you have permissions").API(resp)
 	}
 
-	return ManageEntityResult{
+	return EntityResult{
 		MergeAlertsResult: NewMergeAlertsResult(result, alertIDs, targetCaseID),
 	}, nil
 }
 
-func (t *ManageTool) mergeObservables(ctx context.Context, client *thehive.APIClient, targetCaseID string) (ManageEntityResult, error) {
+func (t *Tool) mergeObservables(ctx context.Context, client *thehive.APIClient, targetCaseID string) (EntityResult, error) {
 	result, resp, err := client.CaseAPI.MergeSimilarObservablesOfThisCase(ctx, targetCaseID).Execute()
+	defer closeResponse(resp)
+
 	if err != nil {
-		return ManageEntityResult{}, tools.NewToolErrorf("failed to merge/deduplicate observables in case %s", targetCaseID).Cause(err).
+		return EntityResult{}, tools.NewToolErrorf("failed to merge/deduplicate observables in case %s", targetCaseID).Cause(err).
 			Hint("Check that the case exists and you have permissions").API(resp)
 	}
 
 	var resultData string
+
 	if result != nil {
 		jsonBytes, marshalErr := json.Marshal(result)
 		if marshalErr == nil {
@@ -95,7 +117,7 @@ func (t *ManageTool) mergeObservables(ctx context.Context, client *thehive.APICl
 		resultData = "merge completed"
 	}
 
-	return ManageEntityResult{
+	return EntityResult{
 		MergeObservablesResult: NewMergeObservablesResult(resultData, targetCaseID),
 	}, nil
 }

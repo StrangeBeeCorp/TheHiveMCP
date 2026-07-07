@@ -5,21 +5,29 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
+
+	"github.com/StrangeBeeCorp/thehive4go/thehive"
+	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/permissions"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
-	"github.com/StrangeBeeCorp/thehive4go/thehive"
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest, params SearchEntitiesParams) (SearchEntitiesResult, error) {
+// Handle executes an entity search: it applies permission filters, builds and
+// runs the TheHive query, optionally enriches results with additional queries,
+// and formats them into an EntitiesResult.
+func (t *Tool) Handle(ctx context.Context, req mcp.CallToolRequest, params EntitiesParams) (EntitiesResult, error) {
+	// The caller (the model) supplies the TheHive filter DSL directly in
+	// params.Filters. There is no inner-LLM translation step — the filter is
+	// applied as-is, after merging any permission-scoping filters.
 	// Non-nil map so echoed rawFilters is always an object ({} = match-all), not JSON null.
 	rawFilters := params.Filters
 	if rawFilters == nil {
-		rawFilters = map[string]interface{}{}
+		rawFilters = map[string]any{}
 	}
 
 	// Legacy "query" param removed in favor of "filters"; warn so ignoring it isn't mistaken for a bug.
@@ -29,8 +37,9 @@ func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest, params
 
 	perms, err := utils.GetPermissionsFromContext(ctx)
 	if err != nil {
-		return SearchEntitiesResult{}, tools.NewToolError("failed to get permissions").Cause(err)
+		return EntitiesResult{}, tools.NewToolError("failed to get permissions").Cause(err)
 	}
+
 	permFilters := perms.GetToolFilters(t.Name())
 	if len(permFilters) > 0 {
 		merged, filtersApplied := permissions.MergeFilters(rawFilters, permFilters)
@@ -39,19 +48,15 @@ func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest, params
 		} else {
 			slog.Info("No permission filters applied to search filters", "entityType", params.EntityType)
 		}
+
 		rawFilters = merged
 	}
 
-	hiveQuery, err := t.buildHiveQuery(params, rawFilters)
-	if err != nil {
-		return SearchEntitiesResult{}, tools.NewToolError("failed to build TheHive query").Cause(err).
-			Hint("This may be due to unsupported field names or filter combinations. Consult hive://schema/"+params.EntityType+" for valid fields and hive://schema/filter for the operator grammar.").
-			Schema(params.EntityType, "")
-	}
+	hiveQuery := t.buildHiveQuery(params, rawFilters)
 
 	results, err := t.executeQuery(ctx, hiveQuery, params.EntityType)
 	if err != nil {
-		return SearchEntitiesResult{}, tools.NewToolError("failed to execute search query").Cause(err).
+		return EntitiesResult{}, tools.NewToolError("failed to execute search query").Cause(err).
 			Hint("The filter likely references a non-existent field or an invalid value/operator. Consult hive://schema/"+params.EntityType+" for valid fields and hive://schema/filter for the operator grammar, then retry with corrected filters.").
 			Schema(params.EntityType, "")
 	}
@@ -59,14 +64,14 @@ func (t *SearchTool) Handle(ctx context.Context, req mcp.CallToolRequest, params
 	if !params.Count {
 		results, err = utils.ExpandEntitiesWithQueries(ctx, params.EntityType, results, params.AdditionalQueries, permFilters)
 		if err != nil {
-			return SearchEntitiesResult{}, tools.NewToolError("failed to perform additional queries").Cause(err)
+			return EntitiesResult{}, tools.NewToolError("failed to perform additional queries").Cause(err)
 		}
 	}
 
 	return NewSearchEntitiesResult(results, params, rawFilters)
 }
 
-func (t *SearchTool) buildHiveQuery(params SearchEntitiesParams, rawFilters map[string]interface{}) (thehive.InputQuery, error) {
+func (t *Tool) buildHiveQuery(params EntitiesParams, rawFilters map[string]any) thehive.InputQuery {
 	listOp := t.buildListOperation(params.EntityType)
 	excludedFields := t.getExcludedFields(params.EntityType, params.ExtraColumns, params.ExtraData)
 
@@ -97,48 +102,50 @@ func (t *SearchTool) buildHiveQuery(params SearchEntitiesParams, rawFilters map[
 		ExcludeFields: excludedFields,
 	}
 
-	if queryJSON, err := json.MarshalIndent(hiveQuery, "", "  "); err == nil {
+	queryJSON, err := json.MarshalIndent(hiveQuery, "", "  ")
+	if err == nil {
 		slog.Info("Built TheHive query", "json", string(queryJSON))
 	}
 
-	return hiveQuery, nil
+	return hiveQuery
 }
 
-func (t *SearchTool) buildListOperation(entityType string) *thehive.InputQueryGenericOperation {
+func (t *Tool) buildListOperation(entityType string) *thehive.InputQueryGenericOperation {
 	return thehive.NewInputQueryGenericOperation(utils.ListOperationName(entityType))
 }
 
-func (t *SearchTool) buildFilterOperation(filters map[string]interface{}) *map[string]interface{} {
+func (t *Tool) buildFilterOperation(filters map[string]any) *map[string]any {
 	// Shallow copy so we don't mutate the caller's filters.
-	filtersCopy := make(map[string]interface{})
-	for k, v := range filters {
-		filtersCopy[k] = v
-	}
+	filtersCopy := make(map[string]any)
+	maps.Copy(filtersCopy, filters)
 
 	// Repair malformed keys (over-quoting/whitespace from weaker models) before
 	// the date pass so it and TheHive see valid keys.
 	normalizedFilters := utils.NormalizeFilterKeys(filtersCopy)
 	parsedFilters := utils.TranslateDatesToTimestamps(normalizedFilters)
 	parsedFilters["_name"] = "filter"
+
 	return &parsedFilters
 }
 
-func (t *SearchTool) buildSortOperation(sortBy, sortOrder string) *thehive.InputQuerySortOperation {
+func (t *Tool) buildSortOperation(sortBy, sortOrder string) *thehive.InputQuerySortOperation {
 	sortOp := thehive.NewInputQuerySortOperation("sort")
-	sortFields := []map[string]interface{}{
+	sortFields := []map[string]any{
 		{sortBy: sortOrder},
 	}
 	sortOp.SetFields(sortFields)
+
 	return sortOp
 }
 
-func (t *SearchTool) buildPagingOperation(limit int, extraData []string) *thehive.InputQueryPagingOperation {
+func (t *Tool) buildPagingOperation(limit int, extraData []string) *thehive.InputQueryPagingOperation {
 	query := thehive.NewInputQueryPagingOperation(0, int32(limit), "page") // #nosec G115 -- limit is validated before reaching here
 	query.SetExtraData(extraData)
+
 	return query
 }
 
-func (t *SearchTool) executeQuery(ctx context.Context, hiveQuery thehive.InputQuery, entityType string) ([]map[string]interface{}, error) {
+func (t *Tool) executeQuery(ctx context.Context, hiveQuery thehive.InputQuery, entityType string) ([]map[string]any, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get TheHive client: %w. Check your authentication and connection settings", err)
@@ -146,28 +153,30 @@ func (t *SearchTool) executeQuery(ctx context.Context, hiveQuery thehive.InputQu
 
 	results, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(ctx).InputQuery(hiveQuery).Execute()
 	if err != nil {
-		return nil, fmt.Errorf("failed to search %ss: %v. Check that you have permissions to view %ss. API response: %v", entityType, err, entityType, resp)
+		return nil, fmt.Errorf("failed to search %ss: %w. Check that you have permissions to view %ss. API response: %v", entityType, err, entityType, resp)
 	}
 
 	// Count queries return a bare number, not an array.
 	if countValue, ok := results.(float64); ok {
-		countResult := map[string]interface{}{
+		countResult := map[string]any{
 			"_count": countValue,
 		}
-		return []map[string]interface{}{countResult}, nil
+
+		return []map[string]any{countResult}, nil
 	}
 
-	resultsInterface, ok := results.([]interface{})
+	resultsInterface, ok := results.([]any)
 	if !ok {
 		return nil, fmt.Errorf("unexpected result type from TheHive API. Expected []interface{} or float64 but got %T: %v", results, results)
 	}
 
-	resultsSlice := make([]map[string]interface{}, len(resultsInterface))
+	resultsSlice := make([]map[string]any, len(resultsInterface))
 	for i, item := range resultsInterface {
-		mapItem, ok := item.(map[string]interface{})
+		mapItem, ok := item.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("unexpected item type in results. Expected map[string]interface{} but got %T at index %d: %v", item, i, item)
 		}
+
 		resultsSlice[i] = mapItem
 	}
 
@@ -176,8 +185,9 @@ func (t *SearchTool) executeQuery(ctx context.Context, hiveQuery thehive.InputQu
 	return resultsSlice, nil
 }
 
-func (t *SearchTool) getExcludedFields(entityType string, keptColumns []string, extraData []string) []string {
+func (t *Tool) getExcludedFields(entityType string, keptColumns []string, extraData []string) []string {
 	var baseModel any
+
 	switch entityType {
 	case types.EntityTypeAlert:
 		baseModel = thehive.OutputAlert{}
@@ -203,18 +213,21 @@ func (t *SearchTool) getExcludedFields(entityType string, keptColumns []string, 
 	excludeFields := make([]string, 0)
 
 	// Never exclude _id: additional queries need it to fetch related entities.
-	systemFields := []string{"_id"}
+	systemFields := []string{fieldID}
 
 	for _, field := range allFields {
 		if !slices.Contains(keptColumns, field) {
 			if slices.Contains(systemFields, field) {
 				continue
 			}
+
 			if field == "extraData" && len(extraData) > 0 {
 				continue
 			}
+
 			excludeFields = append(excludeFields, field)
 		}
 	}
+
 	return excludeFields
 }

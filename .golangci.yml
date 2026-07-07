@@ -4,43 +4,88 @@ run:
   timeout: 5m
 
 linters:
-  enable-all: true
+  default: all
   disable:
-    # Disable overly strict linters for this project
-    - cyclop
-    - depguard
-    - dupl
-    - exhaustive
-    - exhaustruct
-    - forbidigo
+    # --- Complexity ratchets. gocognit, gocyclo, cyclop, nestif and maintidx are
+    # all ENABLED (via `default: all`) as regression ratchets, thresholded in
+    # `settings` below so they add no churn today while blocking anything worse.
+    # funlen stays disabled: most current offenders are idiomatic table-driven
+    # tests, so it is high churn / low signal.
     - funlen
-    - gochecknoglobals
-    - gochecknoinits
-    - gocognit
-    - gocyclo
-    - godot
-    - err113
-    - mnd
-    - gomoddirectives
-    - ireturn
-    - lll
-    - maintidx
-    - nestif
-    - nlreturn
-    - nonamedreturns
-    - paralleltest
-    - prealloc
-    - testpackage
-    - tparallel
-    - varnamelen
-    - wrapcheck
-    - wsl
+    # --- Genuinely too strict / opinionated for this project
+    - depguard # no import allowlist maintained; would be pure noise
+    - dupl # tool packages share intentional shape; false positives outweigh signal
+    - exhaustive # switches over external (TheHive/MCP) enums are intentionally partial with a default
+    - exhaustruct # flags every partial struct literal; unusable in practice
+    - forbidigo # no forbidden-identifier list maintained; nothing to enforce
+    - gochecknoglobals # embed.FS handles and sentinel errors are package globals by design
+    - gochecknoinits # no package init() functions to police; enabling adds no signal
+    - err113 # 46 one-off fmt.Errorf messages; sentinel-error refactor not worth the churn
+    - gomoddirectives # no replace/exclude/retract directives to police in go.mod
+    - gomodguard # deprecated in v2.12.0; gomodguard_v2 is enabled via `default: all`
+    - ireturn # Definition()/Handler() must return mcp.Tool / ToolHandlerFunc (framework contract)
+    - varnamelen # idiomatic short names (r, ctx) are intentional
+    # --- Pure formatting / whitespace opinion
+    - godot # comments are not required to end in a period
+    - lll # no hard line-length cap; gofmt handles layout
+    - nlreturn # no mandatory blank line before return/branch statements
+    - nonamedreturns # named returns are used deliberately for documentation and deferred error wrapping
+    - wsl # whitespace/cuddling style is left to gofmt, not enforced
+    # --- Test conventions specific to this repo
+    # Integration tests share a live Docker stack (TheHive + Elasticsearch); running
+    # them in parallel is unsafe, so we do not mandate t.Parallel().
+    - paralleltest # integration tests must not run in parallel (shared Docker stack)
+    - tparallel # same: t.Parallel() is unsafe against the shared live stack
+    # --- Micro-optimisation opinion
+    - prealloc # slice preallocation is a premature optimisation for these small, non-hot-path slices
+    # In-package tests (package bootstrap, not bootstrap_test) exercise unexported
+    # helpers directly.
+    - testpackage # in-package tests exercise unexported helpers directly
+    # JSON/YAML tags mirror TheHive's wire format (_id, _createdAt) and the
+    # MCP tool parameter contract (kebab-case); renaming them breaks compatibility
+    - tagliatelle # tags mirror TheHive's wire format and the MCP kebab-case contract
+
+  settings:
+    # Complexity ratchet. 56 is the current worst function (the deferred
+    # SonarCloud cognitive-complexity cleanup left a handful in the 31–56 range),
+    # so this threshold adds no churn today while blocking anything worse.
+    # Lower it as those functions are refactored down.
+    gocognit:
+      min-complexity: 56
+
+    # Cyclomatic-complexity ratchet. Current worst is (*Tool).ValidateParams —
+    # gocyclo measures it at 37, cyclop at 38 (cyclop counts one extra path).
+    # 40 clears both today while blocking anything worse. gocyclo uses
+    # min-complexity, cyclop uses max-complexity; both are pinned to 40.
+    gocyclo:
+      min-complexity: 40
+    cyclop:
+      max-complexity: 40
+
+    # Nesting-depth ratchet. Current worst nested blocks reach depth 8; 9 clears
+    # them today while blocking deeper nesting.
+    nestif:
+      min-complexity: 9
+
+    # Maintainability-index ratchet. maintidx flags functions whose MI falls
+    # BELOW `under` (lower MI = worse). Current worst is (*Tool).updateEntity at
+    # MI 19; 19 clears it today while flagging anything less maintainable.
+    maintidx:
+      under: 19
+
+    mnd:
+      # Numbers that are self-evident and not "magic" in context.
+      ignored-numbers:
+        - "2" # strings.SplitN(s, sep, 2) and "at least 2" domain checks
+        - "500" # request-body truncation length in elicitation prompts
+        - "1000" # documented max entity limit (error message states it inline)
 
   exclusions:
-    # Exclude the generated test directory completely
-    paths:
-      - "thehive/test/.*\\.go$"
-
-issues:
-  exclude:
-    - "SA1019:" # Ignore deprecation warnings in generated code
+    rules:
+      # Test-support helpers in internal/testutils are full of intentional
+      # fixture literals (fixed timestamps, TLP/severity values, poll intervals,
+      # file modes). Naming each as a constant adds noise without clarity, so
+      # mnd is not enforced there.
+      - path: internal/testutils/
+        linters:
+          - mnd

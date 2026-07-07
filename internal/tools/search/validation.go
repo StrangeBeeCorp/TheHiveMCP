@@ -2,13 +2,15 @@ package search
 
 import (
 	"context"
+	"slices"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 )
 
-func (t *SearchTool) ValidatePermissions(ctx context.Context, params SearchEntitiesParams) error {
+// ValidatePermissions checks that the caller is allowed to use the search tool.
+func (t *Tool) ValidatePermissions(ctx context.Context, _ EntitiesParams) error {
 	permissions, err := utils.GetPermissionsFromContext(ctx)
 	if err != nil {
 		return tools.NewToolError("failed to get permissions").Cause(err)
@@ -21,7 +23,8 @@ func (t *SearchTool) ValidatePermissions(ctx context.Context, params SearchEntit
 	return nil
 }
 
-func (t *SearchTool) ValidateParams(params *SearchEntitiesParams) error {
+// ValidateParams applies defaults and validates the search parameters in place.
+func (t *Tool) ValidateParams(params *EntitiesParams) error {
 	if params.SortBy == "" {
 		params.SortBy = "_createdAt"
 	}
@@ -38,7 +41,7 @@ func (t *SearchTool) ValidateParams(params *SearchEntitiesParams) error {
 		if defaultFields, exists := types.DefaultFields[params.EntityType]; exists {
 			params.ExtraColumns = defaultFields
 		} else {
-			params.ExtraColumns = []string{"_id", "title", "url"} // fallback
+			params.ExtraColumns = []string{fieldID, fieldTitle, "url"} // fallback
 		}
 	}
 
@@ -51,13 +54,13 @@ func (t *SearchTool) ValidateParams(params *SearchEntitiesParams) error {
 	}
 
 	validEntityTypes := []string{types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable, types.EntityTypeProcedure, types.EntityTypePattern, types.EntityTypeCaseTemplate, types.EntityTypePage}
+
 	var isValidEntityType bool
-	for _, validType := range validEntityTypes {
-		if params.EntityType == validType {
-			isValidEntityType = true
-			break
-		}
+
+	if slices.Contains(validEntityTypes, params.EntityType) {
+		isValidEntityType = true
 	}
+
 	if !isValidEntityType {
 		return tools.NewToolErrorf("invalid entity-type '%s'. Must be one of: 'alert', 'case', 'task', 'observable', 'procedure', 'pattern', 'case-template', 'page'", params.EntityType)
 	}
@@ -71,6 +74,7 @@ func (t *SearchTool) ValidateParams(params *SearchEntitiesParams) error {
 	if params.Limit < 0 {
 		return tools.NewToolError("limit must be a non-negative integer")
 	}
+
 	if params.Limit > 1000 {
 		return tools.NewToolError("limit cannot exceed 1000 entities")
 	}

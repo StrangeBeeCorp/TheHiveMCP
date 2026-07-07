@@ -3,12 +3,13 @@ package search
 import (
 	"testing"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 func TestGetExcludedFields_IdNeverExcluded(t *testing.T) {
-	tool := &SearchTool{}
+	tool := &Tool{}
 
 	entityTypes := []string{
 		types.EntityTypeAlert,
@@ -24,30 +25,30 @@ func TestGetExcludedFields_IdNeverExcluded(t *testing.T) {
 	for _, entityType := range entityTypes {
 		t.Run(entityType, func(t *testing.T) {
 			// When keptColumns does NOT include _id, it should still not be excluded
-			excluded := tool.getExcludedFields(entityType, []string{"title"}, nil)
-			assert.NotContains(t, excluded, "_id",
+			excluded := tool.getExcludedFields(entityType, []string{fieldTitle}, nil)
+			assert.NotContains(t, excluded, fieldID,
 				"_id must never be excluded from search results for entity type %s", entityType)
 		})
 	}
 }
 
 func TestGetExcludedFields_IdNotExcludedWithExtraColumns(t *testing.T) {
-	tool := &SearchTool{}
+	tool := &Tool{}
 
 	// Simulate the bug scenario: extra-columns specified without _id,
 	// and additional-queries would need _id
-	keptColumns := []string{"title", "description", "source", "tags", "severity"}
+	keptColumns := []string{fieldTitle, "description", "source", "tags", "severity"}
 	excluded := tool.getExcludedFields(types.EntityTypeAlert, keptColumns, nil)
 
-	assert.NotContains(t, excluded, "_id",
+	assert.NotContains(t, excluded, fieldID,
 		"_id must never be excluded even when not in keptColumns")
 }
 
 func TestGetExcludedFields_ExtraDataPreserved(t *testing.T) {
-	tool := &SearchTool{}
+	tool := &Tool{}
 
 	// extraData should not be excluded when extraData list is non-empty
-	excluded := tool.getExcludedFields(types.EntityTypeCase, []string{"title"}, []string{"someField"})
+	excluded := tool.getExcludedFields(types.EntityTypeCase, []string{fieldTitle}, []string{"someField"})
 	assert.NotContains(t, excluded, "extraData",
 		"extraData should not be excluded when extraData list is non-empty")
 }

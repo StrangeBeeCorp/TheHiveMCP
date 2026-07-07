@@ -3,11 +3,19 @@ package execute_automation_test
 import (
 	"testing"
 
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
+)
+
+const (
+	toolNameExecuteAutomation = "execute-automation"
+	argOperation              = "operation"
+	argEntityType             = "entity-type"
+	argEntityID               = "entity-id"
 )
 
 // scopedPermissionsYAML restricts execute-automation to TLP <= 2 but allows every
@@ -35,39 +43,25 @@ permissions:
     allowed: ["*"]
 `
 
-func createCaseWithTLP(t *testing.T, hiveClient *thehive.APIClient, title string, tlp int32) *thehive.OutputCase {
-	t.Helper()
-
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	testCase := testutils.MockInputCase()
-	testCase.Title = title
-	testCase.Tlp = &tlp
-
-	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdCase)
-	return createdCase
-}
-
 func createObservableWithTLP(t *testing.T, hiveClient *thehive.APIClient, caseID, data string, tlp int32) string {
 	t.Helper()
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 	observable := thehive.NewInputCreateObservable("ip")
-	observable.SetData(thehive.StringAsInputObservableData(thehive.PtrString(data)))
+	observable.SetData(thehive.StringAsInputObservableData(new(data)))
 	observable.SetMessage("scope test observable")
 	observable.SetTlp(tlp)
 
 	created, _, err := hiveClient.ObservableAPI.CreateObservableInCase(authContext, caseID).InputCreateObservable(*observable).Execute()
 	require.NoError(t, err)
 	require.NotEmpty(t, created)
+
 	return created[0].UnderscoreId
 }
 
 func requireScopeDenied(t *testing.T, result *mcp.CallToolResult) {
 	t.Helper()
-	require.True(t, result.IsError, "automation against an out-of-scope entity must be denied")
-	require.Contains(t, result.Content[0].(mcp.TextContent).Text, "not within the scope")
+	testutils.RequireScopeDenied(t, result, "not within the scope")
 }
 
 func TestExecuteAutomationScopeRunResponderDeniedOutOfScope(t *testing.T) {
@@ -75,18 +69,18 @@ func TestExecuteAutomationScopeRunResponderDeniedOutOfScope(t *testing.T) {
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
 
-	outOfScopeCase := createCaseWithTLP(t, hiveClient, "Out of scope responder target", 3)
-	inScopeCase := createCaseWithTLP(t, hiveClient, "In scope responder target", 2)
+	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope responder target", 3)
+	inScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "In scope responder target", 2)
 
 	runResponderRequest := func(caseID string) mcp.CallToolRequest {
 		return mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
-				Name: "execute-automation",
+				Name: toolNameExecuteAutomation,
 				Arguments: map[string]any{
-					"operation":    "run-responder",
+					argOperation:   "run-responder",
 					"responder-id": "TestResponder_1_0",
-					"entity-type":  types.EntityTypeCase,
-					"entity-id":    caseID,
+					argEntityType:  types.EntityTypeCase,
+					argEntityID:    caseID,
 				},
 			},
 		}
@@ -100,7 +94,10 @@ func TestExecuteAutomationScopeRunResponderDeniedOutOfScope(t *testing.T) {
 	result, err = mcpClient.CallTool(t.Context(), runResponderRequest(inScopeCase.UnderscoreId))
 	require.NoError(t, err)
 	require.True(t, result.IsError)
-	text := result.Content[0].(mcp.TextContent).Text
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+
+	text := textContent.Text
 	require.NotContains(t, text, "not within the scope")
 	require.Contains(t, text, "failed to execute responder")
 }
@@ -112,16 +109,16 @@ func TestExecuteAutomationScopeRunAnalyzerDeniedOutOfScope(t *testing.T) {
 
 	// Scope is decided on the observable's own TLP: the parent case is in scope (TLP 2)
 	// but the TLP-3 observable is not.
-	parentCase := createCaseWithTLP(t, hiveClient, "Case for analyzer scope test", 2)
+	parentCase := testutils.CreateCaseWithTLP(t, hiveClient, "Case for analyzer scope test", 2)
 	outOfScopeObservableID := createObservableWithTLP(t, hiveClient, parentCase.UnderscoreId, "10.20.30.40", 3)
 	inScopeObservableID := createObservableWithTLP(t, hiveClient, parentCase.UnderscoreId, "10.20.30.41", 1)
 
 	runAnalyzerRequest := func(observableID string) mcp.CallToolRequest {
 		return mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
-				Name: "execute-automation",
+				Name: toolNameExecuteAutomation,
 				Arguments: map[string]any{
-					"operation":     "run-analyzer",
+					argOperation:    "run-analyzer",
 					"analyzer-id":   "TestAnalyzer_1_0",
 					"observable-id": observableID,
 				},
@@ -148,10 +145,10 @@ func TestExecuteAutomationScopeRunAnalyzerDeniedOutOfScope(t *testing.T) {
 
 	statusResult, err := mcpClient.CallTool(t.Context(), mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "execute-automation",
+			Name: toolNameExecuteAutomation,
 			Arguments: map[string]any{
-				"operation": "get-job-status",
-				"job-id":    jobID,
+				argOperation: "get-job-status",
+				"job-id":     jobID,
 			},
 		},
 	})
@@ -165,7 +162,7 @@ func TestExecuteAutomationScopeGetJobStatusDeniedOutOfScope(t *testing.T) {
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 
-	parentCase := createCaseWithTLP(t, hiveClient, "Case for job status scope test", 2)
+	parentCase := testutils.CreateCaseWithTLP(t, hiveClient, "Case for job status scope test", 2)
 	outOfScopeObservableID := createObservableWithTLP(t, hiveClient, parentCase.UnderscoreId, "10.20.30.42", 3)
 
 	// Create the job directly through TheHive, bypassing the MCP gate
@@ -176,10 +173,10 @@ func TestExecuteAutomationScopeGetJobStatusDeniedOutOfScope(t *testing.T) {
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "execute-automation",
+			Name: toolNameExecuteAutomation,
 			Arguments: map[string]any{
-				"operation": "get-job-status",
-				"job-id":    job.GetUnderscoreId(),
+				argOperation: "get-job-status",
+				"job-id":     job.GetUnderscoreId(),
 			},
 		},
 	}
@@ -194,16 +191,16 @@ func TestExecuteAutomationScopeGetActionStatusDeniedOutOfScope(t *testing.T) {
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
 
-	outOfScopeCase := createCaseWithTLP(t, hiveClient, "Out of scope action status target", 3)
+	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope action status target", 3)
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "execute-automation",
+			Name: toolNameExecuteAutomation,
 			Arguments: map[string]any{
-				"operation":   "get-action-status",
+				argOperation:  "get-action-status",
 				"action-id":   "~999999",
-				"entity-type": types.EntityTypeCase,
-				"entity-id":   outOfScopeCase.UnderscoreId,
+				argEntityType: types.EntityTypeCase,
+				argEntityID:   outOfScopeCase.UnderscoreId,
 			},
 		},
 	}
@@ -218,16 +215,16 @@ func TestExecuteAutomationScopeNoFiltersBackwardCompatible(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	highTLPCase := createCaseWithTLP(t, hiveClient, "High TLP case without filters", 3)
+	highTLPCase := testutils.CreateCaseWithTLP(t, hiveClient, "High TLP case without filters", 3)
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "execute-automation",
+			Name: toolNameExecuteAutomation,
 			Arguments: map[string]any{
-				"operation":   "get-action-status",
+				argOperation:  "get-action-status",
 				"action-id":   "~999999",
-				"entity-type": types.EntityTypeCase,
-				"entity-id":   highTLPCase.UnderscoreId,
+				argEntityType: types.EntityTypeCase,
+				argEntityID:   highTLPCase.UnderscoreId,
 			},
 		},
 	}
@@ -235,7 +232,12 @@ func TestExecuteAutomationScopeNoFiltersBackwardCompatible(t *testing.T) {
 	result, err := mcpClient.CallTool(t.Context(), request)
 	require.NoError(t, err)
 	require.True(t, result.IsError)
-	text := result.Content[0].(mcp.TextContent).Text
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+
+	text := textContent.Text
+	// The action lookup itself ran (and found nothing); it was not blocked by
+	// any scope gate
 	require.NotContains(t, text, "not within the scope")
 	require.Contains(t, text, "not found for entity")
 }

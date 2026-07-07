@@ -6,7 +6,7 @@ CI_MODE=${CI_MODE:-false}
 WORKSPACE_DIR=${WORKSPACE_DIR:-$(pwd)}
 
 # Load environment variables from .env file (if not in CI)
-if [ "$CI_MODE" != "true" ] && [ -f "./.env" ]; then
+if [[ "$CI_MODE" != "true" ]] && [[ -f "./.env" ]]; then
     export $(grep -v '^#' ./.env | xargs)
 fi
 
@@ -15,11 +15,10 @@ export PERMISSIONS_CONFIG="${PERMISSIONS_CONFIG:-}"
 
 # Check if permissions config is a file before changing directories
 PERMISSIONS_IS_FILE=false
-if [ -n "$PERMISSIONS_CONFIG" ] && [ "$PERMISSIONS_CONFIG" != "admin" ] && [ "$PERMISSIONS_CONFIG" != "read_only" ]; then
-    # Check if file exists (handling both absolute and relative paths)
-    if [ -f "$PERMISSIONS_CONFIG" ]; then
-        PERMISSIONS_IS_FILE=true
-    fi
+# Check if it's a real file path (not the "admin"/"read_only" keywords), handling
+# both absolute and relative paths.
+if [[ -n "$PERMISSIONS_CONFIG" ]] && [[ "$PERMISSIONS_CONFIG" != "admin" ]] && [[ "$PERMISSIONS_CONFIG" != "read_only" ]] && [[ -f "$PERMISSIONS_CONFIG" ]]; then
+    PERMISSIONS_IS_FILE=true
 fi
 
 # Create extension directory structure
@@ -27,7 +26,7 @@ mkdir -p extension/server
 cd extension
 
 # Copy logo - handle both CI and local modes
-if [ "$CI_MODE" = "true" ]; then
+if [[ "$CI_MODE" = "true" ]]; then
     cp /usr/local/share/icon.png icon.png
 else
     cp ../docs/images/theHivelogo.png icon.png
@@ -35,9 +34,9 @@ fi
 
 # Copy permissions config if it's a file path and bundle it
 PERMISSIONS_DEFAULT=""
-if [ "$PERMISSIONS_IS_FILE" = true ]; then
+if [[ "$PERMISSIONS_IS_FILE" = true ]]; then
     # File exists, copy it to the bundle
-    if [ "$CI_MODE" = "true" ]; then
+    if [[ "$CI_MODE" = "true" ]]; then
         cp "$PERMISSIONS_CONFIG" permissions.yaml
     else
         # Try relative path from project root first, then absolute/current path
@@ -49,7 +48,7 @@ if [ "$PERMISSIONS_IS_FILE" = true ]; then
     fi
     PERMISSIONS_DEFAULT="permissions.yaml"
     echo "Bundled permissions config: $PERMISSIONS_CONFIG -> permissions.yaml"
-elif [ -n "$PERMISSIONS_CONFIG" ]; then
+elif [[ -n "$PERMISSIONS_CONFIG" ]]; then
     # Not a file (empty string, admin, read_only, etc), use as-is
     PERMISSIONS_DEFAULT="$PERMISSIONS_CONFIG"
 fi
@@ -59,7 +58,7 @@ fi
 BIN_EXT=""
 
 # Handle binary selection - in CI we'll build for all platforms
-if [ "$CI_MODE" = "true" ]; then
+if [[ "$CI_MODE" = "true" ]]; then
     # In CI, expect binaries to be provided in /workspace/binaries/
     # Use TARGET_ARCH if specified, otherwise default to linux-amd64
     TARGET_ARCH=${TARGET_ARCH:-linux-amd64}
@@ -68,7 +67,7 @@ if [ "$CI_MODE" = "true" ]; then
         *) BIN_EXT="" ;;
     esac
     BINARY_NAME="thehivemcp-${TARGET_ARCH}${BIN_EXT}"
-    if [ -f "/workspace/binaries/$BINARY_NAME" ]; then
+    if [[ -f "/workspace/binaries/$BINARY_NAME" ]]; then
         cp /workspace/binaries/$BINARY_NAME server/thehivemcp${BIN_EXT}
     else
         echo "Error: Binary $BINARY_NAME not found in /workspace/binaries/" >&2
@@ -78,7 +77,7 @@ else
     # Local mode: detect platform and copy appropriate binary
     PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
     ARCH=$(uname -m)
-    if [ "$ARCH" = "x86_64" ]; then
+    if [[ "$ARCH" = "x86_64" ]]; then
         ARCH="amd64"
     fi
     case "$PLATFORM" in
@@ -94,7 +93,7 @@ fi
 [[ -z "$BIN_EXT" ]] && chmod +x server/thehivemcp
 
 # Extract version - handle both CI and local modes
-if [ "$CI_MODE" = "true" ]; then
+if [[ "$CI_MODE" = "true" ]]; then
     VERSION_FULL=${VERSION:-$(echo "$BINARY_NAME" | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "v0.0.0")}
     VERSION=$(echo "$VERSION_FULL" | sed 's/^v//')
 else
@@ -167,10 +166,10 @@ echo "Packaging MCPB with version: $VERSION"
 npx @anthropic-ai/mcpb pack
 
 # In CI mode, move the generated file to expected location
-if [ "$CI_MODE" = "true" ]; then
+if [[ "$CI_MODE" = "true" ]]; then
     # Find the generated .mcpb file and copy it to workspace with architecture suffix
     MCPB_FILE=$(find . -name "*.mcpb" -type f | head -1)
-    if [ -n "$MCPB_FILE" ]; then
+    if [[ -n "$MCPB_FILE" ]]; then
         OUTPUT_NAME="/workspace/thehivemcp-${VERSION_FULL}-${TARGET_ARCH}.mcpb"
         cp "$MCPB_FILE" "$OUTPUT_NAME"
         echo "MCPB package created: $OUTPUT_NAME"

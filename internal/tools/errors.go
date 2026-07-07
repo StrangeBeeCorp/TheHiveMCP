@@ -1,3 +1,5 @@
+// Package tools defines the MCP tools exposed by the server and their shared
+// registration, validation, and error-handling helpers.
 package tools
 
 import (
@@ -7,40 +9,48 @@ import (
 	"net/http"
 )
 
+// ToolError represents a tool error with optional context.
 type ToolError struct {
 	message     string
 	cause       error
 	hints       []string
-	apiResponse interface{}
+	apiResponse any
 }
 
+// NewToolError creates a new tool error.
 func NewToolError(message string) *ToolError {
 	return &ToolError{message: message}
 }
 
-func NewToolErrorf(format string, args ...interface{}) *ToolError {
+// NewToolErrorf creates a new tool error with formatting.
+func NewToolErrorf(format string, args ...any) *ToolError {
 	return &ToolError{message: fmt.Sprintf(format, args...)}
 }
 
+// Cause adds the underlying error
 func (e *ToolError) Cause(err error) *ToolError {
 	e.cause = err
 	return e
 }
 
+// Hint adds a hint message
 func (e *ToolError) Hint(hint string) *ToolError {
 	e.hints = append(e.hints, hint)
 	return e
 }
 
-func (e *ToolError) Hintf(format string, args ...interface{}) *ToolError {
+// Hintf adds a formatted hint message
+func (e *ToolError) Hintf(format string, args ...any) *ToolError {
 	e.hints = append(e.hints, fmt.Sprintf(format, args...))
 	return e
 }
 
+// Schema adds a hint pointing to the schema resource
 func (e *ToolError) Schema(entityType, operation string) *ToolError {
 	if operation != "" {
 		return e.Hintf("Use get-resource 'hive://schema/%s/%s' for field definitions", entityType, operation)
 	}
+
 	return e.Hintf("Use get-resource 'hive://schema/%s' for available fields", entityType)
 }
 
@@ -56,21 +66,26 @@ func (e *ToolError) API(resp *http.Response) *ToolError {
 
 	body, err := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
+
 	if err != nil {
 		return e.Hintf("failed to read API response body: %v", err)
 	}
 
-	var jsonObj interface{}
-	if err := json.Unmarshal(body, &jsonObj); err == nil {
+	var jsonObj any
+
+	err = json.Unmarshal(body, &jsonObj)
+	if err == nil {
 		e.apiResponse = jsonObj
 	} else {
 		e.apiResponse = string(body)
 	}
+
 	return e
 }
 
+// Error implements the error interface
 func (e *ToolError) Error() string {
-	errorObj := map[string]interface{}{
+	errorObj := map[string]any{
 		"error":   true,
 		"message": e.message,
 	}
@@ -87,16 +102,17 @@ func (e *ToolError) Error() string {
 		errorObj["apiResponse"] = e.apiResponse
 	}
 
-	errorJson, err := json.Marshal(errorObj)
+	errorJSON, err := json.Marshal(errorObj)
 	if err != nil {
-		return fmt.Sprintf("error: %s", e.message)
+		return "error: " + e.message
 	}
 
-	return string(errorJson)
+	return string(errorJSON)
 }
 
-func (e *ToolError) ToMap() map[string]interface{} {
-	errorObj := map[string]interface{}{
+// ToMap returns the error as a structured map for JSON serialization
+func (e *ToolError) ToMap() map[string]any {
+	errorObj := map[string]any{
 		"error":   true,
 		"message": e.message,
 	}

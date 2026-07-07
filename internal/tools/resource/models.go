@@ -2,6 +2,7 @@ package resource
 
 import "github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 
+// GetResourceToolDescription is the human-readable description advertised for the get-resource tool.
 const GetResourceToolDescription = `Access TheHive resources for documentation, schemas, and metadata.
 
 Resources are organized hierarchically:
@@ -35,41 +36,45 @@ type GetResourceParams struct {
 	URI string `json:"uri,omitempty" jsonschema_description:"Resource URI to query (e.g., 'hive://schema/alert', 'hive://metadata/automation'). Omit to list all categories."`
 }
 
-// ResourceContent represents a specific resource with content
-type ResourceContent struct {
-	URI      string      `json:"uri"`
-	Name     string      `json:"name"`
-	MIMEType string      `json:"mimeType,omitempty"`
-	Content  string      `json:"content,omitempty"`
-	Data     interface{} `json:"data,omitempty"`
+// Content represents a specific resource with its content.
+type Content struct {
+	URI      string `json:"uri"`
+	Name     string `json:"name"`
+	MIMEType string `json:"mimeType,omitempty"`
+	Content  string `json:"content,omitempty"`
+	Data     any    `json:"data,omitempty"`
 }
 
-func NewResourceContent(uri, name, mimeType string) *ResourceContent {
-	return &ResourceContent{
+// NewResourceContent creates a Content for the resource identified by uri.
+func NewResourceContent(uri, name, mimeType string) *Content {
+	return &Content{
 		URI:      uri,
 		Name:     name,
 		MIMEType: mimeType,
 	}
 }
 
-func (rc *ResourceContent) SetTextContent(content string) *ResourceContent {
+// SetTextContent sets the plain-text body of the resource and returns rc for chaining.
+func (rc *Content) SetTextContent(content string) *Content {
 	rc.Content = content
 	return rc
 }
 
-func (rc *ResourceContent) SetDataContent(data interface{}) *ResourceContent {
+// SetDataContent sets the structured data body of the resource and returns rc for chaining.
+func (rc *Content) SetDataContent(data any) *Content {
 	rc.Data = data
 	return rc
 }
 
 // CategoryBrowse represents a directory listing of resources and subcategories
 type CategoryBrowse struct {
-	URI           string                   `json:"uri"`
-	Subcategories []map[string]interface{} `json:"subcategories,omitempty"`
-	Resources     []map[string]interface{} `json:"resources,omitempty"`
+	URI           string           `json:"uri"`
+	Subcategories []map[string]any `json:"subcategories,omitempty"`
+	Resources     []map[string]any `json:"resources,omitempty"`
 }
 
-func NewCategoryBrowse(uri string, subcategories []map[string]interface{}, resources []map[string]interface{}) *CategoryBrowse {
+// NewCategoryBrowse creates a CategoryBrowse listing for the given uri.
+func NewCategoryBrowse(uri string, subcategories []map[string]any, resources []map[string]any) *CategoryBrowse {
 	return &CategoryBrowse{
 		URI:           uri,
 		Subcategories: subcategories,
@@ -80,16 +85,18 @@ func NewCategoryBrowse(uri string, subcategories []map[string]interface{}, resou
 // GetResourceResult is the unified response type for get-resource operations
 // Either Resource OR Category will be populated, never both
 type GetResourceResult struct {
-	Resource *ResourceContent `json:"resource,omitempty"`
-	Category *CategoryBrowse  `json:"category,omitempty"`
+	Resource *Content        `json:"resource,omitempty"`
+	Category *CategoryBrowse `json:"category,omitempty"`
 }
 
-func NewResourceResult(resource *ResourceContent) *GetResourceResult {
+// NewResourceResult wraps resource content in a GetResourceResult.
+func NewResourceResult(resource *Content) *GetResourceResult {
 	return &GetResourceResult{
 		Resource: resource,
 	}
 }
 
+// NewCategoryResult wraps a category listing in a GetResourceResult.
 func NewCategoryResult(category *CategoryBrowse) *GetResourceResult {
 	return &GetResourceResult{
 		Category: category,
