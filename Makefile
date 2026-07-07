@@ -205,8 +205,7 @@ lint: ## Run linter checks without modifying files
 	@echo $(BGreen)-- Linter Checks --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	docker run --rm -v $(CURDIR):/app -w /app golangci/golangci-lint:v2.12.2 golangci-lint config verify
-	docker run -v $(CURDIR):/app -w /app -i --rm $(DOCKER_CACHE_MOUNTS) -v $(HOME)/.cache/golangci-lint:/root/.cache/golangci-lint golangci/golangci-lint:v2.12.2 golangci-lint run -v
-	docker build -t ${BINARY_NAME}:latest -f deployment/Dockerfile .
+	docker run -v $(CURDIR):/app -w /app -i --rm $(DOCKER_CACHE_MOUNTS) -v $(HOME)/.cache/golangci-lint:/root/.cache/golangci-lint golangci/golangci-lint:v2.12.2 golangci-lint run
 
 .PHONY: lint-fix
 lint-fix: fmt ## Format the code, then run linter checks with auto-fix
@@ -214,8 +213,7 @@ lint-fix: fmt ## Format the code, then run linter checks with auto-fix
 	@echo $(BGreen)-- Linter Checks with auto-fix --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	docker run --rm -v $(CURDIR):/app -w /app golangci/golangci-lint:v2.12.2 golangci-lint config verify
-	docker run -v $(CURDIR):/app -w /app -i --rm $(DOCKER_CACHE_MOUNTS) -v $(HOME)/.cache/golangci-lint:/root/.cache/golangci-lint golangci/golangci-lint:v2.12.2 golangci-lint run --fix -v
-	docker build -t ${BINARY_NAME}:latest -f deployment/Dockerfile .
+	docker run -v $(CURDIR):/app -w /app -i --rm $(DOCKER_CACHE_MOUNTS) -v $(HOME)/.cache/golangci-lint:/root/.cache/golangci-lint golangci/golangci-lint:v2.12.2 golangci-lint run --fix
 
 .PHONY: updatedep
 updatedep: ## Update dependencies
