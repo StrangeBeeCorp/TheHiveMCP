@@ -21,7 +21,7 @@ chmod +x thehivemcp
 ```
 
 > **Windows:** download the matching `windows-*.exe`. The current Windows binaries are unsigned — expect a SmartScreen prompt, and see
-> [How to run on Windows from source](../how-to/run-on-windows-from-source.md) if a signed-only policy blocks it.
+> [How to run on Windows from source](run-on-windows-from-source.md) if a signed-only policy blocks it.
 
 ### 2. Configure environment
 
