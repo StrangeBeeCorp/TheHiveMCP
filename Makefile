@@ -342,20 +342,21 @@ mcpb-ci-nobuild: pre-dist mcpb-build-image ## Generate MCPB packages from pre-bu
 	@echo $(BGreen)----------------------------------$(Color_Off)
 	@echo $(BGreen)-- Generating MCPB Packages CI --$(Color_Off)
 	@echo $(BGreen)----------------------------------$(Color_Off)
-	@for target in $(RELEASE_TARGETS); do \
+	@set -e; for target in $(RELEASE_TARGETS); do \
 		echo "Generating MCPB for $$target..."; \
 		case "$$target" in windows-*) ext=".exe";; *) ext="";; esac; \
-		mkdir -p /tmp/mcpb-workspace-$$target/binaries; \
-		cp $(BUILDDIR)/thehivemcp-$$target$$ext /tmp/mcpb-workspace-$$target/binaries/; \
+		ws=/tmp/mcpb-workspace-$$target; \
+		mkdir -p $$ws/binaries; \
+		cp $(BUILDDIR)/thehivemcp-$$target$$ext $$ws/binaries/; \
 		docker run --rm \
-			-v /tmp/mcpb-workspace-$$target:/workspace \
+			-v $$ws:/workspace \
 			-e CI_MODE=true \
 			-e VERSION=$(VERSION) \
 			-e TARGET_ARCH=$$target \
 			thehivemcp-mcpb:latest; \
-		cp /tmp/mcpb-workspace-$$target/thehivemcp-$(VERSION)-$$target.mcpb $(DISTDIR)/; \
+		cp $$ws/thehivemcp-$(VERSION)-$$target.mcpb $(DISTDIR)/; \
 		shasum -a 256 $(DISTDIR)/thehivemcp-$(VERSION)-$$target.mcpb > $(DISTDIR)/thehivemcp-$(VERSION)-$$target.mcpb.sha256; \
-		docker run --rm -v /tmp/mcpb-workspace-$$target:/workspace alpine:latest rm -rf /workspace/* || rm -rf /tmp/mcpb-workspace-$$target || true; \
+		docker run --rm -v $$ws:/workspace alpine:latest rm -rf /workspace/* || rm -rf $$ws || true; \
 	done
 	@echo "All MCPB packages created in $(DISTDIR)/"
 
