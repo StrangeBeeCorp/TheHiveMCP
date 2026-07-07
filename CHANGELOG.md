@@ -6,7 +6,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > **Note:** All `0.x` releases (v0.3.4 and earlier) were **beta / pre-release** versions. **v1.0.0 is the first production-ready release** — see its notes
 > below.
 
-## [1.0.0] - 2026-07-06
+## [1.0.0] - 2026-07-15
 
 TheHiveMCP is now **production-ready and out of beta**. This is a milestone release: it removes the beta warning, publishes accuracy and security evaluation
 evidence, replaces the internal LLM in search with a deterministic filter interface, hardens the security envelope, and relicenses the project under Apache 2.0.
