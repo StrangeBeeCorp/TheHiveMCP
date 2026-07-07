@@ -46,32 +46,32 @@ linters:
     - tagliatelle # tags mirror TheHive's wire format and the MCP kebab-case contract
 
   settings:
-    # Complexity ratchet. 56 is the current worst function (the deferred
-    # SonarCloud cognitive-complexity cleanup left a handful in the 31–56 range),
-    # so this threshold adds no churn today while blocking anything worse.
-    # Lower it as those functions are refactored down.
+    # Cognitive-complexity ratchet. 17 is the current worst function
+    # (utils.NormalizeFilterKeys), so this threshold adds no churn today while
+    # blocking anything worse. Lower it as functions are refactored down.
     gocognit:
-      min-complexity: 56
+      min-complexity: 17
 
-    # Cyclomatic-complexity ratchet. Current worst is (*Tool).ValidateParams —
-    # gocyclo measures it at 37, cyclop at 38 (cyclop counts one extra path).
-    # 40 clears both today while blocking anything worse. gocyclo uses
-    # min-complexity, cyclop uses max-complexity; both are pinned to 40.
+    # Cyclomatic-complexity ratchet, each linter pinned to its own current worst
+    # so both add no churn today while blocking anything worse. gocyclo's worst
+    # is 15 (testutils.tryEnsureTestOrganisation, manage.updateEntity); cyclop's
+    # is 16 (manage.updateEntity — cyclop counts one extra path). gocyclo uses
+    # min-complexity, cyclop uses max-complexity.
     gocyclo:
-      min-complexity: 40
+      min-complexity: 15
     cyclop:
-      max-complexity: 40
+      max-complexity: 16
 
-    # Nesting-depth ratchet. Current worst nested blocks reach depth 8; 9 clears
+    # Nesting-depth ratchet. Current worst nested blocks measure 8; 9 clears
     # them today while blocking deeper nesting.
     nestif:
       min-complexity: 9
 
     # Maintainability-index ratchet. maintidx flags functions whose MI falls
-    # BELOW `under` (lower MI = worse). Current worst is (*Tool).updateEntity at
-    # MI 19; 19 clears it today while flagging anything less maintainable.
+    # BELOW `under` (lower MI = worse). Current worst is RegisterSchemaResources
+    # at MI 22; 22 clears it today while flagging anything less maintainable.
     maintidx:
-      under: 19
+      under: 22
 
     mnd:
       # Numbers that are self-evident and not "magic" in context.

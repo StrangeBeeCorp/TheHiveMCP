@@ -55,6 +55,11 @@ func resolveHiveCredsIntoContext(ctx context.Context, r *http.Request, options *
 		{string(types.HeaderKeyTheHiveURL), types.HiveURLCtxKey, options.TheHiveURL},
 	}
 
+	// Resolve every header value into a flat key->value map first, so the
+	// context is augmented outside the loop and we avoid nesting
+	// context.WithValue calls across iterations.
+	resolved := make(map[types.CtxKey]string, len(keys))
+
 	for _, km := range keys {
 		val := r.Header.Get(km.header)
 		if val == "" {
@@ -70,7 +75,19 @@ func resolveHiveCredsIntoContext(ctx context.Context, r *http.Request, options *
 			val = ExtractBearerToken(val)
 		}
 
-		ctx = context.WithValue(ctx, km.ctxKey, val)
+		resolved[km.ctxKey] = val
+	}
+
+	if v, ok := resolved[types.HiveAPIKeyCtxKey]; ok {
+		ctx = context.WithValue(ctx, types.HiveAPIKeyCtxKey, v)
+	}
+
+	if v, ok := resolved[types.HiveOrgCtxKey]; ok {
+		ctx = context.WithValue(ctx, types.HiveOrgCtxKey, v)
+	}
+
+	if v, ok := resolved[types.HiveURLCtxKey]; ok {
+		ctx = context.WithValue(ctx, types.HiveURLCtxKey, v)
 	}
 
 	return ctx

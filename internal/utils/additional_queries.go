@@ -384,7 +384,8 @@ func ExpandEntitiesWithQueries(
 			return nil, err
 		}
 
-		if err := verifyParentEntitiesInScope(ctx, entityType, entityIDs, permFilters); err != nil {
+		err = verifyParentEntitiesInScope(ctx, entityType, entityIDs, permFilters)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -402,7 +403,8 @@ func ExpandEntitiesWithQueries(
 		return nil, err
 	}
 
-	if err := attachFilteredResults(ctx, entityType, entities, additionalQueries, queryConfig, permFilters, rawResults, scopeByType); err != nil {
+	err = attachFilteredResults(ctx, entityType, entities, additionalQueries, queryConfig, permFilters, rawResults, scopeByType)
+	if err != nil {
 		return nil, err
 	}
 
