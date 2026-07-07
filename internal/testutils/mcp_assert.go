@@ -56,3 +56,15 @@ func RequirePermissionDenied(t *testing.T, result *mcp.CallToolResult) {
 	require.True(t, ok, "first content item should be text")
 	require.Contains(t, text.Text, "not permitted")
 }
+
+// RequireScopeDenied asserts the tool reported an error whose text contains
+// wantSubstring, used by the DL-6004 scope-enforcement tests.
+func RequireScopeDenied(t *testing.T, result *mcp.CallToolResult, wantSubstring string) {
+	t.Helper()
+
+	require.True(t, result.IsError, "operation on an out-of-scope entity must be denied")
+	require.NotEmpty(t, result.Content, "error result should carry content")
+	text, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok, "first content item should be text")
+	require.Contains(t, text.Text, wantSubstring)
+}

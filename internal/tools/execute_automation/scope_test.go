@@ -43,21 +43,6 @@ permissions:
     allowed: ["*"]
 `
 
-func createCaseWithTLP(t *testing.T, hiveClient *thehive.APIClient, title string, tlp int32) *thehive.OutputCase {
-	t.Helper()
-
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	testCase := testutils.MockInputCase()
-	testCase.Title = title
-	testCase.Tlp = &tlp
-
-	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdCase)
-
-	return createdCase
-}
-
 func createObservableWithTLP(t *testing.T, hiveClient *thehive.APIClient, caseID, data string, tlp int32) string {
 	t.Helper()
 
@@ -76,10 +61,7 @@ func createObservableWithTLP(t *testing.T, hiveClient *thehive.APIClient, caseID
 
 func requireScopeDenied(t *testing.T, result *mcp.CallToolResult) {
 	t.Helper()
-	require.True(t, result.IsError, "automation against an out-of-scope entity must be denied")
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok)
-	require.Contains(t, textContent.Text, "not within the scope")
+	testutils.RequireScopeDenied(t, result, "not within the scope")
 }
 
 func TestExecuteAutomationScopeRunResponderDeniedOutOfScope(t *testing.T) {
@@ -87,8 +69,8 @@ func TestExecuteAutomationScopeRunResponderDeniedOutOfScope(t *testing.T) {
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
 
-	outOfScopeCase := createCaseWithTLP(t, hiveClient, "Out of scope responder target", 3)
-	inScopeCase := createCaseWithTLP(t, hiveClient, "In scope responder target", 2)
+	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope responder target", 3)
+	inScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "In scope responder target", 2)
 
 	runResponderRequest := func(caseID string) mcp.CallToolRequest {
 		return mcp.CallToolRequest{
@@ -127,7 +109,7 @@ func TestExecuteAutomationScopeRunAnalyzerDeniedOutOfScope(t *testing.T) {
 
 	// Scope is decided on the observable's own TLP: the parent case is in scope (TLP 2)
 	// but the TLP-3 observable is not.
-	parentCase := createCaseWithTLP(t, hiveClient, "Case for analyzer scope test", 2)
+	parentCase := testutils.CreateCaseWithTLP(t, hiveClient, "Case for analyzer scope test", 2)
 	outOfScopeObservableID := createObservableWithTLP(t, hiveClient, parentCase.UnderscoreId, "10.20.30.40", 3)
 	inScopeObservableID := createObservableWithTLP(t, hiveClient, parentCase.UnderscoreId, "10.20.30.41", 1)
 
@@ -180,7 +162,7 @@ func TestExecuteAutomationScopeGetJobStatusDeniedOutOfScope(t *testing.T) {
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 
-	parentCase := createCaseWithTLP(t, hiveClient, "Case for job status scope test", 2)
+	parentCase := testutils.CreateCaseWithTLP(t, hiveClient, "Case for job status scope test", 2)
 	outOfScopeObservableID := createObservableWithTLP(t, hiveClient, parentCase.UnderscoreId, "10.20.30.42", 3)
 
 	// Create the job directly through TheHive, bypassing the MCP gate
@@ -209,7 +191,7 @@ func TestExecuteAutomationScopeGetActionStatusDeniedOutOfScope(t *testing.T) {
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
 
-	outOfScopeCase := createCaseWithTLP(t, hiveClient, "Out of scope action status target", 3)
+	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope action status target", 3)
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
@@ -233,7 +215,7 @@ func TestExecuteAutomationScopeNoFiltersBackwardCompatible(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	highTLPCase := createCaseWithTLP(t, hiveClient, "High TLP case without filters", 3)
+	highTLPCase := testutils.CreateCaseWithTLP(t, hiveClient, "High TLP case without filters", 3)
 
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{

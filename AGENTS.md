@@ -36,6 +36,9 @@ All test commands run in Docker (see the `Makefile`); no local Go install is req
 - `make test-integration` — full suite including integration tests. These boot a live TheHive + Elasticsearch + MITRE stack via docker compose
   (`docker-compose.test.yml`; `THEHIVE_TEST_IMAGE` selects the version) and run against it at `THEHIVE_TEST_URL` (default `http://localhost:9000`), tearing the
   stack down afterward. They are slow (minutes) and cannot be result-cached. Requires Docker with compose (no testcontainers).
+  - Because that run takes minutes, never pipe its output through a small `tail`/`head` that discards most of it — you lose the full result and must re-run the
+    whole slow suite. Redirect stdout+stderr to a temp file (e.g. `make test-integration > /tmp/integration.log 2>&1`), then `grep`/inspect that file
+    afterwards.
 - Add `COVERAGE=1` to either target to enable coverage (off by default): it writes `coverage.out` and prints a `go tool cover -func` report. For example,
   `make test COVERAGE=1`.
 

@@ -1,8 +1,30 @@
 package testutils
 
 import (
+	"testing"
+
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
+	"github.com/stretchr/testify/require"
 )
+
+// CreateCaseWithTLP creates a case with the given title and TLP via the raw
+// TheHive API and asserts it succeeded. Shared by the manage and
+// execute_automation scope-enforcement tests.
+func CreateCaseWithTLP(t *testing.T, hiveClient *thehive.APIClient, title string, tlp int32) *thehive.OutputCase {
+	t.Helper()
+
+	authContext := GetAuthContext(NewHiveTestConfig())
+	testCase := MockInputCase()
+	testCase.Title = title
+	testCase.Tlp = &tlp
+
+	createdCase, httpResp, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
+	closeResponse(httpResp)
+	require.NoError(t, err)
+	require.NotNil(t, createdCase)
+
+	return createdCase
+}
 
 // MockInputCase returns a valid InputCreateCase (with a task and custom fields)
 // for testing.
