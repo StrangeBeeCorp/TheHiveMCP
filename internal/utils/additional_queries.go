@@ -189,6 +189,169 @@ func similarityHitID(item map[string]any) string {
 	return ""
 }
 
+// validateAdditionalQueries resolves the query config for entityType and
+// verifies every requested query is supported for it.
+func validateAdditionalQueries(entityType string, additionalQueries []string) (EntityQueryConfig, error) {
+	queryConfig, exists := queryRegistry[entityType]
+	if !exists {
+		return nil, fmt.Errorf("additional queries not supported for entity type: %s", entityType)
+	}
+
+	for _, queryName := range additionalQueries {
+		if _, supported := queryConfig[queryName]; !supported {
+			return nil, fmt.Errorf("unsupported additional query '%s' for entity type '%s'", queryName, entityType)
+		}
+	}
+
+	return queryConfig, nil
+}
+
+// collectEntityIDs extracts the _id of every entity, erroring if any is missing.
+func collectEntityIDs(entities []map[string]any) ([]string, error) {
+	entityIDs := make([]string, 0, len(entities))
+	for i, entity := range entities {
+		entityID, ok := entity[fieldID].(string)
+		if !ok {
+			return nil, fmt.Errorf("entity at index %d missing _id field", i)
+		}
+
+		entityIDs = append(entityIDs, entityID)
+	}
+
+	return entityIDs, nil
+}
+
+// verifyParentEntitiesInScope denies expansion of any parent the permission
+// filters exclude, in case a caller passes unscoped entity IDs (DL-6004).
+func verifyParentEntitiesInScope(ctx context.Context, entityType string, entityIDs []string, permFilters map[string]any) error {
+	inScope, err := GetEntityIDsInScope(ctx, entityType, entityIDs, permFilters)
+	if err != nil {
+		return fmt.Errorf("failed to verify entity scope before expansion: %w", err)
+	}
+
+	for _, entityID := range entityIDs {
+		if !inScope[entityID] {
+			return fmt.Errorf("%s %s was not found or is not within the scope permitted by your permissions configuration", entityType, entityID)
+		}
+	}
+
+	return nil
+}
+
+// runQueriesAndCollectHitIDs runs every requested query against every entity
+// (pass 1), stashing the raw rows and collecting the deduped union of
+// similarity-hit _ids per target type for the batched scope re-check.
+func runQueriesAndCollectHitIDs(
+	ctx context.Context,
+	hiveClient *thehive.APIClient,
+	entityType string,
+	entities []map[string]any,
+	additionalQueries []string,
+	queryConfig EntityQueryConfig,
+	permFilters map[string]any,
+) ([]map[string][]map[string]any, map[string]map[string]struct{}, error) {
+	rawResults := make([]map[string][]map[string]any, len(entities))
+	idsByType := make(map[string]map[string]struct{})
+
+	for i, entity := range entities {
+		entityID, ok := entity[fieldID].(string)
+		if !ok {
+			return nil, nil, fmt.Errorf("entity at index %d missing _id field", i)
+		}
+
+		rawResults[i] = make(map[string][]map[string]any, len(additionalQueries))
+
+		for _, queryName := range additionalQueries {
+			descriptor := queryConfig[queryName]
+
+			data, err := descriptor.Func(ctx, hiveClient, entityID)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to get %s for %s ID %s: %w", queryName, entityType, entityID, err)
+			}
+
+			rawResults[i][queryName] = data
+
+			if !descriptor.ResultsAreIndependent || len(permFilters) == 0 {
+				continue
+			}
+
+			collectHitIDs(idsByType, descriptor.EntityType, data)
+		}
+	}
+
+	return rawResults, idsByType, nil
+}
+
+// collectHitIDs adds the non-empty similarity-hit _ids of data to the dedup set
+// for targetType.
+func collectHitIDs(idsByType map[string]map[string]struct{}, targetType string, data []map[string]any) {
+	set := idsByType[targetType]
+	if set == nil {
+		set = make(map[string]struct{})
+		idsByType[targetType] = set
+	}
+
+	for _, item := range data {
+		if id := similarityHitID(item); id != "" {
+			set[id] = struct{}{}
+		}
+	}
+}
+
+// computeScopeByType runs one batch scope call per target type (pass 1.5),
+// failing closed on the first error before any hit is surfaced.
+func computeScopeByType(ctx context.Context, idsByType map[string]map[string]struct{}, permFilters map[string]any) (map[string]map[string]bool, error) {
+	scopeByType := make(map[string]map[string]bool, len(idsByType))
+	for targetType, set := range idsByType {
+		ids := make([]string, 0, len(set))
+		for id := range set {
+			ids = append(ids, id)
+		}
+
+		inScope, err := GetScopedEntityIDsBatch(ctx, targetType, ids, permFilters)
+		if err != nil {
+			return nil, fmt.Errorf("failed to verify similarity hit scope: %w", err)
+		}
+
+		scopeByType[targetType] = inScope
+	}
+
+	return scopeByType, nil
+}
+
+// attachFilteredResults drops out-of-scope hits per the precomputed verdicts,
+// projects each query result, and attaches it to its parent entity (pass 2).
+func attachFilteredResults(
+	ctx context.Context,
+	entityType string,
+	entities []map[string]any,
+	additionalQueries []string,
+	queryConfig EntityQueryConfig,
+	permFilters map[string]any,
+	rawResults []map[string][]map[string]any,
+	scopeByType map[string]map[string]bool,
+) error {
+	for i, entity := range entities {
+		for _, queryName := range additionalQueries {
+			descriptor := queryConfig[queryName]
+			data := rawResults[i][queryName]
+
+			if descriptor.ResultsAreIndependent && len(permFilters) > 0 {
+				data = filterSimilarityHitsByScope(ctx, queryName, descriptor.EntityType, data, scopeByType[descriptor.EntityType])
+			}
+
+			filteredData, err := filterAdditionalQueryResults(data, descriptor)
+			if err != nil {
+				return fmt.Errorf("failed to filter additional query results for %s ID %s: %w", entityType, entity[fieldID], err)
+			}
+
+			entity[queryName] = filteredData
+		}
+	}
+
+	return nil
+}
+
 // ExpandEntitiesWithQueries expands each entity with its related data inline.
 // When permission filters are configured for the calling tool, every parent
 // entity must be within the filtered scope before its children are fetched.
@@ -208,123 +371,39 @@ func ExpandEntitiesWithQueries(
 		return nil, fmt.Errorf("failed to get TheHive client: %w", err)
 	}
 
-	queryConfig, exists := queryRegistry[entityType]
-	if !exists {
-		return nil, fmt.Errorf("additional queries not supported for entity type: %s", entityType)
-	}
-
-	for _, queryName := range additionalQueries {
-		if _, supported := queryConfig[queryName]; !supported {
-			return nil, fmt.Errorf("unsupported additional query '%s' for entity type '%s'", queryName, entityType)
-		}
+	queryConfig, err := validateAdditionalQueries(entityType, additionalQueries)
+	if err != nil {
+		return nil, err
 	}
 
 	// Deny expansion of any parent the permission filters exclude, in case a
 	// caller passes unscoped entity IDs (DL-6004).
 	if len(permFilters) > 0 {
-		entityIDs := make([]string, 0, len(entities))
-		for i, entity := range entities {
-			entityID, ok := entity[fieldID].(string)
-			if !ok {
-				return nil, fmt.Errorf("entity at index %d missing _id field", i)
-			}
-
-			entityIDs = append(entityIDs, entityID)
-		}
-
-		inScope, err := GetEntityIDsInScope(ctx, entityType, entityIDs, permFilters)
+		entityIDs, err := collectEntityIDs(entities)
 		if err != nil {
-			return nil, fmt.Errorf("failed to verify entity scope before expansion: %w", err)
+			return nil, err
 		}
 
-		for _, entityID := range entityIDs {
-			if !inScope[entityID] {
-				return nil, fmt.Errorf("%s %s was not found or is not within the scope permitted by your permissions configuration", entityType, entityID)
-			}
+		if err := verifyParentEntitiesInScope(ctx, entityType, entityIDs, permFilters); err != nil {
+			return nil, err
 		}
 	}
 
 	// Batch the independent-query re-check (see QueryDescriptor, DL-6004) in ONE
 	// call per target type across ALL parents, not once per parent (DL-5764).
 	// Query execution stays serial; only the re-check is batched.
-
-	// Pass 1: run every query, stash raw rows, collect the deduped union of
-	// similarity hit _ids per target type.
-	rawResults := make([]map[string][]map[string]any, len(entities))
-	idsByType := make(map[string]map[string]struct{})
-
-	for i, entity := range entities {
-		entityID, ok := entity[fieldID].(string)
-		if !ok {
-			return nil, fmt.Errorf("entity at index %d missing _id field", i)
-		}
-
-		rawResults[i] = make(map[string][]map[string]any, len(additionalQueries))
-
-		for _, queryName := range additionalQueries {
-			descriptor := queryConfig[queryName]
-
-			data, err := descriptor.Func(ctx, hiveClient, entityID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get %s for %s ID %s: %w", queryName, entityType, entityID, err)
-			}
-
-			rawResults[i][queryName] = data
-
-			if !descriptor.ResultsAreIndependent || len(permFilters) == 0 {
-				continue
-			}
-
-			targetType := descriptor.EntityType
-
-			set := idsByType[targetType]
-			if set == nil {
-				set = make(map[string]struct{})
-				idsByType[targetType] = set
-			}
-
-			for _, item := range data {
-				if id := similarityHitID(item); id != "" {
-					set[id] = struct{}{}
-				}
-			}
-		}
+	rawResults, idsByType, err := runQueriesAndCollectHitIDs(ctx, hiveClient, entityType, entities, additionalQueries, queryConfig, permFilters)
+	if err != nil {
+		return nil, err
 	}
 
-	// Pass 1.5: one batch scope call per target type; fail closed on the first
-	// error before any hit is surfaced.
-	scopeByType := make(map[string]map[string]bool, len(idsByType))
-	for targetType, set := range idsByType {
-		ids := make([]string, 0, len(set))
-		for id := range set {
-			ids = append(ids, id)
-		}
-
-		inScope, err := GetScopedEntityIDsBatch(ctx, targetType, ids, permFilters)
-		if err != nil {
-			return nil, fmt.Errorf("failed to verify similarity hit scope: %w", err)
-		}
-
-		scopeByType[targetType] = inScope
+	scopeByType, err := computeScopeByType(ctx, idsByType, permFilters)
+	if err != nil {
+		return nil, err
 	}
 
-	// Pass 2: drop out-of-scope hits per the precomputed verdicts, project, attach.
-	for i, entity := range entities {
-		for _, queryName := range additionalQueries {
-			descriptor := queryConfig[queryName]
-			data := rawResults[i][queryName]
-
-			if descriptor.ResultsAreIndependent && len(permFilters) > 0 {
-				data = filterSimilarityHitsByScope(ctx, queryName, descriptor.EntityType, data, scopeByType[descriptor.EntityType])
-			}
-
-			filteredData, err := filterAdditionalQueryResults(data, descriptor)
-			if err != nil {
-				return nil, fmt.Errorf("failed to filter additional query results for %s ID %s: %w", entityType, entity[fieldID], err)
-			}
-
-			entity[queryName] = filteredData
-		}
+	if err := attachFilteredResults(ctx, entityType, entities, additionalQueries, queryConfig, permFilters, rawResults, scopeByType); err != nil {
+		return nil, err
 	}
 
 	return entities, nil

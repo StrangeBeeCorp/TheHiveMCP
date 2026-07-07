@@ -94,43 +94,65 @@ func (t *ExecuteAutomationTool) validateTargetScope(ctx context.Context, perms *
 func (t *ExecuteAutomationTool) ValidateParams(params *ExecuteAutomationParams) error {
 	switch params.Operation {
 	case OperationRunAnalyzer:
-		if params.AnalyzerID == "" {
-			return tools.NewToolErrorf("analyzer-id is required for run-analyzer operations.").Hint("Get available analyzers from get-resource 'hive://metadata/automation/analyzers'")
-		}
-
-		if params.ObservableID == "" {
-			return tools.NewToolErrorf("observable-id is required for run-analyzer operations. This is the ID of the observable to analyze")
-		}
+		return validateRunAnalyzerParams(params)
 	case OperationRunResponder:
-		if params.ResponderID == "" {
-			return tools.NewToolErrorf("responder-id is required for run-responder operations.").Hint("Get available responders from get-resource 'hive://metadata/automation/responders?entityType=<type>&entityId=<id>'")
-		}
-
-		if params.EntityType == "" {
-			return tools.NewToolErrorf("entity-type is required for run-responder operations.").Hint("Must be one of: 'case', 'alert', 'task', 'observable'")
-		}
-
-		if params.EntityID == "" {
-			return tools.NewToolErrorf("entity-id is required for run-responder operations. This is the ID of the entity the responder will act on")
-		}
+		return validateRunResponderParams(params)
 	case OperationGetJobStatus:
-		if params.JobID == "" {
-			return tools.NewToolErrorf("job-id is required for get-job-status operations. Provide the job ID returned by run-analyzer")
-		}
+		return validateGetJobStatusParams(params)
 	case OperationGetActionStatus:
-		if params.ActionID == "" {
-			return tools.NewToolErrorf("action-id is required for get-action-status operations.").Hint("Provide the action ID returned by run-responder")
-		}
-
-		if params.EntityType == "" {
-			return tools.NewToolErrorf("entity-type is required for get-action-status operations.").Hint("Must be one of: 'case', 'alert', 'task', 'observable'")
-		}
-
-		if params.EntityID == "" {
-			return tools.NewToolErrorf("entity-id is required for get-action-status operations. This is the ID of the entity the action is running against").Hint("Provide the entity ID the action is running against")
-		}
+		return validateGetActionStatusParams(params)
 	default:
 		return tools.NewToolErrorf("unsupported operation: %s", params.Operation)
+	}
+}
+
+func validateRunAnalyzerParams(params *ExecuteAutomationParams) error {
+	if params.AnalyzerID == "" {
+		return tools.NewToolErrorf("analyzer-id is required for run-analyzer operations.").Hint("Get available analyzers from get-resource 'hive://metadata/automation/analyzers'")
+	}
+
+	if params.ObservableID == "" {
+		return tools.NewToolErrorf("observable-id is required for run-analyzer operations. This is the ID of the observable to analyze")
+	}
+
+	return nil
+}
+
+func validateRunResponderParams(params *ExecuteAutomationParams) error {
+	if params.ResponderID == "" {
+		return tools.NewToolErrorf("responder-id is required for run-responder operations.").Hint("Get available responders from get-resource 'hive://metadata/automation/responders?entityType=<type>&entityId=<id>'")
+	}
+
+	if params.EntityType == "" {
+		return tools.NewToolErrorf("entity-type is required for run-responder operations.").Hint("Must be one of: 'case', 'alert', 'task', 'observable'")
+	}
+
+	if params.EntityID == "" {
+		return tools.NewToolErrorf("entity-id is required for run-responder operations. This is the ID of the entity the responder will act on")
+	}
+
+	return nil
+}
+
+func validateGetJobStatusParams(params *ExecuteAutomationParams) error {
+	if params.JobID == "" {
+		return tools.NewToolErrorf("job-id is required for get-job-status operations. Provide the job ID returned by run-analyzer")
+	}
+
+	return nil
+}
+
+func validateGetActionStatusParams(params *ExecuteAutomationParams) error {
+	if params.ActionID == "" {
+		return tools.NewToolErrorf("action-id is required for get-action-status operations.").Hint("Provide the action ID returned by run-responder")
+	}
+
+	if params.EntityType == "" {
+		return tools.NewToolErrorf("entity-type is required for get-action-status operations.").Hint("Must be one of: 'case', 'alert', 'task', 'observable'")
+	}
+
+	if params.EntityID == "" {
+		return tools.NewToolErrorf("entity-id is required for get-action-status operations. This is the ID of the entity the action is running against").Hint("Provide the entity ID the action is running against")
 	}
 
 	return nil

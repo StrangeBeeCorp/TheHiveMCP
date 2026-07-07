@@ -168,7 +168,9 @@ func CreateAuthContext(username, password string) context.Context {
 
 // TeardownContainers is a no-op kept so existing TestMain bodies compile:
 // docker compose owns the stack lifecycle (`make test` runs `compose down`).
-func TeardownContainers(_ context.Context) {}
+func TeardownContainers(_ context.Context) {
+	// Intentionally empty: docker compose owns teardown; nothing to do here.
+}
 
 // ResetHiveInstance clears all data from the test organisations
 func ResetHiveInstance(t *testing.T, hiveURL string, testConfig *HiveTestConfig) error {

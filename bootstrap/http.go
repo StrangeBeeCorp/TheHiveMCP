@@ -30,6 +30,101 @@ func parseAuthValidationCacheTTL(ttl string) time.Duration {
 	return duration
 }
 
+// resolveHiveCredsIntoContext extracts TheHive credential/URL headers (falling
+// back to the configured env defaults when opted in) and stores them in the
+// returned context.
+func resolveHiveCredsIntoContext(ctx context.Context, r *http.Request, options *types.TheHiveMcpDefaultOptions) context.Context {
+	// Env credentials are a fallback for requests carrying none, and only
+	// when explicitly opted in.
+	envAPIKey := ""
+
+	if options.AllowEnvCredentialFallback {
+		envAPIKey = options.TheHiveAPIKey
+	}
+
+	type keyMap struct {
+		header string
+		ctxKey types.CtxKey
+		deflt  string
+	}
+
+	keys := []keyMap{
+		{"Authorization", types.HiveAPIKeyCtxKey, envAPIKey},
+		{string(types.HeaderKeyTheHiveAPIKey), types.HiveAPIKeyCtxKey, envAPIKey},
+		{string(types.HeaderKeyTheHiveOrganisation), types.HiveOrgCtxKey, options.TheHiveOrganisation},
+		{string(types.HeaderKeyTheHiveURL), types.HiveURLCtxKey, options.TheHiveURL},
+	}
+
+	for _, km := range keys {
+		val := r.Header.Get(km.header)
+		if val == "" {
+			val = km.deflt
+		}
+
+		if val == "" {
+			continue
+		}
+
+		// Special handling for Authorization header
+		if km.header == "Authorization" {
+			val = ExtractBearerToken(val)
+		}
+
+		ctx = context.WithValue(ctx, km.ctxKey, val)
+	}
+
+	return ctx
+}
+
+// validateHiveAuthIntoContext enforces the URL allowlist and, when it passes,
+// builds a TheHive client and validates the credentials upstream. It records
+// the outcome (client + permissions on success, AuthErrorCtxKey on failure) in
+// the returned context. Fail-closed: the middleware denies any request whose
+// context lacks AuthValidatedCtxKey.
+func validateHiveAuthIntoContext(ctx context.Context, allowlist *TheHiveURLAllowlist, allowlistErr error, cache *validationCache, options *types.TheHiveMcpDefaultOptions) context.Context {
+	hiveAPIKey, _ := ctx.Value(types.HiveAPIKeyCtxKey).(string)
+	hiveOrganisation, _ := ctx.Value(types.HiveOrgCtxKey).(string)
+	hiveURL, _ := ctx.Value(types.HiveURLCtxKey).(string)
+
+	switch {
+	case allowlistErr != nil:
+		return context.WithValue(ctx, types.AuthErrorCtxKey, errors.New("TheHive authentication failed: invalid TheHive URL allowlist configuration"))
+	case hiveURL == "":
+		return context.WithValue(ctx, types.AuthErrorCtxKey, errors.New("TheHive authentication failed: no TheHive URL provided"))
+	case !allowlist.Allows(hiveURL):
+		// Reject before any outbound request: never send creds to an
+		// attacker-controlled destination (SSRF / credential disclosure).
+		slog.Warn("Rejected TheHive URL not in allowlist", "url", hiveURL)
+
+		return context.WithValue(ctx, types.AuthErrorCtxKey, errors.New("TheHive authentication failed: TheHive URL is not in the allowlist"))
+	}
+
+	envUsername := ""
+	envPassword := ""
+
+	if options.AllowEnvCredentialFallback {
+		envUsername = options.TheHiveUsername
+		envPassword = options.TheHivePassword
+	}
+
+	creds := &TheHiveCredentials{
+		URL:          hiveURL,
+		APIKey:       hiveAPIKey,
+		Username:     envUsername,
+		Password:     envPassword,
+		Organisation: hiveOrganisation,
+	}
+
+	newCtx, err := AddTheHiveClientToContextWithCreds(ctx, creds)
+	if err != nil {
+		slog.Error("Failed to add TheHive client to context", "error", err)
+
+		return context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: %w", err))
+	}
+
+	return validateTheHiveAuthInContext(newCtx, creds, cache)
+}
+
 // GetHTTPAuthContextFunc returns an HTTP context function that extracts TheHive
 // credentials and target URL from request headers (or configured fallbacks),
 // enforces the URL allowlist, validates the credentials upstream (with caching),
@@ -44,100 +139,8 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 	cache := newValidationCache(parseAuthValidationCacheTTL(options.AuthValidationCacheTTL))
 
 	return func(ctx context.Context, r *http.Request) context.Context {
-		// Env credentials are a fallback for requests carrying none, and only
-		// when explicitly opted in.
-		envAPIKey := ""
-		envUsername := ""
-		envPassword := ""
-
-		if options.AllowEnvCredentialFallback {
-			envAPIKey = options.TheHiveAPIKey
-			envUsername = options.TheHiveUsername
-			envPassword = options.TheHivePassword
-		}
-
-		type keyMap struct {
-			header string
-			ctxKey types.CtxKey
-			deflt  string
-		}
-
-		keys := []keyMap{
-			{"Authorization", types.HiveAPIKeyCtxKey, envAPIKey},
-			{string(types.HeaderKeyTheHiveAPIKey), types.HiveAPIKeyCtxKey, envAPIKey},
-			{string(types.HeaderKeyTheHiveOrganisation), types.HiveOrgCtxKey, options.TheHiveOrganisation},
-			{string(types.HeaderKeyTheHiveURL), types.HiveURLCtxKey, options.TheHiveURL},
-		}
-
-		// Resolve every header value into a flat key->value map first, so the
-		// context is augmented outside the loop and we avoid nesting
-		// context.WithValue calls across iterations.
-		resolved := make(map[types.CtxKey]string, len(keys))
-
-		for _, km := range keys {
-			val := r.Header.Get(km.header)
-			if val == "" {
-				val = km.deflt
-			}
-
-			if val == "" {
-				continue
-			}
-
-			// Special handling for Authorization header
-			if km.header == "Authorization" {
-				val = ExtractBearerToken(val)
-			}
-
-			resolved[km.ctxKey] = val
-		}
-
-		if v, ok := resolved[types.HiveAPIKeyCtxKey]; ok {
-			ctx = context.WithValue(ctx, types.HiveAPIKeyCtxKey, v)
-		}
-
-		if v, ok := resolved[types.HiveOrgCtxKey]; ok {
-			ctx = context.WithValue(ctx, types.HiveOrgCtxKey, v)
-		}
-
-		if v, ok := resolved[types.HiveURLCtxKey]; ok {
-			ctx = context.WithValue(ctx, types.HiveURLCtxKey, v)
-		}
-
-		// Fail-closed: AuthValidatedCtxKey is set only after the URL passes the
-		// allowlist and creds validate; the middleware denies requests lacking it.
-		hiveAPIKey, _ := ctx.Value(types.HiveAPIKeyCtxKey).(string)
-		hiveOrganisation, _ := ctx.Value(types.HiveOrgCtxKey).(string)
-		hiveURL, _ := ctx.Value(types.HiveURLCtxKey).(string)
-
-		switch {
-		case allowlistErr != nil:
-			ctx = context.WithValue(ctx, types.AuthErrorCtxKey, errors.New("TheHive authentication failed: invalid TheHive URL allowlist configuration"))
-		case hiveURL == "":
-			ctx = context.WithValue(ctx, types.AuthErrorCtxKey, errors.New("TheHive authentication failed: no TheHive URL provided"))
-		case !allowlist.Allows(hiveURL):
-			// Reject before any outbound request: never send creds to an
-			// attacker-controlled destination (SSRF / credential disclosure).
-			slog.Warn("Rejected TheHive URL not in allowlist", "url", hiveURL)
-
-			ctx = context.WithValue(ctx, types.AuthErrorCtxKey, errors.New("TheHive authentication failed: TheHive URL is not in the allowlist"))
-		default:
-			creds := &TheHiveCredentials{
-				URL:          hiveURL,
-				APIKey:       hiveAPIKey,
-				Username:     envUsername,
-				Password:     envPassword,
-				Organisation: hiveOrganisation,
-			}
-
-			newCtx, err := AddTheHiveClientToContextWithCreds(ctx, creds)
-			if err != nil {
-				slog.Error("Failed to add TheHive client to context", "error", err)
-				ctx = context.WithValue(ctx, types.AuthErrorCtxKey, fmt.Errorf("TheHive authentication failed: %w", err))
-			} else {
-				ctx = validateTheHiveAuthInContext(newCtx, creds, cache)
-			}
-		}
+		ctx = resolveHiveCredsIntoContext(ctx, r, options)
+		ctx = validateHiveAuthIntoContext(ctx, allowlist, allowlistErr, cache, options)
 
 		if options.DefaultCortexID != "" {
 			ctx = context.WithValue(ctx, types.DefaultCortexIDCtxKey, options.DefaultCortexID)
