@@ -25,6 +25,10 @@ const (
 	keyName        = "name"
 	keyDescription = "description"
 	keyResources   = "resources"
+	// uriCaseTemplateSchema / uriCaseTemplateDocs are the resource URIs for the
+	// case-template entity, reused across schema variants and documentation.
+	uriCaseTemplateSchema = "hive://schema/case-template"
+	uriCaseTemplateDocs   = "hive://docs/entities/case-template"
 )
 
 //go:embed schemas/*.json schemas/*/*.json
@@ -584,7 +588,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 	})
 
 	caseTemplateSchema := mcp.NewResource(
-		"hive://schema/case-template",
+		uriCaseTemplateSchema,
 		"Case Template Schema",
 		mcp.WithResourceDescription("Output fields, types, and constraints for case templates"),
 		mcp.WithMIMEType(mimeApplicationJSON),
@@ -594,7 +598,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 	})
 
 	caseTemplateCreateSchema := mcp.NewResource(
-		"hive://schema/case-template/create",
+		uriCaseTemplateSchema+suffixCreate,
 		"Case Template Create Schema",
 		mcp.WithResourceDescription("Input fields and requirements for creating new case templates"),
 		mcp.WithMIMEType(mimeApplicationJSON),
@@ -604,7 +608,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 	})
 
 	caseTemplateUpdateSchema := mcp.NewResource(
-		"hive://schema/case-template/update",
+		uriCaseTemplateSchema+suffixUpdate,
 		"Case Template Update Schema",
 		mcp.WithResourceDescription("Partial input fields for updating existing case templates"),
 		mcp.WithMIMEType(mimeApplicationJSON),
@@ -785,7 +789,7 @@ func RegisterFactResources(registry *ResourceRegistry) {
 	)
 
 	caseTemplateDocumentation := mcp.NewResource(
-		"hive://docs/entities/case-template",
+		uriCaseTemplateDocs,
 		"Case Template Documentation",
 		mcp.WithResourceDescription("How case templates work, their role as AI knowledge layer, and usage patterns"),
 		mcp.WithMIMEType(mimeApplicationJSON),
