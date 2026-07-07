@@ -21,11 +21,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '^1.26.4'
-
       # Mirror golangci-lint-action's cache strategy: a 7-day interval number in
       # the key forces a periodic refresh even when nothing else changes, so a
       # frozen (never-re-saved) cache can't go stale indefinitely. The go.mod +
@@ -48,6 +43,9 @@ jobs:
 
       - name: Run linter
         run: make lint
+
+      - name: Run SAST
+        run: make sast
 
       - name: Run vulnerability scan
         run: make vulncheck
@@ -90,11 +88,6 @@ jobs:
           - strangebee/thehive:5.6.3
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '^1.26.4'
 
       - name: Run integration tests
         run: make test-integration
