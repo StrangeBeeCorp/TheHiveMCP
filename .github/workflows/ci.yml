@@ -21,27 +21,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '^1.26.4'
-
-      # Mirror golangci-lint-action's cache strategy: a 7-day interval number in
-      # the key forces a periodic refresh even when nothing else changes, so a
-      # frozen (never-re-saved) cache can't go stale indefinitely. The go.mod +
-      # .golangci.yml hash busts it earlier on a dependency or lint-config change.
-      - name: Compute cache interval
-        id: lint-cache
-        run: echo "interval=$(( $(date +%s) / 86400 / 7 ))" >> "$GITHUB_OUTPUT"
-
-      - name: Cache golangci-lint
+      # The make targets run inside pinned images and bind-mount the runner's
+      # Go and golangci-lint caches (see DOCKER_CACHE_MOUNTS and the lint target
+      # in the Makefile: go env GOPATH is /home/runner/go on ubuntu-latest).
+      # Without this every run re-downloads the whole dependency graph, recompiles
+      # gosec/govulncheck, rebuilds every package, and re-analyzes every file with
+      # golangci-lint from scratch. Three distinct caches:
+      #   ~/go/pkg/mod          — downloaded dependency source (module cache)
+      #   ~/.cache/go-build     — compiled package objects (GOCACHE: go build/test + golangci-lint)
+      #   ~/.cache/golangci-lint — golangci-lint's own per-file analysis results
+      # Keyed on go.sum + the lint config so a dependency or lint-rule change busts
+      # it; restore-keys allow a partial warm start on a miss.
+      - name: Cache Go and golangci-lint caches
         uses: actions/cache@v4
         with:
-          path: ~/.cache/golangci-lint
-          key: golangci-lint-${{ runner.os }}-${{ steps.lint-cache.outputs.interval }}-${{ hashFiles('go.mod', '.golangci.yml') }}
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+            ~/.cache/golangci-lint
+          key: go-${{ runner.os }}-${{ hashFiles('go.sum', '.golangci.yml') }}
           restore-keys: |
-            golangci-lint-${{ runner.os }}-${{ steps.lint-cache.outputs.interval }}-
-            golangci-lint-${{ runner.os }}-
+            go-${{ runner.os }}-
 
       - name: Format check
         run: make fmt
@@ -49,8 +49,33 @@ jobs:
       - name: Run linter
         run: make lint
 
+      - name: Run SAST
+        run: make sast
+
       - name: Run vulnerability scan
         run: make vulncheck
+
+  docker-build:
+    # Smoke-test that the production image still builds from deployment/Dockerfile
+    # (a broken COPY, a renamed cmd/ path, or a bad base digest is not caught by
+    # go build / golangci-lint alone). Runs in parallel with the other jobs and
+    # does not push — it only proves the image assembles.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build production image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: deployment/Dockerfile
+          push: false
+          tags: thehivemcp:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   integration-tests:
     runs-on: ubuntu-latest
@@ -68,11 +93,6 @@ jobs:
           - strangebee/thehive:5.6.3
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '^1.26.4'
 
       - name: Run integration tests
         run: make test-integration
