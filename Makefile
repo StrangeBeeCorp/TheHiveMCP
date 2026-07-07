@@ -331,8 +331,23 @@ mcpb-local: build ## Generate MCPB package locally
 	@echo $(BGreen)------------------------------$(Color_Off)
 	./scripts/generate-mcpb.sh
 
+# The set of targets mcpb-ci-nobuild packages. Defaults to every release
+# target; override it to a subset for a fast packaging smoke-test (see
+# mcpb-smoke and the ci.yml mcpb-package job).
+MCPB_TARGETS ?= $(RELEASE_TARGETS)
+
 .PHONY: mcpb-ci
 mcpb-ci: build-all mcpb-ci-nobuild ## Build, then generate MCPB packages for all architectures
+
+# mcpb-smoke exercises the MCPB packaging path (container permissions, manifest
+# generation, non-empty output) for a single target — fast enough to run on
+# every PR that touches the packaging inputs. Reuses build-<target> +
+# mcpb-ci-nobuild with MCPB_TARGETS narrowed to one arch.
+.PHONY: mcpb-smoke
+mcpb-smoke: ## Smoke-test MCPB packaging for MCPB_SMOKE_TARGET (default linux-amd64)
+	@$(MAKE) build-$(MCPB_SMOKE_TARGET)
+	@$(MAKE) mcpb-ci-nobuild MCPB_TARGETS=$(MCPB_SMOKE_TARGET)
+MCPB_SMOKE_TARGET ?= linux-amd64
 
 # mcpb-ci-nobuild wraps the already-built (and, in release CI, already-signed)
 # binaries in $(BUILDDIR) into MCPB packages. It deliberately does NOT depend on
@@ -342,7 +357,7 @@ mcpb-ci-nobuild: pre-dist mcpb-build-image ## Generate MCPB packages from pre-bu
 	@echo $(BGreen)----------------------------------$(Color_Off)
 	@echo $(BGreen)-- Generating MCPB Packages CI --$(Color_Off)
 	@echo $(BGreen)----------------------------------$(Color_Off)
-	@set -e; for target in $(RELEASE_TARGETS); do \
+	@set -e; for target in $(MCPB_TARGETS); do \
 		echo "Generating MCPB for $$target..."; \
 		case "$$target" in windows-*) ext=".exe";; *) ext="";; esac; \
 		ws=/tmp/mcpb-workspace-$$target; \
