@@ -1,7 +1,7 @@
 # ADR-0001 — Accuracy and security testing policy for TheHiveMCP
 
-- Status: proposed
-- Date: 2026-06-24
+- Status: accepted
+- Date: 2026-06-24 (accepted; policy in force from the v1.0.0 release, 2026-07-06)
 - Deciders: TheHiveMCP maintainers, with the CTO as final arbiter on scope changes
 
 ## Context and problem statement
@@ -82,7 +82,7 @@ this matrix is the starting point, not the outcome.
 | -------------------------------------- | -------------------------------------------------------------------------------- |
 | Frontier / SOTA (common in production) | `anthropic/claude-sonnet-4.6`, `openai/gpt-5.5`, `google/gemini-3.5-flash`       |
 | Strong open-weight alternatives        | `deepseek/deepseek-v4-pro`, `z-ai/glm-5.2`, `moonshotai/kimi-k2.6`               |
-| European-sovereign (Mistral)           | `mistralai/mistral-medium-3-5`                                                   |
+| European-sovereign (Mistral)           | `mistralai/mistral-medium-3.5`                                                   |
 | Small — on-premise / budget            | `google/gemini-3.1-flash-lite`, `qwen/qwen3.5-9b`, `mistralai/ministral-8b-2512` |
 
 This set is a **starting proposal, not a fixed benchmark.** It will change as models are released and in response to customer demand. We aim to keep it somewhat

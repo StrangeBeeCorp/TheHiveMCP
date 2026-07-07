@@ -42,7 +42,7 @@ The tool automatically determines whether you're requesting a specific resource 
 
 Call without parameters to list all available categories:
 
-```
+```text
 get-resource()
 ```
 
@@ -50,7 +50,7 @@ get-resource()
 
 Provide a URI to browse resources and subcategories at that path:
 
-```
+```text
 get-resource(uri="hive://schema")
 get-resource(uri="hive://metadata")
 get-resource(uri="hive://metadata/automation")
@@ -61,7 +61,7 @@ get-resource(uri="hive://docs/entities")
 
 Provide a URI to get a specific resource:
 
-```
+```text
 get-resource(uri="hive://schema/alert")
 get-resource(uri="hive://docs/entities/case")
 get-resource(uri="hive://metadata/automation/analyzers")
@@ -93,7 +93,7 @@ Entity schemas are organized into three variants:
 - **Create schemas** (`hive://schema/{entity}/create`): Required and optional fields for creating new entities
 - **Update schemas** (`hive://schema/{entity}/update`): Partial fields available for updating existing entities
 
-Available entities: `alert`, `case`, `task`, `observable`
+Available entities: `alert`, `case`, `task`, `observable`, `procedure`, `pattern`, `case-template`, `page`
 
 Example:
 
@@ -103,19 +103,12 @@ Example:
 
 This organisation makes it clear which fields are required for creation vs available for updates.
 
-## Best Practices
+## Related resources and tools
 
-1. **Start with discovery**: Always begin by exploring the catalog to understand available resources
-2. **Schema first**: Query entity schemas before creating or updating entities
-3. **Documentation reference**: Use docs resources to understand entity relationships and workflows
-4. **Metadata exploration**: Check metadata resources for available options and choices
+`get-resource` supplies the descriptive data the other tools consume:
 
-## Integration with Other Tools
-
-The `get-resource` tool is designed to work seamlessly with other MCP tools:
-
-- Use it to understand schemas before calling `manage-entities`
-- Reference documentation before using `search-entities`
-- Check available analyzers/responders before using `execute-automation`
-
-This tool ensures you have the most up-to-date information about TheHive's capabilities and can make informed decisions when interacting with the system.
+- `hive://schema/{entity}` and its `/create` and `/update` variants — the field definitions used by [`search-entities`](search-entities.md) (filterable and
+  returned fields) and [`manage-entities`](manage-entities.md) (creatable and updatable fields).
+- `hive://metadata/automation/analyzers` and `hive://metadata/automation/responders` — the live catalog of automation available to
+  [`execute-automation`](execute-automation.md).
+- `hive://docs/overview/filter-dsl` — the filter grammar accepted by [`search-entities`](search-entities.md).

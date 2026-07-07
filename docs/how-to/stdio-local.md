@@ -1,4 +1,4 @@
-# stdio Example - Local MCP Host Integration
+# stdio example - local MCP host integration
 
 This example shows how to run TheHiveMCP in stdio mode for integration with local MCP hosts like GitHub Copilot and Claude Desktop.
 
@@ -12,11 +12,16 @@ This example shows how to run TheHiveMCP in stdio mode for integration with loca
 
 ### 1. Download binary
 
+Pick the artifact matching your OS and architecture from the [releases page](https://github.com/StrangeBeeCorp/TheHiveMCP/releases) — binaries are published for
+`darwin-amd64`, `darwin-arm64`, `linux-amd64`, `linux-arm64`, `windows-amd64`, and `windows-arm64`. For example, on Apple Silicon macOS:
+
 ```bash
-# Download for your platform from releases
 curl -L -o thehivemcp https://github.com/StrangeBeeCorp/TheHiveMCP/releases/latest/download/thehivemcp-darwin-arm64
 chmod +x thehivemcp
 ```
+
+> **Windows:** download the matching `windows-*.exe`. The current Windows binaries are unsigned — expect a SmartScreen prompt, and see
+> [How to run on Windows from source](run-on-windows-from-source.md) if a signed-only policy blocks it.
 
 ### 2. Configure environment
 
@@ -58,7 +63,11 @@ Add to your MCP settings:
 
 ### Claude Desktop
 
-Similar configuration, or use the MCPB package for easier setup.
+Claude Desktop uses the same stdio `command`/`args`/`env` shape. Add the block above to your `claude_desktop_config.json` under `mcpServers`, then restart
+Claude Desktop.
+
+For a one-click alternative, install the `.mcpb` bundle instead of wiring stdio by hand — it registers the server and prompts for your TheHive connection
+settings. See the [Claude Desktop MCPB path in the README](../../README.md#get-started).
 
 ## What to expect
 
@@ -72,4 +81,4 @@ Once configured, your MCP host can:
 
 - For team deployment: [Remote Docker Example](remote-docker.md)
 - For LibreChat integration: [LibreChat Example](librechat.md)
-- For custom permissions: [Permissions Guide](../permissions.md)
+- For custom permissions: [Permissions Guide](../reference/permissions.md)

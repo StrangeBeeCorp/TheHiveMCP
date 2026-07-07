@@ -143,7 +143,7 @@ func scopeChecksForOperation(params EntityParams) (allOf, anyOf []scopeCheck) {
 	case OperationApplyTemplate:
 		// Only the cases being modified are scoped; the template target is
 		// org-level configuration, not filterable row data (see
-		// docs/permissions.md for this documented limitation).
+		// docs/reference/permissions.md for this documented limitation).
 		allOf = append(allOf, scopeCheck{types.EntityTypeCase, params.EntityIDs})
 	}
 

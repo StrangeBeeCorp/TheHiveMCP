@@ -217,7 +217,7 @@ permissions:
     allowed: []
 ```
 
-See: [read-only.yaml](examples/permissions/read-only.yaml)
+See: [read-only.yaml](permissions-examples/read-only.yaml)
 
 ### Analyst
 
@@ -282,7 +282,7 @@ permissions:
     blocked: ["DeleteCase_1_0", "PurgeAlert_1_0"]
 ```
 
-See: [analyst.yaml](examples/permissions/analyst.yaml)
+See: [analyst.yaml](permissions-examples/analyst.yaml)
 
 ### Administrator
 
@@ -306,7 +306,7 @@ permissions:
     allowed: ["*"]
 ```
 
-See: [admin.yaml](examples/permissions/admin.yaml)
+See: [admin.yaml](permissions-examples/admin.yaml)
 
 ## Checking Active Permissions
 
@@ -356,7 +356,7 @@ When generating MCPB packages, permissions configs can be bundled directly:
 
 ```bash
 # Bundle a permissions config with the MCPB
-export PERMISSIONS_CONFIG=docs/examples/permissions/analyst.yaml
+export PERMISSIONS_CONFIG=docs/reference/permissions-examples/analyst.yaml
 ./scripts/generate-mcpb.sh
 ```
 

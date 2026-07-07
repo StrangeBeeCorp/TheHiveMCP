@@ -23,8 +23,8 @@ Read the [Changed](#changed) and [Removed](#removed) sections below before upgra
 - **Similarity search.** `search-entities` now exposes TheHive's similarity engine through `similarCases` and `similarAlerts`, so you can surface related cases
   and alerts directly. Similarity hits are re-scoped against your MCP permission filters, and the new similarity fields are documented in the case and alert
   output schemas.
-- **Filter DSL cheatsheet resource.** A new `hive://docs/filter-dsl` resource documents the TheHive filter grammar that `search-entities` now accepts, alongside
-  the existing `hive://schema/*` resources.
+- **Filter DSL cheatsheet resource.** A new `hive://docs/overview/filter-dsl` resource documents the TheHive filter grammar that `search-entities` now accepts,
+  alongside the existing `hive://schema/*` resources.
 - **Windows release artifacts.** The release pipeline now produces `windows-amd64` and `windows-arm64` binaries, closing a gap where the README and installer
   advertised a Windows download the build never produced.
 - **Container health check.** The Docker image now ships a self-contained `/healthcheck` probe and a `HEALTHCHECK` directive, so orchestrators can detect an
@@ -36,8 +36,8 @@ Read the [Changed](#changed) and [Removed](#removed) sections below before upgra
 - **`search-entities` is now deterministic — provide filters directly.** The tool no longer translates a natural-language query through an internal LLM (MCP
   sampling with an OpenAI fallback). Instead, the caller supplies the TheHive filter DSL through a new optional `filters` parameter, which is applied as-is.
   This makes searches precise, deterministic, and free of an inner LLM round-trip; an empty `filters` matches all. On invalid input the tool returns actionable
-  errors pointing at the `hive://schema/*` and `hive://docs/filter-dsl` resources. **Action required:** callers that previously passed a `query` string must now
-  pass a `filters` object — see the updated `search-entities` documentation.
+  errors pointing at the `hive://schema/*` and `hive://docs/overview/filter-dsl` resources. **Action required:** callers that previously passed a `query` string
+  must now pass a `filters` object — see the updated `search-entities` documentation.
 - **License changed from MIT to Apache 2.0** (Copyright StrangeBee). As the project exits beta it now ships with an explicit patent grant and patent-retaliation
   clause. A `NOTICE` file was added for attribution and the declared license metadata was updated accordingly.
 - **Go toolchain upgraded to 1.26.4.**

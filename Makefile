@@ -200,13 +200,23 @@ vulncheck: ## Check for vulnerabilities
 	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@v1.3.0 && govulncheck ./...'
 
 .PHONY: lint
-lint: ## Run linter checks
+lint: ## Run linter checks without modifying files
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Linter Checks --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	docker run --rm -v $(CURDIR):/app -w /app golangci/golangci-lint:v2.12.2 golangci-lint config verify
 	docker run -v $(CURDIR):/app -w /app -i --rm $(DOCKER_CACHE_MOUNTS) -v $(HOME)/.cache/golangci-lint:/root/.cache/golangci-lint golangci/golangci-lint:v2.12.2 golangci-lint run -v
 	docker build -t ${BINARY_NAME}:latest -f deployment/Dockerfile .
+
+.PHONY: lint-fix
+lint-fix: fmt ## Format the code, then run linter checks with auto-fix
+	@echo $(BGreen)-----------------------------$(Color_Off)
+	@echo $(BGreen)-- Linter Checks with auto-fix --$(Color_Off)
+	@echo $(BGreen)-----------------------------$(Color_Off)
+	docker run --rm -v $(CURDIR):/app -w /app golangci/golangci-lint:v2.12.2 golangci-lint config verify
+	docker run -v $(CURDIR):/app -w /app -i --rm $(DOCKER_CACHE_MOUNTS) -v $(HOME)/.cache/golangci-lint:/root/.cache/golangci-lint golangci/golangci-lint:v2.12.2 golangci-lint run --fix -v
+	docker build -t ${BINARY_NAME}:latest -f deployment/Dockerfile .
+
 .PHONY: updatedep
 updatedep: ## Update dependencies
 	@echo $(BGreen)-----------------------$(Color_Off)

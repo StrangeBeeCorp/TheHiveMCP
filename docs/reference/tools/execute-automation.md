@@ -164,152 +164,19 @@ Before using automation, discover available analyzers and responders:
 }
 ```
 
-## Common Analyzers
+> **Available analyzers and responders are Cortex-catalog-specific and are not listed here.** The analyzer and responder IDs in the examples above
+> (`VirusTotal_3_0`, `Mailer_1_0`, …) are illustrative — the set installed on any given deployment depends on its Cortex configuration. Query the live catalog
+> with `get-resource` (see [Automation discovery](#automation-discovery)) to get the exact IDs, entity-type compatibility, and parameters your deployment
+> supports.
 
-### Threat intelligence
+## Notes
 
-- **VirusTotal_3_0**: File and URL reputation analysis
-- **Shodan_search**: IP address and domain analysis
-- **Abuse_Finder**: Email abuse contact lookup
-- **DomainTools**: Domain registration and history
+- **Scope.** The permission filter applies to the entity the automation acts on — the observable for `run-analyzer`, and the target entity for `run-responder` /
+  `get-action-status`. For `get-job-status`, the job's target observable is resolved and scope-checked before the report is returned. Which analyzers and
+  responders may run at all is gated separately by the automation allow/block lists. See the [permissions reference](../permissions.md).
+- **Cortex routing.** `cortex-id` is optional; omit it to let TheHive route to the configured Cortex instance (`CORTEX_ID`, default `local`).
+- **Asynchronous execution.** `run-analyzer` and `run-responder` start a job/action and return its ID. Poll `get-job-status` / `get-action-status` for
+  completion.
 
-### File analysis
-
-- **File_Info**: Basic file metadata extraction
-- **Yara**: YARA rule matching
-- **PE_Info**: Portable Executable analysis
-
-### Network analysis
-
-- **MaxMind**: IP geolocation lookup
-- **Tor_Blutmagie**: Tor exit node detection
-- **URLVoid**: URL reputation checking
-
-## Common Responders
-
-### Case management
-
-- **Mailer_1_0**: Send email notifications
-- **TheHive_CreateCase_1_0**: Promote alerts to cases
-- **Wazuh**: Integration with Wazuh SIEM
-
-### Threat intelligence
-
-- **MISP_2_1**: Export IOCs to MISP
-- **QRadar_2_0**: Send to IBM QRadar
-
-### Communication
-
-- **Slack**: Send notifications to Slack
-- **Mattermost**: Send notifications to Mattermost
-
-## Execution Workflow
-
-### 1. Discovery phase
-
-```json
-// Get available analyzers
-{
-  "tool": "get-resource",
-  "uri": "hive://metadata/automation/analyzers"
-}
-
-// Get analyzer documentation
-{
-  "tool": "get-resource",
-  "uri": "hive://docs/automation/analyzers/VirusTotal_3_0"
-}
-```
-
-### 2. Execution phase
-
-```json
-// Run analyzer
-{
-  "operation": "run-analyzer",
-  "analyzer-id": "VirusTotal_3_0",
-  "observable-id": "~123456"
-}
-```
-
-### 3. Monitoring phase
-
-```json
-// Check job status
-{
-  "operation": "get-job-status",
-  "job-id": "AWxyz123"
-}
-```
-
-## Best Practices
-
-### Analyzer usage
-
-1. **Observable selection**: Ensure observables are suitable for analysis
-2. **Rate limiting**: Be mindful of API rate limits for external services
-3. **Parameter configuration**: Use appropriate parameters for each analyzer
-4. **Result monitoring**: Check job status to ensure completion
-
-### Responder usage
-
-1. **Entity validation**: Verify entity exists and is accessible
-2. **Permission checks**: Ensure responder has required permissions
-3. **Parameter validation**: Provide correct parameters for each responder
-4. **Impact assessment**: Understand what actions responders will perform
-
-### Performance optimization
-
-1. **Batch processing**: Group similar operations when possible
-2. **Cortex routing**: Let TheHive auto-route for load balancing
-3. **Status polling**: Don't over-poll job status
-4. **Parameter reuse**: Cache common parameter sets
-
-## Error Handling
-
-Common errors and solutions:
-
-### Analyzer errors
-
-- **Analyzer not found**: Check available analyzers list
-- **Observable not found**: Verify observable ID exists
-- **Permission denied**: Ensure user can access observable
-- **Rate limit exceeded**: Wait and retry with delays
-
-### Responder errors
-
-- **Responder not available**: Check responder compatibility with entity type
-- **Entity not found**: Verify entity ID exists and is accessible
-- **Configuration error**: Check responder parameters and configuration
-- **External service error**: Check responder logs and external service status
-
-### Status check errors
-
-- **Job not found**: Verify job ID is correct and accessible
-- **Timeout**: Job may still be processing - wait and retry
-
-## Integration Patterns
-
-### Automated analysis pipeline
-
-1. Search for new observables
-2. Run appropriate analyzers based on observable type
-3. Monitor job status until completion
-4. Update observables with analysis results
-5. Trigger responders based on analysis outcomes
-
-### Incident response workflow
-
-1. Create case from alert
-2. Extract observables from case evidence
-3. Run threat intelligence analyzers
-4. Based on results, run appropriate responders
-5. Update case with analysis and response actions
-
-### Bulk analysis
-
-1. Search for unanalyzed observables
-2. Group by type and suitable analyzers
-3. Execute analyzers in batches
-4. Monitor completion and handle results
-5. Report on analysis coverage and findings
+Discover the available automation with [`get-resource`](get-resource.md), find target entities with [`search-entities`](search-entities.md), and record results
+with [`manage-entities`](manage-entities.md).

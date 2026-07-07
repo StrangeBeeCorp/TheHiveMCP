@@ -18,6 +18,10 @@ you to manipulate entities programmatically while respecting TheHive's data inte
 | `comment`     | string | Conditional | Text content (required for comment operations)                                                       |
 | `target-id`   | string | Conditional | Target entity ID (required for merge operations on alerts/observables)                               |
 
+Entity IDs in `entity-ids` and `target-id` are TheHive internal identifiers in `~`-prefixed numeric form (for example, `~123`) — the same `_id` returned by
+[`search-entities`](search-entities.md). A case's human-readable `number` (for example, "case #42") is not an entity ID; resolve it to an `_id` with a search
+first.
+
 ## Operations
 
 ### Create operations
@@ -104,7 +108,7 @@ Create new entities with complete schema data.
 {
   "operation": "create",
   "entity-type": "task",
-  "entity-ids": ["case-123"],
+  "entity-ids": ["~123"],
   "entity-data": {
     "title": "Analyze Email Headers",
     "description": "Extract and analyze email metadata",
@@ -119,7 +123,7 @@ Create new entities with complete schema data.
 {
   "operation": "create",
   "entity-type": "observable",
-  "entity-ids": ["case-123"],
+  "entity-ids": ["~123"],
   "entity-data": {
     "dataType": "ip",
     "data": "192.168.1.100",
@@ -140,7 +144,7 @@ creating a procedure.
 {
   "operation": "create",
   "entity-type": "procedure",
-  "entity-ids": ["case-123"],
+  "entity-ids": ["~123"],
   "entity-data": {
     "patternId": "T1059",
     "occurDate": "2024-01-15T10:30:00"
@@ -154,7 +158,7 @@ creating a procedure.
 {
   "operation": "create",
   "entity-type": "procedure",
-  "entity-ids": ["case-123"],
+  "entity-ids": ["~123"],
   "entity-data": {
     "patternId": "T1059.001",
     "occurDate": "2024-01-15T10:30:00",
@@ -181,7 +185,7 @@ Pages can be created within a case or as standalone knowledge base articles.
 {
   "operation": "create",
   "entity-type": "page",
-  "entity-ids": ["case-123"],
+  "entity-ids": ["~123"],
   "entity-data": {
     "title": "Investigation Notes",
     "content": "## Summary\nInitial findings from the investigation...",
@@ -220,7 +224,7 @@ Update existing entities with partial field changes.
 {
   "operation": "update",
   "entity-type": "case",
-  "entity-ids": ["case-123"],
+  "entity-ids": ["~123"],
   "entity-data": {
     "status": "InProgress",
     "assignee": "senior-analyst@example.com",
@@ -265,7 +269,7 @@ Update an existing page (use the page ID):
 {
   "operation": "delete",
   "entity-type": "task",
-  "entity-ids": ["task-456"]
+  "entity-ids": ["~301"]
 }
 ```
 
@@ -289,7 +293,7 @@ Add comments to cases or task logs to tasks.
 {
   "operation": "comment",
   "entity-type": "case",
-  "entity-ids": ["case-123"],
+  "entity-ids": ["~123"],
   "comment": "Found additional IOCs in network logs"
 }
 ```
@@ -300,7 +304,7 @@ Add comments to cases or task logs to tasks.
 {
   "operation": "comment",
   "entity-type": "task",
-  "entity-ids": ["task-456"],
+  "entity-ids": ["~301"],
   "comment": "Analysis completed - no malicious indicators found"
 }
 ```
@@ -315,7 +319,7 @@ Convert an alert into a new case. The alert's observables, TTPs, and other data 
 {
   "operation": "promote",
   "entity-type": "alert",
-  "entity-ids": ["alert-123"]
+  "entity-ids": ["~201"]
 }
 ```
 
@@ -325,7 +329,7 @@ Convert an alert into a new case. The alert's observables, TTPs, and other data 
 {
   "operation": "promote",
   "entity-type": "alert",
-  "entity-ids": ["alert-123"],
+  "entity-ids": ["~201"],
   "entity-data": {
     "caseTemplate": "incident-response-template",
     "title": "Custom Case Title"
@@ -352,7 +356,7 @@ Merges multiple cases into a single new case. All tasks, observables, and other 
 {
   "operation": "merge",
   "entity-type": "case",
-  "entity-ids": ["case-123", "case-456", "case-789"]
+  "entity-ids": ["~123", "~456", "~789"]
 }
 ```
 
@@ -369,8 +373,8 @@ Merges one or more alerts into an existing case. The alerts' observables and dat
 {
   "operation": "merge",
   "entity-type": "alert",
-  "entity-ids": ["alert-123", "alert-456"],
-  "target-id": "case-789"
+  "entity-ids": ["~201", "~202"],
+  "target-id": "~789"
 }
 ```
 
@@ -388,7 +392,7 @@ Merges similar observables within a case (deduplication). This finds and merges 
 {
   "operation": "merge",
   "entity-type": "observable",
-  "target-id": "case-123"
+  "target-id": "~123"
 }
 ```
 
@@ -396,6 +400,42 @@ Merges similar observables within a case (deduplication). This finds and merges 
 
 - Requires `target-id` specifying the case containing observables to deduplicate
 - No `entity-ids` needed - operates on all similar observables in the case
+
+### Apply-template operations
+
+Apply a case template to one or more existing cases. `target-id` is the case template name or ID; `entity-ids` are the cases to apply it to.
+
+```json
+{
+  "operation": "apply-template",
+  "entity-type": "case",
+  "entity-ids": ["~123", "~456"],
+  "target-id": "Phishing"
+}
+```
+
+`entity-data` optionally selects which parts of the template to apply. Omit it to apply the template's defaults.
+
+```json
+{
+  "operation": "apply-template",
+  "entity-type": "case",
+  "entity-ids": ["~123"],
+  "target-id": "Phishing",
+  "entity-data": {
+    "updateDescription": true,
+    "updateTags": true,
+    "importTasks": ["Analyze headers", "Check sender reputation"]
+  }
+}
+```
+
+**Requirements:**
+
+- Only supported for cases — use `entity-type="case"`.
+- `entity-ids` (the target cases) and `target-id` (the template name or ID) are both required.
+- Optional `entity-data` fields: `updateTitlePrefix`, `updateDescription`, `updateTags`, `updateSeverity`, `updateFlag`, `updateTlp`, `updatePap`,
+  `updateCustomFields`, `importTasks`, `importPages`.
 
 ## Entity Relationships and Constraints
 
@@ -440,7 +480,7 @@ Merges similar observables within a case (deduplication). This finds and merges 
 
 Before creating or updating entities, always check the appropriate schema:
 
-### For CREATE operations:
+### For CREATE operations
 
 ```json
 {
@@ -457,7 +497,7 @@ Available create schemas:
 - `hive://schema/observable/create` - Required and optional fields for creating observables
 - `hive://schema/procedure/create` - Required and optional fields for creating procedures
 
-### For UPDATE operations:
+### For UPDATE operations
 
 ```json
 {
@@ -474,7 +514,7 @@ Available update schemas:
 - `hive://schema/observable/update` - Fields available for updating observables
 - `hive://schema/procedure/update` - Fields available for updating procedures
 
-### For understanding OUTPUT:
+### For understanding OUTPUT
 
 Available output schemas (for understanding query results):
 
@@ -485,128 +525,31 @@ Available output schemas (for understanding query results):
 - `hive://schema/procedure` - Fields returned when querying procedures
 - `hive://schema/pattern` - Fields returned when querying patterns (MITRE ATT&CK techniques)
 
-## Best Practices
+## Batch operations
 
-### Before creating entities
-
-1. **Query schemas**: Use `get-resource` to understand required fields
-2. **Check metadata**: Verify valid values for enums and choices
-3. **Validate relationships**: Ensure parent entities exist
-
-### Alert-specific requirements
-
-When creating alerts, the following fields are **required**:
-
-- `type`: Alert category (for example, "external", "malware", "phishing")
-- `source`: Source system name (for example, "SIEM", "EDR", "Email Gateway")
-- `sourceRef`: Unique reference from source system (for example, "SIEM-2024-001234")
-- `title`: Brief alert summary
-- `description`: Detailed alert description
-
-**Highly recommended fields** (may have system defaults but should be explicitly set):
-
-- `severity`: Numeric severity level (1-4, where 4 is most critical)
-
-**Optional but commonly used fields**:
-
-- `tlp`: Traffic Light Protocol (0-4, default varies by organisation)
-- `pap`: Permissible Actions Protocol (0-3, default varies by organisation)
-- `tags`: Array of classification tags
-- `assignee`: Email/username to assign the alert
-- `externalLink`: URL to view alert in source system
-- `flag`: Boolean to mark the alert for attention
-- `summary`: Brief triage notes or summary
-
-### Data integrity
-
-1. **Required fields**: Always include mandatory schema fields
-2. **Data types**: Match expected types (string, number, array, etc.)
-3. **Enum values**: Use valid enumeration values
-4. **Relationships**: Maintain proper parent-child relationships
-
-### Update operations
-
-1. **Partial updates**: Only include fields that need to change
-2. **Field validation**: Ensure new values meet schema constraints
-3. **State transitions**: Follow valid status/stage transitions
-
-### Security considerations
-
-1. **Permissions**: Ensure user has appropriate permissions
-2. **Data sensitivity**: Handle sensitive data appropriately
-3. **Audit trail**: All operations are logged in TheHive
-
-## Common Patterns
-
-### Investigation workflow
-
-1. Create case for investigation
-2. Create tasks for specific activities
-3. Create observables as evidence is collected
-4. Map attacker behaviour to MITRE ATT&CK by creating procedures
-5. Update case status as investigation progresses
-6. Add comments to document findings
-
-### TTP workflow
-
-1. Search for relevant MITRE ATT&CK techniques: `search-entities` with `entity-type="pattern"` and a keyword query
-2. Note the `patternId` and available `tactics` from the pattern
-3. Create a procedure on the case or alert with the `patternId`, `occurDate`, and optionally `tactic` and `description`
-4. Update or delete the procedure if details change during investigation
-
-### Alert processing
-
-1. Create alert from external source
-2. Analyze alert content and create observables
-3. Promote alert to case if investigation needed (use `promote` operation)
-4. Create tasks for investigation activities
-5. Merge related alerts into the case if more alerts arrive (use `merge` operation with alerts)
-
-### Batch operations
-
-Use multiple `entity-ids` for bulk operations:
+An operation accepts multiple `entity-ids` and applies to each:
 
 ```json
 {
   "operation": "update",
   "entity-type": "task",
-  "entity-ids": ["task-1", "task-2", "task-3"],
+  "entity-ids": ["~301", "~302", "~303"],
   "entity-data": {
     "status": "Completed"
   }
 }
 ```
 
-### Case consolidation
+## Notes
 
-When multiple cases are related to the same incident:
+- **Field definitions.** Required, optional, and updatable fields per entity are defined by the schema resources, not this page — read `hive://schema/{entity}`
+  and its `/create` and `/update` variants (via [`get-resource`](get-resource.md)) before building `entity-data`. Filtering an unknown or wrong-typed field
+  fails.
+- **Permissions.** Every operation is subject to the deployment's permission profile (tool allow/deny, `entity_permissions`, and scope filters). An entity
+  outside a configured filter is reported as "not found or not within the scope" and nothing is mutated. See the [permissions reference](../permissions.md).
+- **Confirmation.** Create, update, and delete operations trigger an MCP elicitation prompt on clients that support it; when the prompt cannot be completed, the
+  operation fails closed rather than running unconfirmed.
+- **Auditing.** All operations are logged by TheHive.
 
-1. Identify related cases through search or analysis
-2. Merge cases together to consolidate all data (use `merge` operation with cases)
-3. The merged case contains all tasks, observables, and comments from source cases
-4. Continue investigation in the merged case
-
-### Observable deduplication
-
-After importing data or merging alerts:
-
-1. Check for duplicate observables in a case
-2. Use merge operation on observables to deduplicate (use `merge` operation with observable entity-type)
-3. Identical observables are merged, keeping all relevant metadata
-
-## Error Handling
-
-Common errors and solutions:
-
-- **Missing required fields**: Check schema and include all mandatory fields
-- **Invalid parent ID**: Verify parent entity exists and is accessible
-- **Permission denied**: Ensure user has appropriate permissions
-- **Invalid field values**: Check metadata for valid enum values
-- **Relationship constraints**: Verify entity relationships are valid
-
-## Integration with Other Tools
-
-- Use `search-entities` to find entities to manage
-- Use `get-resource` to understand schemas and metadata
-- Use `execute-automation` on created observables
-- Reference entity IDs in other operations
+For task-oriented walkthroughs (running an investigation, mapping TTPs), see the [first-investigation tutorial](../../tutorial/first-investigation.md). Find
+entities to act on with [`search-entities`](search-entities.md), and enrich observables with [`execute-automation`](execute-automation.md).

@@ -6,7 +6,7 @@ terminal and has its own MCP configuration system with a few non-obvious pitfall
 ## Prerequisites
 
 - Claude Code installed (`claude` CLI available)
-- A running TheHive 5.x instance with API access
+- A running TheHive 5.5+ instance with API access
 - Your TheHive URL, API key, and organisation name
 - TheHiveMCP binary for your platform (see [README](../../README.md#get-started))
 
@@ -82,7 +82,7 @@ made while the session was running.
 
 After restart, run:
 
-```
+```text
 /mcp
 ```
 
@@ -139,7 +139,7 @@ This writes to `~/.claude.json`. If you later edit `~/.claude.json` manually, be
 
 ## What to try once connected
 
-```
+```text
 Show me high-severity alerts from the last 7 days
 What cases are currently open and assigned to me?
 Summarise observable activity for case #1234

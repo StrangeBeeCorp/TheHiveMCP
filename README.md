@@ -95,7 +95,8 @@ The full contract — supported deployment shape, security and accuracy envelope
   `[UNTRUSTED_DATA]…[/UNTRUSTED_DATA]` boundary tags, and every tool tells the model never to follow instructions found inside them. We publish prompt-injection
   resilience per recommended model — the pass bar is strict: the agent must **both** ignore the injection **and** warn the analyst. _Boundary:_ this defense
   **reduces but does not eliminate** injection risk, and resilience still varies by model. Weaker models should not drive write-capable or automation tools on
-  attacker-reachable data. The permission model (`read_only` default) is your enforced backstop — see [docs/permissions.md](docs/permissions.md).
+  attacker-reachable data. The permission model (`read_only` default) is your enforced backstop — see
+  [docs/reference/permissions.md](docs/reference/permissions.md).
 
 - **Accuracy envelope, and its boundary.** We measure correct tool use across realistic, multi-step investigations — entity search, schema/resource discovery,
   case and observable management, and automation — end-to-end against a real TheHive instance with the real MCP server, no mocked tools. Per-model results are
@@ -151,14 +152,15 @@ Download and install [Claude Desktop](https://claude.ai/download) for your opera
 
 #### Step 2: Download TheHiveMCP MCPB package
 
-Download the appropriate MCPB file for your system from the [latest release](https://github.com/StrangeBeeCorp/TheHiveMCP/releases):
+Download the appropriate MCPB file for your system from the [latest release](https://github.com/StrangeBeeCorp/TheHiveMCP/releases) — replace `<version>` with
+the release tag (for example, `v1.0.0`):
 
-- **macOS (Intel)**: `thehivemcp-v0.2.0-darwin-amd64.mcpb`
-- **macOS (Apple Silicon)**: `thehivemcp-v0.2.0-darwin-arm64.mcpb`
-- **Windows (64-bit)**: `thehivemcp-v0.2.0-windows-amd64.mcpb`
-- **Windows (ARM64)**: `thehivemcp-v0.2.0-windows-arm64.mcpb`
-- **Linux (64-bit)**: `thehivemcp-v0.2.0-linux-amd64.mcpb`
-- **Linux (ARM64)**: `thehivemcp-v0.2.0-linux-arm64.mcpb`
+- **macOS (Intel)**: `thehivemcp-<version>-darwin-amd64.mcpb`
+- **macOS (Apple Silicon)**: `thehivemcp-<version>-darwin-arm64.mcpb`
+- **Windows (64-bit)**: `thehivemcp-<version>-windows-amd64.mcpb`
+- **Windows (ARM64)**: `thehivemcp-<version>-windows-arm64.mcpb`
+- **Linux (64-bit)**: `thehivemcp-<version>-linux-amd64.mcpb`
+- **Linux (ARM64)**: `thehivemcp-<version>-linux-arm64.mcpb`
 
 > **⚠️ Windows users — unsigned interim binaries.** The current Windows artifacts are **not code-signed** yet (signing is in progress). Expect a Windows
 > SmartScreen **"unknown publisher"** warning on download/run — click **More info → Run anyway** to proceed. On hardened enterprise machines, **Smart App
@@ -242,14 +244,14 @@ services:
 
 ```bash
 # Start services
-docker-compose up -d
+docker compose up -d
 ```
 
 ##### Step 2: Configure your MCP client
 
 Point your MCP client to connect to the HTTP server at `http://localhost:8082/mcp`.
 
-**🐳 For advanced Docker setups:** See [Remote Docker Guide](docs/examples/remote-docker.md) for scalable HTTP deployments with multi-tenant configuration.
+**🐳 For advanced Docker setups:** See [Remote Docker Guide](docs/how-to/remote-docker.md) for scalable HTTP deployments with multi-tenant configuration.
 
 </details>
 
@@ -302,7 +304,7 @@ In your MCP host MCP config file (like `claude_desktop_settings.json`) add the f
 HTTP requests must carry their own TheHive credentials (`Authorization` or `X-TheHive-Api-Key` header). To let requests without credentials fall back to the
 server's `THEHIVE_API_KEY` (single-user deployments only), set `ALLOW_ENV_CREDENTIAL_FALLBACK=true`.
 
-**💻 For local MCP host integration:** See [stdio Local Guide](docs/examples/stdio-local.md) for GitHub Copilot, Claude Desktop, and other local MCP clients.
+**💻 For local MCP host integration:** See [stdio Local Guide](docs/how-to/stdio-local.md) for GitHub Copilot, Claude Desktop, and other local MCP clients.
 
 </details>
 
@@ -337,9 +339,9 @@ bootstrap.RegisterToolsToMCPServer(mcpServer)
 | ----------------------- | -------------------------------- | ----------------- | ----------------------------------------------------- |
 | **Claude Desktop MCPB** | Personal use, quick start        | ⭐ Easy           | Above ⬆️                                              |
 | **Claude Code**         | Anthropic CLI (terminal)         | ⭐⭐ Simple       | [Claude Code Guide](docs/how-to/setup-claude-code.md) |
-| **stdio Local**         | Local MCP hosts (GitHub Copilot) | ⭐⭐ Simple       | [stdio Guide](docs/examples/stdio-local.md)           |
-| **Remote Docker**       | Team/cloud deployment            | ⭐⭐⭐ Medium     | [Remote Guide](docs/examples/remote-docker.md)        |
-| **LibreChat**           | Complete AI assistant setup      | ⭐⭐⭐⭐ Advanced | [LibreChat Guide](docs/examples/librechat.md)         |
+| **stdio Local**         | Local MCP hosts (GitHub Copilot) | ⭐⭐ Simple       | [stdio Guide](docs/how-to/stdio-local.md)             |
+| **Remote Docker**       | Team/cloud deployment            | ⭐⭐⭐ Medium     | [Remote Guide](docs/how-to/remote-docker.md)          |
+| **LibreChat**           | Complete AI assistant setup      | ⭐⭐⭐⭐ Advanced | [LibreChat Guide](docs/how-to/librechat.md)           |
 
 ---
 
@@ -391,7 +393,7 @@ This allows you to set defaults via environment variables while overriding speci
 THEHIVE_URL=https://thehive.example.com
 THEHIVE_API_KEY=<thehive_api_key>
 THEHIVE_ORGANISATION=<thehive_organisation>  # Optional, defaults to user's own organisation
-PERMISSIONS_CONFIG=docs/examples/permissions/analyst.yaml  # Optional, defaults to read-only
+PERMISSIONS_CONFIG=docs/reference/permissions-examples/analyst.yaml  # Optional, defaults to read-only
 MCP_BIND_HOST=0.0.0.0  # Exposes the server to the network: requires a TLS-terminating, authenticating reverse proxy in front
 MCP_PORT=8082
 # HTTP transport security (defaults shown):
@@ -402,7 +404,7 @@ LOG_LEVEL=INFO
 # Permissions options (choose one):
 # PERMISSIONS_CONFIG=read_only                              # Default: safe read-only access
 # PERMISSIONS_CONFIG=admin                                  # Full access (development/testing only)
-# PERMISSIONS_CONFIG=docs/examples/permissions/analyst.yaml # Custom permissions file
+# PERMISSIONS_CONFIG=docs/reference/permissions-examples/analyst.yaml # Custom permissions file
 
 # Optional Cortex configuration:
 # CORTEX_ID=local               # Default Cortex instance ID (defaults to 'local')
@@ -429,7 +431,7 @@ TheHive is contacted. Requests must supply their own credentials unless `ALLOW_E
 - **`admin`**: Full access to all operations (development/testing only)
 - **Custom file**: Fine-grained permissions via YAML configuration
 
-See [docs/permissions.md](docs/permissions.md) for detailed permission configuration and examples.
+See [docs/reference/permissions.md](docs/reference/permissions.md) for detailed permission configuration and examples.
 
 </details>
 
@@ -476,7 +478,7 @@ Entity: {"title": "Security Incident", "severity": 3, ...}
 <details>
 <summary><strong>🔧 Detailed tool documentation</strong></summary>
 
-### [get-resource](docs/tools/get-resource.md)
+### [get-resource](docs/reference/tools/get-resource.md)
 
 Access TheHive resources for documentation, schemas, and metadata. The entry point for exploring TheHive capabilities through a hierarchical URI-based resource
 system.
@@ -500,7 +502,7 @@ system.
 - List entity schemas: `uri="hive://schema"`
 - Get specific alert schema: `uri="hive://schema/alert"`
 
-### [search-entities](docs/tools/search-entities.md)
+### [search-entities](docs/reference/tools/search-entities.md)
 
 Search for entities in TheHive by providing a structured filter built from TheHive's query DSL. The filter is applied directly — no natural-language translation
 step.
@@ -513,7 +515,7 @@ step.
 - Custom column and data field selection
 - Count-only queries for performance optimization
 
-### [manage-entities](docs/tools/manage-entities.md)
+### [manage-entities](docs/reference/tools/manage-entities.md)
 
 Perform comprehensive CRUD and workflow operations on TheHive entities with full support for relationships and constraints.
 
@@ -526,7 +528,7 @@ Perform comprehensive CRUD and workflow operations on TheHive entities with full
 - Respect for entity hierarchies and relationships
 - Batch operations support
 
-### [execute-automation](docs/tools/execute-automation.md)
+### [execute-automation](docs/reference/tools/execute-automation.md)
 
 Execute Cortex analyzers and responders with comprehensive status monitoring and parameter customization.
 
