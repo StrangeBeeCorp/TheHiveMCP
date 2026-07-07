@@ -12,5 +12,10 @@
   "MD060": false, // table column style — cosmetic pipe spacing/alignment
   "MD056": false, // table column count — miscounts cells inside <details>
   "MD036": false, // emphasis used instead of heading — intentional tagline
-  "MD001": false  // heading increment — h2->h3 jumps inside <details>
+  "MD001": false, // heading increment — h2->h3 jumps inside <details>
+
+  // Keep a Changelog repeats ### Added/Changed/Fixed/Security under every
+  // version heading; scope MD024 to siblings so those repeats are allowed but
+  // true duplicates within one section are still caught.
+  "MD024": { "siblings_only": true }
 }

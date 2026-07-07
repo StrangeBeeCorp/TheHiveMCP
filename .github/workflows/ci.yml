@@ -5,6 +5,15 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+    # Skip CI for docs-only changes — these can't affect the code checks or the
+    # integration suite, and the integration matrix boots a full TheHive per leg
+    # (~5 min each). Safe because no job here is a required status check on main;
+    # if that changes, switch to a paths-filter gate job so skips still report.
+    paths-ignore:
+      - '**/*.md'
+      - '.markdownlint.jsonc'
+      - 'LICENSE'
+      - 'NOTICE'
 
 jobs:
   checks:
