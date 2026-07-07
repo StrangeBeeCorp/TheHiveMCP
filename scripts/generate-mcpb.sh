@@ -26,11 +26,12 @@ fi
 # Local mode: the CWD is the repo root (the manifest step below reads
 # ../docs/... and ../build/... relative to extension/), so build there.
 #
-# CI mode: the container runs as the unprivileged "node" user with CWD
-# /workspace, but /workspace is a volume owned by root on the runner and is not
-# writable by "node" (mkdir extension/ -> Permission denied). All CI inputs are
-# absolute paths (/usr/local/share, /workspace/binaries), so assemble under a
-# node-writable dir instead and only touch /workspace for the final copy.
+# CI mode: the container runs with the host's uid:gid (see `docker run --user`
+# in the Makefile) so it can write the /workspace volume, which is owned by the
+# runner user rather than by the image's "node" user. That injected uid has no
+# home dir in the image, so the Makefile sets HOME=/workspace; assemble under a
+# subdir of it. All CI inputs are absolute paths (/usr/local/share,
+# /workspace/binaries), so nothing else depends on the CWD.
 if [[ "$CI_MODE" = "true" ]]; then
     BUILD_ROOT="${HOME:-/tmp}/mcpb-build"
     mkdir -p "$BUILD_ROOT"

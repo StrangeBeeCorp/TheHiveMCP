@@ -349,7 +349,9 @@ mcpb-ci-nobuild: pre-dist mcpb-build-image ## Generate MCPB packages from pre-bu
 		mkdir -p $$ws/binaries; \
 		cp $(BUILDDIR)/thehivemcp-$$target$$ext $$ws/binaries/; \
 		docker run --rm \
+			--user "$$(id -u):$$(id -g)" \
 			-v $$ws:/workspace \
+			-e HOME=/workspace \
 			-e CI_MODE=true \
 			-e VERSION=$(VERSION) \
 			-e TARGET_ARCH=$$target \
