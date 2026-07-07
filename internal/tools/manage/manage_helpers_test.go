@@ -1,6 +1,7 @@
 package manage_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
@@ -34,6 +35,36 @@ func createCase(t *testing.T, hiveClient *thehive.APIClient, title string) *theh
 	require.NotNil(t, createdCase)
 
 	return createdCase
+}
+
+// createCases creates count cases titled via titleFmt (given the 1-based index)
+// and returns their IDs. Used by the batch merge tests.
+func createCases(t *testing.T, hiveClient *thehive.APIClient, count int, titleFmt string) []string {
+	t.Helper()
+
+	caseIDs := make([]string, 0, count)
+
+	for i := 1; i <= count; i++ {
+		createdCase := createCase(t, hiveClient, fmt.Sprintf(titleFmt, i))
+		caseIDs = append(caseIDs, createdCase.UnderscoreId)
+	}
+
+	return caseIDs
+}
+
+// createPageInCase creates a case titled caseTitle and a page inside it via the
+// raw TheHive API, asserting both succeeded and returning the created page.
+func createPageInCase(t *testing.T, hiveClient *thehive.APIClient, caseTitle string, page thehive.InputCreatePage) *thehive.OutputPage {
+	t.Helper()
+
+	createdCase := createCase(t, hiveClient, caseTitle)
+
+	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	createdPage, _, err := hiveClient.PageAPI.CreateAPageInACase(authContext, createdCase.UnderscoreId).InputCreatePage(page).Execute()
+	require.NoError(t, err)
+	require.NotNil(t, createdPage)
+
+	return createdPage
 }
 
 // createAlert creates an alert with the given title and source reference via

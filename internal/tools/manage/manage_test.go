@@ -433,17 +433,7 @@ func TestManageMergeCases(t *testing.T) {
 
 	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
 
-	var caseIDs []string
-
-	for i := 1; i <= 2; i++ {
-		testCase := testutils.MockInputCase()
-		testCase.Title = fmt.Sprintf("Case %d for Merging", i)
-
-		createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-		require.NoError(t, err)
-
-		caseIDs = append(caseIDs, createdCase.UnderscoreId)
-	}
+	caseIDs := createCases(t, hiveClient, 2, "Case %d for Merging")
 
 	structuredData := manageStructured(t, mcpClient, map[string]any{
 		testArgOperation:  testOpMerge,
@@ -551,19 +541,7 @@ func TestManageMergeWithAnalystPermissions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-
-	var caseIDs []string
-
-	for i := 1; i <= 2; i++ {
-		testCase := testutils.MockInputCase()
-		testCase.Title = fmt.Sprintf("Case %d for Analyst Merge Test", i)
-
-		createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
-		require.NoError(t, err)
-
-		caseIDs = append(caseIDs, createdCase.UnderscoreId)
-	}
+	caseIDs := createCases(t, hiveClient, 2, "Case %d for Analyst Merge Test")
 
 	structuredData := manageStructured(t, mcpClient, map[string]any{
 		testArgOperation:  testOpMerge,
@@ -922,17 +900,11 @@ func TestManageUpdatePage(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	createdCase := createCase(t, hiveClient, "Case for Page Update")
-
-	inputPage := thehive.InputCreatePage{
+	createdPage := createPageInCase(t, hiveClient, "Case for Page Update", thehive.InputCreatePage{
 		Title:    "Original Page Title",
 		Content:  "## Original\ncontent.",
 		Category: testCategoryDefault,
-	}
-	createdPage, _, err := hiveClient.PageAPI.CreateAPageInACase(authContext, createdCase.UnderscoreId).InputCreatePage(inputPage).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdPage)
+	})
 
 	updateData := map[string]any{
 		testFieldTitle:   "Updated Page Title",
@@ -953,17 +925,11 @@ func TestManageDeletePage(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-	createdCase := createCase(t, hiveClient, "Case for Page Deletion")
-
-	inputPage := thehive.InputCreatePage{
+	createdPage := createPageInCase(t, hiveClient, "Case for Page Deletion", thehive.InputCreatePage{
 		Title:    "Page to Delete",
 		Content:  "This page will be deleted.",
 		Category: testCategoryDefault,
-	}
-	createdPage, _, err := hiveClient.PageAPI.CreateAPageInACase(authContext, createdCase.UnderscoreId).InputCreatePage(inputPage).Execute()
-	require.NoError(t, err)
-	require.NotNil(t, createdPage)
+	})
 
 	structuredData := manageStructured(t, mcpClient, map[string]any{
 		testArgOperation:  testOpDelete,
@@ -979,8 +945,6 @@ func TestManagePageWithAnalystPermissions(t *testing.T) {
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
-
 	pageData := map[string]any{
 		testFieldTitle:    "Analyst Created Page",
 		testFieldContent:  "## Content\nPage created by analyst.",
@@ -994,15 +958,11 @@ func TestManagePageWithAnalystPermissions(t *testing.T) {
 	})
 	require.False(t, result.IsError, "Page creation should succeed with analyst permissions")
 
-	createdCase := createCase(t, hiveClient, "Case for Analyst Page Permission Test")
-
-	inputPage := thehive.InputCreatePage{
+	createdPage := createPageInCase(t, hiveClient, "Case for Analyst Page Permission Test", thehive.InputCreatePage{
 		Title:    "Page for Analyst Delete Test",
 		Content:  "Content",
 		Category: testCategoryDefault,
-	}
-	createdPage, _, err := hiveClient.PageAPI.CreateAPageInACase(authContext, createdCase.UnderscoreId).InputCreatePage(inputPage).Execute()
-	require.NoError(t, err)
+	})
 
 	deleteResult := testutils.CallTool(t, mcpClient, testToolName, map[string]any{
 		testArgOperation:  testOpDelete,
