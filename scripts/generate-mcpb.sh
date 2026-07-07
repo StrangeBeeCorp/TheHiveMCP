@@ -97,7 +97,11 @@ if [[ "$CI_MODE" = "true" ]]; then
     VERSION_FULL=${VERSION:-$(echo "$BINARY_NAME" | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "v0.0.0")}
     VERSION=$(echo "$VERSION_FULL" | sed 's/^v//')
 else
-    VERSION_FULL=$(cd .. && make version)
+    # --no-print-directory + tail -1: when this script runs under `make
+    # mcpb-local`, MAKELEVEL is inherited and a recursive `make version` would
+    # otherwise emit "Entering/Leaving directory" lines onto stdout, which get
+    # captured here and inject literal newlines into the JSON manifest below.
+    VERSION_FULL=$(cd .. && make --no-print-directory version | tail -1)
     VERSION=$(echo "$VERSION_FULL" | sed 's/^v//')
 fi
 
