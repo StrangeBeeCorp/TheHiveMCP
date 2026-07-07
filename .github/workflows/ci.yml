@@ -21,19 +21,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The make targets run inside golang:1.26.4-alpine and bind-mount the
-      # runner's Go module and build caches (see DOCKER_CACHE_MOUNTS in the
-      # Makefile: go env GOPATH is /home/runner/go on ubuntu-latest). Without
-      # this, every sast/vulncheck run re-downloads the whole dependency graph
-      # and recompiles gosec/govulncheck from scratch. Keyed on go.sum so a
-      # dependency change busts it; restore-keys allow a partial warm start.
-      - name: Cache Go modules and build cache
+      # The make targets run inside pinned images and bind-mount the runner's
+      # Go and golangci-lint caches (see DOCKER_CACHE_MOUNTS and the lint target
+      # in the Makefile: go env GOPATH is /home/runner/go on ubuntu-latest).
+      # Without this every run re-downloads the whole dependency graph, recompiles
+      # gosec/govulncheck, rebuilds every package, and re-analyzes every file with
+      # golangci-lint from scratch. Three distinct caches:
+      #   ~/go/pkg/mod          — downloaded dependency source (module cache)
+      #   ~/.cache/go-build     — compiled package objects (GOCACHE: go build/test + golangci-lint)
+      #   ~/.cache/golangci-lint — golangci-lint's own per-file analysis results
+      # Keyed on go.sum + the lint config so a dependency or lint-rule change busts
+      # it; restore-keys allow a partial warm start on a miss.
+      - name: Cache Go and golangci-lint caches
         uses: actions/cache@v4
         with:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: go-${{ runner.os }}-${{ hashFiles('go.sum') }}
+            ~/.cache/golangci-lint
+          key: go-${{ runner.os }}-${{ hashFiles('go.sum', '.golangci.yml') }}
           restore-keys: |
             go-${{ runner.os }}-
 
