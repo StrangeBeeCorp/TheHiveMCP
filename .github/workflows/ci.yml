@@ -21,22 +21,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Mirror golangci-lint-action's cache strategy: a 7-day interval number in
-      # the key forces a periodic refresh even when nothing else changes, so a
-      # frozen (never-re-saved) cache can't go stale indefinitely. The go.mod +
-      # .golangci.yml hash busts it earlier on a dependency or lint-config change.
-      - name: Compute cache interval
-        id: lint-cache
-        run: echo "interval=$(( $(date +%s) / 86400 / 7 ))" >> "$GITHUB_OUTPUT"
-
-      - name: Cache golangci-lint
+      # The make targets run inside golang:1.26.4-alpine and bind-mount the
+      # runner's Go module and build caches (see DOCKER_CACHE_MOUNTS in the
+      # Makefile: go env GOPATH is /home/runner/go on ubuntu-latest). Without
+      # this, every sast/vulncheck run re-downloads the whole dependency graph
+      # and recompiles gosec/govulncheck from scratch. Keyed on go.sum so a
+      # dependency change busts it; restore-keys allow a partial warm start.
+      - name: Cache Go modules and build cache
         uses: actions/cache@v4
         with:
-          path: ~/.cache/golangci-lint
-          key: golangci-lint-${{ runner.os }}-${{ steps.lint-cache.outputs.interval }}-${{ hashFiles('go.mod', '.golangci.yml') }}
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-${{ runner.os }}-${{ hashFiles('go.sum') }}
           restore-keys: |
-            golangci-lint-${{ runner.os }}-${{ steps.lint-cache.outputs.interval }}-
-            golangci-lint-${{ runner.os }}-
+            go-${{ runner.os }}-
 
       - name: Format check
         run: make fmt
