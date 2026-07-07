@@ -95,7 +95,8 @@ The full contract — supported deployment shape, security and accuracy envelope
   `[UNTRUSTED_DATA]…[/UNTRUSTED_DATA]` boundary tags, and every tool tells the model never to follow instructions found inside them. We publish prompt-injection
   resilience per recommended model — the pass bar is strict: the agent must **both** ignore the injection **and** warn the analyst. _Boundary:_ this defense
   **reduces but does not eliminate** injection risk, and resilience still varies by model. Weaker models should not drive write-capable or automation tools on
-  attacker-reachable data. The permission model (`read_only` default) is your enforced backstop — see [docs/reference/permissions.md](docs/reference/permissions.md).
+  attacker-reachable data. The permission model (`read_only` default) is your enforced backstop — see
+  [docs/reference/permissions.md](docs/reference/permissions.md).
 
 - **Accuracy envelope, and its boundary.** We measure correct tool use across realistic, multi-step investigations — entity search, schema/resource discovery,
   case and observable management, and automation — end-to-end against a real TheHive instance with the real MCP server, no mocked tools. Per-model results are
@@ -338,9 +339,9 @@ bootstrap.RegisterToolsToMCPServer(mcpServer)
 | ----------------------- | -------------------------------- | ----------------- | ----------------------------------------------------- |
 | **Claude Desktop MCPB** | Personal use, quick start        | ⭐ Easy           | Above ⬆️                                              |
 | **Claude Code**         | Anthropic CLI (terminal)         | ⭐⭐ Simple       | [Claude Code Guide](docs/how-to/setup-claude-code.md) |
-| **stdio Local**         | Local MCP hosts (GitHub Copilot) | ⭐⭐ Simple       | [stdio Guide](docs/how-to/stdio-local.md)           |
-| **Remote Docker**       | Team/cloud deployment            | ⭐⭐⭐ Medium     | [Remote Guide](docs/how-to/remote-docker.md)        |
-| **LibreChat**           | Complete AI assistant setup      | ⭐⭐⭐⭐ Advanced | [LibreChat Guide](docs/how-to/librechat.md)         |
+| **stdio Local**         | Local MCP hosts (GitHub Copilot) | ⭐⭐ Simple       | [stdio Guide](docs/how-to/stdio-local.md)             |
+| **Remote Docker**       | Team/cloud deployment            | ⭐⭐⭐ Medium     | [Remote Guide](docs/how-to/remote-docker.md)          |
+| **LibreChat**           | Complete AI assistant setup      | ⭐⭐⭐⭐ Advanced | [LibreChat Guide](docs/how-to/librechat.md)           |
 
 ---
 
