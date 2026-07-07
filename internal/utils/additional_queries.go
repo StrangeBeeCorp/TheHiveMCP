@@ -238,40 +238,46 @@ func verifyParentEntitiesInScope(ctx context.Context, entityType string, entityI
 	return nil
 }
 
+// expandRequest bundles the invariant inputs of a single expansion pass so the
+// per-pass helpers stay under Go's parameter-count limit (SonarCloud go:S107).
+type expandRequest struct {
+	entityType        string
+	entities          []map[string]any
+	additionalQueries []string
+	queryConfig       EntityQueryConfig
+	permFilters       map[string]any
+}
+
 // runQueriesAndCollectHitIDs runs every requested query against every entity
 // (pass 1), stashing the raw rows and collecting the deduped union of
 // similarity-hit _ids per target type for the batched scope re-check.
 func runQueriesAndCollectHitIDs(
 	ctx context.Context,
 	hiveClient *thehive.APIClient,
-	entityType string,
-	entities []map[string]any,
-	additionalQueries []string,
-	queryConfig EntityQueryConfig,
-	permFilters map[string]any,
+	req expandRequest,
 ) ([]map[string][]map[string]any, map[string]map[string]struct{}, error) {
-	rawResults := make([]map[string][]map[string]any, len(entities))
+	rawResults := make([]map[string][]map[string]any, len(req.entities))
 	idsByType := make(map[string]map[string]struct{})
 
-	for i, entity := range entities {
+	for i, entity := range req.entities {
 		entityID, ok := entity[fieldID].(string)
 		if !ok {
 			return nil, nil, fmt.Errorf("entity at index %d missing _id field", i)
 		}
 
-		rawResults[i] = make(map[string][]map[string]any, len(additionalQueries))
+		rawResults[i] = make(map[string][]map[string]any, len(req.additionalQueries))
 
-		for _, queryName := range additionalQueries {
-			descriptor := queryConfig[queryName]
+		for _, queryName := range req.additionalQueries {
+			descriptor := req.queryConfig[queryName]
 
 			data, err := descriptor.Func(ctx, hiveClient, entityID)
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to get %s for %s ID %s: %w", queryName, entityType, entityID, err)
+				return nil, nil, fmt.Errorf("failed to get %s for %s ID %s: %w", queryName, req.entityType, entityID, err)
 			}
 
 			rawResults[i][queryName] = data
 
-			if !descriptor.ResultsAreIndependent || len(permFilters) == 0 {
+			if !descriptor.ResultsAreIndependent || len(req.permFilters) == 0 {
 				continue
 			}
 
@@ -323,26 +329,22 @@ func computeScopeByType(ctx context.Context, idsByType map[string]map[string]str
 // projects each query result, and attaches it to its parent entity (pass 2).
 func attachFilteredResults(
 	ctx context.Context,
-	entityType string,
-	entities []map[string]any,
-	additionalQueries []string,
-	queryConfig EntityQueryConfig,
-	permFilters map[string]any,
+	req expandRequest,
 	rawResults []map[string][]map[string]any,
 	scopeByType map[string]map[string]bool,
 ) error {
-	for i, entity := range entities {
-		for _, queryName := range additionalQueries {
-			descriptor := queryConfig[queryName]
+	for i, entity := range req.entities {
+		for _, queryName := range req.additionalQueries {
+			descriptor := req.queryConfig[queryName]
 			data := rawResults[i][queryName]
 
-			if descriptor.ResultsAreIndependent && len(permFilters) > 0 {
+			if descriptor.ResultsAreIndependent && len(req.permFilters) > 0 {
 				data = filterSimilarityHitsByScope(ctx, queryName, descriptor.EntityType, data, scopeByType[descriptor.EntityType])
 			}
 
 			filteredData, err := filterAdditionalQueryResults(data, descriptor)
 			if err != nil {
-				return fmt.Errorf("failed to filter additional query results for %s ID %s: %w", entityType, entity[fieldID], err)
+				return fmt.Errorf("failed to filter additional query results for %s ID %s: %w", req.entityType, entity[fieldID], err)
 			}
 
 			entity[queryName] = filteredData
@@ -376,6 +378,14 @@ func ExpandEntitiesWithQueries(
 		return nil, err
 	}
 
+	req := expandRequest{
+		entityType:        entityType,
+		entities:          entities,
+		additionalQueries: additionalQueries,
+		queryConfig:       queryConfig,
+		permFilters:       permFilters,
+	}
+
 	// Deny expansion of any parent the permission filters exclude, in case a
 	// caller passes unscoped entity IDs (DL-6004).
 	if len(permFilters) > 0 {
@@ -393,7 +403,7 @@ func ExpandEntitiesWithQueries(
 	// Batch the independent-query re-check (see QueryDescriptor, DL-6004) in ONE
 	// call per target type across ALL parents, not once per parent (DL-5764).
 	// Query execution stays serial; only the re-check is batched.
-	rawResults, idsByType, err := runQueriesAndCollectHitIDs(ctx, hiveClient, entityType, entities, additionalQueries, queryConfig, permFilters)
+	rawResults, idsByType, err := runQueriesAndCollectHitIDs(ctx, hiveClient, req)
 	if err != nil {
 		return nil, err
 	}
@@ -403,7 +413,7 @@ func ExpandEntitiesWithQueries(
 		return nil, err
 	}
 
-	err = attachFilteredResults(ctx, entityType, entities, additionalQueries, queryConfig, permFilters, rawResults, scopeByType)
+	err = attachFilteredResults(ctx, req, rawResults, scopeByType)
 	if err != nil {
 		return nil, err
 	}
