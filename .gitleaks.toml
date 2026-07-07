@@ -1,0 +1,27 @@
+# gitleaks configuration. Extends the built-in default ruleset and adds a small
+# allowlist for known-safe placeholder values that live in documentation and
+# example configs. Everything else is scanned with the stock rules.
+#
+# Only add entries here for values that are demonstrably NOT real secrets
+# (example/placeholder credentials in docs). A real secret must be rotated and
+# removed, never allowlisted.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholder credentials in documentation and example configs"
+
+# Example/placeholder values that trip the generic/auth-header rules but are not
+# real secrets.
+regexes = [
+  # README curl example: "Authorization: Bearer different-api-key"
+  '''different-api-key''',
+]
+
+# The LibreChat helper compose file ships LibreChat's own published example
+# CREDS_KEY / CREDS_IV / JWT_SECRET / JWT_REFRESH_SECRET values, which every
+# operator is expected to regenerate. They are not our secrets.
+paths = [
+  '''docs/how-to/docker/docker-compose\.librechat\.yml''',
+]

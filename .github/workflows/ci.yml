@@ -55,6 +55,12 @@ jobs:
       - name: Run vulnerability scan
         run: make vulncheck
 
+      - name: Lint Dockerfiles
+        run: make dockerlint
+
+      - name: Scan for secrets
+        run: make secrets
+
   docker-build:
     # Smoke-test that the production image still builds from deployment/Dockerfile
     # (a broken COPY, a renamed cmd/ path, or a bad base digest is not caught by

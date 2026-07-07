@@ -49,7 +49,7 @@ fmt: ## Format the code
 	@echo "Code formatted"
 
 .PHONY: security
-security: vulncheck sast lint ## Run security checks
+security: vulncheck sast lint dockerlint dockersec secrets ## Run security checks
 
 .PHONY: help
 help: ## Display this help
@@ -76,7 +76,50 @@ sast: ## Static Application Security Testing
 	@echo $(BGreen)---------------------------$(Color_Off)
 	@echo $(BGreen)-- Running SAST Analysis --$(Color_Off)
 	@echo $(BGreen)---------------------------$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install github.com/securego/gosec/v2/cmd/gosec@v2.26.1 && gosec -exclude=G101 ./...'
+	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install github.com/securego/gosec/v2/cmd/gosec@v2.26.1 && gosec ./...'
+
+# Every Dockerfile in the repo. hadolint lints each — the production image plus
+# the MCPB and LibreChat helper images — so a misconfig regression in any of them
+# turns the build red, not just the one we ship.
+DOCKERFILES := deployment/Dockerfile scripts/Dockerfile.mcpb docs/how-to/docker/Dockerfile.librechat
+
+.PHONY: dockerlint
+dockerlint: ## Lint the Dockerfiles (hadolint)
+	@echo $(BGreen)---------------------------$(Color_Off)
+	@echo $(BGreen)-- Linting Dockerfiles   --$(Color_Off)
+	@echo $(BGreen)---------------------------$(Color_Off)
+	@for f in $(DOCKERFILES); do \
+		echo "hadolint $$f"; \
+		docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < $$f || exit 1; \
+	done
+	@echo "Dockerfiles OK"
+
+# hadolint checks Dockerfile hygiene but has no rule for "container runs as
+# root"; trivy config does (DS-0002), matching SonarCloud's docker:S6471. We scan
+# each Dockerfile for HIGH+ misconfigs only: the LOW findings here are just the
+# missing-HEALTHCHECK check (DS-0026), which is noise for a short-lived CI packer
+# and a thin config-overlay image. The named volume caches trivy's checks bundle
+# (a per-run network download otherwise); like GO_TOOLS_CACHE it is linux-native
+# and populated in-container, so it is not bind-mounted from the host.
+TRIVY_CACHE := -v thehivemcp-trivy-cache:/root/.cache/trivy
+.PHONY: dockersec
+dockersec: ## Scan the Dockerfiles for security misconfigurations (trivy)
+	@echo $(BGreen)---------------------------$(Color_Off)
+	@echo $(BGreen)-- Scanning Dockerfiles  --$(Color_Off)
+	@echo $(BGreen)---------------------------$(Color_Off)
+	@for f in $(DOCKERFILES); do \
+		echo "trivy config $$f"; \
+		docker run --rm -v $(CURDIR):/scan -w /scan $(TRIVY_CACHE) aquasec/trivy:0.72.0 \
+			config --quiet --exit-code 1 --severity HIGH,CRITICAL "$$f" || exit 1; \
+	done
+	@echo "Dockerfiles security OK"
+
+.PHONY: secrets
+secrets: ## Scan the working tree for committed secrets (gitleaks)
+	@echo $(BGreen)---------------------------$(Color_Off)
+	@echo $(BGreen)-- Scanning for secrets  --$(Color_Off)
+	@echo $(BGreen)---------------------------$(Color_Off)
+	docker run --rm -v $(CURDIR):/repo -w /repo zricethezav/gitleaks:v8.30.1 dir --redact --verbose --config /repo/.gitleaks.toml .
 
 .PHONY: build
 build: ## Build binary for current host OS/Arch

@@ -19,4 +19,9 @@ RUN chmod +x /usr/local/bin/generate-mcpb.sh
 # Set working directory for volumes
 WORKDIR /workspace
 
+# Drop root: the upstream node:alpine image ships a non-root "node" user. All
+# build-time file ops above run as root; the packer runs unprivileged and only
+# needs to write into the mounted /workspace.
+USER node
+
 ENTRYPOINT ["/usr/local/bin/generate-mcpb.sh"]

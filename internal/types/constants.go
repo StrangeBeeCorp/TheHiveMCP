@@ -49,7 +49,7 @@ const EnvKeyTheHiveAPIKey EnvKey = "THEHIVE_API_KEY" // #nosec G101 -- env var n
 const EnvKeyTheHiveUsername EnvKey = "THEHIVE_USERNAME"
 
 // EnvKeyTheHivePassword is the env var name for TheHive password.
-const EnvKeyTheHivePassword EnvKey = "THEHIVE_PASSWORD"
+const EnvKeyTheHivePassword EnvKey = "THEHIVE_PASSWORD" // #nosec G101 -- env var name, not a real credential
 
 // EnvKeyTheHiveOrganisation is the env var name for TheHive organisation.
 const EnvKeyTheHiveOrganisation EnvKey = "THEHIVE_ORGANISATION"
@@ -97,7 +97,7 @@ const FlagVarTheHiveAPIKey FlagVar = "thehive-api-key" // #nosec G101 -- flag na
 const FlagVarTheHiveUsername FlagVar = "thehive-username"
 
 // FlagVarTheHivePassword is the CLI flag name for TheHive password.
-const FlagVarTheHivePassword FlagVar = "thehive-password"
+const FlagVarTheHivePassword FlagVar = "thehive-password" // #nosec G101 -- flag name, not a real credential
 
 // FlagVarTheHiveOrganisation is the CLI flag name for TheHive organisation.
 const FlagVarTheHiveOrganisation FlagVar = "thehive-organisation"

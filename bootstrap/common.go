@@ -19,7 +19,7 @@ import (
 )
 
 // dummyAPIKey is the placeholder API key value that is treated as unset.
-const dummyAPIKey = "dummy"
+const dummyAPIKey = "dummy" // #nosec G101 -- placeholder sentinel value, not a real credential
 
 // Common errors
 var (
