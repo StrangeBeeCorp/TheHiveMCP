@@ -21,6 +21,22 @@ if [[ -n "$PERMISSIONS_CONFIG" ]] && [[ "$PERMISSIONS_CONFIG" != "admin" ]] && [
     PERMISSIONS_IS_FILE=true
 fi
 
+# Choose where to assemble the extension/ tree.
+#
+# Local mode: the CWD is the repo root (the manifest step below reads
+# ../docs/... and ../build/... relative to extension/), so build there.
+#
+# CI mode: the container runs as the unprivileged "node" user with CWD
+# /workspace, but /workspace is a volume owned by root on the runner and is not
+# writable by "node" (mkdir extension/ -> Permission denied). All CI inputs are
+# absolute paths (/usr/local/share, /workspace/binaries), so assemble under a
+# node-writable dir instead and only touch /workspace for the final copy.
+if [[ "$CI_MODE" = "true" ]]; then
+    BUILD_ROOT="${HOME:-/tmp}/mcpb-build"
+    mkdir -p "$BUILD_ROOT"
+    cd "$BUILD_ROOT"
+fi
+
 # Create extension directory structure
 mkdir -p extension/server
 cd extension
