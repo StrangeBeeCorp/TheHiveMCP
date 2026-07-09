@@ -57,15 +57,21 @@ derive_licensing_tag() {
 }
 
 # pick_licensing_image echoes the first pullable "<repo>:<tag>" among the
-# derived tag and the fallback, or nothing if none is pullable.
+# derived tag and the fallback, or nothing if none is pullable. The chosen
+# image goes to stdout (captured by the caller); every probe attempt — and the
+# manifest-inspect error when it fails — is logged to stderr so a CI fallback to
+# free mode is never silent (see the log when a run unexpectedly goes sequential).
 pick_licensing_image() {
-	local tag
+	local tag err
 	for tag in "$(derive_licensing_tag)" "$LICENSING_FALLBACK_TAG"; do
 		[[ -n "$tag" ]] || continue
-		if docker manifest inspect "${LICENSING_REPO}:${tag}" >/dev/null 2>&1; then
+		echo "Probing ${LICENSING_REPO}:${tag}…" >&2
+		if err="$(docker manifest inspect "${LICENSING_REPO}:${tag}" 2>&1 >/dev/null)"; then
+			echo "  → pullable" >&2
 			echo "${LICENSING_REPO}:${tag}"
 			return 0
 		fi
+		echo "  → not pullable: ${err}" >&2
 	done
 	return 0
 }
