@@ -53,7 +53,7 @@ derive_licensing_tag() {
 	local ver majmin
 	ver="${img##*:}" # 5.6.3
 	majmin="$(echo "$ver" | grep -oE '^[0-9]+\.[0-9]+' || true)"
-	[ -n "$majmin" ] && echo "release-${majmin}"
+	[[ -n "$majmin" ]] && echo "release-${majmin}"
 }
 
 # pick_licensing_image echoes the first pullable "<repo>:<tag>" among the
@@ -61,7 +61,7 @@ derive_licensing_tag() {
 pick_licensing_image() {
 	local tag
 	for tag in "$(derive_licensing_tag)" "$LICENSING_FALLBACK_TAG"; do
-		[ -n "$tag" ] || continue
+		[[ -n "$tag" ]] || continue
 		if docker manifest inspect "${LICENSING_REPO}:${tag}" >/dev/null 2>&1; then
 			echo "${LICENSING_REPO}:${tag}"
 			return 0
@@ -76,7 +76,7 @@ LICENSING_IMAGE="$(pick_licensing_image)"
 # stale token from a previous run must never leak into a free-mode run.
 rm -f "${LICENSE_FILE}"
 
-if [ -n "${LICENSING_IMAGE}" ]; then
+if [[ -n "${LICENSING_IMAGE}" ]]; then
 	echo "Licensing image ${LICENSING_IMAGE} is pullable → license (parallel) mode."
 	# The override mounts LICENSE_FILE; create an empty placeholder so the mount
 	# source exists and TheHive boots in --dev mode (unlicensed-but-dev) for the
@@ -107,11 +107,11 @@ ${DC} up -d
 # the DB a new instance id). We also write it to LICENSE_FILE so a restart
 # re-activates it from disk, and so the Makefile can pass it to the go-test
 # container to select parallel mode.
-if [ -n "${LICENSING_IMAGE}" ]; then
+if [[ -n "${LICENSING_IMAGE}" ]]; then
 	echo "Waiting for TheHive to accept the licensing challenge…"
 	for _ in $(seq 1 72); do
 		code="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9000/api/status || true)"
-		[ "${code}" = "200" ] && break
+		[[ "${code}" == "200" ]] && break
 		sleep 5
 	done
 
@@ -130,7 +130,7 @@ if [ -n "${LICENSING_IMAGE}" ]; then
 	# JWT line; fail loudly if it is missing (so we never silently fall back to a
 	# free run when the operator expected parallel).
 	token="$(printf '%s\n' "${mint_out}" | sed -n 's/^Token: //p' | head -1)"
-	if [ -z "${token}" ]; then
+	if [[ -z "${token}" ]]; then
 		echo "Failed to mint license; tool output was:" >&2
 		printf '%s\n' "${mint_out}" >&2
 		exit 1
