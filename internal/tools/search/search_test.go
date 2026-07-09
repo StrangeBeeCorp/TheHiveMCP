@@ -96,7 +96,7 @@ func createTestCaseWithTaskAndAlert(t *testing.T, hiveClient *thehive.APIClient)
 }
 
 func TestSearchCasesBySeverityAndStatus(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
@@ -135,7 +135,7 @@ func TestSearchCasesBySeverityAndStatus(t *testing.T) {
 }
 
 func TestSearchAlertsWithDateRange(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
@@ -164,7 +164,7 @@ func TestSearchAlertsWithDateRange(t *testing.T) {
 }
 
 func TestSearchAlertsWithMultipleTags(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
@@ -193,7 +193,7 @@ func TestSearchAlertsWithMultipleTags(t *testing.T) {
 }
 
 func TestSearchCasesWithAssigneeAndSorting(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
@@ -239,7 +239,7 @@ func TestSearchCasesWithAssigneeAndSorting(t *testing.T) {
 }
 
 func TestSearchAlertsWithComplexOrConditions(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
@@ -283,7 +283,7 @@ func TestSearchAlertsWithComplexOrConditions(t *testing.T) {
 }
 
 func TestSearchTasksWithLimit(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
@@ -311,7 +311,7 @@ func TestSearchTasksWithLimit(t *testing.T) {
 }
 
 func TestExtraColumnsLimitColumns(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
@@ -340,7 +340,7 @@ func TestExtraColumnsLimitColumns(t *testing.T) {
 }
 
 func TestSearchWithAnalystPermissions(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	authContext := testutils.GetAuthContext(t)
@@ -401,7 +401,7 @@ func TestSearchWithAnalystPermissions(t *testing.T) {
 }
 
 func TestSearchWithReadOnlyPermissions(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	authContext := testutils.GetAuthContext(t)
@@ -445,7 +445,7 @@ func TestSearchWithReadOnlyPermissions(t *testing.T) {
 }
 
 func TestSearchCasesWithCountOnly(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
@@ -479,7 +479,7 @@ func TestSearchCasesWithCountOnly(t *testing.T) {
 }
 
 func TestSearchAlertsWithCountOnly(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
@@ -511,7 +511,7 @@ func TestSearchAlertsWithCountOnly(t *testing.T) {
 }
 
 func TestSearchCountVsRegularSearch(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
@@ -543,7 +543,7 @@ func TestSearchCountVsRegularSearch(t *testing.T) {
 }
 
 func TestSearchExtraDataAndAdditionalQueries(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
@@ -616,7 +616,7 @@ func createTestCaseWithComment(t *testing.T, hiveClient *thehive.APIClient) map[
 }
 
 func TestSearchAdditionalQueriesComments(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	creationResult := createTestCaseWithComment(t, hiveClient)
@@ -672,7 +672,7 @@ func createTaskWithLog(t *testing.T, hiveClient *thehive.APIClient) map[string]a
 }
 
 func TestSearchTaskTasKLogs(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	creationResult := createTaskWithLog(t, hiveClient)
@@ -714,7 +714,7 @@ func TestSearchTaskTasKLogs(t *testing.T) {
 }
 
 func TestSearchCaseTemplates(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
@@ -748,7 +748,7 @@ func TestSearchCaseTemplates(t *testing.T) {
 }
 
 func TestSearchPages(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 

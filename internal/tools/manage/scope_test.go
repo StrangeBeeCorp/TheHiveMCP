@@ -64,7 +64,7 @@ func requireScopeDenied(t *testing.T, result *mcp.CallToolResult) {
 
 // Out-of-scope update is denied without mutating; in-scope update succeeds.
 func TestManageScopeUpdateDeniedOutOfScope(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -106,7 +106,7 @@ func TestManageScopeUpdateDeniedOutOfScope(t *testing.T) {
 
 // A batch update is denied entirely if any entity is out of scope.
 func TestManageScopeBatchUpdateDeniedWhenAnyOutOfScope(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -141,7 +141,7 @@ func TestManageScopeBatchUpdateDeniedWhenAnyOutOfScope(t *testing.T) {
 
 // Out-of-scope deletes are denied and the entity survives.
 func TestManageScopeDeleteDeniedOutOfScope(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -171,7 +171,7 @@ func TestManageScopeDeleteDeniedOutOfScope(t *testing.T) {
 
 // Out-of-scope comments are denied; in-scope comments succeed.
 func TestManageScopeCommentDeniedOutOfScope(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -204,7 +204,7 @@ func TestManageScopeCommentDeniedOutOfScope(t *testing.T) {
 
 // Child creation (task) inside an out-of-scope parent case is denied.
 func TestManageScopeCreateChildDeniedOutOfScopeParent(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -238,7 +238,7 @@ func TestManageScopeCreateChildDeniedOutOfScopeParent(t *testing.T) {
 // Case-or-alert parent resolution: observable in an in-scope alert succeeds,
 // in an out-of-scope alert is denied.
 func TestManageScopeCreateObservableInScopeAlertParent(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -275,7 +275,7 @@ func TestManageScopeCreateObservableInScopeAlertParent(t *testing.T) {
 
 // Promoting an out-of-scope alert is denied.
 func TestManageScopePromoteDeniedOutOfScope(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -300,7 +300,7 @@ func TestManageScopePromoteDeniedOutOfScope(t *testing.T) {
 
 // A merge spanning an out-of-scope entity is denied.
 func TestManageScopeMergeDeniedWhenAnyCaseOutOfScope(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -326,7 +326,7 @@ func TestManageScopeMergeDeniedWhenAnyCaseOutOfScope(t *testing.T) {
 
 // Without configured filters (admin), operations a filter would exclude proceed.
 func TestManageScopeNoFiltersBackwardCompatible(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 	authContext := testutils.GetAuthContext(t)

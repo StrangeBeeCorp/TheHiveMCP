@@ -32,13 +32,15 @@ linters:
     - nonamedreturns # named returns are used deliberately for documentation and deferred error wrapping
     - wsl # whitespace/cuddling style is left to gofmt, not enforced
     # --- Test conventions specific to this repo
-    # paralleltest and tparallel are ENABLED (via `default: all`). Every test —
-    # unit and integration — runs with t.Parallel(); integration tests are
-    # isolated per-test (a dedicated organisation + user each, see
-    # internal/testutils/orgs.go). paralleltest enforces the convention so new
-    # tests stay parallelizable, and tparallel guards against parallel-cleanup
-    # misuse. The single exception (a test that mutates the global slog logger)
-    # carries an inline //nolint:paralleltest rather than a package-wide exclusion.
+    # paralleltest and tparallel are ENABLED (via `default: all`) for UNIT tests,
+    # which still call t.Parallel() directly. INTEGRATION tests instead call the
+    # testutils.Parallel(t) wrapper, which runs t.Parallel() only when a TheHive
+    # license is present (parallel one-org-per-test) and no-ops otherwise
+    # (sequential shared-org; see internal/testutils/orgs.go). Both linters look
+    # for a literal t.Parallel() call and cannot see through the wrapper, so they
+    # are excluded for the integration test files in the `exclusions` section
+    # below. The single unit-test exception (a test that mutates the global slog
+    # logger) carries an inline //nolint:paralleltest.
     # --- Micro-optimisation opinion
     - prealloc # slice preallocation is a premature optimisation for these small, non-hot-path slices
     # In-package tests (package bootstrap, not bootstrap_test) exercise unexported
@@ -92,3 +94,13 @@ linters:
       - path: internal/testutils/
         linters:
           - mnd
+
+      # Integration tests call the testutils.Parallel(t) wrapper instead of a
+      # literal t.Parallel() (see the paralleltest/tparallel note above), so
+      # those two linters would false-positive on every integration test func.
+      # Excluded for exactly the integration test files; unit-test files in the
+      # same packages keep both linters and their direct t.Parallel() calls.
+      - path: (internal/tools/execute_automation/scope_test\.go|internal/tools/search/(expansion_scope|filter_operators|search)_test\.go|internal/tools/manage/(scope|entity_scope_batch_integration|manage)_test\.go|internal/tools/resource/resource_test\.go)
+        linters:
+          - paralleltest
+          - tparallel

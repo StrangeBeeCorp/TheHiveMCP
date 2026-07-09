@@ -18,7 +18,7 @@ import (
 // catastrophic: false denial (in-scope hit dropped) and leak (out-of-scope hit
 // marked in-scope). Cross-checks against the proven get-by-ID path.
 func TestGetScopedEntityIDsBatchHonorsIDFilter(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	authCtx := testutils.GetAuthContext(t)
 	ctx := context.WithValue(authCtx, types.HiveClientCtxKey, hiveClient)

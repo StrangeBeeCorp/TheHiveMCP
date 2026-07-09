@@ -14,7 +14,7 @@ import (
 // Additional-query expansion must not fetch children of a parent excluded by permission
 // filters, and must proceed unchanged when no filters are configured (DL-6004).
 func TestExpandEntitiesWithQueriesScopeEnforcement(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	authContext := testutils.GetAuthContext(t)

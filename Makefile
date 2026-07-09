@@ -175,6 +175,19 @@ endif
 THEHIVE_TEST_URL ?= http://localhost:9000
 export THEHIVE_TEST_URL
 
+# THEHIVE_TEST_IMAGE reaches the reset script (which derives the licensing tag
+# from it) and the go-test container; export it so both sub-shells see it.
+export THEHIVE_TEST_IMAGE
+
+# Integration mode is NOT chosen by a committed/configured secret. It is decided
+# at run time by scripts/reset-integration-db.sh purely on whether the StrangeBee
+# licensing image is pullable (see that script + the recipe below): pullable ⇒
+# mint a dev license ⇒ parallel one-org-per-test; not pullable ⇒ free license ⇒
+# sequential shared-org. The script materialises the minted token to this file,
+# which the recipe reads to set THEHIVE_TEST_LICENSE and the go-test parallelism
+# for the go-test container.
+LICENSE_FILE := internal/testutils/testdata/.test-license.lic.local
+
 .PHONY: test
 test: pre ## Run fast unit tests, skipping integration tests (COVERAGE=1 for coverage, RUN=<regexp> to filter)
 	@echo $(BGreen)-----------------------$(Color_Off)
@@ -204,16 +217,33 @@ test-integration: pre ## Run the full test suite against the docker-compose test
 	# (THEHIVE_TEST_IMAGE selects the version) and reset its databases to a clean
 	# state (scripts/reset-integration-db.sh — see it for the why), then run the
 	# suite against it on the host network. The stack is deliberately LEFT UP for
-	# fast reruns; `make test-integration-down` tears it down. No -p 1: packages
-	# run concurrently and tests within them use t.Parallel(). Isolation comes
-	# from a dedicated per-test org + user (internal/testutils/orgs.go).
+	# fast reruns; `make test-integration-down` tears it down.
+	#
+	# The reset script decides the mode by whether the licensing image is
+	# pullable, and writes the minted token (or nothing) to LICENSE_FILE. We read
+	# that file here to configure the go-test container:
+	#   - Non-empty (license minted) ⇒ export THEHIVE_TEST_LICENSE so the Go suite
+	#     runs per-test org + user via t.Parallel (testutils.Parallel), packages
+	#     concurrent (no -p 1).
+	#   - Empty/absent (free license) ⇒ one shared org, testutils.Parallel no-ops
+	#     so tests run sequentially and purge their own data; `-p 1` stops packages
+	#     from racing on that shared org.
+	# Isolation in either mode comes from internal/testutils/orgs.go.
 	#
 	# -timeout 20m raises the per-package deadline above the default 10m: under
 	# memory pressure a single request can stall, and the setup helpers retry
 	# those (each capped at the client's 90s transport timeout), so the headroom
-	# keeps a transient stall from tripping the package timeout.
+	# keeps a transient stall from tripping the package timeout. The sequential
+	# free-license path is the slowest run, so it needs this headroom most.
 	./scripts/reset-integration-db.sh docker-compose.test.yml
-	docker run -i --rm --network host -v $(CURDIR):/app -w /app -e THEHIVE_TEST_URL -e LOG_LEVEL -e THEHIVE_TEST_IMAGE $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'command -v gotestsum >/dev/null 2>&1 || go install gotest.tools/gotestsum@v1.13.0 ; gotestsum --format pkgname --hide-summary=skipped -- $(GO_TEST_COVER) $(GO_TEST_RUN) -timeout 20m ./...'
+	@if [ -s "$(LICENSE_FILE)" ]; then \
+		echo "License minted → parallel multi-org mode."; \
+		LIC="$$(cat "$(LICENSE_FILE)")"; PARALLELISM=""; \
+	else \
+		echo "No license → sequential shared-org mode."; \
+		LIC=""; PARALLELISM="-p 1"; \
+	fi; \
+	docker run -i --rm --network host -v $(CURDIR):/app -w /app -e THEHIVE_TEST_URL -e LOG_LEVEL -e THEHIVE_TEST_IMAGE -e THEHIVE_TEST_LICENSE="$$LIC" $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c "command -v gotestsum >/dev/null 2>&1 || go install gotest.tools/gotestsum@v1.13.0 ; gotestsum --format pkgname --hide-summary=skipped -- $(GO_TEST_COVER) $(GO_TEST_RUN) $$PARALLELISM -timeout 20m ./..."
 ifeq ($(COVERAGE),1)
 	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
 endif

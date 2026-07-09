@@ -35,7 +35,29 @@ var (
 	// orgCounter makes org/user names unique without time/rand (deterministic,
 	// -race-safe, and usable regardless of environment).
 	orgCounter atomic.Int64
+	// sharedUserOnce creates the free-mode shared user exactly once across the
+	// whole (sequential) suite; createOrgUser already treats a 409 as success,
+	// so this is belt-and-suspenders against redundant CreateUser calls.
+	sharedUserOnce sync.Once
 )
+
+// Parallel marks a test as safe to run concurrently, but ONLY in license mode.
+//
+// In license mode (THEHIVE_TEST_LICENSE set) each test gets its own org + user,
+// so it calls t.Parallel() as usual. In free-license mode all tests share
+// main-org and must run sequentially: Parallel is a no-op there, so the test
+// runs in source order and its t.Cleanup (purgeOrg) completes before the next
+// test starts — the ordering the shared-org data reset depends on.
+//
+// Integration tests call testutils.Parallel(t) as their first statement in
+// place of t.Parallel(). Pure unit tests (no live TheHive) keep t.Parallel().
+func Parallel(t *testing.T) {
+	t.Helper()
+
+	if LicensePresent() {
+		t.Parallel()
+	}
+}
 
 // testEnv is one test's isolated org + dedicated user. once ensures the org and
 // user are created exactly once even if both helpers enter concurrently for the
@@ -64,6 +86,15 @@ func testEnvFor(t *testing.T) *testEnv {
 	cell.once.Do(func() {
 		cell.err = provisionTestEnv(t, cell)
 		t.Cleanup(func() { orgByTest.Delete(t) })
+
+		// Free-license mode reuses one shared org across all (sequential) tests,
+		// so each test must purge the data it created; otherwise the next test's
+		// absolute-count assertions (require.Len / require.Equal on row counts)
+		// would see leftovers. License mode gives each test its own throwaway org
+		// and abandons it — zero teardown.
+		if cell.err == nil && !LicensePresent() {
+			t.Cleanup(func() { purgeOrg(t, cell) })
+		}
 	})
 
 	if cell.err != nil {
@@ -84,11 +115,6 @@ func provisionTestEnv(t *testing.T, cell *testEnv) error {
 		return err
 	}
 
-	n := orgCounter.Add(1)
-	base := sanitizeOrgName(t.Name())
-	cell.org = fmt.Sprintf("%s-%d", base, n)
-	// TheHive logins must look like emails; the local part must be unique.
-	cell.username = fmt.Sprintf("%s-%d@test.local", base, n)
 	cell.password = testAdminPassword
 
 	adminConfig := &Config{
@@ -98,6 +124,27 @@ func provisionTestEnv(t *testing.T, cell *testEnv) error {
 		OrgName:  adminOrg,
 	}
 	client, ctx := createClientAndContext(t, adminConfig)
+
+	if !LicensePresent() {
+		// Free-license mode: TheHive's built-in license caps organisations at 1,
+		// so every test shares the already-bootstrapped main-org and one shared
+		// org-admin user. Tests run sequentially (see Parallel) and purge their
+		// own data on cleanup, so sharing the org is safe.
+		cell.org = NewHiveTestConfig().MainOrg
+		cell.username = sharedFreeUser
+
+		sharedUserOnce.Do(func() {
+			createOrgUser(ctx, t, client, cell.org, cell.username, cell.password)
+		})
+
+		return nil
+	}
+
+	n := orgCounter.Add(1)
+	base := sanitizeOrgName(t.Name())
+	cell.org = fmt.Sprintf("%s-%d", base, n)
+	// TheHive logins must look like emails; the local part must be unique.
+	cell.username = fmt.Sprintf("%s-%d@test.local", base, n)
 
 	ensureTestOrganisation(ctx, t, client, cell.org)
 	createOrgUser(ctx, t, client, cell.org, cell.username, cell.password)

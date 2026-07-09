@@ -73,26 +73,16 @@ services:
       TH_CQL_WAIT: "0"
     ports:
       - "9000:9000"
-    # The integration suite gives every test its own organisation (see
-    # internal/testutils/orgs.go), but TheHive's default free license caps
-    # `organisations` at 1. We mount a committed dev-signed license token whose
-    # `organisations` quota is -1 (unlimited).
+    # This base file boots TheHive on its built-in free license (organisations
+    # capped at 1), so it is runnable by anyone with no committed secret. The
+    # integration suite then shares that single org across sequential tests,
+    # each purging its own data (see internal/testutils/orgs.go).
     #
-    # - test-license.lic is the raw JWT token; thehive-application.conf sets
-    #   `license.filePath` to it. The entrypoint auto-includes any file at
-    #   /etc/thehive/application.conf into its generated config.
-    # - The token is signed with the repo-bundled `dev` key, trusted ONLY in
-    #   Mode.Dev, so the command starts the server with `--dev`. TheHiveStarter
-    #   reads `--dev` from its args; the preceding `/opt/thehive` is the server
-    #   root dir (the launcher would otherwise misread `--dev` as that path).
-    #   The `--` terminates the entrypoint's own option parsing so both args
-    #   reach bin/thehive.
-    # - The token is multi-instance (`dev-multi`), so it validates against the
-    #   fresh per-run DB UUID without pre-knowing it.
-    volumes:
-      - ./internal/testutils/testdata/test-license.lic:/etc/thehive/test-license.lic:ro
-      - ./internal/testutils/testdata/thehive-application.conf:/etc/thehive/application.conf:ro
-    command: ["--", "/opt/thehive", "--dev"]
+    # To run the parallel, one-org-per-test mode you need a license whose
+    # `organisations` quota is unlimited: supply THEHIVE_TEST_LICENSE and layer
+    # docker-compose.license.yml on top (it adds `--dev` + the license mounts).
+    # That override is selected automatically by scripts/reset-integration-db.sh
+    # and the Makefile when THEHIVE_TEST_LICENSE is set.
 
   # Serves the minimal MITRE ATT&CK STIX bundle that initHiveInstance imports.
   # TheHive fetches it server-side over the compose network as `mitre-server`.

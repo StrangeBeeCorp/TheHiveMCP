@@ -65,7 +65,7 @@ func requireScopeDenied(t *testing.T, result *mcp.CallToolResult) {
 }
 
 func TestExecuteAutomationScopeRunResponderDeniedOutOfScope(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -104,7 +104,7 @@ func TestExecuteAutomationScopeRunResponderDeniedOutOfScope(t *testing.T) {
 }
 
 func TestExecuteAutomationScopeRunAnalyzerDeniedOutOfScope(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -159,7 +159,7 @@ func TestExecuteAutomationScopeRunAnalyzerDeniedOutOfScope(t *testing.T) {
 }
 
 func TestExecuteAutomationScopeGetJobStatusDeniedOutOfScope(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -190,7 +190,7 @@ func TestExecuteAutomationScopeGetJobStatusDeniedOutOfScope(t *testing.T) {
 }
 
 func TestExecuteAutomationScopeGetActionStatusDeniedOutOfScope(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -216,7 +216,7 @@ func TestExecuteAutomationScopeGetActionStatusDeniedOutOfScope(t *testing.T) {
 
 // No filters means the scope gate is skipped: a high-TLP entity reaches the lookup.
 func TestExecuteAutomationScopeNoFiltersBackwardCompatible(t *testing.T) {
-	t.Parallel()
+	testutils.Parallel(t)
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 

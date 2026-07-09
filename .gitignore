@@ -42,6 +42,10 @@ mcp-go/
 evaluation_results/id_mapping.json
 integration_test/data/test_questions.json
 
+# Runtime-materialised TheHive test license (from THEHIVE_TEST_LICENSE); never
+# committed — the raw JWT is a dev-mode secret. See docker-compose.license.yml.
+internal/testutils/testdata/*.lic.local
+
 .claude/
 CLAUDE.md
 extension/

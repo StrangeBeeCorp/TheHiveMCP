@@ -282,6 +282,151 @@ func ensureTestOrganisation(ctx context.Context, t *testing.T, client *thehive.A
 	return id
 }
 
+// purgeOrgTimeout bounds the poll-until-empty wait in purgeOrg. The delete
+// calls are synchronous, but Elasticsearch refreshes its index asynchronously,
+// so a listX right after a delete can still return the just-deleted rows; we
+// poll until the counts settle to 0 so the next sequential test starts clean.
+const purgeOrgTimeout = 30 * time.Second
+
+// purgeOrg deletes every entity the shared free-mode org accumulated during a
+// test, then polls until those entity counts read 0. It runs only in
+// free-license mode (see testEnvFor), where all tests share one org and run
+// sequentially, so a clean slate between tests is what keeps the suite's
+// absolute-count assertions valid.
+//
+// It acts as the test's dedicated user, scoped to the org via the X-Organisation
+// header — the same credentials/scope the test itself used. MITRE ATT&CK
+// patterns are a global catalog shared by all orgs and are never deleted.
+func purgeOrg(t *testing.T, cell *testEnv) {
+	t.Helper()
+
+	cfg := &Config{
+		URL:      hiveURL,
+		Username: cell.username,
+		Password: cell.password,
+		OrgName:  cell.org,
+	}
+	client, ctx := createClientAndContext(t, cfg)
+
+	// Delete cases first: DeleteCase cascades a case's tasks, observables, pages,
+	// procedures and comments, so afterwards listPage returns only standalone
+	// org pages.
+	for _, id := range listEntityIDs(ctx, t, client, "listCase") {
+		resp, err := client.CaseAPI.DeleteCase(ctx, id).Execute()
+		closeResponse(resp)
+
+		if err != nil {
+			t.Logf("purgeOrg: delete case %s in %q: %v", id, cell.org, err)
+		}
+	}
+
+	if alertIDs := listEntityIDs(ctx, t, client, "listAlert"); len(alertIDs) > 0 {
+		body := thehive.NewDeleteAlertInBulkRequest(alertIDs)
+		resp, err := client.AlertAPI.DeleteAlertInBulk(ctx).DeleteAlertInBulkRequest(*body).Execute()
+		closeResponse(resp)
+
+		if err != nil {
+			t.Logf("purgeOrg: bulk-delete alerts in %q: %v", cell.org, err)
+		}
+	}
+
+	for _, id := range listEntityIDs(ctx, t, client, "listCaseTemplate") {
+		resp, err := client.CaseTemplateAPI.DeleteCaseTemplate(ctx, id).Execute()
+		closeResponse(resp)
+
+		if err != nil {
+			t.Logf("purgeOrg: delete case template %s in %q: %v", id, cell.org, err)
+		}
+	}
+
+	for _, id := range listEntityIDs(ctx, t, client, "listPage") {
+		resp, err := client.PageAPI.DeleteAPage(ctx, id).Execute()
+		closeResponse(resp)
+
+		if err != nil {
+			t.Logf("purgeOrg: delete page %s in %q: %v", id, cell.org, err)
+		}
+	}
+
+	waitOrgEmpty(ctx, t, client, cell.org)
+}
+
+// waitOrgEmpty polls the org's entity lists until every one reads empty (or the
+// timeout elapses), defeating the async Elasticsearch refresh that would
+// otherwise leave stale rows visible to the next test.
+func waitOrgEmpty(ctx context.Context, t *testing.T, client *thehive.APIClient, orgName string) {
+	t.Helper()
+
+	ops := []string{"listCase", "listAlert", "listCaseTemplate", "listPage"}
+	deadline := time.Now().Add(purgeOrgTimeout)
+
+	for {
+		remaining := 0
+		for _, op := range ops {
+			remaining += len(listEntityIDs(ctx, t, client, op))
+		}
+
+		if remaining == 0 {
+			return
+		}
+
+		if time.Now().After(deadline) {
+			t.Logf("purgeOrg: %q still had %d entities after %s; next test may see leftovers", orgName, remaining, purgeOrgTimeout)
+			return
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// listEntityIDs runs a generic list operation (e.g. "listCase") in the current
+// org context and returns the _id of every result. It reuses the same
+// QueryAPI generic-op pattern as tryEnsureTestOrganisation. A failed query
+// yields an empty slice (the poll retries), never a fatal error.
+func listEntityIDs(ctx context.Context, t *testing.T, client *thehive.APIClient, operation string) []string {
+	t.Helper()
+
+	genericOp := thehive.NewInputQueryGenericOperation(operation)
+	query := thehive.NewInputQuery()
+	query.SetQuery([]thehive.InputQueryNamedOperation{
+		thehive.InputQueryGenericOperationAsInputQueryNamedOperation(genericOp),
+	})
+
+	resp, httpResp, err := client.QueryAndExportAPI.QueryAPI(ctx).InputQuery(*query).Execute()
+	closeResponse(httpResp)
+
+	if err != nil || httpResp == nil || httpResp.StatusCode != http.StatusOK || resp == nil {
+		return nil
+	}
+
+	return extractIDs(resp)
+}
+
+// extractIDs pulls the "_id" of each object from a generic-op query response.
+func extractIDs(resp any) []string {
+	jsonBytes, err := json.Marshal(resp)
+	if err != nil || jsonBytes == nil {
+		return nil
+	}
+
+	var rows []struct {
+		ID string `json:"_id"`
+	}
+	if json.Unmarshal(jsonBytes, &rows) != nil {
+		return nil
+	}
+
+	ids := make([]string, 0, len(rows))
+
+	for _, r := range rows {
+		if r.ID != "" {
+			ids = append(ids, r.ID)
+		}
+	}
+
+	return ids
+}
+
 func findOrganisationID(resp any, orgName string) (string, bool) {
 	jsonBytes, err := json.Marshal(resp)
 	if err != nil || jsonBytes == nil {

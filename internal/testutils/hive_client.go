@@ -41,9 +41,10 @@ func GetAuthContext(t *testing.T) context.Context {
 	return CreateAuthContext(env.username, env.password)
 }
 
-// SetupTestWithCleanup returns a test client scoped to this test's dedicated,
-// freshly-created organisation (see orgs.go). No cleanup is needed: each test
-// owns its own org, and `compose down -v` wipes the whole stack after the suite.
+// SetupTestWithCleanup returns a test client scoped to this test's organisation
+// (see orgs.go). In license mode each test owns a throwaway org that is simply
+// abandoned; in free-license mode the shared org is purged on t.Cleanup so the
+// next sequential test starts clean. Either way the caller needs no teardown.
 func SetupTestWithCleanup(t *testing.T) *thehive.APIClient {
 	t.Helper()
 
