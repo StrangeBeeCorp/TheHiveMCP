@@ -6,6 +6,8 @@ import (
 )
 
 func TestNormalizeFilterKeys(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		in   map[string]any
@@ -104,6 +106,8 @@ func TestNormalizeFilterKeys(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := NormalizeFilterKeys(tc.in)
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("NormalizeFilterKeys()\n got = %#v\nwant = %#v", got, tc.want)
@@ -113,6 +117,8 @@ func TestNormalizeFilterKeys(t *testing.T) {
 }
 
 func TestNormalizeFilterKeyIsIdempotent(t *testing.T) {
+	t.Parallel()
+
 	in := map[string]any{
 		`"_and"`: []any{
 			map[string]any{`"_eq"`: map[string]any{quotedFieldName: fieldSeverity, fieldValue: 4}},

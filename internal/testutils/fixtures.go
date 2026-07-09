@@ -13,7 +13,7 @@ import (
 func CreateCaseWithTLP(t *testing.T, hiveClient *thehive.APIClient, title string, tlp int32) *thehive.OutputCase {
 	t.Helper()
 
-	authContext := GetAuthContext(NewHiveTestConfig())
+	authContext := GetAuthContext(t)
 	testCase := MockInputCase()
 	testCase.Title = title
 	testCase.Tlp = &tlp
@@ -41,7 +41,9 @@ func MockInputCase() *thehive.InputCreateCase {
 		Pap:         thehive.PtrInt32(2),
 		Status:      new("InProgress"),
 		Summary:     new("This is a summary"),
-		Assignee:    new(DefaultAdminUser),
+		// No explicit assignee: under per-test-org isolation the admin is not a
+		// member of the test's org, so assigning to it 4xxs. TheHive assigns the
+		// creating (per-test) user automatically.
 		CustomFields: &thehive.InputCreateAlertCustomFields{
 			ArrayOfInputCustomFieldValue: &[]thehive.InputCustomFieldValue{
 				{
@@ -62,7 +64,6 @@ func MockInputCase() *thehive.InputCreateCase {
 				Flag:        new(true),
 				StartDate:   thehive.PtrInt64(1609459200),
 				EndDate:     thehive.PtrInt64(1609545600),
-				Assignee:    new(DefaultAdminUser),
 			},
 		},
 	}
@@ -82,7 +83,6 @@ func MockInputAlert() *thehive.InputCreateAlert {
 		Source:      testTag,
 		SourceRef:   testTag,
 		Summary:     new("This is a summary"),
-		Assignee:    new(DefaultAdminUser),
 	}
 }
 
@@ -139,7 +139,6 @@ func MockInputTask() *thehive.InputCreateTask {
 		Flag:        new(true),
 		StartDate:   thehive.PtrInt64(1609459200),
 		EndDate:     thehive.PtrInt64(1609545600),
-		Assignee:    new(DefaultAdminUser),
 		Mandatory:   new(false),
 	}
 }

@@ -46,7 +46,7 @@ permissions:
 func createObservableWithTLP(t *testing.T, hiveClient *thehive.APIClient, caseID, data string, tlp int32) string {
 	t.Helper()
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	observable := thehive.NewInputCreateObservable("ip")
 	observable.SetData(thehive.StringAsInputObservableData(new(data)))
 	observable.SetMessage("scope test observable")
@@ -65,6 +65,7 @@ func requireScopeDenied(t *testing.T, result *mcp.CallToolResult) {
 }
 
 func TestExecuteAutomationScopeRunResponderDeniedOutOfScope(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -103,6 +104,7 @@ func TestExecuteAutomationScopeRunResponderDeniedOutOfScope(t *testing.T) {
 }
 
 func TestExecuteAutomationScopeRunAnalyzerDeniedOutOfScope(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -157,10 +159,11 @@ func TestExecuteAutomationScopeRunAnalyzerDeniedOutOfScope(t *testing.T) {
 }
 
 func TestExecuteAutomationScopeGetJobStatusDeniedOutOfScope(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 
 	parentCase := testutils.CreateCaseWithTLP(t, hiveClient, "Case for job status scope test", 2)
 	outOfScopeObservableID := createObservableWithTLP(t, hiveClient, parentCase.UnderscoreId, "10.20.30.42", 3)
@@ -187,6 +190,7 @@ func TestExecuteAutomationScopeGetJobStatusDeniedOutOfScope(t *testing.T) {
 }
 
 func TestExecuteAutomationScopeGetActionStatusDeniedOutOfScope(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -212,6 +216,7 @@ func TestExecuteAutomationScopeGetActionStatusDeniedOutOfScope(t *testing.T) {
 
 // No filters means the scope gate is skipped: a high-TLP entity reaches the lookup.
 func TestExecuteAutomationScopeNoFiltersBackwardCompatible(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 

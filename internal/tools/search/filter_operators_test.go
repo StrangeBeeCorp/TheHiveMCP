@@ -28,6 +28,8 @@ func resultText(t *testing.T, result *mcp.CallToolResult) string {
 
 // Exercises every operator of the TheHive filter DSL (hive://docs/overview/filter-dsl).
 func TestFilterOperators(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
 	// Severities 1..4 = Low..Critical.
@@ -109,6 +111,8 @@ func TestFilterOperators(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			require.Len(t, run(t, tc.filter), tc.want)
 		})
 	}
@@ -117,6 +121,8 @@ func TestFilterOperators(t *testing.T) {
 // A filter on a non-existent field must return an actionable error hinting at the
 // schema resources (self-correct, no inner retry).
 func TestSearchInvalidFieldReturnsActionableError(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	createTestAlert(t, hiveClient, "Some Alert", 2, []string{"test"})
 

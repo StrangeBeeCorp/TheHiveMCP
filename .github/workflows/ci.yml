@@ -154,9 +154,11 @@ jobs:
     # Run the integration suite against every supported TheHive version, so a
     # compatibility break against any of them turns the PR red instead of going
     # unnoticed (see DL-6007). `make test-integration` brings up the docker-compose
-    # test stack (TheHive + Elasticsearch + MITRE) for the selected THEHIVE_TEST_IMAGE
-    # and tears it down after. Each leg boots a full TheHive (~5 min startup);
-    # keep this to the versions we actually support.
+    # test stack (TheHive + Elasticsearch + Cassandra + MITRE) for the selected
+    # THEHIVE_TEST_IMAGE. It deliberately LEAVES the stack up (for fast local
+    # reruns), so the teardown step below runs it down explicitly — with
+    # `if: always()` so it fires even when the tests fail. Each leg boots a full
+    # TheHive (~5 min startup); keep this to the versions we actually support.
     strategy:
       fail-fast: false
       matrix:
@@ -170,3 +172,7 @@ jobs:
         run: make test-integration
         env:
           THEHIVE_TEST_IMAGE: ${{ matrix.thehive-image }}
+
+      - name: Tear down integration test stack
+        if: always()
+        run: make test-integration-down

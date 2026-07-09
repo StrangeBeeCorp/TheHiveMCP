@@ -9,7 +9,8 @@ import (
 )
 
 // NewTestClient starts (or reuses) the integration TheHive instance and returns
-// an API client scoped to the main test organisation.
+// an API client scoped to this test's dedicated organisation, authenticated as
+// this test's dedicated user (see orgs.go).
 func NewTestClient(t *testing.T) *thehive.APIClient {
 	t.Helper()
 
@@ -18,48 +19,33 @@ func NewTestClient(t *testing.T) *thehive.APIClient {
 		log.Fatalf("Failed to start container: %v", err)
 	}
 
-	testConfig := NewHiveTestConfig()
+	env := testEnvFor(t)
 	cfg := &Config{
 		URL:      url,
-		Username: testConfig.User,
-		Password: testConfig.Password,
-		OrgName:  testConfig.MainOrg,
+		Username: env.username,
+		Password: env.password,
+		OrgName:  env.org,
 	}
 
 	return CreateOrgClient(t, cfg)
 }
 
-// GetAuthContext creates a context with authentication for API calls
-func GetAuthContext(testConfig *HiveTestConfig) context.Context {
-	return CreateAuthContext(testConfig.User, testConfig.Password)
+// GetAuthContext returns a basic-auth context for this test's dedicated user, so
+// data seeded through it lands in the test's own organisation. The org itself
+// comes from the client's X-Organisation header, not this context.
+func GetAuthContext(t *testing.T) context.Context {
+	t.Helper()
+
+	env := testEnvFor(t)
+
+	return CreateAuthContext(env.username, env.password)
 }
 
-// GetAdminAuthContext creates a context with admin authentication for API calls
-func GetAdminAuthContext(testConfig *HiveTestConfig) context.Context {
-	return CreateAuthContext(testConfig.User, testConfig.Password)
-}
-
-// SetupTestWithCleanup returns a test client and registers a t.Cleanup that
-// resets the hive instance.
+// SetupTestWithCleanup returns a test client scoped to this test's dedicated,
+// freshly-created organisation (see orgs.go). No cleanup is needed: each test
+// owns its own org, and `compose down -v` wipes the whole stack after the suite.
 func SetupTestWithCleanup(t *testing.T) *thehive.APIClient {
 	t.Helper()
 
-	client := NewTestClient(t)
-
-	t.Cleanup(func() {
-		url, err := StartTheHiveContainer(t)
-		if err != nil {
-			t.Logf("Warning: Failed to get container URL for cleanup: %v", err)
-			return
-		}
-
-		testConfig := NewHiveTestConfig()
-
-		err = ResetHiveInstance(t, url, testConfig)
-		if err != nil {
-			t.Logf("Warning: Failed to reset hive instance: %v", err)
-		}
-	})
-
-	return client
+	return NewTestClient(t)
 }

@@ -16,7 +16,11 @@ import (
 )
 
 func TestAuthenticationExecutionOrder(t *testing.T) {
+	t.Parallel()
+
 	t.Run("middleware runs after context function and catches auth error", func(t *testing.T) {
+		t.Parallel()
+
 		options := &types.TheHiveMcpDefaultOptions{
 			TheHiveURL:          "https://invalid-thehive-server-that-does-not-exist.com",
 			TheHiveAPIKey:       "test-key",

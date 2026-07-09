@@ -12,6 +12,7 @@ import (
 )
 
 func TestManageCreateAlert(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
@@ -48,17 +49,18 @@ func TestManageCreateAlert(t *testing.T) {
 	require.InDelta(t, float64(3), severityValue, 0.0001)
 
 	// Verify the alert exists in TheHive by fetching it
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	fetchedAlert, _, err := hiveClient.AlertAPI.GetAlert(authContext, alertID).Execute()
 	require.NoError(t, err)
 	require.Equal(t, "Test Alert via MCP", fetchedAlert.Title)
 }
 
 func TestManageUpdateCase(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Original Case Title"
 	severity := int32(2)
@@ -92,10 +94,11 @@ func TestManageUpdateCase(t *testing.T) {
 }
 
 func TestManageDeleteAlert(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	createdAlert := createAlert(t, hiveClient, "Alert to Delete", "test-delete-alert-001")
 
 	_, _, err := hiveClient.AlertAPI.GetAlert(authContext, createdAlert.UnderscoreId).Execute()
@@ -115,10 +118,11 @@ func TestManageDeleteAlert(t *testing.T) {
 }
 
 func TestManageAddCommentToCase(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	createdCase := createCase(t, hiveClient, "Case for Comment Testing")
 
 	commentText := "This is a test comment added via the MCP tool. Investigation is ongoing."
@@ -169,10 +173,11 @@ func TestManageAddCommentToCase(t *testing.T) {
 }
 
 func TestManageCreateTaskInCase(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	createdCase := createCase(t, hiveClient, "Case for Task Creation")
 
 	taskData := map[string]any{
@@ -207,10 +212,11 @@ func TestManageCreateTaskInCase(t *testing.T) {
 }
 
 func TestManageCreateObservableInCase(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	createdCase := createCase(t, hiveClient, "Case for Observable Creation")
 
 	observableData := map[string]any{
@@ -255,6 +261,7 @@ func TestManageCreateObservableInCase(t *testing.T) {
 // Regression: creating an observable in a case returned the alert-endpoint 403
 // even though case creation succeeded (201). Must report IsError=false.
 func TestManageCreateObservableInCaseReportsSuccess(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
@@ -284,10 +291,11 @@ func TestManageCreateObservableInCaseReportsSuccess(t *testing.T) {
 }
 
 func TestManageUpdateMultipleEntities(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 
 	var caseIDs []string
 
@@ -327,6 +335,7 @@ func TestManageUpdateMultipleEntities(t *testing.T) {
 
 // Analyst permissions allow create but deny delete.
 func TestManageWithAnalystPermissions(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
@@ -362,7 +371,7 @@ func TestManageWithAnalystPermissions(t *testing.T) {
 	})
 	testutils.RequirePermissionDenied(t, result)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	fetchedAlert, _, err := hiveClient.AlertAPI.GetAlert(authContext, alertID).Execute()
 	require.NoError(t, err)
 	require.Equal(t, alertID, fetchedAlert.UnderscoreId)
@@ -370,6 +379,7 @@ func TestManageWithAnalystPermissions(t *testing.T) {
 
 // Read-only permissions deny all manage operations.
 func TestManageWithReadOnlyPermissions(t *testing.T) {
+	t.Parallel()
 	testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "")
 
@@ -401,10 +411,11 @@ func TestManageWithReadOnlyPermissions(t *testing.T) {
 }
 
 func TestManagePromoteAlert(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	createdAlert := createAlert(t, hiveClient, "Alert to Promote", "test-promote-alert-001")
 
 	structuredData := manageStructured(t, mcpClient, map[string]any{
@@ -428,10 +439,11 @@ func TestManagePromoteAlert(t *testing.T) {
 }
 
 func TestManageMergeCases(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 
 	caseIDs := createCases(t, hiveClient, 2, "Case %d for Merging")
 
@@ -456,6 +468,7 @@ func TestManageMergeCases(t *testing.T) {
 }
 
 func TestManageMergeAlertsIntoCase(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
@@ -486,6 +499,7 @@ func TestManageMergeAlertsIntoCase(t *testing.T) {
 }
 
 func TestManageMergeObservables(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
@@ -523,6 +537,7 @@ func TestManageMergeObservables(t *testing.T) {
 
 // Promote is allowed with analyst permissions.
 func TestManagePromoteWithAnalystPermissions(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
@@ -538,6 +553,7 @@ func TestManagePromoteWithAnalystPermissions(t *testing.T) {
 
 // Merge is allowed with analyst permissions.
 func TestManageMergeWithAnalystPermissions(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
@@ -552,6 +568,7 @@ func TestManageMergeWithAnalystPermissions(t *testing.T) {
 }
 
 func TestManagePromoteWithReadOnlyPermissions(t *testing.T) {
+	t.Parallel()
 	testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "")
 
@@ -564,6 +581,7 @@ func TestManagePromoteWithReadOnlyPermissions(t *testing.T) {
 }
 
 func TestManageCreateProcedureInCase(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
@@ -594,10 +612,11 @@ func TestManageCreateProcedureInCase(t *testing.T) {
 }
 
 func TestManageUpdateProcedure(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	createdCase := createCase(t, hiveClient, "Case for Procedure Update")
 
 	// Set up via the raw API; the MCP update is under test.
@@ -626,10 +645,11 @@ func TestManageUpdateProcedure(t *testing.T) {
 }
 
 func TestManageDeleteProcedure(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	createdCase := createCase(t, hiveClient, "Case for Procedure Deletion")
 
 	// Set up via the raw API; the MCP delete is under test.
@@ -654,6 +674,7 @@ func TestManageDeleteProcedure(t *testing.T) {
 }
 
 func TestManageMergeWithReadOnlyPermissions(t *testing.T) {
+	t.Parallel()
 	testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, "")
 
@@ -666,6 +687,7 @@ func TestManageMergeWithReadOnlyPermissions(t *testing.T) {
 }
 
 func TestManageCreateCaseTemplate(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
@@ -698,17 +720,18 @@ func TestManageCreateCaseTemplate(t *testing.T) {
 	require.Equal(t, "[UNTRUSTED_DATA]Test-MCP-Template[/UNTRUSTED_DATA]", resultData["name"])
 	require.Equal(t, "[UNTRUSTED_DATA]Test MCP Template[/UNTRUSTED_DATA]", resultData["displayName"])
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	fetchedTemplate, _, err := hiveClient.CaseTemplateAPI.GetCaseTemplate(authContext, templateID).Execute()
 	require.NoError(t, err)
 	require.Equal(t, "Test-MCP-Template", fetchedTemplate.Name)
 }
 
 func TestManageUpdateCaseTemplate(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	input := testutils.MockInputCaseTemplate()
 	input.Name = "Update-Test-Template"
 
@@ -737,10 +760,11 @@ func TestManageUpdateCaseTemplate(t *testing.T) {
 }
 
 func TestManageDeleteCaseTemplate(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	input := testutils.MockInputCaseTemplate()
 	input.Name = "Delete-Test-Template"
 
@@ -761,10 +785,11 @@ func TestManageDeleteCaseTemplate(t *testing.T) {
 }
 
 func TestManageApplyTemplateToCase(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 
 	input := testutils.MockInputCaseTemplate()
 	input.Name = "Apply-Test-Template"
@@ -800,10 +825,11 @@ func TestManageApplyTemplateToCase(t *testing.T) {
 
 // Apply-template is allowed with analyst permissions.
 func TestManageApplyTemplateWithAnalystPermissions(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 
 	input := testutils.MockInputCaseTemplate()
 	input.Name = "Analyst-Apply-Template"
@@ -824,6 +850,7 @@ func TestManageApplyTemplateWithAnalystPermissions(t *testing.T) {
 
 // Creating case templates is denied for analysts.
 func TestManageCaseTemplateCreateDeniedWithAnalystPermissions(t *testing.T) {
+	t.Parallel()
 	testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 
@@ -838,6 +865,7 @@ func TestManageCaseTemplateCreateDeniedWithAnalystPermissions(t *testing.T) {
 }
 
 func TestManageCreatePageInCase(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
@@ -870,6 +898,7 @@ func TestManageCreatePageInCase(t *testing.T) {
 }
 
 func TestManageCreateStandalonePage(t *testing.T) {
+	t.Parallel()
 	testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
@@ -897,6 +926,7 @@ func TestManageCreateStandalonePage(t *testing.T) {
 }
 
 func TestManageUpdatePage(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
@@ -922,6 +952,7 @@ func TestManageUpdatePage(t *testing.T) {
 }
 
 func TestManageDeletePage(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
 
@@ -942,6 +973,7 @@ func TestManageDeletePage(t *testing.T) {
 
 // Analyst permissions allow page create but deny delete.
 func TestManagePageWithAnalystPermissions(t *testing.T) {
+	t.Parallel()
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
 

@@ -17,6 +17,8 @@ import (
 )
 
 func TestListOperationName(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		entityType string
 		want       string
@@ -37,6 +39,8 @@ func TestListOperationName(t *testing.T) {
 }
 
 func TestGetOperationName(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		entityType string
 		want       string
@@ -59,6 +63,8 @@ func TestGetOperationName(t *testing.T) {
 // No filters: every requested ID is in scope with no TheHive call (the bare
 // context carries no client, so a call would fail).
 func TestGetEntityIDsInScopeWithoutFilters(t *testing.T) {
+	t.Parallel()
+
 	inScope, err := GetEntityIDsInScope(context.Background(), types.EntityTypeCase, []string{"~1", "~2"}, nil)
 	require.NoError(t, err)
 	require.Equal(t, map[string]bool{"~1": true, "~2": true}, inScope)
@@ -70,6 +76,8 @@ func TestGetEntityIDsInScopeWithoutFilters(t *testing.T) {
 
 // With filters configured but no IDs to check, nothing is queried.
 func TestGetEntityIDsInScopeWithoutIDs(t *testing.T) {
+	t.Parallel()
+
 	filters := map[string]any{opLTE: map[string]any{fieldField: fieldTLP, fieldValue: 2}}
 	inScope, err := GetEntityIDsInScope(context.Background(), types.EntityTypeCase, nil, filters)
 	require.NoError(t, err)
@@ -78,12 +86,16 @@ func TestGetEntityIDsInScopeWithoutIDs(t *testing.T) {
 
 // Batch entry point, same bare-context guard as TestGetEntityIDsInScopeWithoutFilters.
 func TestGetScopedEntityIDsBatchWithoutFilters(t *testing.T) {
+	t.Parallel()
+
 	inScope, err := GetScopedEntityIDsBatch(context.Background(), types.EntityTypeCase, []string{"~1", "~2"}, nil)
 	require.NoError(t, err)
 	require.Equal(t, map[string]bool{"~1": true, "~2": true}, inScope)
 }
 
 func TestGetScopedEntityIDsBatchWithoutIDs(t *testing.T) {
+	t.Parallel()
+
 	filters := map[string]any{opLTE: map[string]any{fieldField: fieldTLP, fieldValue: 2}}
 	inScope, err := GetScopedEntityIDsBatch(context.Background(), types.EntityTypeCase, nil, filters)
 	require.NoError(t, err)
@@ -95,6 +107,8 @@ func TestGetScopedEntityIDsBatchWithoutIDs(t *testing.T) {
 // handler cancels on the first query; with 50 IDs and a concurrency cap of 8, an
 // honest implementation issues far fewer than 50 before noticing the cancellation.
 func TestGetScopedEntityIDsBatchStopsDispatchingOnCancel(t *testing.T) {
+	t.Parallel()
+
 	const total = 50
 
 	ctx, cancel := context.WithCancel(context.Background())

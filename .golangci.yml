@@ -32,10 +32,13 @@ linters:
     - nonamedreturns # named returns are used deliberately for documentation and deferred error wrapping
     - wsl # whitespace/cuddling style is left to gofmt, not enforced
     # --- Test conventions specific to this repo
-    # Integration tests share a live Docker stack (TheHive + Elasticsearch); running
-    # them in parallel is unsafe, so we do not mandate t.Parallel().
-    - paralleltest # integration tests must not run in parallel (shared Docker stack)
-    - tparallel # same: t.Parallel() is unsafe against the shared live stack
+    # paralleltest and tparallel are ENABLED (via `default: all`). Every test —
+    # unit and integration — runs with t.Parallel(); integration tests are
+    # isolated per-test (a dedicated organisation + user each, see
+    # internal/testutils/orgs.go). paralleltest enforces the convention so new
+    # tests stay parallelizable, and tparallel guards against parallel-cleanup
+    # misuse. The single exception (a test that mutates the global slog logger)
+    # carries an inline //nolint:paralleltest rather than a package-wide exclusion.
     # --- Micro-optimisation opinion
     - prealloc # slice preallocation is a premature optimisation for these small, non-hot-path slices
     # In-package tests (package bootstrap, not bootstrap_test) exercise unexported

@@ -24,4 +24,10 @@ regexes = [
 # operator is expected to regenerate. They are not our secrets.
 paths = [
   '''docs/how-to/docker/docker-compose\.librechat\.yml''',
+  # Integration-test license: a JWT signed with TheHive's *public* dev key
+  # (bundled in the open-source backend), trusted only in Mode.Dev. It grants
+  # the compose test stack an unlimited-organisation quota so the suite can
+  # create one org per test. Not a real secret — it authorises nothing on any
+  # production instance. See docker-compose.test.yml.
+  '''internal/testutils/testdata/test-license\.lic''',
 ]

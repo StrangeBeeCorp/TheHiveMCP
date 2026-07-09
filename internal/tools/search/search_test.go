@@ -35,7 +35,7 @@ func createTestAlert(t *testing.T, hiveClient *thehive.APIClient, title string, 
 	testAlert.Tags = tags
 	testAlert.SourceRef = "test-" + title
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	createdAlert, _, err := hiveClient.AlertAPI.CreateAlert(authContext).InputCreateAlert(*testAlert).Execute()
 	require.NoError(t, err)
 	require.NotNil(t, createdAlert)
@@ -61,7 +61,7 @@ func createTestCase(t *testing.T, hiveClient *thehive.APIClient, title string, s
 		testCase.Assignee = nil // Explicitly set to nil to remove the default assignee
 	}
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	createdCase, resp, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
 	slog.Info("Create case response", "response", resp)
 	require.NoError(t, err)
@@ -75,7 +75,7 @@ func createTestCaseWithTaskAndAlert(t *testing.T, hiveClient *thehive.APIClient)
 	testCase.Title = "Test case with tasks"
 	testAlert := testutils.MockInputAlert()
 	testAlert.Title = "Test alert 1"
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	createdCase, resp, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
 	slog.Info("Create case response", "response", resp)
 	require.NoError(t, err)
@@ -96,6 +96,8 @@ func createTestCaseWithTaskAndAlert(t *testing.T, hiveClient *thehive.APIClient)
 }
 
 func TestSearchCasesBySeverityAndStatus(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
 	createTestCase(t, hiveClient, "High severity open case", 3, "New", "")
@@ -133,6 +135,8 @@ func TestSearchCasesBySeverityAndStatus(t *testing.T) {
 }
 
 func TestSearchAlertsWithDateRange(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
 	createTestAlert(t, hiveClient, "Recent alert", 2, []string{"recent"})
@@ -160,6 +164,8 @@ func TestSearchAlertsWithDateRange(t *testing.T) {
 }
 
 func TestSearchAlertsWithMultipleTags(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
 	createTestAlert(t, hiveClient, "Phishing alert", 3, []string{tPhishing, "email"})
@@ -187,13 +193,16 @@ func TestSearchAlertsWithMultipleTags(t *testing.T) {
 }
 
 func TestSearchCasesWithAssigneeAndSorting(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
-	// Assign to admin: test users don't exist in the fixture.
-	createTestCase(t, hiveClient, "Admin's case 1", 2, "InProgress", "admin@thehive.local")
+	// Assign to this test's own dedicated org user (the only member of the
+	// per-test org; the shared admin is not a member).
+	assignee := testutils.TestUserLogin(t)
+	createTestCase(t, hiveClient, "Admin's case 1", 2, "InProgress", assignee)
 	time.Sleep(50 * time.Millisecond)
-	createTestCase(t, hiveClient, "Admin's case 2", 3, "InProgress", "admin@thehive.local")
-	// TheHive assigns the creator as assignee even when set nil, so all cases show admin.
+	createTestCase(t, hiveClient, "Admin's case 2", 3, "InProgress", assignee)
 
 	mcpClient := newSearchClient(t)
 
@@ -204,7 +213,7 @@ func TestSearchCasesWithAssigneeAndSorting(t *testing.T) {
 				map[string]any{
 					tEq: map[string]any{
 						tField: "assignee",
-						tValue: "admin@thehive.local",
+						tValue: assignee,
 					},
 				},
 				map[string]any{
@@ -230,6 +239,8 @@ func TestSearchCasesWithAssigneeAndSorting(t *testing.T) {
 }
 
 func TestSearchAlertsWithComplexOrConditions(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
 	createTestAlert(t, hiveClient, "Critical alert", 4, []string{"critical"})
@@ -272,9 +283,11 @@ func TestSearchAlertsWithComplexOrConditions(t *testing.T) {
 }
 
 func TestSearchTasksWithLimit(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Test case for tasks"
 	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
@@ -298,6 +311,8 @@ func TestSearchTasksWithLimit(t *testing.T) {
 }
 
 func TestExtraColumnsLimitColumns(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
 	createTestAlert(t, hiveClient, "Test alert for column override", 2, []string{"test"})
@@ -325,8 +340,10 @@ func TestExtraColumnsLimitColumns(t *testing.T) {
 }
 
 func TestSearchWithAnalystPermissions(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 
 	// Alert 1: TLP=2, PAP=2 (visible)
 	alert1 := testutils.MockInputAlert()
@@ -384,8 +401,10 @@ func TestSearchWithAnalystPermissions(t *testing.T) {
 }
 
 func TestSearchWithReadOnlyPermissions(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 
 	alert := testutils.MockInputAlert()
 	alert.Title = "ReadOnly Search Test Alert"
@@ -426,6 +445,8 @@ func TestSearchWithReadOnlyPermissions(t *testing.T) {
 }
 
 func TestSearchCasesWithCountOnly(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
 	createTestCase(t, hiveClient, "High severity case 1", 3, "New", "")
@@ -458,6 +479,8 @@ func TestSearchCasesWithCountOnly(t *testing.T) {
 }
 
 func TestSearchAlertsWithCountOnly(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
 	createTestAlert(t, hiveClient, "Critical Alert 1", 4, []string{tMalware, tPhishing})
@@ -488,6 +511,8 @@ func TestSearchAlertsWithCountOnly(t *testing.T) {
 }
 
 func TestSearchCountVsRegularSearch(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
 	createTestCase(t, hiveClient, "Test case 1", 2, "New", "")
@@ -518,6 +543,8 @@ func TestSearchCountVsRegularSearch(t *testing.T) {
 }
 
 func TestSearchExtraDataAndAdditionalQueries(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
 	creationResult := createTestCaseWithTaskAndAlert(t, hiveClient)
@@ -571,7 +598,7 @@ func TestSearchExtraDataAndAdditionalQueries(t *testing.T) {
 func createTestCaseWithComment(t *testing.T, hiveClient *thehive.APIClient) map[string]any {
 	t.Helper()
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Test case for comment"
 	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
@@ -589,6 +616,8 @@ func createTestCaseWithComment(t *testing.T, hiveClient *thehive.APIClient) map[
 }
 
 func TestSearchAdditionalQueriesComments(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	creationResult := createTestCaseWithComment(t, hiveClient)
 
@@ -618,7 +647,7 @@ func TestSearchAdditionalQueriesComments(t *testing.T) {
 func createTaskWithLog(t *testing.T, hiveClient *thehive.APIClient) map[string]any {
 	t.Helper()
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Test case for task logs"
 	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testCase).Execute()
@@ -643,6 +672,8 @@ func createTaskWithLog(t *testing.T, hiveClient *thehive.APIClient) map[string]a
 }
 
 func TestSearchTaskTasKLogs(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	creationResult := createTaskWithLog(t, hiveClient)
 
@@ -683,9 +714,11 @@ func TestSearchTaskTasKLogs(t *testing.T) {
 }
 
 func TestSearchCaseTemplates(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 
 	for _, name := range []string{"Phishing-Search-Test", "Malware-Search-Test"} {
 		input := testutils.MockInputCaseTemplate()
@@ -715,9 +748,11 @@ func TestSearchCaseTemplates(t *testing.T) {
 }
 
 func TestSearchPages(t *testing.T) {
+	t.Parallel()
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	testCase := testutils.MockInputCase()
 	testCase.Title = "Case with Pages for Search"
 

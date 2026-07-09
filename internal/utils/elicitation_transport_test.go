@@ -88,6 +88,8 @@ func closeBody(resp *http.Response) {
 }
 
 func TestRequiresElicitation(t *testing.T) {
+	t.Parallel()
+
 	e := &ElicitationTransport{}
 
 	tests := []struct {
@@ -115,6 +117,8 @@ func TestRequiresElicitation(t *testing.T) {
 // authorization layer (permissions and the API key are), so its absence must not
 // block modifying requests.
 func TestRoundTrip_NoCapabilityProceeds(t *testing.T) {
+	t.Parallel()
+
 	rt := &recordingTransport{}
 	e := &ElicitationTransport{Transport: rt}
 
@@ -127,6 +131,8 @@ func TestRoundTrip_NoCapabilityProceeds(t *testing.T) {
 }
 
 func TestRoundTrip_NonModifyingAlwaysProceeds(t *testing.T) {
+	t.Parallel()
+
 	rt := &recordingTransport{}
 	e := &ElicitationTransport{Transport: rt}
 
@@ -138,6 +144,8 @@ func TestRoundTrip_NonModifyingAlwaysProceeds(t *testing.T) {
 }
 
 func TestRoundTrip_QueryEndpointProceeds(t *testing.T) {
+	t.Parallel()
+
 	rt := &recordingTransport{}
 	e := &ElicitationTransport{Transport: rt}
 
@@ -153,6 +161,8 @@ func TestRoundTrip_QueryEndpointProceeds(t *testing.T) {
 // RequestElicitation fails midflight: the request must be refused, not run
 // unconfirmed.
 func TestRoundTrip_AdvertisedButUnsupportedMidflightDenies(t *testing.T) {
+	t.Parallel()
+
 	rt := &recordingTransport{}
 	e := &ElicitationTransport{Transport: rt}
 
@@ -169,6 +179,8 @@ func TestRoundTrip_AdvertisedButUnsupportedMidflightDenies(t *testing.T) {
 }
 
 func TestRoundTrip_UserAcceptsProceeds(t *testing.T) {
+	t.Parallel()
+
 	rt := &recordingTransport{}
 	e := &ElicitationTransport{Transport: rt}
 
@@ -187,6 +199,8 @@ func TestRoundTrip_UserAcceptsProceeds(t *testing.T) {
 }
 
 func TestRoundTrip_UserDeclinesIsRefused(t *testing.T) {
+	t.Parallel()
+
 	rt := &recordingTransport{}
 	e := &ElicitationTransport{Transport: rt}
 

@@ -9,9 +9,21 @@
 # ES-less run would pass while testing nothing. TheHive 5.x requires
 # Elasticsearch 7.17.x (8.x is unsupported).
 #
+# Graph backend is Cassandra (JanusGraph storage.backend=cql), NOT the image's
+# default embedded berkeleyje. The suite gives every test its own org and runs
+# ~100+ write-heavy tests in parallel; berkeleyje is a single-process embedded
+# store that serialises commits and returns transient 500s on overlapping write
+# transactions under that load. Cassandra is the production backend and absorbs
+# the concurrent writes. The backend is selected purely by TH_CQL_HOSTNAMES
+# (the entrypoint emits a cql block when it is set, berkeleyje when it is not);
+# --dev governs only the license/auth mode, not the DB.
+#
 # Readiness is handled Go-side (testutils.StartTheHiveContainer polls
 # /api/status), not by compose healthchecks, because the TheHive and ES images
-# do not ship a guaranteed in-container HTTP client to probe with.
+# do not ship a guaranteed in-container HTTP client to probe with. Cassandra is
+# the exception: it ships nodetool, so a compose healthcheck + service_healthy
+# dependency gates TheHive on a ready cluster (replacing the entrypoint's blind
+# 30s sleep, which we disable with TH_CQL_WAIT=0).
 services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.17.9
@@ -21,17 +33,66 @@ services:
       # Cap the heap so the ES + TheHive stack fits on a 16 GB CI runner.
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
 
+  cassandra:
+    image: cassandra:4
+    environment:
+      CASSANDRA_CLUSTER_NAME: thehive-test
+      # Cap the heap so the Cassandra + ES + TheHive stack fits on a 16 GB CI
+      # runner (ES is capped to 512m above for the same reason).
+      MAX_HEAP_SIZE: "1024M"
+      HEAP_NEWSIZE: "256M"
+    healthcheck:
+      # Probe the CQL native transport directly, NOT `nodetool statusgossip`:
+      # gossip reports "running" before port 9042 accepts queries, so TheHive
+      # (which retries the CQL handshake only 10×) can exhaust its retries and
+      # abort boot against a gossip-healthy-but-CQL-closed node. A successful
+      # cqlsh query is the real "ready for JanusGraph" signal.
+      test: ["CMD-SHELL", "cqlsh -e 'SELECT release_version FROM system.local' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+
   thehive:
     # THEHIVE_TEST_IMAGE is the single source of truth for the version under
     # test; CI sets it per matrix leg (5.5.2 / 5.6.3).
     image: ${THEHIVE_TEST_IMAGE:-strangebee/thehive:5.6.3}
     depends_on:
-      - elasticsearch
+      elasticsearch:
+        condition: service_started
+      cassandra:
+        condition: service_healthy
     environment:
       TH_INDEX_BACKEND: elasticsearch
       TH_ELASTICSEARCH_HOSTNAMES: elasticsearch
+      # Non-empty TH_CQL_HOSTNAMES makes the entrypoint generate a JanusGraph
+      # cql (Cassandra) storage block instead of berkeleyje.
+      TH_CQL_HOSTNAMES: cassandra
+      # The healthcheck + service_healthy above already gate on a ready
+      # Cassandra, so skip the entrypoint's unconditional 30s sleep.
+      TH_CQL_WAIT: "0"
     ports:
       - "9000:9000"
+    # The integration suite gives every test its own organisation (see
+    # internal/testutils/orgs.go), but TheHive's default free license caps
+    # `organisations` at 1. We mount a committed dev-signed license token whose
+    # `organisations` quota is -1 (unlimited).
+    #
+    # - test-license.lic is the raw JWT token; thehive-application.conf sets
+    #   `license.filePath` to it. The entrypoint auto-includes any file at
+    #   /etc/thehive/application.conf into its generated config.
+    # - The token is signed with the repo-bundled `dev` key, trusted ONLY in
+    #   Mode.Dev, so the command starts the server with `--dev`. TheHiveStarter
+    #   reads `--dev` from its args; the preceding `/opt/thehive` is the server
+    #   root dir (the launcher would otherwise misread `--dev` as that path).
+    #   The `--` terminates the entrypoint's own option parsing so both args
+    #   reach bin/thehive.
+    # - The token is multi-instance (`dev-multi`), so it validates against the
+    #   fresh per-run DB UUID without pre-knowing it.
+    volumes:
+      - ./internal/testutils/testdata/test-license.lic:/etc/thehive/test-license.lic:ro
+      - ./internal/testutils/testdata/thehive-application.conf:/etc/thehive/application.conf:ro
+    command: ["--", "/opt/thehive", "--dev"]
 
   # Serves the minimal MITRE ATT&CK STIX bundle that initHiveInstance imports.
   # TheHive fetches it server-side over the compose network as `mitre-server`.

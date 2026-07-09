@@ -8,6 +8,8 @@ import (
 )
 
 func TestCreateTheHiveConfig_OrganisationHeader(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name          string
 		organisation  string
@@ -29,6 +31,8 @@ func TestCreateTheHiveConfig_OrganisationHeader(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			creds := &TheHiveCredentials{
 				URL: testHiveExampleURL,
 				// #nosec G101 -- test fixture credential value, not a real secret
@@ -51,6 +55,8 @@ func TestCreateTheHiveConfig_OrganisationHeader(t *testing.T) {
 }
 
 func TestTheHiveCredentials_Validate(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		creds   TheHiveCredentials
@@ -99,6 +105,8 @@ func TestTheHiveCredentials_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tt.creds.Validate()
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)

@@ -94,6 +94,8 @@ func assertAuthValidated(ctx context.Context, t *testing.T, msgAndArgs ...any) {
 }
 
 func TestGetHTTPAuthContextFunc_TheHiveURL(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name        string
 		headerValue string
@@ -133,6 +135,8 @@ func TestGetHTTPAuthContextFunc_TheHiveURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			options := &types.TheHiveMcpDefaultOptions{
 				TheHiveURL:          tt.optionsURL,
 				TheHiveAPIKey:       "test-api-key",
@@ -161,6 +165,8 @@ func TestGetHTTPAuthContextFunc_TheHiveURL(t *testing.T) {
 }
 
 func TestGetHTTPAuthContextFunc_AllHeaders(t *testing.T) {
+	t.Parallel()
+
 	options := &types.TheHiveMcpDefaultOptions{
 		TheHiveURL:          testDefaultHiveURL,
 		TheHiveAPIKey:       "default-key",
@@ -181,6 +187,8 @@ func TestGetHTTPAuthContextFunc_AllHeaders(t *testing.T) {
 }
 
 func TestGetHTTPAuthContextFunc_AuthorizationHeader(t *testing.T) {
+	t.Parallel()
+
 	options := &types.TheHiveMcpDefaultOptions{
 		TheHiveURL: "https://test.thehive.com",
 	}
@@ -209,6 +217,8 @@ func TestGetHTTPAuthContextFunc_AuthorizationHeader(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/mcp", nil)
 			req.Header.Set("Authorization", tt.authHeader)
 			req.Header.Set(string(types.HeaderKeyTheHiveURL), "https://test.thehive.com")
@@ -235,7 +245,11 @@ func clientHeaders(hiveURL string) map[string]string {
 }
 
 func TestGetHTTPAuthContextFunc_URLAllowlist(t *testing.T) {
+	t.Parallel()
+
 	t.Run("header URL matching allowlist is allowed", func(t *testing.T) {
+		t.Parallel()
+
 		hive := newFakeTheHive(t)
 		options := &types.TheHiveMcpDefaultOptions{
 			TheHiveURLAllowlist: []string{hive.server.URL},
@@ -248,6 +262,8 @@ func TestGetHTTPAuthContextFunc_URLAllowlist(t *testing.T) {
 	})
 
 	t.Run("header URL not in allowlist is rejected before any outbound call", func(t *testing.T) {
+		t.Parallel()
+
 		attacker := newFakeTheHive(t)
 		options := &types.TheHiveMcpDefaultOptions{
 			TheHiveURL: "https://legit.thehive.example.com",
@@ -260,6 +276,8 @@ func TestGetHTTPAuthContextFunc_URLAllowlist(t *testing.T) {
 	})
 
 	t.Run("empty allowlist permits only the server's own URL", func(t *testing.T) {
+		t.Parallel()
+
 		hive := newFakeTheHive(t)
 		attacker := newFakeTheHive(t)
 		options := &types.TheHiveMcpDefaultOptions{
@@ -276,6 +294,8 @@ func TestGetHTTPAuthContextFunc_URLAllowlist(t *testing.T) {
 	})
 
 	t.Run("host suffix does not bypass the allowlist", func(t *testing.T) {
+		t.Parallel()
+
 		options := &types.TheHiveMcpDefaultOptions{
 			TheHiveURLAllowlist: []string{testHiveComURL},
 		}
@@ -292,7 +312,11 @@ func TestGetHTTPAuthContextFunc_URLAllowlist(t *testing.T) {
 }
 
 func TestGetHTTPAuthContextFunc_EnvCredentialFallback(t *testing.T) {
+	t.Parallel()
+
 	t.Run("fails closed without credentials when fallback is off (default)", func(t *testing.T) {
+		t.Parallel()
+
 		hive := newFakeTheHive(t)
 		options := &types.TheHiveMcpDefaultOptions{
 			TheHiveURL:    hive.server.URL,
@@ -309,6 +333,8 @@ func TestGetHTTPAuthContextFunc_EnvCredentialFallback(t *testing.T) {
 	})
 
 	t.Run("uses env credentials when fallback is explicitly enabled", func(t *testing.T) {
+		t.Parallel()
+
 		hive := newFakeTheHive(t)
 		options := &types.TheHiveMcpDefaultOptions{
 			TheHiveURL:                 hive.server.URL,
@@ -324,6 +350,8 @@ func TestGetHTTPAuthContextFunc_EnvCredentialFallback(t *testing.T) {
 	})
 
 	t.Run("client-supplied credentials are used regardless of fallback setting", func(t *testing.T) {
+		t.Parallel()
+
 		hive := newFakeTheHive(t)
 		options := &types.TheHiveMcpDefaultOptions{
 			TheHiveURL:    hive.server.URL,
@@ -340,6 +368,8 @@ func TestGetHTTPAuthContextFunc_EnvCredentialFallback(t *testing.T) {
 // Regression test for RandoriSec 5.5: an empty X-TheHive-Url with no
 // configured server URL must be denied, not silently allowed.
 func TestGetHTTPAuthContextFunc_EmptyURLFailsClosed(t *testing.T) {
+	t.Parallel()
+
 	ctx := authContextForRequest(&types.TheHiveMcpDefaultOptions{}, map[string]string{
 		string(types.HeaderKeyTheHiveURL):    "",
 		string(types.HeaderKeyTheHiveAPIKey): "client-key",
@@ -356,6 +386,8 @@ func TestGetHTTPAuthContextFunc_EmptyURLFailsClosed(t *testing.T) {
 }
 
 func TestGetHTTPAuthContextFunc_ValidationCache(t *testing.T) {
+	t.Parallel()
+
 	invoke := func(authFunc func(context.Context, *http.Request) context.Context, apiKey string) context.Context {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/mcp", nil)
 		req.Header.Set(string(types.HeaderKeyTheHiveAPIKey), apiKey)
@@ -364,6 +396,8 @@ func TestGetHTTPAuthContextFunc_ValidationCache(t *testing.T) {
 	}
 
 	t.Run("identical credentials within TTL validate upstream once", func(t *testing.T) {
+		t.Parallel()
+
 		hive := newFakeTheHive(t)
 		authFunc := GetHTTPAuthContextFunc(&types.TheHiveMcpDefaultOptions{
 			TheHiveURL:             hive.server.URL,
@@ -382,6 +416,8 @@ func TestGetHTTPAuthContextFunc_ValidationCache(t *testing.T) {
 	})
 
 	t.Run("different credentials are validated separately", func(t *testing.T) {
+		t.Parallel()
+
 		hive := newFakeTheHive(t)
 		authFunc := GetHTTPAuthContextFunc(&types.TheHiveMcpDefaultOptions{TheHiveURL: hive.server.URL})
 
@@ -393,6 +429,8 @@ func TestGetHTTPAuthContextFunc_ValidationCache(t *testing.T) {
 	})
 
 	t.Run("failed validations are not cached as successes", func(t *testing.T) {
+		t.Parallel()
+
 		hive := newFakeTheHive(t)
 		authFunc := GetHTTPAuthContextFunc(&types.TheHiveMcpDefaultOptions{TheHiveURL: hive.server.URL})
 
@@ -406,6 +444,8 @@ func TestGetHTTPAuthContextFunc_ValidationCache(t *testing.T) {
 	})
 
 	t.Run("concurrent requests are safe", func(t *testing.T) {
+		t.Parallel()
+
 		hive := newFakeTheHive(t)
 		authFunc := GetHTTPAuthContextFunc(&types.TheHiveMcpDefaultOptions{TheHiveURL: hive.server.URL})
 
@@ -445,6 +485,8 @@ func TestGetHTTPAuthContextFunc_ValidationCache(t *testing.T) {
 }
 
 func TestStartHTTPServer_InvalidAllowlist(t *testing.T) {
+	t.Parallel()
+
 	options := &types.TheHiveMcpDefaultOptions{
 		BindAddr:            "127.0.0.1:0",
 		TheHiveURLAllowlist: []string{"ftp://not-http.example.com"},

@@ -47,6 +47,11 @@ type HiveTestConfig struct {
 }
 
 // NewHiveTestConfig returns the default HiveTestConfig for the integration suite.
+//
+// MainOrg / AdminOrg are the bootstrap seed orgs only. Per-test scoping no
+// longer flows from here: each test gets its own freshly-created org via
+// testOrgName (see orgs.go), which the client/MCP-creds constructors read
+// directly. The org field here is kept for the one-time boot provisioning.
 func NewHiveTestConfig() *HiveTestConfig {
 	return &HiveTestConfig{
 		ImageName:     TheHiveTestImage(),
@@ -59,6 +64,8 @@ func NewHiveTestConfig() *HiveTestConfig {
 }
 
 // NewMCPTestConfig returns the default in-process MCP server options for tests.
+// TheHiveOrganisation here is a placeholder default; GetMCPTestClient* overrides
+// it with the per-test org from testOrgName (see orgs.go).
 func NewMCPTestConfig() *types.TheHiveMcpDefaultOptions {
 	return &types.TheHiveMcpDefaultOptions{
 		TheHiveURL:            "http://localhost:9000",

@@ -6,6 +6,8 @@ import (
 )
 
 func TestMergeFilters(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name             string
 		userQuery        map[string]any
@@ -42,6 +44,8 @@ func TestMergeFilters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			merged, applied := MergeFilters(tt.userQuery, tt.permFilters)
 
 			if applied != tt.wantApplied {
@@ -58,6 +62,8 @@ func TestMergeFilters(t *testing.T) {
 }
 
 func TestNewPermissionInfo(t *testing.T) {
+	t.Parallel()
+
 	info := NewPermissionInfo()
 	if info.Applied {
 		t.Error("NewPermissionInfo() should have Applied=false")
@@ -65,6 +71,8 @@ func TestNewPermissionInfo(t *testing.T) {
 }
 
 func TestNewPermissionInfoDenied(t *testing.T) {
+	t.Parallel()
+
 	msg := "access denied"
 	info := NewPermissionInfoDenied(msg)
 
@@ -78,6 +86,8 @@ func TestNewPermissionInfoDenied(t *testing.T) {
 }
 
 func TestNewPermissionInfoFiltered(t *testing.T) {
+	t.Parallel()
+
 	msg := "filter applied"
 	info := NewPermissionInfoFiltered(msg)
 
@@ -95,6 +105,8 @@ func TestNewPermissionInfoFiltered(t *testing.T) {
 }
 
 func TestNewPermissionInfoRestricted(t *testing.T) {
+	t.Parallel()
+
 	restrictions := []string{"item1", "item2", "item3"}
 	info := NewPermissionInfoRestricted(restrictions)
 

@@ -8,6 +8,8 @@ import (
 )
 
 func TestNewTheHiveURLAllowlist_RejectsInvalidConfiguration(t *testing.T) {
+	t.Parallel()
+
 	for name, args := range map[string][2]any{
 		"non-http allowlist entry": {[]string{"ftp://thehive.example.com"}, ""},
 		"unparseable entry":        {[]string{"not a url"}, ""},
@@ -15,6 +17,8 @@ func TestNewTheHiveURLAllowlist_RejectsInvalidConfiguration(t *testing.T) {
 		"non-http server URL":      {[]string(nil), "gopher://thehive.example.com"},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			entries, ok := args[0].([]string)
 			require.True(t, ok)
 
@@ -28,6 +32,8 @@ func TestNewTheHiveURLAllowlist_RejectsInvalidConfiguration(t *testing.T) {
 }
 
 func TestTheHiveURLAllowlist_Allows(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name      string
 		entries   []string
@@ -62,6 +68,8 @@ func TestTheHiveURLAllowlist_Allows(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			allowlist, err := NewTheHiveURLAllowlist(tc.entries, tc.serverURL)
 			require.NoError(t, err)
 			assert.Equal(t, tc.allowed, allowlist.Allows(tc.url))
@@ -69,6 +77,8 @@ func TestTheHiveURLAllowlist_Allows(t *testing.T) {
 	}
 
 	t.Run("nil allowlist denies everything", func(t *testing.T) {
+		t.Parallel()
+
 		var allowlist *TheHiveURLAllowlist
 		assert.False(t, allowlist.Allows(testHiveComURL))
 	})
