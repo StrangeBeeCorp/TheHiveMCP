@@ -16,6 +16,8 @@ const (
 )
 
 func TestValidateResponderParams(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		entityType string
@@ -49,6 +51,8 @@ func TestValidateResponderParams(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := validateResponderParams(tt.entityType, tt.entityID)
 			if tt.wantErr == "" {
 				require.NoError(t, err)
@@ -62,6 +66,8 @@ func TestValidateResponderParams(t *testing.T) {
 // Validation must run before the client is resolved, so a rejected value never
 // reaches a Cortex request.
 func TestGetAvailableRespondersValidatesBeforeAnyCall(t *testing.T) {
+	t.Parallel()
+
 	makeRequest := func(entityType, entityID string) mcp.ReadResourceRequest {
 		return mcp.ReadResourceRequest{
 			Params: mcp.ReadResourceParams{

@@ -1,17 +1,77 @@
 BUILD_DATE := $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 GIT_COMMIT=$(shell git rev-parse HEAD)
 VERSION=$(shell git describe --tags 2> /dev/null || echo "v0.0.0-${GIT_COMMIT}")
-GO := go
-GO_IMAGE := golang:1.26.4-alpine
-GOPATH ?= $(shell go env GOPATH)
-# Module cache (source) and build cache (objects, hash-keyed by GOOS/GOARCH) are
-# safe to share between the macOS host and a linux container. go/bin is NOT: it
-# holds arch-specific executables, so a bind-mounted host $(GOPATH)/bin puts
-# Mach-O binaries on the container's PATH ("Exec format error") and shadows tools
-# an image bakes into /go/bin (e.g. golangci-lint). Cache those via GO_TOOLS_CACHE.
-DOCKER_CACHE_MOUNTS := -v $(GOPATH)/pkg/mod:/go/pkg/mod -v $(HOME)/.cache/go-build:/root/.cache/go-build
+GO_IMAGE := golang:1.26.5-alpine
+# The race detector requires cgo (a C toolchain), which the Alpine GO_IMAGE lacks.
+# GO_IMAGE_CGO is the Debian-based image used by `make test-race`; it ships gcc, so
+# `-race` builds there with CGO_ENABLED=1.
+GO_IMAGE_CGO := golang:1.26.5
+# All Go work runs inside the $(GO_IMAGE) container — there is NO host Go install
+# (see install-dev-deps). So every cache is a Docker named volume, never a host
+# path: named volumes are linux-native, populated in-container, and — unlike a
+# bind mount of a host path — work identically whether `make` runs on the host
+# or itself inside a container talking to the same daemon (docker-in-docker),
+# where a host path like $(HOME)/.cache would be meaningless to the daemon.
+# Module cache (downloaded source) and build cache (compiled objects, hash-keyed
+# by GOOS/GOARCH) persist across runs. go/bin is deliberately NOT shared with the
+# host: it holds arch-specific executables and would shadow tools an image bakes
+# into /go/bin (e.g. golangci-lint); it gets its own volume via GO_TOOLS_CACHE.
+# GO_CACHE_DIR: opt-in host directory backing the Go caches, for CI where a fresh
+# runner starts with empty named volumes (so every job re-downloads modules,
+# recompiles the test binary, and re-`go install`s gotestsum — ~2min/job). Set it
+# to a host path that actions/cache restores/saves (keyed on go.sum) and the three
+# caches become bind mounts of $(GO_CACHE_DIR)/{gomod,gobuild,go-tools} instead of
+# named volumes — the daemon on a hosted runner shares the host filesystem, so the
+# docker-in-docker caveat above does not apply there. Unset (local default) keeps
+# named volumes, whose whole point is to survive across local runs anyway.
+#
+# In this mode the container also runs as the host uid (GO_RUN_AS_HOST_UID) so the
+# cache files it writes are owned by the runner user, not root — otherwise
+# actions/cache (which saves as the runner user) cannot read them. As a non-root
+# uid several defaults break and are pinned here:
+#   HOME=/tmp        — default HOME (/) is unwritable, and `go` writes there.
+#   GOCACHE, GOMODCACHE — point at the mounted, runner-owned cache dirs (the
+#                    non-root default $HOME/.cache/go-build is not the mount).
+#   GOPATH=/go       — keep the image's GOPATH; only its mod/bin subdirs are mounted.
+#   GOSUMDB=off      — `go install` otherwise writes the sumdb cache under
+#                    /go/pkg/sumdb, but /go/pkg (parent of the mounted /go/pkg/mod)
+#                    is root-owned and unwritable by the host uid. Safe: go.sum
+#                    still verifies module content locally; this only skips the
+#                    remote checksum-db lookup.
+#   GOTOOLCHAIN=local — never auto-download the go.mod `toolchain` version; use the
+#                    image's Go. Non-root can't verify a toolchain module under
+#                    GOSUMDB=off (it errors), and it matters for the golangci image,
+#                    whose Go differs from go.mod's toolchain.
+# GOLANGCI_LINT_CACHE moves golangci's analysis cache to a mounted, runner-owned
+# dir too (its default /root/.cache is unwritable by the host uid).
+ifdef GO_CACHE_DIR
+DOCKER_CACHE_MOUNTS := -v $(GO_CACHE_DIR)/gomod:/go/pkg/mod -v $(GO_CACHE_DIR)/gobuild:/go/cache/go-build
+GO_TOOLS_CACHE := -v $(GO_CACHE_DIR)/go-tools:/go/bin
+GO_RUN_AS_HOST_UID := --user $(shell id -u):$(shell id -g) -e HOME=/tmp -e GOCACHE=/go/cache/go-build -e GOMODCACHE=/go/pkg/mod -e GOPATH=/go -e GOSUMDB=off -e GOTOOLCHAIN=local
+GOLANGCI_CACHE := -v $(GO_CACHE_DIR)/golangci:/go/cache/golangci -e GOLANGCI_LINT_CACHE=/go/cache/golangci
+else
+DOCKER_CACHE_MOUNTS := -v thehivemcp-gomod:/go/pkg/mod -v thehivemcp-gobuild:/root/.cache/go-build
 # Named volume (linux-native, populated in-container) for go-installed tools.
 GO_TOOLS_CACHE := -v thehivemcp-go-tools:/go/bin
+GO_RUN_AS_HOST_UID :=
+# Named volume for golangci-lint's analysis cache (same rationale as above).
+GOLANGCI_CACHE := -v thehivemcp-golangci-cache:/root/.cache/golangci-lint
+endif
+# Git worktree support for tools that shell out to git inside a container
+# (golangci-lint, gitleaks). In a linked worktree, $(CURDIR)/.git is a FILE
+# pointing at the main repo's .git/worktrees/<name> via an ABSOLUTE path, which
+# in turn references the common .git (objects) — both OUTSIDE $(CURDIR). The
+# working tree is mounted at /app via $(CURDIR), but that absolute .git pointer
+# is not, so git in the sibling container fails with "not a git repository".
+# Bind-mount the common .git at its real host path so the pointer resolves.
+# In a normal checkout the common dir is $(CURDIR)/.git — already under /app —
+# so this expands to empty and adds no mount. Read-only: these tools only read.
+GIT_COMMON_DIR := $(shell git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+ifeq ($(filter $(CURDIR)/.git,$(GIT_COMMON_DIR)),)
+GIT_WORKTREE_MOUNT := $(if $(GIT_COMMON_DIR),-v $(GIT_COMMON_DIR):$(GIT_COMMON_DIR):ro)
+else
+GIT_WORKTREE_MOUNT :=
+endif
 GOLDFLAGS := -ldflags="-s -w -X 'github.com/StrangeBeeCorp/TheHiveMCP/version.buildDate=${BUILD_DATE}' -X 'github.com/StrangeBeeCorp/TheHiveMCP/version.gitCommit=${GIT_COMMIT}' -X 'github.com/StrangeBeeCorp/TheHiveMCP/version.gitVersion=${VERSION}'"
 BUILDDIR := ./build
 DISTDIR := ./dist
@@ -45,7 +105,7 @@ fmt: ## Format the code
 	@echo $(BGreen)-------------$(Color_Off)
 	@echo $(BGreen)--- Format --$(Color_Off)
 	@echo $(BGreen)-------------$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go fmt ./...
+	docker run -i --rm -v $(CURDIR):/app -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go fmt ./...
 	@echo "Code formatted"
 
 .PHONY: security
@@ -76,7 +136,7 @@ sast: ## Static Application Security Testing
 	@echo $(BGreen)---------------------------$(Color_Off)
 	@echo $(BGreen)-- Running SAST Analysis --$(Color_Off)
 	@echo $(BGreen)---------------------------$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install github.com/securego/gosec/v2/cmd/gosec@v2.26.1 && gosec ./...'
+	docker run -i --rm -v $(CURDIR):/app -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install github.com/securego/gosec/v2/cmd/gosec@v2.26.1 && gosec ./...'
 
 # Every Dockerfile in the repo. hadolint lints each — the production image plus
 # the MCPB and LibreChat helper images — so a misconfig regression in any of them
@@ -119,7 +179,7 @@ secrets: ## Scan the working tree for committed secrets (gitleaks)
 	@echo $(BGreen)---------------------------$(Color_Off)
 	@echo $(BGreen)-- Scanning for secrets  --$(Color_Off)
 	@echo $(BGreen)---------------------------$(Color_Off)
-	docker run --rm -v $(CURDIR):/repo -w /repo zricethezav/gitleaks:v8.30.1 dir --redact --verbose --config /repo/.gitleaks.toml .
+	docker run --rm -v $(CURDIR):/repo -w /repo $(GIT_WORKTREE_MOUNT) zricethezav/gitleaks:v8.30.1 dir --redact --verbose --config /repo/.gitleaks.toml .
 
 .PHONY: build
 build: ## Build binary for current host OS/Arch
@@ -151,6 +211,24 @@ endif
 THEHIVE_TEST_URL ?= http://localhost:9000
 export THEHIVE_TEST_URL
 
+# THEHIVE_TEST_IMAGE reaches the reset script (which derives the licensing tag
+# from it) and the go-test container; export it so both sub-shells see it.
+export THEHIVE_TEST_IMAGE
+
+# Integration mode is decided at run time by scripts/reset-integration-db.sh,
+# highest-priority first (see that script + the recipe below):
+#   1. THEHIVE_TEST_LICENSE set ⇒ use that token directly (no probe, no mint) ⇒
+#      parallel one-org-per-test. Supply it as a CI secret or a local export to
+#      get parallel mode without needing the licensing image to be pullable.
+#   2. else the StrangeBee licensing image is pullable ⇒ mint a dev license ⇒
+#      parallel one-org-per-test.
+#   3. else free license ⇒ sequential shared-org.
+# In cases 1-2 the script materialises the token to this file, which the recipe
+# reads to set THEHIVE_TEST_LICENSE and the go-test parallelism for the go-test
+# container. Export it so the reset script (a separate sub-shell) sees case 1.
+export THEHIVE_TEST_LICENSE
+LICENSE_FILE := internal/testutils/testdata/.test-license.lic.local
+
 .PHONY: test
 test: pre ## Run fast unit tests, skipping integration tests (COVERAGE=1 for coverage, RUN=<regexp> to filter)
 	@echo $(BGreen)-----------------------$(Color_Off)
@@ -161,30 +239,60 @@ ifeq ($(COVERAGE),1)
 	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
 endif
 
+# test-race runs -short only: the race detector is meaningful on our own
+# concurrency (parallel tests, fan-out helpers), not on the live SDK/HTTP client
+# the integration suite drives, and a -race integration run would be far slower.
+# It uses GO_IMAGE_CGO with CGO_ENABLED=1 because -race needs cgo (the Alpine
+# GO_IMAGE has no C toolchain).
+.PHONY: test-race
+test-race: pre ## Run fast unit tests under the race detector (RUN=<regexp> to filter)
+	@echo $(BGreen)-- Running UnitTests under -race --$(Color_Off)
+	docker run -i --rm -v $(CURDIR):/app -w /app -e CGO_ENABLED=1 $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE_CGO) go test -race $(GO_TEST_RUN) -short ./...
+
 .PHONY: test-integration
-test-integration: pre ## Run the full test suite against the docker-compose test stack (COVERAGE=1 for coverage, RUN=<regexp> to filter)
+test-integration: pre ## Run the full test suite against the docker-compose test stack (COVERAGE=1 for coverage, RUN=<regexp> to filter). Leaves the stack UP for fast reruns; use `make test-integration-down` to tear it down.
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Running Integration Tests --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
-	# Bring up the TheHive + Elasticsearch + MITRE stack (THEHIVE_TEST_IMAGE
-	# selects the version), run the suite against it on the host network, then
-	# tear it down regardless of the test outcome and propagate that outcome.
-	# -p 1 serializes packages: they share one mutable instance, and one TheHive
-	# stack at a time keeps memory in bounds on a 16 GB CI runner.
+	# Bring up the TheHive + Elasticsearch + Cassandra + MITRE stack
+	# (THEHIVE_TEST_IMAGE selects the version) and reset its databases to a clean
+	# state (scripts/reset-integration-db.sh — see it for the why), then run the
+	# suite against it on the host network. The stack is deliberately LEFT UP for
+	# fast reruns; `make test-integration-down` tears it down.
+	#
+	# The reset script decides the mode (presupplied THEHIVE_TEST_LICENSE, else
+	# pullable image ⇒ mint, else free — see the LICENSE_FILE note above) and
+	# writes the token (or nothing) to LICENSE_FILE. We read that file here to
+	# configure the go-test container:
+	#   - Non-empty (token present) ⇒ export THEHIVE_TEST_LICENSE so the Go suite
+	#     runs per-test org + user via t.Parallel (testutils.Parallel), packages
+	#     concurrent (no -p 1).
+	#   - Empty/absent (free license) ⇒ one shared org, testutils.Parallel no-ops
+	#     so tests run sequentially and purge their own data; `-p 1` stops packages
+	#     from racing on that shared org.
+	# Isolation in either mode comes from internal/testutils/orgs.go.
 	#
 	# -timeout 20m raises the per-package deadline above the default 10m: under
 	# memory pressure a single request can stall, and the setup helpers retry
 	# those (each capped at the client's 90s transport timeout), so the headroom
-	# keeps a transient stall from tripping the package timeout. A true deadlock
-	# is still bounded.
-	# `up` is chained with && into the same shell line as the test run and an
-	# unconditional `down`, so the stack is always torn down — even if `up`
-	# itself fails (otherwise make would stop before reaching `down`). STATUS
-	# captures the `up && test` outcome and is propagated after teardown.
-	docker compose -f docker-compose.test.yml up -d && docker run -i --rm --network host -v $(CURDIR):/app -w /app -e THEHIVE_TEST_URL -e LOG_LEVEL -e THEHIVE_TEST_IMAGE $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'command -v gotestsum >/dev/null 2>&1 || go install gotest.tools/gotestsum@v1.13.0 ; gotestsum --format pkgname --hide-summary=skipped -- $(GO_TEST_COVER) $(GO_TEST_RUN) -timeout 20m -p 1 ./...' ; STATUS=$$? ; docker compose -f docker-compose.test.yml down -v ; exit $$STATUS
+	# keeps a transient stall from tripping the package timeout. The sequential
+	# free-license path is the slowest run, so it needs this headroom most.
+	./scripts/reset-integration-db.sh docker-compose.test.yml
+	@if [ -s "$(LICENSE_FILE)" ]; then \
+		echo "License present → parallel multi-org mode."; \
+		LIC="$$(cat "$(LICENSE_FILE)")"; PARALLELISM=""; \
+	else \
+		echo "No license → sequential shared-org mode."; \
+		LIC=""; PARALLELISM="-p 1"; \
+	fi; \
+	docker run -i --rm --network host -v $(CURDIR):/app -w /app -e THEHIVE_TEST_URL -e LOG_LEVEL -e THEHIVE_TEST_IMAGE -e THEHIVE_TEST_LICENSE="$$LIC" $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c "command -v gotestsum >/dev/null 2>&1 || go install gotest.tools/gotestsum@v1.13.0 ; gotestsum --format pkgname --hide-summary=skipped -- $(GO_TEST_COVER) $(GO_TEST_RUN) $$PARALLELISM -timeout 20m ./..."
 ifeq ($(COVERAGE),1)
 	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
 endif
+
+.PHONY: test-integration-down
+test-integration-down: ## Tear down the integration test stack left up by `make test-integration` (containers, network, volumes)
+	docker compose -f docker-compose.test.yml down -v
 
 .PHONY: docker-build
 docker-build: ## Build Docker image
@@ -240,7 +348,7 @@ vulncheck: ## Check for vulnerabilities
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Security Vulnerability  --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@v1.3.0 && govulncheck ./...'
+	docker run -i --rm -v $(CURDIR):/app -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@v1.3.0 && govulncheck ./...'
 
 .PHONY: lint
 lint: ## Run linter checks without modifying files
@@ -248,7 +356,7 @@ lint: ## Run linter checks without modifying files
 	@echo $(BGreen)-- Linter Checks --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	docker run --rm -v $(CURDIR):/app -w /app golangci/golangci-lint:v2.12.2 golangci-lint config verify
-	docker run -v $(CURDIR):/app -w /app -i --rm $(DOCKER_CACHE_MOUNTS) -v $(HOME)/.cache/golangci-lint:/root/.cache/golangci-lint golangci/golangci-lint:v2.12.2 golangci-lint run
+	docker run -v $(CURDIR):/app -w /app -i --rm $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GOLANGCI_CACHE) $(GIT_WORKTREE_MOUNT) golangci/golangci-lint:v2.12.2 golangci-lint run
 
 .PHONY: lint-fix
 lint-fix: fmt ## Format the code, then run linter checks with auto-fix
@@ -256,7 +364,7 @@ lint-fix: fmt ## Format the code, then run linter checks with auto-fix
 	@echo $(BGreen)-- Linter Checks with auto-fix --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	docker run --rm -v $(CURDIR):/app -w /app golangci/golangci-lint:v2.12.2 golangci-lint config verify
-	docker run -v $(CURDIR):/app -w /app -i --rm $(DOCKER_CACHE_MOUNTS) -v $(HOME)/.cache/golangci-lint:/root/.cache/golangci-lint golangci/golangci-lint:v2.12.2 golangci-lint run --fix
+	docker run -v $(CURDIR):/app -w /app -i --rm $(DOCKER_CACHE_MOUNTS) $(GOLANGCI_CACHE) $(GIT_WORKTREE_MOUNT) golangci/golangci-lint:v2.12.2 golangci-lint run --fix
 
 .PHONY: updatedep
 updatedep: ## Update dependencies

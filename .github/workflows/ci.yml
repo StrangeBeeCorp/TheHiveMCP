@@ -18,30 +18,36 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    # GO_CACHE_DIR makes the Makefile bind these host dirs into the tool
+    # containers as the runner uid (see the Makefile note), so the cache below
+    # is actually mounted AND is runner-owned for actions/cache to save. This is
+    # set job-wide so every make step (fmt/lint/sast/vulncheck) uses it.
+    env:
+      GO_CACHE_DIR: /home/runner/.cache/thehivemcp-go
     steps:
       - uses: actions/checkout@v4
 
-      # The make targets run inside pinned images and bind-mount the runner's
-      # Go and golangci-lint caches (see DOCKER_CACHE_MOUNTS and the lint target
-      # in the Makefile: go env GOPATH is /home/runner/go on ubuntu-latest).
-      # Without this every run re-downloads the whole dependency graph, recompiles
-      # gosec/govulncheck, rebuilds every package, and re-analyzes every file with
-      # golangci-lint from scratch. Three distinct caches:
-      #   ~/go/pkg/mod          — downloaded dependency source (module cache)
-      #   ~/.cache/go-build     — compiled package objects (GOCACHE: go build/test + golangci-lint)
-      #   ~/.cache/golangci-lint — golangci-lint's own per-file analysis results
+      # The make targets run inside pinned images and bind-mount these host caches
+      # (via GO_CACHE_DIR / DOCKER_CACHE_MOUNTS / GOLANGCI_CACHE). Without them every
+      # run re-downloads the whole dependency graph, recompiles gosec/govulncheck,
+      # rebuilds every package, and re-analyzes every file with golangci-lint from
+      # scratch. Four subdirs under GO_CACHE_DIR:
+      #   gomod    — downloaded dependency source (module cache, /go/pkg/mod)
+      #   gobuild  — compiled package objects (GOCACHE: go build/test + golangci)
+      #   go-tools — go-installed tools (gosec, govulncheck)
+      #   golangci — golangci-lint's own per-file analysis results
       # Keyed on go.sum + the lint config so a dependency or lint-rule change busts
       # it; restore-keys allow a partial warm start on a miss.
       - name: Cache Go and golangci-lint caches
         uses: actions/cache@v4
         with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-            ~/.cache/golangci-lint
+          path: ${{ env.GO_CACHE_DIR }}
           key: go-${{ runner.os }}-${{ hashFiles('go.sum', '.golangci.yml') }}
           restore-keys: |
             go-${{ runner.os }}-
+
+      - name: Prepare cache dirs
+        run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools "$GO_CACHE_DIR"/golangci
 
       - name: Format check
         run: make fmt
@@ -151,12 +157,31 @@ jobs:
 
   integration-tests:
     runs-on: ubuntu-latest
+    # `packages: read` scopes the GITHUB_TOKEN used by the ghcr login below.
+    # NOTE: GITHUB_TOKEN is scoped to THIS repo, not the whole org — it can only
+    # read the `strangebee/tools/licensing` image if that package explicitly
+    # grants StrangeBee/TheHiveMCP read access (ghcr → package → Package settings
+    # → Manage Actions access). Without that grant the probe gets `denied` (login
+    # still succeeds), so the suite falls back to the sequential free-license path
+    # — which is also the public-mirror behavior. To run parallel here, either add
+    # that package grant or swap the login below to an org-scoped read:packages
+    # token. See scripts/reset-integration-db.sh (pick_licensing_image) for the gate.
+    permissions:
+      contents: read
+      packages: read
+    # GO_CACHE_DIR makes the Makefile bind these host dirs into the go-test
+    # container as the runner uid (see the Makefile note), so the cache below is
+    # actually mounted AND is runner-owned for actions/cache to save.
+    env:
+      GO_CACHE_DIR: /home/runner/.cache/thehivemcp-go
     # Run the integration suite against every supported TheHive version, so a
     # compatibility break against any of them turns the PR red instead of going
     # unnoticed (see DL-6007). `make test-integration` brings up the docker-compose
-    # test stack (TheHive + Elasticsearch + MITRE) for the selected THEHIVE_TEST_IMAGE
-    # and tears it down after. Each leg boots a full TheHive (~5 min startup);
-    # keep this to the versions we actually support.
+    # test stack (TheHive + Elasticsearch + Cassandra + MITRE) for the selected
+    # THEHIVE_TEST_IMAGE. It deliberately LEAVES the stack up (for fast local
+    # reruns), so the teardown step below runs it down explicitly — with
+    # `if: always()` so it fires even when the tests fail. Each leg boots a full
+    # TheHive (~5 min startup); keep this to the versions we actually support.
     strategy:
       fail-fast: false
       matrix:
@@ -166,7 +191,56 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Persist the Go caches the test container uses (module cache, build cache,
+      # and the go-installed gotestsum) across runs. Without this each fresh runner
+      # re-downloads every module, recompiles the whole test binary, and rebuilds
+      # gotestsum — ~2min per job. Keyed on go.sum so a dependency change busts it.
+      # The matrix leg is IN THE KEY: the two legs run concurrently and would
+      # otherwise collide on one key — both miss, then race to save it and one
+      # fails with "Unable to reserve cache … another job may be creating this
+      # cache", so a leg's cache never persists. A per-leg key lets each save and
+      # restore its own. Separate prefix from the checks job: this cache also holds
+      # gotestsum and test-compiled objects that job doesn't need.
+      # NOTE: caches saved on a PR's refs/pull/N/merge ref do not reliably restore
+      # across separate runs; the durable warm baseline is the cache main saves
+      # once this merges (main's caches are readable by all branches).
+      - name: Cache Go caches (integration)
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.GO_CACHE_DIR }}
+          key: go-int-${{ runner.os }}-${{ hashFiles('go.sum') }}-${{ strategy.job-index }}
+          restore-keys: |
+            go-int-${{ runner.os }}-${{ hashFiles('go.sum') }}-
+            go-int-${{ runner.os }}-
+
+      - name: Prepare cache dirs
+        run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools
+
+      # Parallel mode needs a license token (see scripts/reset-integration-db.sh).
+      # The primary path is the THEHIVE_TEST_LICENSE secret passed to the run step
+      # below — used directly, no image pull or mint. This ghcr login is now only a
+      # best-effort fallback for the mint path (an authenticated dev running CI
+      # without the secret); on the public mirror it simply fails and the suite
+      # falls back to sequential free mode. NOTE: the repo GITHUB_TOKEN is often
+      # `denied` on the licensing package (see the `permissions` note above), which
+      # is exactly why the secret is the primary path.
+      - name: Log in to ghcr.io (best-effort)
+        continue-on-error: true
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run integration tests
         run: make test-integration
         env:
           THEHIVE_TEST_IMAGE: ${{ matrix.thehive-image }}
+          # A pre-minted multi-instance dev license. When set, the suite runs
+          # parallel one-org-per-test without needing the licensing image pullable.
+          # Empty on the public mirror (secret absent) ⇒ sequential free mode.
+          THEHIVE_TEST_LICENSE: ${{ secrets.THEHIVE_TEST_LICENSE }}
+
+      - name: Tear down integration test stack
+        if: always()
+        run: make test-integration-down

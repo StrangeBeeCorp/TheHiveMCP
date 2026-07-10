@@ -10,6 +10,8 @@ import (
 )
 
 func TestNewFilteredOutputPage(t *testing.T) {
+	t.Parallel()
+
 	page := &thehive.OutputPage{
 		UnderscoreId:        "~123",
 		Title:               "Test Page",
@@ -28,6 +30,8 @@ func TestNewFilteredOutputPage(t *testing.T) {
 }
 
 func TestNewCreatePageResult(t *testing.T) {
+	t.Parallel()
+
 	page := &thehive.OutputPage{
 		UnderscoreId:        "~456",
 		Title:               "My Page",
@@ -47,6 +51,8 @@ func TestNewCreatePageResult(t *testing.T) {
 }
 
 func TestNewFilteredOutputProcedure_DoesNotPanicWhenTacticIsNil(t *testing.T) {
+	t.Parallel()
+
 	patternID := "T1059"
 
 	procedure := &thehive.OutputProcedure{

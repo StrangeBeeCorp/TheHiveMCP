@@ -182,6 +182,8 @@ func hitIDs(t *testing.T, entity map[string]any, queryName string) []string {
 // similarCases; the engine returns a TLP:AMBER (in scope) and a TLP:RED (out of
 // scope) case. The RED case must not surface — a direct search would never return it.
 func TestExpandSimilarityHitsAreScoped(t *testing.T) {
+	t.Parallel()
+
 	const (
 		inScopeCaseID = "~1000" // TLP:AMBER, analyst may see it
 		outOfScopeID  = "~2000" // TLP:RED, analyst may NOT see it
@@ -238,6 +240,8 @@ func TestExpandSimilarityHitsAreScoped(t *testing.T) {
 // old per-parent code). That dedup is the load-bearing assertion — both paths produce
 // the same surfaced result, so only the check count distinguishes them.
 func TestExpandSimilarityHitsScopedAcrossParentsAreBatched(t *testing.T) {
+	t.Parallel()
+
 	const (
 		parentA      = "~500"
 		parentB      = "~501"
@@ -301,6 +305,10 @@ func TestExpandSimilarityHitsScopedAcrossParentsAreBatched(t *testing.T) {
 // linkedCases silently bypass the re-check and leak). A synthetic independent query
 // with a non-similar* name gets its out-of-scope hit dropped, purely because it set
 // ResultsAreIndependent: true.
+// Not parallel: mutates the package-global queryRegistry (restored via defer),
+// which would race sibling parallel tests. Kept serial deliberately.
+//
+//nolint:paralleltest // mutates the global queryRegistry
 func TestExpandIndependentNonSimilarityQueryIsScoped(t *testing.T) {
 	const (
 		inScopeCaseID = "~1000"
@@ -362,6 +370,11 @@ func TestExpandIndependentNonSimilarityQueryIsScoped(t *testing.T) {
 
 // Companion to the test above: a query declared NOT independent (a child of an
 // already-scoped parent) fires ONLY the parent scope check, never a per-hit re-check.
+//
+// Not parallel: mutates the package-global queryRegistry (restored via defer),
+// which would race sibling parallel tests. Kept serial deliberately.
+//
+//nolint:paralleltest // mutates the global queryRegistry
 func TestExpandChildQueryIsNotRescoped(t *testing.T) {
 	const (
 		childID       = "~3000"

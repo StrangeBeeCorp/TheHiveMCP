@@ -4,9 +4,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
 )
 
 func TestGetResourceCatalog(t *testing.T) {
+	testutils.Parallel(t)
 	mcpClient := newResourceClient(t)
 
 	structuredData := getResourceStructured(t, mcpClient, "")
@@ -25,6 +28,7 @@ func TestGetResourceCatalog(t *testing.T) {
 }
 
 func TestGetResourceBrowseSchemaCategory(t *testing.T) {
+	testutils.Parallel(t)
 	mcpClient := newResourceClient(t)
 
 	structuredData := getResourceStructured(t, mcpClient, "schema")
@@ -40,6 +44,7 @@ func TestGetResourceBrowseSchemaCategory(t *testing.T) {
 }
 
 func TestGetResourceFetchAlertSchema(t *testing.T) {
+	testutils.Parallel(t)
 	mcpClient := newResourceClient(t)
 
 	structuredData := getResourceStructured(t, mcpClient, "hive://schema/alert")
@@ -65,6 +70,7 @@ func TestGetResourceFetchAlertSchema(t *testing.T) {
 }
 
 func TestGetResourceFetchCurrentUser(t *testing.T) {
+	testutils.Parallel(t)
 	mcpClient := newResourceClient(t)
 
 	structuredData := getResourceStructured(t, mcpClient, "hive://config/current-user")
@@ -78,11 +84,12 @@ func TestGetResourceFetchCurrentUser(t *testing.T) {
 	require.Contains(t, data, "name")
 	require.NotEmpty(t, data["login"])
 
-	// admin user seeded by test setup
-	require.Equal(t, "admin@thehive.local", data["login"])
+	// The MCP client authenticates as this test's dedicated per-test-org user.
+	require.Equal(t, testutils.TestUserLogin(t), data["login"])
 }
 
 func TestGetResourceFetchDocumentation(t *testing.T) {
+	testutils.Parallel(t)
 	mcpClient := newResourceClient(t)
 
 	structuredData := getResourceStructured(t, mcpClient, "hive://docs/entities/case")
@@ -97,6 +104,7 @@ func TestGetResourceFetchDocumentation(t *testing.T) {
 }
 
 func TestGetResourceBrowseMetadataCategory(t *testing.T) {
+	testutils.Parallel(t)
 	mcpClient := newResourceClient(t)
 
 	structuredData := getResourceStructured(t, mcpClient, "metadata")
@@ -111,6 +119,7 @@ func TestGetResourceBrowseMetadataCategory(t *testing.T) {
 }
 
 func TestGetResourceFetchCaseStatuses(t *testing.T) {
+	testutils.Parallel(t)
 	mcpClient := newResourceClient(t)
 
 	structuredData := getResourceStructured(t, mcpClient, "hive://metadata/entities/case/statuses")
@@ -125,6 +134,7 @@ func TestGetResourceFetchCaseStatuses(t *testing.T) {
 }
 
 func TestGetResourceTrailingSlashEquivalence(t *testing.T) {
+	testutils.Parallel(t)
 	mcpClient := newResourceClient(t)
 
 	noSlashData := getResourceStructured(t, mcpClient, "metadata/automation")
@@ -169,6 +179,7 @@ func TestGetResourceTrailingSlashEquivalence(t *testing.T) {
 }
 
 func TestGetResourceResourcesFieldBehavior(t *testing.T) {
+	testutils.Parallel(t)
 	mcpClient := newResourceClient(t)
 
 	// Browse a category that has only subcategories (no direct resources)

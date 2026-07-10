@@ -44,7 +44,7 @@ func scopedManageClient(t *testing.T) *thehive.APIClient {
 func createAlertWithTLP(t *testing.T, hiveClient *thehive.APIClient, sourceRef string, tlp int32) *thehive.OutputAlert {
 	t.Helper()
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	testAlert := testutils.MockInputAlert()
 	testAlert.Title = "Alert " + sourceRef
 	testAlert.SourceRef = sourceRef
@@ -64,10 +64,11 @@ func requireScopeDenied(t *testing.T, result *mcp.CallToolResult) {
 
 // Out-of-scope update is denied without mutating; in-scope update succeeds.
 func TestManageScopeUpdateDeniedOutOfScope(t *testing.T) {
+	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 
 	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope case", 3)
 	inScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "In scope case", 2)
@@ -105,10 +106,11 @@ func TestManageScopeUpdateDeniedOutOfScope(t *testing.T) {
 
 // A batch update is denied entirely if any entity is out of scope.
 func TestManageScopeBatchUpdateDeniedWhenAnyOutOfScope(t *testing.T) {
+	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 
 	inScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "In scope batch case", 2)
 	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope batch case", 3)
@@ -139,10 +141,11 @@ func TestManageScopeBatchUpdateDeniedWhenAnyOutOfScope(t *testing.T) {
 
 // Out-of-scope deletes are denied and the entity survives.
 func TestManageScopeDeleteDeniedOutOfScope(t *testing.T) {
+	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 
 	outOfScopeAlert := createAlertWithTLP(t, hiveClient, "scope-delete-001", 3)
 
@@ -168,6 +171,7 @@ func TestManageScopeDeleteDeniedOutOfScope(t *testing.T) {
 
 // Out-of-scope comments are denied; in-scope comments succeed.
 func TestManageScopeCommentDeniedOutOfScope(t *testing.T) {
+	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -200,6 +204,7 @@ func TestManageScopeCommentDeniedOutOfScope(t *testing.T) {
 
 // Child creation (task) inside an out-of-scope parent case is denied.
 func TestManageScopeCreateChildDeniedOutOfScopeParent(t *testing.T) {
+	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -233,6 +238,7 @@ func TestManageScopeCreateChildDeniedOutOfScopeParent(t *testing.T) {
 // Case-or-alert parent resolution: observable in an in-scope alert succeeds,
 // in an out-of-scope alert is denied.
 func TestManageScopeCreateObservableInScopeAlertParent(t *testing.T) {
+	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -269,6 +275,7 @@ func TestManageScopeCreateObservableInScopeAlertParent(t *testing.T) {
 
 // Promoting an out-of-scope alert is denied.
 func TestManageScopePromoteDeniedOutOfScope(t *testing.T) {
+	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -293,6 +300,7 @@ func TestManageScopePromoteDeniedOutOfScope(t *testing.T) {
 
 // A merge spanning an out-of-scope entity is denied.
 func TestManageScopeMergeDeniedWhenAnyCaseOutOfScope(t *testing.T) {
+	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
@@ -318,9 +326,10 @@ func TestManageScopeMergeDeniedWhenAnyCaseOutOfScope(t *testing.T) {
 
 // Without configured filters (admin), operations a filter would exclude proceed.
 func TestManageScopeNoFiltersBackwardCompatible(t *testing.T) {
+	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 
 	highTLPCase := testutils.CreateCaseWithTLP(t, hiveClient, "High TLP case", 3)
 

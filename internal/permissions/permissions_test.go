@@ -5,6 +5,8 @@ import (
 )
 
 func TestIsToolAllowed(t *testing.T) {
+	t.Parallel()
+
 	config := &Config{
 		Version: versionV1,
 		Permissions: Section{
@@ -27,6 +29,8 @@ func TestIsToolAllowed(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if got := config.IsToolAllowed(tt.toolName); got != tt.want {
 				t.Errorf("IsToolAllowed(%q) = %v, want %v", tt.toolName, got, tt.want)
 			}
@@ -35,6 +39,8 @@ func TestIsToolAllowed(t *testing.T) {
 }
 
 func TestIsAnalyzerAllowed_AllowList(t *testing.T) {
+	t.Parallel()
+
 	config := &Config{
 		Permissions: Section{
 			Analyzers: AutomationPermissions{
@@ -57,6 +63,8 @@ func TestIsAnalyzerAllowed_AllowList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if got := config.IsAnalyzerAllowed(tt.analyzerName); got != tt.want {
 				t.Errorf("IsAnalyzerAllowed(%q) = %v, want %v", tt.analyzerName, got, tt.want)
 			}
@@ -65,6 +73,8 @@ func TestIsAnalyzerAllowed_AllowList(t *testing.T) {
 }
 
 func TestIsAnalyzerAllowed_BlockList(t *testing.T) {
+	t.Parallel()
+
 	config := &Config{
 		Permissions: Section{
 			Analyzers: AutomationPermissions{
@@ -85,6 +95,8 @@ func TestIsAnalyzerAllowed_BlockList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if got := config.IsAnalyzerAllowed(tt.analyzerName); got != tt.want {
 				t.Errorf("IsAnalyzerAllowed(%q) = %v, want %v", tt.analyzerName, got, tt.want)
 			}
@@ -93,6 +105,8 @@ func TestIsAnalyzerAllowed_BlockList(t *testing.T) {
 }
 
 func TestIsAnalyzerAllowed_Wildcard(t *testing.T) {
+	t.Parallel()
+
 	config := &Config{
 		Permissions: Section{
 			Analyzers: AutomationPermissions{
@@ -108,6 +122,8 @@ func TestIsAnalyzerAllowed_Wildcard(t *testing.T) {
 }
 
 func TestIsResponderAllowed_AllowList(t *testing.T) {
+	t.Parallel()
+
 	config := &Config{
 		Permissions: Section{
 			Responders: AutomationPermissions{
@@ -128,6 +144,8 @@ func TestIsResponderAllowed_AllowList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if got := config.IsResponderAllowed(tt.responderName); got != tt.want {
 				t.Errorf("IsResponderAllowed(%q) = %v, want %v", tt.responderName, got, tt.want)
 			}
@@ -136,6 +154,8 @@ func TestIsResponderAllowed_AllowList(t *testing.T) {
 }
 
 func TestGetAllowedAnalyzers(t *testing.T) {
+	t.Parallel()
+
 	config := &Config{
 		Permissions: Section{
 			Analyzers: AutomationPermissions{
@@ -161,6 +181,8 @@ func TestGetAllowedAnalyzers(t *testing.T) {
 }
 
 func TestGetAllowedResponders(t *testing.T) {
+	t.Parallel()
+
 	config := &Config{
 		Permissions: Section{
 			Responders: AutomationPermissions{
@@ -185,6 +207,8 @@ func TestGetAllowedResponders(t *testing.T) {
 }
 
 func TestIsEntityOperationAllowed(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		config     *Config
@@ -345,6 +369,8 @@ func TestIsEntityOperationAllowed(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := tt.config.IsEntityOperationAllowed(tt.entityType, tt.operation)
 			if got != tt.want {
 				t.Errorf("IsEntityOperationAllowed() = %v, want %v", got, tt.want)

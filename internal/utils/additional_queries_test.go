@@ -15,6 +15,8 @@ import (
 // {"case"|"alert"} wrapper. Meta stats survive projection for all four
 // source↔hit pairs; dropped linkedWith does not leak through.
 func TestFilterAdditionalQueryResultsSimilarityShapes(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name       string
 		parentType string
@@ -29,6 +31,8 @@ func TestFilterAdditionalQueryResultsSimilarityShapes(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			descriptor, ok := queryRegistry[tc.parentType][tc.queryName]
 			require.True(t, ok, "query %q must be registered for %q", tc.queryName, tc.parentType)
 			require.True(t, descriptor.ResultsAreIndependent,
@@ -63,6 +67,8 @@ func TestFilterAdditionalQueryResultsSimilarityShapes(t *testing.T) {
 // Fail-closed guard: a zero-value descriptor (missing Func/EntityType) would slip
 // past projection or scope re-checking. Catch it at test time, not as a runtime leak.
 func TestEveryRegisteredQueryDeclaresScopeIntent(t *testing.T) {
+	t.Parallel()
+
 	for entityType, config := range queryRegistry {
 		for queryName, descriptor := range config {
 			require.NotNilf(t, descriptor.Func,
@@ -79,6 +85,8 @@ func TestEveryRegisteredQueryDeclaresScopeIntent(t *testing.T) {
 // Tasks declares no MetaFields and ResultsAreIndependent=false, so includeMeta is
 // false: meta fields in the input must not survive projection.
 func TestFilterAdditionalQueryResultsNonSimilarityDropsMeta(t *testing.T) {
+	t.Parallel()
+
 	descriptor, ok := queryRegistry[types.EntityTypeCase]["tasks"]
 	require.True(t, ok, "tasks must be registered for case")
 	require.False(t, descriptor.ResultsAreIndependent,
@@ -107,6 +115,11 @@ func TestFilterAdditionalQueryResultsNonSimilarityDropsMeta(t *testing.T) {
 // An unresolvable-_id drop is Debug-logged so a future *Light _id shape regression
 // is diagnosable rather than silently emptying results; expected out-of-scope and
 // all-in-scope drops stay quiet, carrying no regression signal.
+// Not parallel: the subtests install a process-global default logger via
+// slog.SetDefault (see captureDebugLogs), which would race sibling parallel
+// tests. Kept serial deliberately.
+//
+//nolint:paralleltest // mutates the global slog default logger
 func TestFilterSimilarityHitsByScopeLogsUnresolvableDrops(t *testing.T) {
 	t.Run("unresolvable _id is dropped and logged", func(t *testing.T) {
 		buf := captureDebugLogs(t)

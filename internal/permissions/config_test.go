@@ -7,6 +7,8 @@ import (
 )
 
 func TestLoadDefault(t *testing.T) {
+	t.Parallel()
+
 	config, err := LoadDefault()
 	if err != nil {
 		t.Fatalf("LoadDefault() failed: %v", err)
@@ -30,6 +32,8 @@ func TestLoadDefault(t *testing.T) {
 }
 
 func TestParseYAML(t *testing.T) {
+	t.Parallel()
+
 	yamlData := []byte(`
 version: "1.0"
 permissions:
@@ -73,6 +77,8 @@ permissions:
 }
 
 func TestLoadFromFile(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "permissions.yaml")
 
@@ -112,6 +118,8 @@ permissions:
 }
 
 func TestLoadFromFile_InvalidPath(t *testing.T) {
+	t.Parallel()
+
 	_, err := LoadFromFile("/nonexistent/path/permissions.yaml")
 	if err == nil {
 		t.Error("Expected error for nonexistent file")
@@ -119,6 +127,8 @@ func TestLoadFromFile_InvalidPath(t *testing.T) {
 }
 
 func TestParseYAML_InvalidYAML(t *testing.T) {
+	t.Parallel()
+
 	invalidYAML := []byte(`
 this is not: valid: yaml:
 `)

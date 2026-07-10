@@ -1,0 +1,28 @@
+# License override for the integration test stack. Layered on top of
+# docker-compose.test.yml ONLY when a license token is supplied via
+# THEHIVE_TEST_LICENSE (selected by scripts/reset-integration-db.sh and the
+# Makefile). Without it, the base file boots on TheHive's built-in free license.
+#
+# Why this exists: the base stack's free license caps `organisations` at 1, so
+# the suite must share one org sequentially. A license whose `organisations`
+# quota is unlimited lets the suite create one org per test and run in parallel.
+#
+# Compose merge semantics (verified): a second `-f` file REPLACES `command` and
+# APPENDS to `volumes`, so this override adds `--dev` + the two license mounts
+# without duplicating anything from the base service.
+services:
+  thehive:
+    # - .test-license.lic.local is the raw JWT, materialised at runtime by
+    #   scripts/reset-integration-db.sh from THEHIVE_TEST_LICENSE (gitignored;
+    #   never committed). thehive-application.conf sets `license.filePath` to it.
+    #   The entrypoint auto-includes any file at /etc/thehive/application.conf.
+    # - The token is trusted ONLY in Mode.Dev, so the command starts the server
+    #   with `--dev`. TheHiveStarter reads `--dev` from its args; the preceding
+    #   `/opt/thehive` is the server root dir (the launcher would otherwise
+    #   misread `--dev` as that path). The `--` terminates the entrypoint's own
+    #   option parsing so both args reach bin/thehive. `--dev` governs only the
+    #   license/auth mode, not the DB (that stays Cassandra via TH_CQL_HOSTNAMES).
+    volumes:
+      - ./internal/testutils/testdata/.test-license.lic.local:/etc/thehive/test-license.lic:ro
+      - ./internal/testutils/testdata/thehive-application.conf:/etc/thehive/application.conf:ro
+    command: ["--", "/opt/thehive", "--dev"]

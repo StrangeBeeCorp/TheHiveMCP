@@ -18,8 +18,9 @@ import (
 // catastrophic: false denial (in-scope hit dropped) and leak (out-of-scope hit
 // marked in-scope). Cross-checks against the proven get-by-ID path.
 func TestGetScopedEntityIDsBatchHonorsIDFilter(t *testing.T) {
+	testutils.Parallel(t)
 	hiveClient := testutils.SetupTestWithCleanup(t)
-	authCtx := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authCtx := testutils.GetAuthContext(t)
 	ctx := context.WithValue(authCtx, types.HiveClientCtxKey, hiveClient)
 
 	// Mirrors analyst.yaml (tlp<=2): tlp=3 (TLP:RED) is out of scope.
@@ -30,11 +31,13 @@ func TestGetScopedEntityIDsBatchHonorsIDFilter(t *testing.T) {
 	// GetScopedEntityIDsBatch is only ever called with case (similarCases) and
 	// alert (similarAlerts), so both getCase and getAlert must be proven.
 	t.Run("case", func(t *testing.T) {
+		t.Parallel()
 		ids := createScopedCases(authCtx, t, hiveClient)
 		assertBatchHonorsIDFilter(ctx, t, types.EntityTypeCase, ids, permFilters)
 	})
 
 	t.Run("alert", func(t *testing.T) {
+		t.Parallel()
 		ids := createScopedAlerts(authCtx, t, hiveClient)
 		assertBatchHonorsIDFilter(ctx, t, types.EntityTypeAlert, ids, permFilters)
 	})

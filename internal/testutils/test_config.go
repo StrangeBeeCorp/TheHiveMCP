@@ -15,6 +15,26 @@ const DefaultTheHiveTestImage = "strangebee/thehive:5.6.3"
 // integration suite for authentication and as a default assignee in fixtures.
 const DefaultAdminUser = "admin@thehive.local"
 
+// sharedFreeUser is the single org-admin login used by the free-license
+// (no-THEHIVE_TEST_LICENSE) path, where every test shares main-org and runs
+// sequentially. In license mode each test instead gets its own unique user
+// (see provisionTestEnv in orgs.go).
+const sharedFreeUser = "shared@test.local"
+
+// LicensePresent reports whether the suite is running in license mode, keyed on
+// THEHIVE_TEST_LICENSE being non-empty:
+//   - present  ⇒ per-test org + user, tests run in parallel (multi-org).
+//   - absent   ⇒ one shared main-org, tests run sequentially and purge their
+//     own data on cleanup (free-license path; the public-CI default).
+//
+// The variable is NOT a user input: the harness (scripts/reset-integration-db.sh
+// + the Makefile) decides the mode by whether the StrangeBee licensing image is
+// pullable, mints a dev license on the fly when it is, and injects the minted
+// token here for the go-test container. So this reads that harness-set signal.
+func LicensePresent() bool {
+	return os.Getenv("THEHIVE_TEST_LICENSE") != ""
+}
+
 // TheHiveTestImage returns the integration-suite image: THEHIVE_TEST_IMAGE
 // overrides the default (how the CI matrix selects 5.5 vs 5.6).
 func TheHiveTestImage() string {
@@ -47,6 +67,11 @@ type HiveTestConfig struct {
 }
 
 // NewHiveTestConfig returns the default HiveTestConfig for the integration suite.
+//
+// MainOrg / AdminOrg are the bootstrap seed orgs only. Per-test scoping no
+// longer flows from here: each test gets its own freshly-created org via
+// testOrgName (see orgs.go), which the client/MCP-creds constructors read
+// directly. The org field here is kept for the one-time boot provisioning.
 func NewHiveTestConfig() *HiveTestConfig {
 	return &HiveTestConfig{
 		ImageName:     TheHiveTestImage(),
@@ -59,6 +84,8 @@ func NewHiveTestConfig() *HiveTestConfig {
 }
 
 // NewMCPTestConfig returns the default in-process MCP server options for tests.
+// TheHiveOrganisation here is a placeholder default; GetMCPTestClient* overrides
+// it with the per-test org from testOrgName (see orgs.go).
 func NewMCPTestConfig() *types.TheHiveMcpDefaultOptions {
 	return &types.TheHiveMcpDefaultOptions{
 		TheHiveURL:            "http://localhost:9000",

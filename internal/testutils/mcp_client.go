@@ -112,12 +112,14 @@ func GetMCPTestClientWithPermissions(
 
 	options := NewMCPTestConfig()
 	initTestLogger(options)
+
+	env := testEnvFor(t)
 	creds := &bootstrap.TheHiveCredentials{
 		URL:          containerURL,
 		APIKey:       options.TheHiveAPIKey,
-		Username:     options.TheHiveUsername,
-		Password:     options.TheHivePassword,
-		Organisation: options.TheHiveOrganisation,
+		Username:     env.username,
+		Password:     env.password,
+		Organisation: env.org,
 	}
 	mcpServer := bootstrap.GetInprocessServer(creds, permissionsConfigPath)
 	bootstrap.RegisterToolsToMCPServer(mcpServer)

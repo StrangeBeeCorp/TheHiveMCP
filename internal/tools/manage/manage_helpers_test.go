@@ -26,7 +26,7 @@ func manageStructured(t *testing.T, c *client.Client, args map[string]any) map[s
 func createCase(t *testing.T, hiveClient *thehive.APIClient, title string) *thehive.OutputCase {
 	t.Helper()
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	testCase := testutils.MockInputCase()
 	testCase.Title = title
 
@@ -59,7 +59,7 @@ func createPageInCase(t *testing.T, hiveClient *thehive.APIClient, caseTitle str
 
 	createdCase := createCase(t, hiveClient, caseTitle)
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	createdPage, _, err := hiveClient.PageAPI.CreateAPageInACase(authContext, createdCase.UnderscoreId).InputCreatePage(page).Execute()
 	require.NoError(t, err)
 	require.NotNil(t, createdPage)
@@ -72,7 +72,7 @@ func createPageInCase(t *testing.T, hiveClient *thehive.APIClient, caseTitle str
 func createAlert(t *testing.T, hiveClient *thehive.APIClient, title, sourceRef string) *thehive.OutputAlert {
 	t.Helper()
 
-	authContext := testutils.GetAuthContext(testutils.NewHiveTestConfig())
+	authContext := testutils.GetAuthContext(t)
 	testAlert := testutils.MockInputAlert()
 	testAlert.Title = title
 	testAlert.SourceRef = sourceRef

@@ -52,6 +52,8 @@ func authWrappers() map[string]invokeThroughAuth {
 }
 
 func TestAuthenticationChecks(t *testing.T) {
+	t.Parallel()
+
 	authError := errors.New("TheHive authentication failed: invalid credentials")
 
 	// buildCtx constructs the per-scenario request context from the scenario's
@@ -102,6 +104,8 @@ func TestAuthenticationChecks(t *testing.T) {
 	for wrapperName, invoke := range authWrappers() {
 		for _, scenario := range scenarios {
 			t.Run(wrapperName+" "+scenario.name, func(t *testing.T) {
+				t.Parallel()
+
 				called, err := invoke(buildCtx(scenario.validated, scenario.authErr))
 
 				assert.Equal(t, scenario.expectCall, called)

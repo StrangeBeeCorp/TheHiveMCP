@@ -5,6 +5,7 @@ package testutils
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -14,7 +15,6 @@ import (
 	"time"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
-	"github.com/stretchr/testify/require"
 )
 
 // TestMITREPatternID is the patternId available in the test TheHive instance after initHiveInstance
@@ -172,20 +172,10 @@ func TeardownContainers(_ context.Context) {
 	// Intentionally empty: docker compose owns teardown; nothing to do here.
 }
 
-// ResetHiveInstance clears all data from the test organisations
-func ResetHiveInstance(t *testing.T, hiveURL string, testConfig *HiveTestConfig) error {
-	t.Helper()
-
-	for _, org := range []string{testConfig.MainOrg, testConfig.AdminOrg} {
-		err := resetOrganisation(t, hiveURL, org)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
+// initHiveInstance runs the one-time boot: MITRE ATT&CK import (global catalog
+// shared by all orgs) plus the default main-org provisioning. It runs inside
+// StartTheHiveContainer's initOnce, so the t that wins the race may not own the
+// failure — it MUST return errors (propagated via errInit), never call t.Fatalf.
 func initHiveInstance(t *testing.T, url string) error {
 	t.Helper()
 
@@ -199,10 +189,12 @@ func initHiveInstance(t *testing.T, url string) error {
 	client, ctx := createClientAndContext(t, adminConfig)
 	testConfig := NewHiveTestConfig()
 
-	ensureTestOrganisation(ctx, t, client, testConfig.MainOrg)
-	setupUserPermissions(ctx, t, client, testConfig.MainOrg)
+	_, err := ensureOrganisation(ctx, client, testConfig.MainOrg)
+	if err != nil {
+		return fmt.Errorf("failed to ensure organisation %q: %w", testConfig.MainOrg, err)
+	}
 
-	err := setupAttackPatterns(ctx, client)
+	err = setupAttackPatterns(ctx, client)
 	if err != nil {
 		return fmt.Errorf("failed to setup ATT&CK patterns: %w", err)
 	}
@@ -246,9 +238,11 @@ func createClientAndContext(t *testing.T, cfg *Config) (*thehive.APIClient, cont
 	return client, context.WithValue(baseCtx, thehive.ContextBasicAuth, auth)
 }
 
-func ensureTestOrganisation(ctx context.Context, t *testing.T, client *thehive.APIClient, orgName string) string {
-	t.Helper()
-
+// ensureOrganisation looks up or creates orgName, retrying transient startup
+// errors. It returns an error rather than calling t.Fatalf so it is safe both on
+// the initOnce boot path (where the caller doesn't own the failing test) and on
+// the per-test path via ensureTestOrganisation.
+func ensureOrganisation(ctx context.Context, client *thehive.APIClient, orgName string) (string, error) {
 	// /api/status returns 200 before schema migration completes, so early org
 	// setup can transiently 5xx (worse when several containers boot in parallel).
 	// Retry those; fail fast on non-retriable errors.
@@ -259,19 +253,201 @@ func ensureTestOrganisation(ctx context.Context, t *testing.T, client *thehive.A
 	for {
 		id, retry, err := tryEnsureTestOrganisation(ctx, client, orgName)
 		if err == nil {
-			return id
+			return id, nil
 		}
 
 		if !retry {
-			t.Fatalf("organisation %q setup failed: %v", orgName, err)
+			return "", fmt.Errorf("organisation %q setup failed: %w", orgName, err)
 		}
 
 		if time.Now().After(deadline) {
-			t.Fatalf("TheHive not ready to create organisation %q within %s: %v", orgName, readinessTimeout, err)
+			return "", fmt.Errorf("TheHive not ready to create organisation %q within %s: %w", orgName, readinessTimeout, err)
 		}
 
 		time.Sleep(3 * time.Second)
 	}
+}
+
+// ensureTestOrganisation is the per-test wrapper around ensureOrganisation. It
+// runs outside initOnce (in provisionTestOrg), so it owns its own t and may
+// fail the test directly.
+func ensureTestOrganisation(ctx context.Context, t *testing.T, client *thehive.APIClient, orgName string) string {
+	t.Helper()
+
+	id, err := ensureOrganisation(ctx, client, orgName)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	return id
+}
+
+// purgeOrgTimeout bounds the delete-until-empty loop in purgeOrg. Two effects
+// make a single delete sweep insufficient: the server's list is capped at a
+// page window (so a heavy test may need several sweeps to drain), and
+// Elasticsearch refreshes its index asynchronously (so a listX right after a
+// delete can still return just-deleted rows). purgeOrg re-lists and re-deletes
+// until a sweep sees nothing, so the next sequential test starts clean.
+const purgeOrgTimeout = 30 * time.Second
+
+// purgeOrg deletes every entity the shared free-mode org accumulated during a
+// test, re-sweeping until a full pass finds nothing left. It runs only in
+// free-license mode (see testEnvFor), where all tests share one org and run
+// sequentially, so a clean slate between tests is what keeps the suite's
+// absolute-count assertions valid.
+//
+// It acts as the test's dedicated user, scoped to the org via the X-Organisation
+// header — the same credentials/scope the test itself used. MITRE ATT&CK
+// patterns are a global catalog shared by all orgs and are never deleted.
+func purgeOrg(t *testing.T, cell *testEnv) {
+	t.Helper()
+
+	cfg := &Config{
+		URL:      hiveURL,
+		Username: cell.username,
+		Password: cell.password,
+		OrgName:  cell.org,
+	}
+	client, ctx := createClientAndContext(t, cfg)
+
+	deadline := time.Now().Add(purgeOrgTimeout)
+
+	for {
+		remaining := purgeSweep(ctx, t, client, cell.org)
+		if remaining == 0 {
+			return
+		}
+
+		if time.Now().After(deadline) {
+			t.Logf("purgeOrg: %q still had %d entities after %s; next test may see leftovers", cell.org, remaining, purgeOrgTimeout)
+			return
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// purgeSweep runs one delete pass over the org's entities and returns how many
+// it saw (before deleting). A return of 0 means the org listed empty — the
+// loop's exit condition. Deletes are best-effort and merely logged on failure:
+// a transient error just leaves rows for the next sweep to retry.
+func purgeSweep(ctx context.Context, t *testing.T, client *thehive.APIClient, orgName string) int {
+	t.Helper()
+
+	seen := 0
+
+	// Delete cases first: DeleteCase cascades a case's tasks, observables, pages,
+	// procedures and comments, so afterwards listPage returns only standalone
+	// org pages.
+	caseIDs := listEntityIDs(ctx, t, client, "listCase")
+	seen += len(caseIDs)
+
+	for _, id := range caseIDs {
+		resp, err := client.CaseAPI.DeleteCase(ctx, id).Execute()
+		closeResponse(resp)
+
+		if err != nil {
+			t.Logf("purgeOrg: delete case %s in %q: %v", id, orgName, err)
+		}
+	}
+
+	if alertIDs := listEntityIDs(ctx, t, client, "listAlert"); len(alertIDs) > 0 {
+		seen += len(alertIDs)
+
+		body := thehive.NewDeleteAlertInBulkRequest(alertIDs)
+		resp, err := client.AlertAPI.DeleteAlertInBulk(ctx).DeleteAlertInBulkRequest(*body).Execute()
+		closeResponse(resp)
+
+		if err != nil {
+			t.Logf("purgeOrg: bulk-delete alerts in %q: %v", orgName, err)
+		}
+	}
+
+	caseTemplateIDs := listEntityIDs(ctx, t, client, "listCaseTemplate")
+	seen += len(caseTemplateIDs)
+
+	for _, id := range caseTemplateIDs {
+		resp, err := client.CaseTemplateAPI.DeleteCaseTemplate(ctx, id).Execute()
+		closeResponse(resp)
+
+		if err != nil {
+			t.Logf("purgeOrg: delete case template %s in %q: %v", id, orgName, err)
+		}
+	}
+
+	pageIDs := listEntityIDs(ctx, t, client, "listPage")
+	seen += len(pageIDs)
+
+	for _, id := range pageIDs {
+		resp, err := client.PageAPI.DeleteAPage(ctx, id).Execute()
+		closeResponse(resp)
+
+		if err != nil {
+			t.Logf("purgeOrg: delete page %s in %q: %v", id, orgName, err)
+		}
+	}
+
+	return seen
+}
+
+// purgeListPageSize bounds the page appended to every purge listing. TheHive's
+// /api/v1/query returns only a capped default window when no `page` operation is
+// present, so a bare listX could miss rows a heavier test created and leave them
+// undeleted. We request an explicit wide page (matching what the production
+// search handler does — see buildPagingOperation) so a single call sees every
+// entity; purgeOrg still loops in case a test somehow exceeds even this.
+const purgeListPageSize = 10000
+
+// listEntityIDs runs a generic list operation (e.g. "listCase") in the current
+// org context and returns the _id of every result, up to purgeListPageSize. It
+// reuses the same QueryAPI generic-op pattern as tryEnsureTestOrganisation, plus
+// an explicit wide `page` op so it is not truncated by the server's default page
+// window. A failed query yields an empty slice (the caller retries), never a
+// fatal error.
+func listEntityIDs(ctx context.Context, t *testing.T, client *thehive.APIClient, operation string) []string {
+	t.Helper()
+
+	genericOp := thehive.NewInputQueryGenericOperation(operation)
+	pageOp := thehive.NewInputQueryPagingOperation(0, purgeListPageSize, "page")
+	query := thehive.NewInputQuery()
+	query.SetQuery([]thehive.InputQueryNamedOperation{
+		thehive.InputQueryGenericOperationAsInputQueryNamedOperation(genericOp),
+		thehive.InputQueryPagingOperationAsInputQueryNamedOperation(pageOp),
+	})
+
+	resp, httpResp, err := client.QueryAndExportAPI.QueryAPI(ctx).InputQuery(*query).Execute()
+	closeResponse(httpResp)
+
+	if err != nil || httpResp == nil || httpResp.StatusCode != http.StatusOK || resp == nil {
+		return nil
+	}
+
+	return extractIDs(resp)
+}
+
+// extractIDs pulls the "_id" of each object from a generic-op query response.
+func extractIDs(resp any) []string {
+	jsonBytes, err := json.Marshal(resp)
+	if err != nil || jsonBytes == nil {
+		return nil
+	}
+
+	var rows []struct {
+		ID string `json:"_id"`
+	}
+	if json.Unmarshal(jsonBytes, &rows) != nil {
+		return nil
+	}
+
+	ids := make([]string, 0, len(rows))
+
+	for _, r := range rows {
+		if r.ID != "" {
+			ids = append(ids, r.ID)
+		}
+	}
+
+	return ids
 }
 
 func findOrganisationID(resp any, orgName string) (string, bool) {
@@ -322,7 +498,7 @@ func tryEnsureTestOrganisation(ctx context.Context, client *thehive.APIClient, o
 		return createResp.GetUnderscoreId(), false, nil
 	}
 
-	if httpResp != nil && (httpResp.StatusCode == http.StatusConflict || httpResp.StatusCode == http.StatusForbidden) {
+	if httpResp != nil && httpResp.StatusCode == http.StatusConflict {
 		// Already exists / created concurrently — good enough for test setup.
 		return orgName, false, nil
 	}
@@ -333,136 +509,17 @@ func tryEnsureTestOrganisation(ctx context.Context, client *thehive.APIClient, o
 	}
 
 	transient := httpResp == nil || status >= 500
+
 	if createErr != nil {
-		return "", transient, fmt.Errorf("create organisation %q (status %d): %w", orgName, status, createErr)
+		body := ""
+
+		var apiErr *thehive.GenericOpenAPIError
+		if errors.As(createErr, &apiErr) {
+			body = string(apiErr.Body())
+		}
+
+		return "", transient, fmt.Errorf("create organisation %q (status %d, body %s): %w", orgName, status, body, createErr)
 	}
 
 	return "", transient, fmt.Errorf("create organisation %q: unexpected status %d", orgName, status)
-}
-
-func setupUserPermissions(ctx context.Context, t *testing.T, client *thehive.APIClient, orgName string) {
-	t.Helper()
-
-	userResp, httpResp, err := client.UserAPI.GetCurrentUserInfo(ctx).Execute()
-	closeResponse(httpResp)
-
-	if err != nil || httpResp.StatusCode != http.StatusOK || userResp == nil {
-		t.Fatalf("Could not get current user info: %v", err)
-	}
-
-	userID := userResp.GetUnderscoreId()
-	orgAssignments := []thehive.InputUserOrganisation{
-		{Organisation: orgName, Profile: "org-admin"},
-		{Organisation: adminOrg, Profile: adminOrg},
-	}
-
-	updateInput := thehive.NewInputSetUserOrganisations()
-	updateInput.SetOrganisations(orgAssignments)
-
-	_, httpResp, err = client.UserAPI.SetUserOrganisations(ctx, userID).
-		InputSetUserOrganisations(*updateInput).Execute()
-	closeResponse(httpResp)
-
-	if err != nil || httpResp.StatusCode != http.StatusOK {
-		t.Fatalf("Failed to set user organisations: %v, status: %d", err, httpResp.StatusCode)
-	}
-}
-
-func resetOrganisation(t *testing.T, hiveURL string, org string) error {
-	t.Helper()
-
-	cfg := &Config{
-		URL:      hiveURL,
-		Username: DefaultAdminUser,
-		Password: testAdminPassword,
-		OrgName:  org,
-	}
-
-	client, ctx := createClientAndContext(t, cfg)
-
-	entityTypes := []struct {
-		name      string
-		operation string
-		deleteAPI func(context.Context, *thehive.APIClient, string) (*http.Response, error)
-	}{
-		{"alerts", "listAlert", func(ctx context.Context, c *thehive.APIClient, id string) (*http.Response, error) {
-			return c.AlertAPI.DeleteAlert(ctx, id).Execute()
-		}},
-		{"cases", "listCase", func(ctx context.Context, c *thehive.APIClient, id string) (*http.Response, error) {
-			return c.CaseAPI.DeleteCase(ctx, id).Execute()
-		}},
-		{"case templates", "listCaseTemplate", func(ctx context.Context, c *thehive.APIClient, id string) (*http.Response, error) {
-			return c.CaseTemplateAPI.DeleteCaseTemplate(ctx, id).Execute()
-		}},
-		{"tasks", "listTask", func(ctx context.Context, c *thehive.APIClient, id string) (*http.Response, error) {
-			return c.TaskAPI.DeleteTask(ctx, id).Execute()
-		}},
-	}
-
-	for _, entity := range entityTypes {
-		err := deleteAllEntities(ctx, t, client, entity.name, entity.operation, entity.deleteAPI)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func deleteAllEntities(
-	ctx context.Context,
-	t *testing.T,
-	client *thehive.APIClient,
-	entityName string,
-	listOperation string,
-	deleteFunc func(context.Context, *thehive.APIClient, string) (*http.Response, error),
-) error {
-	t.Helper()
-
-	query := thehive.InputQuery{
-		Query: []thehive.InputQueryNamedOperation{
-			thehive.InputQueryGenericOperationAsInputQueryNamedOperation(
-				thehive.NewInputQueryGenericOperation(listOperation),
-			),
-		},
-	}
-
-	resp, httpResp, err := client.QueryAndExportAPI.QueryAPI(ctx).InputQuery(query).Execute()
-	closeResponse(httpResp)
-
-	if err != nil {
-		return fmt.Errorf("error listing %s: %w", entityName, err)
-	}
-
-	respBytes, err := json.Marshal(resp)
-	require.NoError(t, err)
-
-	var entities []map[string]any
-
-	err = json.Unmarshal(respBytes, &entities)
-	if err != nil {
-		return fmt.Errorf("error parsing %s: %w", entityName, err)
-	}
-
-	// Tolerate 404: the entity is already gone (e.g. a parent case cascade-deleted
-	// its tasks), which is the desired end state. Aborting would leak the rest.
-	for _, entity := range entities {
-		id, ok := entity["_id"].(string)
-		if !ok {
-			continue
-		}
-
-		resp, err := deleteFunc(ctx, client, id)
-		closeResponse(resp)
-
-		if err != nil {
-			if resp != nil && resp.StatusCode == http.StatusNotFound {
-				continue
-			}
-
-			return fmt.Errorf("error deleting %s %s: %w", entityName, id, err)
-		}
-	}
-
-	return nil
 }
