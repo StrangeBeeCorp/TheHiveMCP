@@ -169,6 +169,11 @@ jobs:
     permissions:
       contents: read
       packages: read
+    # GO_CACHE_DIR makes the Makefile bind these host dirs into the go-test
+    # container as the runner uid (see the Makefile note), so the cache below is
+    # actually mounted AND is runner-owned for actions/cache to save.
+    env:
+      GO_CACHE_DIR: /home/runner/.cache/thehivemcp-go
     # Run the integration suite against every supported TheHive version, so a
     # compatibility break against any of them turns the PR red instead of going
     # unnoticed (see DL-6007). `make test-integration` brings up the docker-compose
@@ -189,17 +194,20 @@ jobs:
       # Persist the Go caches the test container uses (module cache, build cache,
       # and the go-installed gotestsum) across runs. Without this each fresh runner
       # re-downloads every module, recompiles the whole test binary, and rebuilds
-      # gotestsum — ~2min per job. GO_CACHE_DIR (below) makes the Makefile bind these
-      # host dirs into the container as the runner uid, so actions/cache can save
-      # them. Keyed on go.sum so a dependency change busts it; the two matrix legs
-      # share one key (same deps) and the first to finish saves it.
+      # gotestsum — ~2min per job. Keyed on go.sum so a dependency change busts it;
+      # the two matrix legs share one key (same deps) and the first to finish saves
+      # it. Separate key prefix from the checks job: this cache also holds gotestsum
+      # and test-compiled objects that job doesn't need.
       - name: Cache Go caches (integration)
         uses: actions/cache@v4
         with:
-          path: ~/.cache/thehivemcp-go
+          path: ${{ env.GO_CACHE_DIR }}
           key: go-int-${{ runner.os }}-${{ hashFiles('go.sum') }}
           restore-keys: |
             go-int-${{ runner.os }}-
+
+      - name: Prepare cache dirs
+        run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools
 
       # Parallel mode needs a license token (see scripts/reset-integration-db.sh).
       # The primary path is the THEHIVE_TEST_LICENSE secret passed to the run step
@@ -218,9 +226,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run integration tests
-        run: |
-          mkdir -p ~/.cache/thehivemcp-go/gomod ~/.cache/thehivemcp-go/gobuild ~/.cache/thehivemcp-go/go-tools
-          make test-integration GO_CACHE_DIR="$HOME/.cache/thehivemcp-go"
+        run: make test-integration
         env:
           THEHIVE_TEST_IMAGE: ${{ matrix.thehive-image }}
           # A pre-minted multi-instance dev license. When set, the suite runs
