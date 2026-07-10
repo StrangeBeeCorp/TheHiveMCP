@@ -179,13 +179,18 @@ export THEHIVE_TEST_URL
 # from it) and the go-test container; export it so both sub-shells see it.
 export THEHIVE_TEST_IMAGE
 
-# Integration mode is NOT chosen by a committed/configured secret. It is decided
-# at run time by scripts/reset-integration-db.sh purely on whether the StrangeBee
-# licensing image is pullable (see that script + the recipe below): pullable ⇒
-# mint a dev license ⇒ parallel one-org-per-test; not pullable ⇒ free license ⇒
-# sequential shared-org. The script materialises the minted token to this file,
-# which the recipe reads to set THEHIVE_TEST_LICENSE and the go-test parallelism
-# for the go-test container.
+# Integration mode is decided at run time by scripts/reset-integration-db.sh,
+# highest-priority first (see that script + the recipe below):
+#   1. THEHIVE_TEST_LICENSE set ⇒ use that token directly (no probe, no mint) ⇒
+#      parallel one-org-per-test. Supply it as a CI secret or a local export to
+#      get parallel mode without needing the licensing image to be pullable.
+#   2. else the StrangeBee licensing image is pullable ⇒ mint a dev license ⇒
+#      parallel one-org-per-test.
+#   3. else free license ⇒ sequential shared-org.
+# In cases 1-2 the script materialises the token to this file, which the recipe
+# reads to set THEHIVE_TEST_LICENSE and the go-test parallelism for the go-test
+# container. Export it so the reset script (a separate sub-shell) sees case 1.
+export THEHIVE_TEST_LICENSE
 LICENSE_FILE := internal/testutils/testdata/.test-license.lic.local
 
 .PHONY: test
@@ -219,10 +224,11 @@ test-integration: pre ## Run the full test suite against the docker-compose test
 	# suite against it on the host network. The stack is deliberately LEFT UP for
 	# fast reruns; `make test-integration-down` tears it down.
 	#
-	# The reset script decides the mode by whether the licensing image is
-	# pullable, and writes the minted token (or nothing) to LICENSE_FILE. We read
-	# that file here to configure the go-test container:
-	#   - Non-empty (license minted) ⇒ export THEHIVE_TEST_LICENSE so the Go suite
+	# The reset script decides the mode (presupplied THEHIVE_TEST_LICENSE, else
+	# pullable image ⇒ mint, else free — see the LICENSE_FILE note above) and
+	# writes the token (or nothing) to LICENSE_FILE. We read that file here to
+	# configure the go-test container:
+	#   - Non-empty (token present) ⇒ export THEHIVE_TEST_LICENSE so the Go suite
 	#     runs per-test org + user via t.Parallel (testutils.Parallel), packages
 	#     concurrent (no -p 1).
 	#   - Empty/absent (free license) ⇒ one shared org, testutils.Parallel no-ops
@@ -237,7 +243,7 @@ test-integration: pre ## Run the full test suite against the docker-compose test
 	# free-license path is the slowest run, so it needs this headroom most.
 	./scripts/reset-integration-db.sh docker-compose.test.yml
 	@if [ -s "$(LICENSE_FILE)" ]; then \
-		echo "License minted → parallel multi-org mode."; \
+		echo "License present → parallel multi-org mode."; \
 		LIC="$$(cat "$(LICENSE_FILE)")"; PARALLELISM=""; \
 	else \
 		echo "No license → sequential shared-org mode."; \

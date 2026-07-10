@@ -16,17 +16,19 @@
 # suite's count assertions (require.Len / require.Equal on row counts).
 #
 # Mode selection (see internal/testutils/orgs.go for the matching Go-side
-# branch). The single gate is whether the StrangeBee licensing image is
-# PULLABLE:
-#   - Pullable (private-repo CI / an authenticated dev): boot TheHive in --dev
-#     mode, MINT a multi-instance dev license on the fly, activate it, and
-#     write it to the gitignored .test-license.lic.local that the license
-#     override mounts. The suite then runs parallel with one org per test
-#     (unlimited-org quota). No secret is committed or configured anywhere —
-#     the token is minted per run.
-#   - Not pullable (public mirror / external contributors): the base file alone
-#     boots TheHive on its built-in free license (1 org); the suite runs
-#     sequentially against one shared org.
+# branch), highest-priority first:
+#   1. THEHIVE_TEST_LICENSE set (CI secret / local export): use that token
+#      directly — no image probe, no minting. Write it to the gitignored
+#      .test-license.lic.local that the license override mounts and boot TheHive
+#      licensed. This is how CI gets parallel mode when the licensing image is
+#      not pullable by the repo's token (the common case).
+#   2. Licensing image PULLABLE (an authenticated dev): boot TheHive in --dev
+#      mode, MINT a multi-instance dev license on the fly, activate it, and
+#      write it to the same file. No secret is configured anywhere — the token
+#      is minted per run.
+#   3. Neither (public mirror / external contributors): the base file alone
+#      boots TheHive on its built-in free license (1 org); the suite runs
+#      sequentially against one shared org.
 # The Makefile reads .test-license.lic.local after this script returns: a
 # non-empty file ⇒ license (parallel) mode, absent/empty ⇒ free (sequential).
 #
@@ -76,22 +78,37 @@ pick_licensing_image() {
 	return 0
 }
 
-LICENSING_IMAGE="$(pick_licensing_image)"
+# A ready-made license token supplied out of band (CI secret, local dev). When
+# set it takes precedence over everything below: we skip the image probe and the
+# minting round-trip entirely and use this token directly. Empty/unset ⇒ the
+# probe-and-mint path (see pick_licensing_image + the minting block below).
+PRESUPPLIED_LICENSE="${THEHIVE_TEST_LICENSE:-}"
 
-# Start from a clean license file every run: whether we mint below or not, a
-# stale token from a previous run must never leak into a free-mode run.
+# Start from a clean license file every run: whether we mint, reuse a supplied
+# token, or run free, a stale token from a previous run must never leak in.
 rm -f "${LICENSE_FILE}"
 
-if [[ -n "${LICENSING_IMAGE}" ]]; then
-	echo "Licensing image ${LICENSING_IMAGE} is pullable → license (parallel) mode."
-	# The override mounts LICENSE_FILE; create an empty placeholder so the mount
-	# source exists and TheHive boots in --dev mode (unlicensed-but-dev) for the
-	# minting challenge below.
-	: >"${LICENSE_FILE}"
+if [[ -n "${PRESUPPLIED_LICENSE}" ]]; then
+	echo "THEHIVE_TEST_LICENSE is set → license (parallel) mode; skipping mint."
+	# TheHive reads the token from the mounted LICENSE_FILE at boot (license
+	# override → license.filePath), so writing it now and booting with the
+	# override is all that's needed — no minting challenge, no activation call.
+	printf '%s' "${PRESUPPLIED_LICENSE}" >"${LICENSE_FILE}"
+	LICENSING_IMAGE=""
 	DC="docker compose -f ${COMPOSE_FILE} -f docker-compose.license.yml"
 else
-	echo "Licensing image not pullable → free (sequential) mode."
-	DC="docker compose -f ${COMPOSE_FILE}"
+	LICENSING_IMAGE="$(pick_licensing_image)"
+	if [[ -n "${LICENSING_IMAGE}" ]]; then
+		echo "Licensing image ${LICENSING_IMAGE} is pullable → license (parallel) mode."
+		# The override mounts LICENSE_FILE; create an empty placeholder so the mount
+		# source exists and TheHive boots in --dev mode (unlicensed-but-dev) for the
+		# minting challenge below.
+		: >"${LICENSE_FILE}"
+		DC="docker compose -f ${COMPOSE_FILE} -f docker-compose.license.yml"
+	else
+		echo "Licensing image not pullable → free (sequential) mode."
+		DC="docker compose -f ${COMPOSE_FILE}"
+	fi
 fi
 
 # Tear the stack down if we fail before handing off to the test run. Cleared on
@@ -108,11 +125,13 @@ trap cleanup EXIT INT TERM
 # blocks until Cassandra is healthy (compose `depends_on: service_healthy`).
 ${DC} up -d
 
-# Mint the license against the freshly-booted --dev server. The token is
-# multi-instance, so it survives the keyspace DROP + restart below (which gives
-# the DB a new instance id). We also write it to LICENSE_FILE so a restart
-# re-activates it from disk, and so the Makefile can pass it to the go-test
-# container to select parallel mode.
+# Mint the license against the freshly-booted --dev server (only on the
+# probe-and-mint path; a presupplied THEHIVE_TEST_LICENSE clears LICENSING_IMAGE
+# and is already on disk, so this block is skipped). The token is multi-instance,
+# so it survives the keyspace DROP + restart below (which gives the DB a new
+# instance id). We also write it to LICENSE_FILE so a restart re-activates it from
+# disk, and so the Makefile can pass it to the go-test container to select
+# parallel mode.
 if [[ -n "${LICENSING_IMAGE}" ]]; then
 	echo "Waiting for TheHive to accept the licensing challenge…"
 	for _ in $(seq 1 72); do

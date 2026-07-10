@@ -151,9 +151,15 @@ jobs:
 
   integration-tests:
     runs-on: ubuntu-latest
-    # `packages: read` lets the ghcr login below pull the StrangeBee licensing
-    # image on the private repo (whose GITHUB_TOKEN can read the org's internal
-    # packages). On a public mirror the token cannot, so the pull fails.
+    # `packages: read` scopes the GITHUB_TOKEN used by the ghcr login below.
+    # NOTE: GITHUB_TOKEN is scoped to THIS repo, not the whole org — it can only
+    # read the `strangebee/tools/licensing` image if that package explicitly
+    # grants StrangeBee/TheHiveMCP read access (ghcr → package → Package settings
+    # → Manage Actions access). Without that grant the probe gets `denied` (login
+    # still succeeds), so the suite falls back to the sequential free-license path
+    # — which is also the public-mirror behavior. To run parallel here, either add
+    # that package grant or swap the login below to an org-scoped read:packages
+    # token. See scripts/reset-integration-db.sh (pick_licensing_image) for the gate.
     permissions:
       contents: read
       packages: read
@@ -174,12 +180,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The suite's mode is gated on whether the StrangeBee licensing image is
-      # pullable (see scripts/reset-integration-db.sh). Authenticate to ghcr so
-      # the private repo CAN pull it (⇒ mint a dev license ⇒ parallel multi-org).
-      # `continue-on-error` keeps the PUBLIC mirror green: there the login/pull
-      # simply fails and the suite falls back to the sequential free-license path
-      # — no secret is ever required in either environment.
+      # Parallel mode needs a license token (see scripts/reset-integration-db.sh).
+      # The primary path is the THEHIVE_TEST_LICENSE secret passed to the run step
+      # below — used directly, no image pull or mint. This ghcr login is now only a
+      # best-effort fallback for the mint path (an authenticated dev running CI
+      # without the secret); on the public mirror it simply fails and the suite
+      # falls back to sequential free mode. NOTE: the repo GITHUB_TOKEN is often
+      # `denied` on the licensing package (see the `permissions` note above), which
+      # is exactly why the secret is the primary path.
       - name: Log in to ghcr.io (best-effort)
         continue-on-error: true
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
@@ -192,6 +200,10 @@ jobs:
         run: make test-integration
         env:
           THEHIVE_TEST_IMAGE: ${{ matrix.thehive-image }}
+          # A pre-minted multi-instance dev license. When set, the suite runs
+          # parallel one-org-per-test without needing the licensing image pullable.
+          # Empty on the public mirror (secret absent) ⇒ sequential free mode.
+          THEHIVE_TEST_LICENSE: ${{ secrets.THEHIVE_TEST_LICENSE }}
 
       - name: Tear down integration test stack
         if: always()
