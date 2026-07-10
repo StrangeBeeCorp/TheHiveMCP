@@ -64,10 +64,10 @@ Use `claude mcp add`. It writes a syntactically valid entry for you, so you neve
 claude mcp add thehive \
   --scope project \
   -- docker run -i --rm \
-       -e THEHIVE_URL=https://your-thehive-instance.com \
-       -e THEHIVE_API_KEY=your-api-key \
-       -e THEHIVE_ORGANISATION=your-org \
-       -e PERMISSIONS_CONFIG=read_only \
+       -e 'THEHIVE_URL=${THEHIVE_URL}' \
+       -e 'THEHIVE_API_KEY=${THEHIVE_API_KEY}' \
+       -e 'THEHIVE_ORGANISATION=${THEHIVE_ORGANISATION}' \
+       -e 'PERMISSIONS_CONFIG=${PERMISSIONS_CONFIG:-read_only}' \
        ghcr.io/strangebeecorp/thehivemcp/thehivemcp:latest /app/server --transport stdio
 ```
 
@@ -76,6 +76,11 @@ Everything after `--` is the command Claude Code runs to launch the server. Note
 - The `-e VAR=value` pairs **after `docker run`** are Docker environment flags — they inject the variables **into the container**, where the server reads them.
 - Do **not** use `claude mcp add`'s own `-e` flag here. That would set the variable in the host process that launches `docker`, not inside the container, so the
   server would never see it.
+
+The `${VAR}` references are wrapped in **single quotes** on purpose: that stops your shell from expanding them at `add` time, so the literal `${VAR}` string is
+written into `.mcp.json`. Claude Code then expands it from your environment each time it launches the server (`${VAR:-default}` supplies a fallback). The result
+is a `.mcp.json` you can safely commit — export `THEHIVE_URL`, `THEHIVE_API_KEY`, and `THEHIVE_ORGANISATION` in your shell before launching `claude`. To bake
+the literal values into the file instead, drop the single quotes and write them directly — but then don't commit the file.
 
 ### Choosing a scope
 
@@ -106,13 +111,13 @@ Create `.mcp.json` in your project directory:
         "-i",
         "--rm",
         "-e",
-        "THEHIVE_URL=https://your-thehive-instance.com",
+        "THEHIVE_URL=${THEHIVE_URL}",
         "-e",
-        "THEHIVE_API_KEY=your-api-key",
+        "THEHIVE_API_KEY=${THEHIVE_API_KEY}",
         "-e",
-        "THEHIVE_ORGANISATION=your-org",
+        "THEHIVE_ORGANISATION=${THEHIVE_ORGANISATION}",
         "-e",
-        "PERMISSIONS_CONFIG=read_only",
+        "PERMISSIONS_CONFIG=${PERMISSIONS_CONFIG:-read_only}",
         "ghcr.io/strangebeecorp/thehivemcp/thehivemcp:latest",
         "/app/server",
         "--transport",
@@ -123,8 +128,19 @@ Create `.mcp.json` in your project directory:
 }
 ```
 
-> **Do not use shell variables in these values.** JSON does not expand `$VAR` — the literal string `$THEHIVE_API_KEY` is passed through, not the value of the
-> variable. Write the credentials directly.
+> **Keep secrets out of the file — use `${VAR}` references.** Claude Code expands environment variables in `.mcp.json` before launching the server: `${VAR}`
+> takes the value from your shell environment, and `${VAR:-default}` falls back to `default` when the variable is unset. Expansion works in `command`, `args`,
+> `env`, and (for HTTP servers) `url` and `headers`, in every scope. This lets you commit `.mcp.json` while keeping your API key in your environment instead of
+> in git. Export the variables before launching `claude` (e.g. in your shell profile or a local `.env` you source):
+>
+> ```bash
+> export THEHIVE_URL="https://your-thehive-instance.com"
+> export THEHIVE_API_KEY="your-api-key"
+> export THEHIVE_ORGANISATION="your-org"
+> ```
+>
+> If a referenced variable is unset and has no default, Claude Code fails to parse the config. You can still write the values inline instead — but then never
+> commit the file.
 
 </details>
 
@@ -191,15 +207,16 @@ chmod +x /path/to/thehivemcp-darwin-arm64
 ```bash
 claude mcp add thehive \
   --scope project \
-  -e THEHIVE_URL=https://your-thehive-instance.com \
-  -e THEHIVE_API_KEY=your-api-key \
-  -e THEHIVE_ORGANISATION=your-org \
-  -e PERMISSIONS_CONFIG=read_only \
+  -e 'THEHIVE_URL=${THEHIVE_URL}' \
+  -e 'THEHIVE_API_KEY=${THEHIVE_API_KEY}' \
+  -e 'THEHIVE_ORGANISATION=${THEHIVE_ORGANISATION}' \
+  -e 'PERMISSIONS_CONFIG=${PERMISSIONS_CONFIG:-read_only}' \
   -- /path/to/thehivemcp --transport stdio
 ```
 
-Here the `-e` flags belong to `claude mcp add` (there's no container), and they're written into the server's `env` block. Use the **absolute** path to the
-binary.
+Here the `-e` flags belong to `claude mcp add` (there's no container), and they're written into the server's `env` block. As in Step 2, the single-quoted
+`${VAR}` references land literally in `.mcp.json` and are expanded from your environment at launch — export the variables in your shell first, and the file
+stays safe to commit. Use the **absolute** path to the binary.
 
 ---
 
