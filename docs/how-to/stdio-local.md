@@ -1,4 +1,4 @@
-# stdio example - local MCP host integration
+# stdio Example - Local MCP Host Integration
 
 This example shows how to run TheHiveMCP in stdio mode for integration with local MCP hosts like GitHub Copilot and Claude Desktop.
 
@@ -12,7 +12,7 @@ This example shows how to run TheHiveMCP in stdio mode for integration with loca
 
 ### 1. Download binary
 
-Pick the artifact matching your OS and architecture from the [releases page](https://github.com/StrangeBeeCorp/TheHiveMCP/releases) — binaries are published for
+Pick the artifact matching your OS and architecture from the [releases page](https://github.com/StrangeBeeCorp/TheHiveMCP/releases)—binaries are published for
 `darwin-amd64`, `darwin-arm64`, `linux-amd64`, `linux-arm64`, `windows-amd64`, and `windows-arm64`. For example, on Apple Silicon macOS:
 
 ```bash
@@ -21,10 +21,10 @@ chmod +x thehivemcp
 ```
 
 > **macOS:** the binaries are unsigned, so Gatekeeper blocks GUI hosts (VS Code, Claude Desktop) with _"Apple could not verify … is free of malware"_. Clear the
-> quarantine attribute once after downloading: `xattr -d com.apple.quarantine ./thehivemcp`. Running from a terminal works without this; GUI hosts do not. To
-> skip unsigned binaries entirely, use the Docker path — see [How to set up Claude Code](setup-claude-code.md).
+> quarantine attribute once after downloading: `xattr -d com.apple.quarantine ./thehivemcp`. Running from a terminal works without this. GUI hosts don't. To
+> skip unsigned binaries entirely, use the Docker path—see [How to set up Claude Code](setup-claude-code.md).
 >
-> **Windows:** download the matching `windows-*.exe`. The current Windows binaries are unsigned — expect a SmartScreen prompt, and see
+> **Windows:** download the matching `windows-*.exe`. The current Windows binaries are unsigned—expect a SmartScreen prompt, and see
 > [How to run on Windows from source](run-on-windows-from-source.md) if a signed-only policy blocks it.
 
 ### 2. Configure environment
@@ -70,7 +70,7 @@ Add to your MCP settings:
 Claude Desktop uses the same stdio `command`/`args`/`env` shape. Add the block above to your `claude_desktop_config.json` under `mcpServers`, then restart
 Claude Desktop.
 
-For a one-click alternative, install the `.mcpb` bundle instead of wiring stdio by hand — it registers the server and prompts for your TheHive connection
+For a one-click alternative, install the `.mcpb` bundle instead of wiring stdio by hand—it registers the server and prompts for your TheHive connection
 settings. See the [Claude Desktop MCPB path in the README](../../README.md#get-started).
 
 ## What to expect

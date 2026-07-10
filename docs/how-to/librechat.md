@@ -1,4 +1,4 @@
-# LibreChat example - simple integration
+# LibreChat Example - Simple Integration
 
 This example shows how to run TheHiveMCP with **LibreChat** using Anthropic models for AI-powered TheHive operations.
 

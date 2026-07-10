@@ -19,7 +19,7 @@ you to manipulate entities programmatically while respecting TheHive's data inte
 | `target-id`   | string | Conditional | Target entity ID (required for merge operations on alerts/observables)                               |
 
 Entity IDs in `entity-ids` and `target-id` are TheHive internal identifiers in `~`-prefixed numeric form (for example, `~123`) — the same `_id` returned by
-[`search-entities`](search-entities.md). A case's human-readable `number` (for example, "case #42") is not an entity ID; resolve it to an `_id` with a search
+[`search-entities`](search-entities.md). A case's human-readable `number` (for example, "case #42") is not an entity ID. Resolve it to an `_id` with a search
 first.
 
 ## Operations
@@ -403,7 +403,7 @@ Merges similar observables within a case (deduplication). This finds and merges 
 
 ### Apply-template operations
 
-Apply a case template to one or more existing cases. `target-id` is the case template name or ID; `entity-ids` are the cases to apply it to.
+Apply a case template to one or more existing cases. `target-id` is the case template name or ID. `entity-ids` are the cases to apply it to.
 
 ```json
 {
@@ -547,7 +547,7 @@ An operation accepts multiple `entity-ids` and applies to each:
   fails.
 - **Permissions.** Every operation is subject to the deployment's permission profile (tool allow/deny, `entity_permissions`, and scope filters). An entity
   outside a configured filter is reported as "not found or not within the scope" and nothing is mutated. See the [permissions reference](../permissions.md).
-- **Confirmation.** Create, update, and delete operations trigger an MCP elicitation prompt on clients that support it; when the prompt cannot be completed, the
+- **Confirmation.** Create, update, and delete operations trigger an MCP elicitation prompt on clients that support it. When the prompt cannot be completed, the
   operation fails closed rather than running unconfirmed.
 - **Auditing.** All operations are logged by TheHive.
 

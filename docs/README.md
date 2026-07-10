@@ -1,8 +1,8 @@
-# TheHiveMCP documentation
+# TheHiveMCP Documentation
 
 TheHiveMCP is a Model Context Protocol server that lets an AI assistant operate [TheHive](https://strangebee.com/thehive/) — searching cases and alerts,
 managing entities, and running Cortex automation — through natural language. For the project overview, install paths, and configuration reference, start at the
-[main README](../README.md). This directory holds the deeper documentation, organised by what you are trying to do.
+[main README](../README.md). This directory holds the deeper documentation, organized by what you are trying to do.
 
 ## Tutorial
 
@@ -39,5 +39,5 @@ Information-oriented, neutral description of the tools and their contracts. Look
 
 Understanding-oriented discussion of the reasoning behind the project.
 
-- **[ADR-0001 — Accuracy and security testing policy](explanation/adr/0001-security-and-accuracy-testing-policy.md)** — what we test, how, and why.
+- **[ADR-0001 — Accuracy and security testing policy](explanation/adr/0001-security-and-accuracy-testing-policy.md)** — what's tested, how, and why.
 - **[Evaluation evidence](evaluation/README.md)** — published per-model accuracy and prompt-injection resilience results, per server version.

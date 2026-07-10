@@ -10,8 +10,8 @@ directly to TheHive, so searches are precise and deterministic.
 
 To build a filter you need to know the available fields and the operator grammar:
 
-- **Fields and types** are entity-specific — read `hive://schema/<entity-type>` (e.g. `hive://schema/alert`) before filtering.
-- **Operator grammar** — see the [Filter DSL](#filter-dsl) below, the full JSON schema at `hive://schema/filter`, the filtering rules at
+- **Fields and types** are entity-specific—read `hive://schema/<entity-type>` (for example, `hive://schema/alert`) before filtering.
+- **Operator grammar**—see the [Filter DSL](#filter-dsl) below, the full JSON schema at `hive://schema/filter`, the filtering rules at
   `hive://rule/filtering`, and the worked-example cheatsheet at `hive://docs/overview/filter-dsl`.
 
 ## Parameters
@@ -43,7 +43,7 @@ A filter is a JSON object with exactly **one operator at its root**. Nest `_and`
 | `_like`                     | `{"_like": {"_field": F, "_value": "*term*"}}`      | wildcard match, case-insensitive (`*` wildcards, **not** `%`)     |
 | `_startsWith` / `_endsWith` | `{"_startsWith": {"_field": F, "_value": V}}`       | prefix / suffix match                                             |
 | `_match`                    | `{"_match": {"_field": F, "_value": V}}`            | full-text match: value matches a token of the analyzed text field |
-| `_contains`                 | `{"_contains": "fieldName"}`                        | the entity has that field set (presence test; bare field name)    |
+| `_contains`                 | `{"_contains": "fieldName"}`                        | the entity has that field set (presence test on a bare field name) |
 | `_id`                       | `{"_id": "~354"}`                                   | match by internal id                                              |
 | `_any`                      | `{"_any": {}}`                                      | match everything                                                  |
 | `_and`                      | `{"_and": [filter, filter, ...]}`                   | all must hold                                                     |
@@ -52,10 +52,11 @@ A filter is a JSON object with exactly **one operator at its root**. Nest `_and`
 
 ### Fields, values and dates
 
-- Field names and types are **entity-specific**. Read `hive://schema/<entity-type>` for exact fields before filtering. Never filter on a field that does not
+- Field names and types are **entity-specific**. Read `hive://schema/<entity-type>` for exact fields before filtering. Never filter on a field that doesn't
   exist.
-- **Severity** is numeric. TheHive's default scale is `1=Low, 2=Medium, 3=High, 4=Critical` (configurable per org; `severityLabel` holds the label).
-- **Cases** also have a human-readable `number` field (e.g. 42) distinct from the internal `_id` (`~<number>`). "case #42" → filter on `number`, not `_id`.
+- **Severity** is numeric. TheHive's default scale is `1=Low, 2=Medium, 3=High, 4=Critical`, configurable per org. `severityLabel` holds the label.
+- **Cases** also have a human-readable `number` field (for example, 42) distinct from the internal `_id` (`~<number>`). "case #42" → filter on `number`, not
+  `_id`.
 - **Dates**: use ISO strings like `"2024-08-01T00:00:00"`. For relative ranges ("last week"), read `hive://config/server-time` and compute the bound yourself.
 
 ## Examples
@@ -97,7 +98,7 @@ A filter is a JSON object with exactly **one operator at its root**. Nest `_and`
 }
 ```
 
-> Observables have no `title` field — they use `data`, `dataType`, `message`, `tags`. Always check `hive://schema/observable` for valid fields.
+> Observables have no `title` field—they use `data`, `dataType`, `message`, `tags`. Always check `hive://schema/observable` for valid fields.
 
 ### Latest N of an entity (no filter)
 
@@ -112,7 +113,7 @@ A filter is a JSON object with exactly **one operator at its root**. Nest `_and`
 
 ### Alerts
 
-Search for security alerts with filters on type, source, severity, tags, creation/update dates, status and assignee.
+Search for security alerts with filters on type, source, severity, tags, creation/update dates, status, and assignee.
 
 ### Cases
 
@@ -120,7 +121,7 @@ Search for investigation cases with filters on title, description, severity, sta
 
 ### Tasks
 
-Search for case tasks with filters on title, description, status, assignee, group, due dates and completion.
+Search for case tasks with filters on title, description, status, assignee, group, due dates, and completion.
 
 ### Observables
 
@@ -128,7 +129,7 @@ Search for artifacts and IOCs with filters on data type, value, tags, analysis r
 
 ### Procedures
 
-Search for TTP entries (MITRE ATT&CK mappings) attached to cases or alerts with filters on pattern ID, pattern name, tactic, occurrence date and description.
+Search for TTP entries (MITRE ATT&CK mappings) attached to cases or alerts with filters on pattern ID, pattern name, tactic, occurrence date, and description.
 
 ### Patterns
 
@@ -215,9 +216,9 @@ Enrich results with related information:
 - **`rawFilters` echo.** The applied filter is echoed back in every response. When results are unexpected, inspect `rawFilters` to see exactly what was sent to
   TheHive.
 - **Field discovery.** Valid fields and types per entity are defined in `hive://schema/<entity-type>` (output schema). The `/create` and `/update` variants
-  describe the fields [`manage-entities`](manage-entities.md) accepts. Filtering on a field an entity type does not have fails.
+  describe the fields [`manage-entities`](manage-entities.md) accepts. Filtering on a field an entity type doesn't have fails.
 - **Grammar reference.** The full operator grammar is at `hive://schema/filter` and the worked-example cheatsheet at `hive://docs/overview/filter-dsl`.
-- **Related tools.** Discover fields and automation options with [`get-resource`](get-resource.md); act on results with [`manage-entities`](manage-entities.md)
+- **Related tools.** Discover fields and automation options with [`get-resource`](get-resource.md). Act on results with [`manage-entities`](manage-entities.md)
   and [`execute-automation`](execute-automation.md).
 
 For a task-oriented walkthrough of running a search end to end, see the [first-investigation tutorial](../../tutorial/first-investigation.md).

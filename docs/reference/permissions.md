@@ -93,11 +93,11 @@ Uses TheHive's native filter syntax where the operator (for example, `_gte`, `_l
 
 Filters are always evaluated by TheHive itself, using its native query language — the MCP server never reimplements filtering. For tools that act on a raw
 entity ID, the server issues a _scoped existence check_ before doing anything: it asks TheHive for that specific entity with the configured filter appended as a
-`filter` stage (e.g. `getCase {id} → filter {tlp ≤ 2}`). If TheHive returns the entity, it is in scope; if it returns nothing (filtered out, deleted, or not
+`filter` stage (for example, `getCase {id} → filter {tlp ≤ 2}`). If TheHive returns the entity, it is in scope. If it returns nothing (filtered out, deleted, or not
 visible to the caller's API key), the operation is denied. This reuses the exact same filter the deployment configures for search.
 
 - `search-entities`: the filter is AND-merged directly into the search query, so results are scoped server-side. The same applies to additional-query expansion
-  (fetching a case's tasks, observables, comments, etc.): the parent entity is scope-checked before its children are fetched.
+  (fetching a case's tasks, observables, comments, and other related data): the parent entity is scope-checked before its children are fetched.
 - `manage-entities`: before any by-ID operation (update, delete, comment, promote, merge, apply-template, or creating a child entity inside a case/alert), every
   referenced entity is scope-checked. An entity outside the filter is reported as "not found or not within the scope" and nothing is mutated.
 - `execute-automation`: the filter applies to the **entity the automation acts on**, not to the analyzer or responder. Before running, the target is
@@ -113,7 +113,7 @@ constrain reach.
 - _Creating top-level entities_ (alerts, cases, case templates, standalone pages) is not constrained by filters: filters scope reach to existing entities, and a
   brand-new top-level entity reaches none. An agent can therefore create an entity that its own filter then hides from it. Use `entity_permissions` to deny
   `create` if needed.
-- _Case template targets of `apply-template`_ are org-level configuration, not row-scoped data; the template itself is not checked against the filter. The cases
+- _Case template targets of `apply-template`_ are org-level configuration, not row-scoped data. The template itself is not checked against the filter. The cases
   the template is applied to **are** checked.
 - _Filter fields must exist on the entity types the tool touches._ If a filter references a field that an entity type does not have (for example a `tlp` filter
   checked against a procedure), the scope query fails and the operation is **denied** (fail closed), not silently allowed.
@@ -408,7 +408,7 @@ Alternatively, users can specify a permissions path when configuring the MCPB in
   an entity (see "Tool filters" above for the exact guarantees and limitations)
 - **Untrusted-data wrapping (deny-by-default)**: TheHive field values returned to the LLM are wrapped in `[UNTRUSTED_DATA]...[/UNTRUSTED_DATA]` boundary tags so
   the model can tell data from instructions. The policy is **deny-by-default**: every string value is wrapped _unless_ its field name is on a small trusted
-  allowlist of structural identifiers, enums/control values, and dates (`_id`, `_type`, `status`, `dataType`, date fields, …). This means `customFields` values,
+  allowlist of structural identifiers, enums/control values, and dates (`_id`, `_type`, `status`, `dataType`, date fields, and more). This means `customFields` values,
   attachment names, and any field added to the TheHive SDK in the future are wrapped automatically — there is no longer an allowlist of "untrusted" fields that
   has to be kept in sync. Embedded boundary markers are escaped so the boundary cannot be broken out of.
 - **Logged Operations**: Permission denials logged for auditing

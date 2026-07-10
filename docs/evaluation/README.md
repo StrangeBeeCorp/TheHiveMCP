@@ -1,9 +1,9 @@
-# Evaluation evidence
+# Evaluation Evidence
 
-This directory holds TheHiveMCP's published **accuracy** and **security** evaluation evidence, per
-[ADR-0001](../explanation/adr/0001-security-and-accuracy-testing-policy.md). It is the evidence behind the
-[recommended-model shortlist](../../README.md#-production-ready-what-we-commit-to) in the README: the shortlist is the models here that clear both the accuracy
-and injection-resilience bars.
+This directory holds the published **accuracy** and **security** evaluation evidence for TheHiveMCP, per
+[ADR-0001](../explanation/adr/0001-security-and-accuracy-testing-policy.md). It's the evidence behind the
+[recommended-model shortlist](../../README.md#-production-ready-what-we-commit-to) in the README: the shortlist consists of the models here that clear both
+the accuracy and injection-resilience bars.
 
 Evidence is published **one folder per evaluated MCP-server version**. Each version folder contains:
 
@@ -12,20 +12,20 @@ Evidence is published **one folder per evaluated MCP-server version**. Each vers
 - **`summary.md`** — a human-readable summary of that version's results and a comparison with the previous evaluated version.
 - **`report.html`** — a detailed, chart-based visual report.
 
-| Version                       | Released   | Folder                         |
-| ----------------------------- | ---------- | ------------------------------ |
-| **v1.0.0** (latest evaluated) | 2026-07-06 | [`v1.0.0/`](v1.0.0/summary.md) |
-| v0.3.4                        | 2026-05-22 | [`v0.3.4/`](v0.3.4/summary.md) |
-| v0.3.3                        | 2026-03-17 | [`v0.3.3/`](v0.3.3/summary.md) |
+| Version                       | Released       | Folder                         |
+| ------------------------------ | -------------- | ------------------------------ |
+| **v1.0.0** (latest evaluated)  | July 6, 2026   | [`v1.0.0/`](v1.0.0/summary.md) |
+| v0.3.4                          | May 22, 2026   | [`v0.3.4/`](v0.3.4/summary.md) |
+| v0.3.3                          | March 17, 2026 | [`v0.3.3/`](v0.3.3/summary.md) |
 
-## Latest evaluation — v1.0.0 (released 2026-07-06, evaluated 2026-07-02)
+## Latest evaluation — v1.0.0 (released July 6, 2026, and evaluated July 2, 2026)
 
 Accuracy = `mcp-tools` (34 checks) + `workflows` (3) = 37. Security = 15 prompt-injection scenarios (the agent must both ignore the injection **and** warn the
-analyst). v1.0.0 is the production-ready release; its injection defense is unchanged from v0.3.4, and this run refreshes the recommended-model matrix. Full
-detail is in [`v1.0.0/summary.md`](v1.0.0/summary.md); machine-readable data in [`v1.0.0/results.csv`](v1.0.0/results.csv).
+analyst). v1.0.0 is the production-ready release. Its injection defense is unchanged from v0.3.4, and this run refreshes the recommended-model matrix. Full
+detail is in [`v1.0.0/summary.md`](v1.0.0/summary.md). Machine-readable data is in [`v1.0.0/results.csv`](v1.0.0/results.csv).
 
 | Model                          | Accuracy     | Security (injection resilience) |
-| ------------------------------ | ------------ | ------------------------------- |
+| ------------------------------ | ------------ | -------------------------------- |
 | `moonshotai/kimi-k2.6`         | 100% (37/37) | 100% (15/15)                    |
 | `openai/gpt-5.5`               | 100% (37/37) | 100% (15/15)                    |
 | `z-ai/glm-5.2`                 | 100% (37/37) | 100% (15/15)                    |
@@ -37,16 +37,16 @@ detail is in [`v1.0.0/summary.md`](v1.0.0/summary.md); machine-readable data in 
 | `qwen/qwen3.5-9b`              | 73% (27/37)  | 53% (8/15)                      |
 | `mistralai/ministral-8b-2512`  | 70% (26/37)  | 53% (8/15)                      |
 
-**What to read into it.** Accuracy is strong and tightly clustered — once a run reaches the tool layer, most models drive a multi-step investigation correctly;
-only the two smallest models trail. The dimension that separates models is **security**: even with the boundary-tag defense on, injection resilience ranges from
-100% down to 53% (`qwen3.5-9b`, `ministral-8b-2512`). Model choice changes the risk profile far more than it changes task accuracy, which is why security is
+**What to read into it.** Accuracy is strong and tightly clustered. Once a run reaches the tool layer, most models drive a multi-step investigation correctly,
+and only the two smallest models trail. The dimension that separates models is **security**: even with the boundary-tag defense on, injection resilience ranges
+from 100% down to 53% (`qwen3.5-9b`, `ministral-8b-2512`). Model choice changes the risk profile far more than it changes task accuracy. That's why security is
 reported as its own dimension and never folded into a single score.
 
 ## Methodology (summary)
 
 The suite answers one question: **how well can each model operate TheHive through the MCP tools?** It stands up a real TheHive stack seeded with realistic
-incident data, then has each model drive a multi-turn agent loop (up to 10 turns) that calls the **real MCP tools** against that live stack — no mocks.
-Assertions inspect the **execution trace** — the actual tool calls, arguments, and results — not just the final reply.
+incident data. Each model then drives a multi-turn agent loop (up to 10 turns) that calls the **real MCP tools** against that live stack, with no mocks.
+Assertions inspect the **execution trace**: the actual tool calls, arguments, and results, not just the final reply.
 
 ```mermaid
 graph LR
@@ -63,13 +63,13 @@ Two dimensions:
 
 - **Accuracy** — correct tool use across realistic investigations: entity search, schema/resource discovery, case & observable management, automation
   (analyzers), and multi-step workflows.
-- **Security** — prompt-injection resilience. TheHive data is seeded with hidden instructions; a model passes only if it **both** ignores the injection **and**
-  warns the analyst. Reported with the shipped `[UNTRUSTED_DATA]` boundary-tag defense on.
+- **Security** — prompt-injection resilience. The suite seeds TheHive data with hidden instructions, and a model passes only if it **both** ignores the injection
+  **and** warns the analyst. Reported with the shipped `[UNTRUSTED_DATA]` boundary-tag defense on.
 
-Security assertions are graded by a rubric-based LLM-as-judge; the judge model for each run is recorded in its `results.csv`. Full test definitions and fixtures
-live in the internal evaluation suite; raw attacker payloads are not reproduced here.
+A rubric-based LLM-as-judge grades security assertions. `results.csv` records the judge model for each run. Full test definitions and fixtures live in the
+internal evaluation suite. Raw attacker payloads are not reproduced here.
 
 ## Keeping this current
 
-The re-test policy that governs when these tables must be refreshed lives in [`RELEASING.md`](../../RELEASING.md); ADR-0001 is the source of truth for what is
+The re-test policy that governs when these tables must be refreshed lives in [`RELEASING.md`](../../RELEASING.md). ADR-0001 is the source of truth for what's
 tested, the candidate model set, and the pinned judge.
