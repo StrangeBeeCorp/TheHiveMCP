@@ -194,16 +194,23 @@ jobs:
       # Persist the Go caches the test container uses (module cache, build cache,
       # and the go-installed gotestsum) across runs. Without this each fresh runner
       # re-downloads every module, recompiles the whole test binary, and rebuilds
-      # gotestsum — ~2min per job. Keyed on go.sum so a dependency change busts it;
-      # the two matrix legs share one key (same deps) and the first to finish saves
-      # it. Separate key prefix from the checks job: this cache also holds gotestsum
-      # and test-compiled objects that job doesn't need.
+      # gotestsum — ~2min per job. Keyed on go.sum so a dependency change busts it.
+      # The matrix leg is IN THE KEY: the two legs run concurrently and would
+      # otherwise collide on one key — both miss, then race to save it and one
+      # fails with "Unable to reserve cache … another job may be creating this
+      # cache", so a leg's cache never persists. A per-leg key lets each save and
+      # restore its own. Separate prefix from the checks job: this cache also holds
+      # gotestsum and test-compiled objects that job doesn't need.
+      # NOTE: caches saved on a PR's refs/pull/N/merge ref do not reliably restore
+      # across separate runs; the durable warm baseline is the cache main saves
+      # once this merges (main's caches are readable by all branches).
       - name: Cache Go caches (integration)
         uses: actions/cache@v4
         with:
           path: ${{ env.GO_CACHE_DIR }}
-          key: go-int-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          key: go-int-${{ runner.os }}-${{ hashFiles('go.sum') }}-${{ strategy.job-index }}
           restore-keys: |
+            go-int-${{ runner.os }}-${{ hashFiles('go.sum') }}-
             go-int-${{ runner.os }}-
 
       - name: Prepare cache dirs
