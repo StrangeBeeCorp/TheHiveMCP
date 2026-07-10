@@ -1,15 +1,15 @@
-# Remote docker example - HTTP deployment
+# Remote Docker Example - HTTP Deployment
 
 This example shows how to deploy TheHiveMCP as a remote HTTP service using Docker.
 
 ## Security requirements
 
-TheHiveMCP serves plain HTTP and does not authenticate callers itself. Before exposing it beyond localhost:
+TheHiveMCP serves plain HTTP and doesn't authenticate callers itself. Before exposing it beyond localhost:
 
-- **Always place a TLS-terminating, authenticating reverse proxy** (nginx, Traefik, Caddy, ...) in front of the MCP port. Never expose port 8082 directly to
-  untrusted networks.
+- **Always place a TLS-terminating, authenticating reverse proxy** (nginx, Traefik, Caddy, and so on) in front of the MCP port. Never expose port 8082 directly
+  to untrusted networks.
 - **Clients must send their own TheHive credentials** (`Authorization` or `X-TheHive-Api-Key` header). Requests without credentials are rejected unless you
-  explicitly set `ALLOW_ENV_CREDENTIAL_FALLBACK=true`, which makes every request fall back to the server's `THEHIVE_API_KEY` — only do this for single-user
+  explicitly set `ALLOW_ENV_CREDENTIAL_FALLBACK=true`, which makes every request fall back to the server's `THEHIVE_API_KEY`—only do this for single-user
   deployments behind an authenticating proxy.
 - **The `X-TheHive-Url` header is restricted** to the configured `THEHIVE_URL`. To allow additional TheHive instances (multi-tenant), list them explicitly in
   `THEHIVE_URL_ALLOWLIST` (comma-separated, exact scheme/host/port match). Any other destination is rejected before TheHive is contacted.

@@ -164,17 +164,17 @@ Before using automation, discover available analyzers and responders:
 }
 ```
 
-> **Available analyzers and responders are Cortex-catalog-specific and are not listed here.** The analyzer and responder IDs in the examples above
-> (`VirusTotal_3_0`, `Mailer_1_0`, …) are illustrative — the set installed on any given deployment depends on its Cortex configuration. Query the live catalog
-> with `get-resource` (see [Automation discovery](#automation-discovery)) to get the exact IDs, entity-type compatibility, and parameters your deployment
-> supports.
+> **Available analyzers and responders are Cortex-catalog-specific and aren't listed here.** The analyzer and responder IDs in the examples above
+> (`VirusTotal_3_0`, `Mailer_1_0`, and so on) are illustrative—the set installed on any given deployment depends on its Cortex configuration. Query the live
+> catalog with `get-resource` (see [Automation Discovery](#automation-discovery)) to get the exact IDs, entity-type compatibility, and parameters your
+> deployment supports.
 
 ## Notes
 
-- **Scope.** The permission filter applies to the entity the automation acts on — the observable for `run-analyzer`, and the target entity for `run-responder` /
+- **Scope.** The permission filter applies to the entity the automation acts on—the observable for `run-analyzer`, and the target entity for `run-responder` /
   `get-action-status`. For `get-job-status`, the job's target observable is resolved and scope-checked before the report is returned. Which analyzers and
   responders may run at all is gated separately by the automation allow/block lists. See the [permissions reference](../permissions.md).
-- **Cortex routing.** `cortex-id` is optional; omit it to let TheHive route to the configured Cortex instance (`CORTEX_ID`, default `local`).
+- **Cortex routing.** `cortex-id` is optional. Omit it to let TheHive route to the configured Cortex instance (`CORTEX_ID`, default `local`).
 - **Asynchronous execution.** `run-analyzer` and `run-responder` start a job/action and return its ID. Poll `get-job-status` / `get-action-status` for
   completion.
 
