@@ -180,6 +180,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Persist the Go caches the test container uses (module cache, build cache,
+      # and the go-installed gotestsum) across runs. Without this each fresh runner
+      # re-downloads every module, recompiles the whole test binary, and rebuilds
+      # gotestsum — ~2min per job. GO_CACHE_DIR (below) makes the Makefile bind these
+      # host dirs into the container as the runner uid, so actions/cache can save
+      # them. Keyed on go.sum so a dependency change busts it; the two matrix legs
+      # share one key (same deps) and the first to finish saves it.
+      - name: Cache Go caches (integration)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/thehivemcp-go
+          key: go-int-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            go-int-${{ runner.os }}-
+
       # Parallel mode needs a license token (see scripts/reset-integration-db.sh).
       # The primary path is the THEHIVE_TEST_LICENSE secret passed to the run step
       # below — used directly, no image pull or mint. This ghcr login is now only a
@@ -197,7 +212,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run integration tests
-        run: make test-integration
+        run: |
+          mkdir -p ~/.cache/thehivemcp-go/gomod ~/.cache/thehivemcp-go/gobuild ~/.cache/thehivemcp-go/go-tools
+          make test-integration GO_CACHE_DIR="$HOME/.cache/thehivemcp-go"
         env:
           THEHIVE_TEST_IMAGE: ${{ matrix.thehive-image }}
           # A pre-minted multi-instance dev license. When set, the suite runs
