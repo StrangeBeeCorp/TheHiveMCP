@@ -18,30 +18,36 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    # GO_CACHE_DIR makes the Makefile bind these host dirs into the tool
+    # containers as the runner uid (see the Makefile note), so the cache below
+    # is actually mounted AND is runner-owned for actions/cache to save. This is
+    # set job-wide so every make step (fmt/lint/sast/vulncheck) uses it.
+    env:
+      GO_CACHE_DIR: /home/runner/.cache/thehivemcp-go
     steps:
       - uses: actions/checkout@v4
 
-      # The make targets run inside pinned images and bind-mount the runner's
-      # Go and golangci-lint caches (see DOCKER_CACHE_MOUNTS and the lint target
-      # in the Makefile: go env GOPATH is /home/runner/go on ubuntu-latest).
-      # Without this every run re-downloads the whole dependency graph, recompiles
-      # gosec/govulncheck, rebuilds every package, and re-analyzes every file with
-      # golangci-lint from scratch. Three distinct caches:
-      #   ~/go/pkg/mod          — downloaded dependency source (module cache)
-      #   ~/.cache/go-build     — compiled package objects (GOCACHE: go build/test + golangci-lint)
-      #   ~/.cache/golangci-lint — golangci-lint's own per-file analysis results
+      # The make targets run inside pinned images and bind-mount these host caches
+      # (via GO_CACHE_DIR / DOCKER_CACHE_MOUNTS / GOLANGCI_CACHE). Without them every
+      # run re-downloads the whole dependency graph, recompiles gosec/govulncheck,
+      # rebuilds every package, and re-analyzes every file with golangci-lint from
+      # scratch. Four subdirs under GO_CACHE_DIR:
+      #   gomod    — downloaded dependency source (module cache, /go/pkg/mod)
+      #   gobuild  — compiled package objects (GOCACHE: go build/test + golangci)
+      #   go-tools — go-installed tools (gosec, govulncheck)
+      #   golangci — golangci-lint's own per-file analysis results
       # Keyed on go.sum + the lint config so a dependency or lint-rule change busts
       # it; restore-keys allow a partial warm start on a miss.
       - name: Cache Go and golangci-lint caches
         uses: actions/cache@v4
         with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-            ~/.cache/golangci-lint
+          path: ${{ env.GO_CACHE_DIR }}
           key: go-${{ runner.os }}-${{ hashFiles('go.sum', '.golangci.yml') }}
           restore-keys: |
             go-${{ runner.os }}-
+
+      - name: Prepare cache dirs
+        run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools "$GO_CACHE_DIR"/golangci
 
       - name: Format check
         run: make fmt

@@ -38,18 +38,25 @@ GO_IMAGE_CGO := golang:1.26.5
 #                    is root-owned and unwritable by the host uid. Safe: go.sum
 #                    still verifies module content locally; this only skips the
 #                    remote checksum-db lookup.
+#   GOTOOLCHAIN=local — never auto-download the go.mod `toolchain` version; use the
+#                    image's Go. Non-root can't verify a toolchain module under
+#                    GOSUMDB=off (it errors), and it matters for the golangci image,
+#                    whose Go differs from go.mod's toolchain.
+# GOLANGCI_LINT_CACHE moves golangci's analysis cache to a mounted, runner-owned
+# dir too (its default /root/.cache is unwritable by the host uid).
 ifdef GO_CACHE_DIR
 DOCKER_CACHE_MOUNTS := -v $(GO_CACHE_DIR)/gomod:/go/pkg/mod -v $(GO_CACHE_DIR)/gobuild:/go/cache/go-build
 GO_TOOLS_CACHE := -v $(GO_CACHE_DIR)/go-tools:/go/bin
-GO_RUN_AS_HOST_UID := --user $(shell id -u):$(shell id -g) -e HOME=/tmp -e GOCACHE=/go/cache/go-build -e GOMODCACHE=/go/pkg/mod -e GOPATH=/go -e GOSUMDB=off
+GO_RUN_AS_HOST_UID := --user $(shell id -u):$(shell id -g) -e HOME=/tmp -e GOCACHE=/go/cache/go-build -e GOMODCACHE=/go/pkg/mod -e GOPATH=/go -e GOSUMDB=off -e GOTOOLCHAIN=local
+GOLANGCI_CACHE := -v $(GO_CACHE_DIR)/golangci:/go/cache/golangci -e GOLANGCI_LINT_CACHE=/go/cache/golangci
 else
 DOCKER_CACHE_MOUNTS := -v thehivemcp-gomod:/go/pkg/mod -v thehivemcp-gobuild:/root/.cache/go-build
 # Named volume (linux-native, populated in-container) for go-installed tools.
 GO_TOOLS_CACHE := -v thehivemcp-go-tools:/go/bin
 GO_RUN_AS_HOST_UID :=
-endif
 # Named volume for golangci-lint's analysis cache (same rationale as above).
 GOLANGCI_CACHE := -v thehivemcp-golangci-cache:/root/.cache/golangci-lint
+endif
 # Git worktree support for tools that shell out to git inside a container
 # (golangci-lint, gitleaks). In a linked worktree, $(CURDIR)/.git is a FILE
 # pointing at the main repo's .git/worktrees/<name> via an ABSOLUTE path, which
@@ -98,7 +105,7 @@ fmt: ## Format the code
 	@echo $(BGreen)-------------$(Color_Off)
 	@echo $(BGreen)--- Format --$(Color_Off)
 	@echo $(BGreen)-------------$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go fmt ./...
+	docker run -i --rm -v $(CURDIR):/app -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go fmt ./...
 	@echo "Code formatted"
 
 .PHONY: security
@@ -129,7 +136,7 @@ sast: ## Static Application Security Testing
 	@echo $(BGreen)---------------------------$(Color_Off)
 	@echo $(BGreen)-- Running SAST Analysis --$(Color_Off)
 	@echo $(BGreen)---------------------------$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install github.com/securego/gosec/v2/cmd/gosec@v2.26.1 && gosec ./...'
+	docker run -i --rm -v $(CURDIR):/app -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install github.com/securego/gosec/v2/cmd/gosec@v2.26.1 && gosec ./...'
 
 # Every Dockerfile in the repo. hadolint lints each — the production image plus
 # the MCPB and LibreChat helper images — so a misconfig regression in any of them
@@ -341,7 +348,7 @@ vulncheck: ## Check for vulnerabilities
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Security Vulnerability  --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@v1.3.0 && govulncheck ./...'
+	docker run -i --rm -v $(CURDIR):/app -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@v1.3.0 && govulncheck ./...'
 
 .PHONY: lint
 lint: ## Run linter checks without modifying files
@@ -349,7 +356,7 @@ lint: ## Run linter checks without modifying files
 	@echo $(BGreen)-- Linter Checks --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	docker run --rm -v $(CURDIR):/app -w /app golangci/golangci-lint:v2.12.2 golangci-lint config verify
-	docker run -v $(CURDIR):/app -w /app -i --rm $(DOCKER_CACHE_MOUNTS) $(GOLANGCI_CACHE) $(GIT_WORKTREE_MOUNT) golangci/golangci-lint:v2.12.2 golangci-lint run
+	docker run -v $(CURDIR):/app -w /app -i --rm $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GOLANGCI_CACHE) $(GIT_WORKTREE_MOUNT) golangci/golangci-lint:v2.12.2 golangci-lint run
 
 .PHONY: lint-fix
 lint-fix: fmt ## Format the code, then run linter checks with auto-fix
