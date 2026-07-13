@@ -2,13 +2,9 @@ package utils
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"slices"
-	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -102,44 +98,20 @@ func TestGetScopedEntityIDsBatchWithoutIDs(t *testing.T) {
 	require.Empty(t, inScope)
 }
 
-// On mid-batch ctx cancellation the dispatch loop must stop issuing remaining
-// per-ID checks and report an error, not a silently-truncated partial map. The
-// handler cancels on the first query; with 50 IDs and a concurrency cap of 8, an
-// honest implementation issues far fewer than 50 before noticing the cancellation.
-func TestGetScopedEntityIDsBatchStopsDispatchingOnCancel(t *testing.T) {
+// The batch is fail-closed: a cancelled context must surface as an error with no
+// map, never a truncated partial map treated as complete. The single list query
+// runs against a context cancelled before dispatch, so the request fails outright.
+func TestGetScopedEntityIDsBatchFailsClosedOnCancel(t *testing.T) {
 	t.Parallel()
 
 	const total = 50
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	cancel()
 
-	var queries atomic.Int64
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-
-		var parsed struct {
-			Query []map[string]any `json:"query"`
-		}
-
-		_ = json.Unmarshal(body, &parsed)
-
-		names := operationNames(parsed.Query)
-		if len(names) > 0 && names[0] == opGetCase && slices.Contains(names, "filter") {
-			// Cancel on the first query but keep counting, so the test can assert
-			// the loop stopped dispatching the rest.
-			if queries.Add(1) == 1 {
-				cancel()
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte("[]"))
-
-			return
-		}
-
-		http.Error(w, "unexpected query", http.StatusInternalServerError)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("[]"))
 	}))
 	defer srv.Close()
 
@@ -156,10 +128,6 @@ func TestGetScopedEntityIDsBatchStopsDispatchingOnCancel(t *testing.T) {
 	}
 
 	inScope, err := GetScopedEntityIDsBatch(qctx, types.EntityTypeCase, entityIDs, permFilters)
-	require.Error(t, err, "a cancelled batch must report an error, not a truncated partial map")
+	require.Error(t, err, "a cancelled batch must report an error, not a partial map")
 	require.Nil(t, inScope, "the partial map must be discarded on cancellation")
-
-	got := queries.Load()
-	require.Less(t, got, int64(total),
-		"dispatch must stop after cancellation, not fire all %d checks (got %d)", total, got)
 }

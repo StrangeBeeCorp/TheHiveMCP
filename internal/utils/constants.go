@@ -9,6 +9,15 @@ const (
 	// idOrNameKey is the TheHive get-by-id/name selector key.
 	idOrNameKey = "idOrName"
 
+	// opFilter is the TheHive filter operation name.
+	opFilter = "filter"
+	// opAnd, opIn, keyField, keyValues are query-filter DSL keys used to build the
+	// scope filter (_and[ permFilters, _in{_field:_id, _values:ids} ]).
+	opAnd     = "_and"
+	opIn      = "_in"
+	keyField  = "_field"
+	keyValues = "_values"
+
 	// fieldID is the top-level entity identifier field.
 	fieldID = "_id"
 	// fieldDataType is the observable data-type field.

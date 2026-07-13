@@ -25,6 +25,9 @@ const (
 	opGetCase  = "getCase"
 	opGetAlert = "getAlert"
 
+	opListCase  = "listCase"
+	opListAlert = "listAlert"
+
 	methodPost      = "POST"
 	pathCaseByID    = "/api/v1/case/~1"
 	pathQuery       = "/api/v1/query"
