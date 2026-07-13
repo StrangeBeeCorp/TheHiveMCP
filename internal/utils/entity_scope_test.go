@@ -132,6 +132,58 @@ func TestGetScopedEntityIDsBatchFailsClosedOnCancel(t *testing.T) {
 	require.Nil(t, inScope, "the partial map must be discarded on cancellation")
 }
 
+// A batch larger than one chunk boundary must be split into ceil(N/chunk) list
+// queries and the matched sets unioned, so it can never exceed a server-side
+// _in-clause / page-row cap and silently come back truncated as a false "out of
+// scope" (DL-5764, mass false denial). The unioned in-scope verdict must match
+// the per-ID oracle exactly, and the number of round-trips must equal the number
+// of chunks — proving the split actually happened rather than one oversized query.
+func TestGetScopedEntityIDsBatchChunksLargeIDSet(t *testing.T) {
+	t.Parallel()
+
+	// Straddle a chunk boundary: 2 full chunks + a partial third.
+	total := 2*scopeBatchChunkSize + 7
+
+	entityIDs := make([]string, total)
+	scopeIDs := make(map[string]bool, total)
+	oracle := make(map[string]bool, total)
+
+	for i := range entityIDs {
+		id := fmt.Sprintf("~%d", i)
+		entityIDs[i] = id
+		// Every third id is out of scope, so the union must exclude some ids per chunk.
+		inScope := i%3 != 0
+		scopeIDs[id] = inScope
+		oracle[id] = inScope
+	}
+
+	fake := &fakeHiveServer{
+		scopeIDs:        scopeIDs,
+		scopeCheckedIDs: map[string]int{},
+	}
+	ctx := startFakeHive(t, fake)
+
+	inScope, err := GetScopedEntityIDsBatch(ctx, types.EntityTypeCase, entityIDs, tlpLTE2Filters())
+	require.NoError(t, err)
+	require.Equal(t, oracle, inScope,
+		"the chunked union must match the per-ID oracle: every in-scope id present-and-true, every out-of-scope id present-and-false")
+
+	wantChunks := (total + scopeBatchChunkSize - 1) / scopeBatchChunkSize
+	require.Equal(t, int64(wantChunks), fake.scopeQueries.Load(),
+		"a batch of %d ids must split into %d chunk queries, not one oversized _in list", total, wantChunks)
+
+	// No chunk query may request more than scopeBatchChunkSize ids.
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+
+	require.LessOrEqual(t, fake.maxScopeQuerySize, scopeBatchChunkSize,
+		"no single chunk query may exceed the chunk size")
+
+	for id, n := range fake.scopeCheckedIDs {
+		require.Equal(t, 1, n, "id %s must be checked exactly once across all chunks", id)
+	}
+}
+
 // The scope builders normalize + date-translate permFilters in place via
 // mutating recursive transforms. A shallow copy would leave nested maps/slices
 // aliased with the caller's original, so those transforms would rewrite the

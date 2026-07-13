@@ -89,20 +89,26 @@ func GetScopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs [
 }
 
 // scopedEntityIDsBatch reports which of entityIDs match permFilters for the
-// given type, in a single list query:
+// given type, via one list query per chunk of at most scopeBatchChunkSize ids:
 //
-//	listX -> filter(_and[ permFilters, _in{_field:_id, _values:ids} ]) -> page(0, len(ids))
+//	listX -> filter(_and[ permFilters, _in{_field:_id, _values:chunk} ]) -> page(0, len(chunk))
 //
 // _in on _id is honoured by TheHive on a list op for every type that reaches
 // here (case/alert/task/observable/page/procedure), returning exactly the same
 // set as N get-by-ID checks — verified live against 5.6.3 and pinned by
 // TestGetScopedEntityIDsBatchHonorsIDFilter, which diffs this path against the
 // get-by-ID oracle (ScopedEntityIDsByGetOneByOne). This replaces the earlier
-// per-ID fan-out: one round-trip instead of N, same result.
+// per-ID fan-out: ceil(N/chunk) round-trips instead of N, same result.
 //
-// Fail-closed: any query error returns an error and no map, never a partial map
-// treated as complete. The result seeds every requested id to false, then flips
-// the ones the query returned to true; an id never requested is never added.
+// Chunking (scopeBatchChunkSize) keeps each _in clause below any server-side
+// clause/row cap: an oversized single query could 400 (fail closed on the whole
+// batch) or silently truncate its result rows, which seeds the dropped ids false
+// and mass-denies legitimately in-scope hits (DL-5764). The matched sets of all
+// chunks are unioned, so the split is invisible to the caller.
+//
+// Fail-closed: any chunk query error returns an error and no map, never a partial
+// map treated as complete. The result seeds every requested id to false, then
+// flips the ones the queries returned to true; an id never requested is never added.
 func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []string, permFilters map[string]any) (map[string]bool, error) {
 	inScope := make(map[string]bool, len(entityIDs))
 	if len(permFilters) == 0 {
@@ -118,8 +124,8 @@ func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []st
 	}
 
 	// Seed every requested id to false so an out-of-scope id is present-and-false,
-	// not absent (matches the get-by-ID oracle's result shape). The query below
-	// flips the matched ones to true.
+	// not absent (matches the get-by-ID oracle's result shape). The chunk queries
+	// below flip the matched ones to true.
 	for _, id := range entityIDs {
 		inScope[id] = false
 	}
@@ -129,28 +135,40 @@ func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []st
 		return nil, errors.New("cannot verify scope: missing entity type")
 	}
 
-	listOp := map[string]any{opNameKey: listOpName}
-	filterOp := scopeInFilterOperation(permFilters, entityIDs)
-	// Explicit page so a batch larger than TheHive's default window is not
-	// truncated into a false "out of scope" (a denial bug, not a leak).
-	pageOp := thehive.NewInputQueryPagingOperation(0, int32(len(entityIDs)), "page") // #nosec G115 -- entityIDs length is bounded by the caller's hit set
+	for start := 0; start < len(entityIDs); start += scopeBatchChunkSize {
+		end := min(start+scopeBatchChunkSize, len(entityIDs))
+		chunk := entityIDs[start:end]
 
-	matchedIDs, err := executeScopeQueryIDs(ctx, []thehive.InputQueryNamedOperation{
-		thehive.MapmapOfStringAnyAsInputQueryNamedOperation(&listOp),
-		thehive.MapmapOfStringAnyAsInputQueryNamedOperation(&filterOp),
-		thehive.InputQueryPagingOperationAsInputQueryNamedOperation(pageOp),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to verify %s IDs against permission filters: %w", entityType, err)
-	}
+		matchedIDs, err := scopedEntityIDsChunk(ctx, listOpName, chunk, permFilters)
+		if err != nil {
+			return nil, fmt.Errorf("failed to verify %s IDs against permission filters: %w", entityType, err)
+		}
 
-	for _, id := range entityIDs {
-		if _, ok := matchedIDs[id]; ok {
-			inScope[id] = true
+		for _, id := range chunk {
+			if _, ok := matchedIDs[id]; ok {
+				inScope[id] = true
+			}
 		}
 	}
 
 	return inScope, nil
+}
+
+// scopedEntityIDsChunk runs the single list query for one bounded chunk of ids
+// and returns the matched _id set. chunk is expected to hold at most
+// scopeBatchChunkSize ids; callers do the chunking.
+func scopedEntityIDsChunk(ctx context.Context, listOpName string, chunk []string, permFilters map[string]any) (map[string]struct{}, error) {
+	listOp := map[string]any{opNameKey: listOpName}
+	filterOp := scopeInFilterOperation(permFilters, chunk)
+	// Explicit page so a chunk larger than TheHive's default window is not
+	// truncated into a false "out of scope" (a denial bug, not a leak).
+	pageOp := thehive.NewInputQueryPagingOperation(0, int32(len(chunk)), "page") // #nosec G115 -- chunk length is bounded by scopeBatchChunkSize
+
+	return executeScopeQueryIDs(ctx, []thehive.InputQueryNamedOperation{
+		thehive.MapmapOfStringAnyAsInputQueryNamedOperation(&listOp),
+		thehive.MapmapOfStringAnyAsInputQueryNamedOperation(&filterOp),
+		thehive.InputQueryPagingOperationAsInputQueryNamedOperation(pageOp),
+	})
 }
 
 // ScopedEntityIDsByGetOneByOne resolves scope per id through the canonical getX

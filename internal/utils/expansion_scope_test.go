@@ -36,6 +36,9 @@ type fakeHiveServer struct {
 	// Per-id scope-check count, for asserting cross-parent dedup (a hit two parents
 	// return is checked once).
 	scopeCheckedIDs map[string]int
+	// Largest _in set seen in any single scope query, for asserting a large batch
+	// is chunked below the server clause limit rather than sent as one list.
+	maxScopeQuerySize int
 }
 
 func (f *fakeHiveServer) handle(w http.ResponseWriter, r *http.Request) {
@@ -129,6 +132,10 @@ func (f *fakeHiveServer) recordScopeCheck(ids []string) {
 	f.scopeQueries.Add(1)
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
+	if len(ids) > f.maxScopeQuerySize {
+		f.maxScopeQuerySize = len(ids)
+	}
 
 	if f.scopeCheckedIDs != nil {
 		for _, id := range ids {
