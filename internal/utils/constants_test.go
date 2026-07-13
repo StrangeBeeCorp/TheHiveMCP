@@ -20,6 +20,7 @@ const (
 
 	valueCase = "case"
 	fieldTLP  = "tlp"
+	fieldTags = "tags"
 
 	valueNew = "New"
 

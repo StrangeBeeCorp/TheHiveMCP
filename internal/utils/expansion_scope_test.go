@@ -197,12 +197,14 @@ func operationNames(query []map[string]any) []string {
 // _values:ids} ], and when permFilters is itself _in-shaped, scopeInValues must
 // still return the _id clause's values — not the permFilters clause's.
 func TestScopeInValuesIgnoresInShapedPermFilters(t *testing.T) {
+	t.Parallel()
+
 	query := []map[string]any{
 		{
 			opNameKey: opFilter,
 			opAnd: []any{
 				// _in-shaped permFilters, nested first (as production builds it).
-				map[string]any{opIn: map[string]any{keyField: "tags", keyValues: []any{"phishing"}}},
+				map[string]any{opIn: map[string]any{keyField: fieldTags, keyValues: []any{"phishing"}}},
 				// The id clause the fake server must key off.
 				map[string]any{opIn: map[string]any{keyField: fieldID, keyValues: []any{"~1", "~2"}}},
 			},

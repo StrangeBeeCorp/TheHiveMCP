@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -217,7 +218,7 @@ func TestGetScopedEntityIDsBatchErrorCarriesContext(t *testing.T) {
 
 	msg := err.Error()
 	require.Contains(t, msg, types.EntityTypeCase, "error must name the entity type")
-	require.Contains(t, msg, fmt.Sprintf("%d", total), "error must report the id count for triage")
+	require.Contains(t, msg, strconv.Itoa(total), "error must report the id count for triage")
 	require.Contains(t, msg, apiDetail, "error must preserve the underlying API response detail")
 }
 

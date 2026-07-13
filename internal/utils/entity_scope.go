@@ -148,8 +148,8 @@ func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []st
 			// executeScopeQueryIDs wrap preserves the API response detail. The ids
 			// themselves are not logged — they can be large in number and are not
 			// needed to identify which check failed.
-			return nil, fmt.Errorf("failed to verify %d %s IDs (chunk %d-%d of %d total) against permission filters: %w",
-				len(chunk), entityType, start, end, len(entityIDs), err)
+			return nil, fmt.Errorf("failed to verify %d %s IDs (chunk ids %d-%d of %d total) against permission filters: %w",
+				len(chunk), entityType, start, end-1, len(entityIDs), err)
 		}
 
 		for _, id := range chunk {
