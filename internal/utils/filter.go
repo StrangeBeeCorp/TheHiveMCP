@@ -3,6 +3,8 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -92,6 +94,56 @@ func NormalizeFilterKeys(filterMap map[string]any) map[string]any {
 	}
 
 	return filterMap
+}
+
+// deepCopyFilter returns a deep copy of a filter map so in-place transforms
+// (NormalizeFilterKeys, TranslateDatesToTimestamps) never reach through shared
+// nested maps/slices into the caller's original filters. Only the map/slice
+// spine is cloned; leaf values are shared, which is safe because the transforms
+// replace values rather than mutating them.
+func deepCopyFilter(filterMap map[string]any) map[string]any {
+	out := make(map[string]any, len(filterMap))
+	for key, value := range filterMap {
+		out[key] = deepCopyFilterValue(value)
+	}
+
+	return out
+}
+
+// deepCopyFilterValue clones every composite spine a filter value can carry.
+// Config-decoded filters only ever hold map[string]any / []any, but a filter
+// built in Go may use typed composites (map[string]string, []string,
+// []map[string]any); each is cloned explicitly so the deep-copy guarantee holds
+// regardless of how the filter was constructed. Scalars are returned as-is (the
+// transforms replace, never mutate, leaf values).
+func deepCopyFilterValue(value any) any {
+	switch v := value.(type) {
+	case map[string]any:
+		return deepCopyFilter(v)
+	case map[string]string:
+		out := make(map[string]string, len(v))
+		maps.Copy(out, v)
+
+		return out
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			out[i] = deepCopyFilterValue(item)
+		}
+
+		return out
+	case []string:
+		return slices.Clone(v)
+	case []map[string]any:
+		out := make([]map[string]any, len(v))
+		for i, item := range v {
+			out[i] = deepCopyFilter(item)
+		}
+
+		return out
+	default:
+		return v
+	}
 }
 
 // TranslateDatesToTimestamps recursively converts date strings in a filter map

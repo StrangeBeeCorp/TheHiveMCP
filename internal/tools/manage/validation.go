@@ -56,7 +56,10 @@ func (t *Tool) validateEntityScope(ctx context.Context, perms *permissions.Confi
 
 func checkAllInScope(ctx context.Context, checks []scopeCheck, permFilters map[string]any) error {
 	for _, check := range checks {
-		inScope, err := utils.GetEntityIDsInScope(ctx, check.entityType, check.entityIDs, permFilters)
+		// Tolerant get-by-idOrName resolution: manage entity-ids are user/LLM-supplied
+		// and may be bare (a plain case number, not the ~-prefixed _id), which the
+		// batched _in{_id} query would wrongly deny (DL-5764).
+		inScope, err := utils.ScopedEntityIDsTolerant(ctx, check.entityType, check.entityIDs, permFilters)
 		if err != nil {
 			return tools.NewToolError("failed to verify entity scope").Cause(err).
 				Hint("The operation was denied because the configured permission filters could not be checked against the target entities")
@@ -81,7 +84,7 @@ func checkAnyInScope(ctx context.Context, checks []scopeCheck, permFilters map[s
 	}
 
 	for _, check := range checks {
-		inScope, err := utils.IsEntityInScope(ctx, check.entityType, check.entityIDs[0], permFilters)
+		inScope, err := utils.IsEntityInScopeTolerant(ctx, check.entityType, check.entityIDs[0], permFilters)
 		if err != nil {
 			slog.Debug("Entity scope alternative check failed", "entityType", check.entityType, "error", err)
 			continue

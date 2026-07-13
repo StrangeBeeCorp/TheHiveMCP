@@ -9,6 +9,25 @@ const (
 	// idOrNameKey is the TheHive get-by-id/name selector key.
 	idOrNameKey = "idOrName"
 
+	// opFilter is the TheHive filter operation name.
+	opFilter = "filter"
+	// opAnd, opIn, keyField, keyValues are query-filter DSL keys used to build the
+	// scope filter (_and[ permFilters, _in{_field:_id, _values:ids} ]).
+	opAnd     = "_and"
+	opIn      = "_in"
+	keyField  = "_field"
+	keyValues = "_values"
+
+	// scopeBatchChunkSize caps how many ids ride in a single scopedEntityIDsBatch
+	// _in{_id} query. A large batch is split into ceil(N/chunk) list queries whose
+	// matched sets are unioned, so the _in clause can never exceed a server-side
+	// cap and come back silently truncated (which would read as a false "out of
+	// scope" — a mass-denial bug, DL-5764). Chosen at 500, comfortably below
+	// Elasticsearch's default indices.query.bool.max_clause_count (1024) while
+	// still collapsing a realistic multi-parent expansion (hundreds of hits) into
+	// one or two round-trips instead of N.
+	scopeBatchChunkSize = 500
+
 	// fieldID is the top-level entity identifier field.
 	fieldID = "_id"
 	// fieldDataType is the observable data-type field.

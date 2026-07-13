@@ -12,11 +12,12 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 )
 
-// DL-5764: GetScopedEntityIDsBatch fans out per-hit get-by-ID checks rather than
-// one list query with _or of _id filters — _id equality is unsupported on list for
-// some types (see GetEntityIDsInScope). On a TLP:RED path both failure modes are
-// catastrophic: false denial (in-scope hit dropped) and leak (out-of-scope hit
-// marked in-scope). Cross-checks against the proven get-by-ID path.
+// DL-5764: GetScopedEntityIDsBatch resolves the in-scope set with a single list
+// query (listX -> filter(_and[permFilters, _in{_id}]) -> page). On a TLP:RED path
+// both failure modes are catastrophic: false denial (in-scope hit dropped) and
+// leak (out-of-scope hit marked in-scope). This is the empirical proof that the
+// _in path agrees, byte-for-byte on the ~-prefixed ids, with the independent
+// get-by-ID oracle (utils.ScopedEntityIDsByGetOneByOne) against a live TheHive.
 func TestGetScopedEntityIDsBatchHonorsIDFilter(t *testing.T) {
 	testutils.Parallel(t)
 	hiveClient := testutils.SetupTestWithCleanup(t)
@@ -126,10 +127,11 @@ func assertBatchHonorsIDFilter(
 		"LEAK (over-match): decoy (tlp=2, never requested) appeared — the batch returned an entity it was never asked to scope-check for %s",
 		entityType)
 
-	// Differential oracle: batch must agree with the proven get-by-ID path on the
-	// same inputs; `want` pins the correct answer from the trusted path.
-	want, err := utils.GetEntityIDsInScope(ctx, entityType, requested, permFilters)
+	// Differential oracle: the single-query _in path must agree with the
+	// independent, proven get-by-ID path on the same inputs; `want` pins the correct
+	// answer from the trusted path. This is what keeps the _in migration honest.
+	want, err := utils.ScopedEntityIDsByGetOneByOne(ctx, entityType, requested, permFilters)
 	require.NoError(t, err)
 	require.Equal(t, want, inScope,
-		"batch get-by-ID result must match the proven get-by-ID result for %s", entityType)
+		"the _in scope result must match the proven get-by-ID oracle for %s", entityType)
 }

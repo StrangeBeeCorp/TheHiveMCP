@@ -222,10 +222,10 @@ func TestWrap_MarkerSplitAcrossSliceElements(t *testing.T) {
 	// A marker split across array elements can't escape: each element is wrapped
 	// independently.
 	out := processMap(t, map[string]any{
-		"tags": []string{"foo" + openTag[:8], openTag[8:] + "bar", closeTag},
+		fieldTags: []string{"foo" + openTag[:8], openTag[8:] + "bar", closeTag},
 	})
-	tags, ok := out["tags"].([]any)
-	require.True(t, ok, "expected tags slice, got %T", out["tags"])
+	tags, ok := out[fieldTags].([]any)
+	require.True(t, ok, "expected tags slice, got %T", out[fieldTags])
 	require.Len(t, tags, 3)
 
 	for _, item := range tags {
@@ -311,7 +311,7 @@ func TestWrap_RawFiltersNestedCombinatorsNotWrapped(t *testing.T) {
 func TestWrap_LegacyUntrustedFieldsWrapOnce(t *testing.T) {
 	t.Parallel()
 
-	for _, field := range []string{fieldTitle, schemaKeyDesc, "message", "summary", "content", "source", "sourceRef", "data", "tags"} {
+	for _, field := range []string{fieldTitle, schemaKeyDesc, "message", "summary", "content", "source", "sourceRef", "data", fieldTags} {
 		out := processMap(t, map[string]any{field: "value"})
 		s := requireWrapped(t, out[field])
 		require.Equal(t, 1, strings.Count(s, openTag), "field %q wrapped more than once", field)

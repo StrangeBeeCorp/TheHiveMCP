@@ -21,7 +21,8 @@ import (
 
 // fakeHiveServer replaces a real TheHive (no Docker). Every SDK call hits POST
 // /api/v1/query; handle routes on the operation names in the body. scopeQueries
-// counts scope checks so tests can assert hits were re-scoped.
+// counts scope queries (round-trips) so tests can assert hits were re-scoped and
+// that a batch collapses to one query.
 type fakeHiveServer struct {
 	similarCases []map[string]any
 	// Per-parent similar cases (keyed by parent idOrName); falls back to similarCases when nil.
@@ -35,6 +36,9 @@ type fakeHiveServer struct {
 	// Per-id scope-check count, for asserting cross-parent dedup (a hit two parents
 	// return is checked once).
 	scopeCheckedIDs map[string]int
+	// Largest _in set seen in any single scope query, for asserting a large batch
+	// is chunked below the server clause limit rather than sent as one list.
+	maxScopeQuerySize int
 }
 
 func (f *fakeHiveServer) handle(w http.ResponseWriter, r *http.Request) {
@@ -55,18 +59,14 @@ func (f *fakeHiveServer) handle(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	switch {
-	// Parent scope check (GetEntityIDsInScope).
-	case names[0] == opGetAlert && slices.Contains(names, "filter"):
-		idOrName, _ := parsed.Query[0]["idOrName"].(string)
-		f.recordScopeCheck(idOrName)
-		f.encodeScopeRows(w, f.inScopeSubset([]string{idOrName}))
-
-	// Per-hit scope check, fanned out concurrently one per hit (a single listCase
-	// _id-filter query was unreliable on real TheHive) — tests see one query per hit.
-	case names[0] == opGetCase && slices.Contains(names, "filter"):
-		idOrName, _ := parsed.Query[0]["idOrName"].(string)
-		f.recordScopeCheck(idOrName)
-		f.encodeScopeRows(w, f.inScopeSubset([]string{idOrName}))
+	// Scope check: one list query per type with an _in over the _id set (parent
+	// verification and the batched per-hit re-check both take this path). Each hit
+	// counts as one check; a batch of N ids is a single query. Routes both listAlert
+	// (parent) and listCase (case hits).
+	case (names[0] == opListAlert || names[0] == opListCase) && slices.Contains(names, "filter"):
+		ids := scopeInValues(parsed.Query)
+		f.recordScopeCheck(ids)
+		f.encodeScopeRows(w, f.inScopeSubset(ids))
 
 	// The MCP sends the *Light op; its MCP-facing query name stays "similarCases".
 	case names[0] == opGetAlert && slices.Contains(names, "similarCasesLight"):
@@ -82,13 +82,71 @@ func (f *fakeHiveServer) handle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (f *fakeHiveServer) recordScopeCheck(id string) {
+// scopeInValues extracts the _in._values ids from a scope filter operation shaped
+// filter(_and[ permFilters, _in{_field:_id, _values:[...]} ]).
+func scopeInValues(query []map[string]any) []string {
+	for _, op := range query {
+		if op[opNameKey] != opFilter {
+			continue
+		}
+
+		and, _ := op[opAnd].([]any)
+		if ids := inValuesFromAnd(and); ids != nil {
+			return ids
+		}
+	}
+
+	return nil
+}
+
+// inValuesFromAnd returns the string _in._values from the _and clause whose
+// _in targets _field:_id, or nil. Keying on _id (rather than first-_in-wins)
+// keeps extraction correct when permFilters is itself _in-shaped and nests
+// ahead of the id clause.
+func inValuesFromAnd(and []any) []string {
+	for _, clause := range and {
+		clauseMap, _ := clause.(map[string]any)
+		in, _ := clauseMap[opIn].(map[string]any)
+
+		if in[keyField] != fieldID {
+			continue
+		}
+
+		values, ok := in[keyValues].([]any)
+		if !ok {
+			continue
+		}
+
+		ids := make([]string, 0, len(values))
+		for _, v := range values {
+			if s, ok := v.(string); ok {
+				ids = append(ids, s)
+			}
+		}
+
+		return ids
+	}
+
+	return nil
+}
+
+// recordScopeCheck counts one scope query (round-trip) and, per id in that
+// query's _in set, one per-id check — so scopeQueries collapses a batch to 1
+// while scopeCheckedIDs still proves cross-parent dedup (a shared hit lands in a
+// single query, counted once).
+func (f *fakeHiveServer) recordScopeCheck(ids []string) {
 	f.scopeQueries.Add(1)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	if len(ids) > f.maxScopeQuerySize {
+		f.maxScopeQuerySize = len(ids)
+	}
+
 	if f.scopeCheckedIDs != nil {
-		f.scopeCheckedIDs[id]++
+		for _, id := range ids {
+			f.scopeCheckedIDs[id]++
+		}
 	}
 }
 
@@ -132,6 +190,28 @@ func operationNames(query []map[string]any) []string {
 	}
 
 	return names
+}
+
+// TestScopeInValuesIgnoresInShapedPermFilters guards the fake server's id
+// extraction: the production scope filter is _and[ permFilters, _in{_field:_id,
+// _values:ids} ], and when permFilters is itself _in-shaped, scopeInValues must
+// still return the _id clause's values — not the permFilters clause's.
+func TestScopeInValuesIgnoresInShapedPermFilters(t *testing.T) {
+	t.Parallel()
+
+	query := []map[string]any{
+		{
+			opNameKey: opFilter,
+			opAnd: []any{
+				// _in-shaped permFilters, nested first (as production builds it).
+				map[string]any{opIn: map[string]any{keyField: fieldTags, keyValues: []any{"phishing"}}},
+				// The id clause the fake server must key off.
+				map[string]any{opIn: map[string]any{keyField: fieldID, keyValues: []any{"~1", "~2"}}},
+			},
+		},
+	}
+
+	require.Equal(t, []string{"~1", "~2"}, scopeInValues(query))
 }
 
 func newFakeHiveClient(t *testing.T, srv *httptest.Server) *thehive.APIClient {
@@ -227,11 +307,11 @@ func TestExpandSimilarityHitsAreScoped(t *testing.T) {
 	require.NotContains(t, gotIDs, outOfScopeID,
 		"PERMISSION BYPASS: the out-of-scope (TLP:RED) similar case leaked through expansion")
 
-	// 3 scope queries: 1 parent + 1 per hit. DL-5764's constraint is kept as bounded
-	// concurrency (overlapping checks, ~one round-trip), not a single unreliable
-	// listCase _id-filter query. No re-scoping would fire only the parent (count 1).
-	require.Equal(t, int64(3), fake.scopeQueries.Load(),
-		"each similarity hit must be re-scoped (1 parent + 2 hits), and the RED hit must not leak")
+	// 2 scope queries: 1 parent + 1 batched hit re-check (both hits collapse into a
+	// single listCase _in query, DL-5764). No re-scoping would fire only the parent
+	// (count 1).
+	require.Equal(t, int64(2), fake.scopeQueries.Load(),
+		"the similarity hits must be re-scoped in one batched query (1 parent + 1 hit batch), and the RED hit must not leak")
 }
 
 // Scope checks are batched ACROSS parents, not once per parent (DL-5764, Finding 2).
@@ -294,10 +374,12 @@ func TestExpandSimilarityHitsScopedAcrossParentsAreBatched(t *testing.T) {
 	require.Equal(t, 1, fake.scopeCheckedIDs[sharedCaseID],
 		"a hit shared by two parents must be scope-checked once, not once per parent")
 
-	// 2 parent checks + 3 distinct case checks = 5. Per-parent would check the
-	// shared case twice, totalling 6.
-	require.Equal(t, int64(5), fake.scopeQueries.Load(),
-		"scope checks must be batched across parents: 2 parents + 3 distinct hits, not 6")
+	// 2 queries total: 1 parent query (both parents collapse into one listAlert _in
+	// batch) + 1 hit query (the 3 distinct case hits collapse into one listCase _in
+	// batch). The load-bearing assertion above is scopeCheckedIDs[sharedCaseID]==1;
+	// this count guards that neither parents nor hits fan back out per item.
+	require.Equal(t, int64(2), fake.scopeQueries.Load(),
+		"scope checks must be batched: 1 parent batch + 1 hit batch, not fanned out per parent/hit")
 }
 
 // Re-scoping keys off the descriptor's ResultsAreIndependent, NOT a hardcoded set of
@@ -362,10 +444,10 @@ func TestExpandIndependentNonSimilarityQueryIsScoped(t *testing.T) {
 	require.NotContains(t, gotIDs, outOfScopeID,
 		"PERMISSION BYPASS: an independent non-similarity hit leaked through expansion")
 
-	// 1 parent check + 1 per hit (2 hits) = 3, identical to the similarity path —
+	// 1 parent query + 1 batched hit query, identical to the similarity path —
 	// proving the re-scope is driven by ResultsAreIndependent, not the query name.
-	require.Equal(t, int64(3), fake.scopeQueries.Load(),
-		"an independent query must be re-scoped per hit regardless of its name")
+	require.Equal(t, int64(2), fake.scopeQueries.Load(),
+		"an independent query must be re-scoped regardless of its name")
 }
 
 // Companion to the test above: a query declared NOT independent (a child of an
