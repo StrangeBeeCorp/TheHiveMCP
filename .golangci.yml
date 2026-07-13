@@ -100,7 +100,7 @@ linters:
       # those two linters would false-positive on every integration test func.
       # Excluded for exactly the integration test files; unit-test files in the
       # same packages keep both linters and their direct t.Parallel() calls.
-      - path: (internal/tools/execute_automation/scope_test\.go|internal/tools/search/(expansion_scope|filter_operators|search)_test\.go|internal/tools/manage/(scope|entity_scope_batch_integration|manage)_test\.go|internal/tools/resource/resource_test\.go)
+      - path: (internal/tools/execute_automation/scope_test\.go|internal/tools/search/(expansion_scope|filter_operators|search)_test\.go|internal/tools/manage/(scope|scope_bare_id|entity_scope_batch_integration|manage)_test\.go|internal/tools/resource/resource_test\.go)
         linters:
           - paralleltest
           - tparallel

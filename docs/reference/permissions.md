@@ -93,13 +93,19 @@ Uses TheHive's native filter syntax where the operator (for example, `_gte`, `_l
 
 Filters are always evaluated by TheHive itself, using its native query language — the MCP server never reimplements filtering. For tools that act on a raw
 entity ID, the server issues a _scoped existence check_ before doing anything: it asks TheHive for that specific entity with the configured filter appended as a
-`filter` stage (for example, `getCase {id} → filter {tlp ≤ 2}`). If TheHive returns the entity, it is in scope. If it returns nothing (filtered out, deleted, or not
-visible to the caller's API key), the operation is denied. This reuses the exact same filter the deployment configures for search.
+`filter` stage (for example, `getCase {id} → filter {tlp ≤ 2}`). If TheHive returns the entity, it is in scope. If it returns nothing (filtered out, deleted, or
+not visible to the caller's API key), the operation is denied. This reuses the exact same filter the deployment configures for search.
+
+Two entity identifiers exist: the internal `_id` (rendered with a leading `~`, for example `~40988160`) and the human-facing `number` shown in the UI. On the
+`manage-entities` and `execute-automation` paths the scope check resolves each ID through `getX {idOrName} → filter`, one query per ID, which accepts either
+form (`_id`, a bare `number`, or a name). On the similarity-expansion path the hits are re-scoped with a single batched `listX → filter(_and[filter, _in{_id}])`
+query; those IDs always arrive as the internal `_id`. See [ADR-0002](../explanation/adr/0002-scope-resolution-two-paths.md) for why the two paths differ.
 
 - `search-entities`: the filter is AND-merged directly into the search query, so results are scoped server-side. The same applies to additional-query expansion
   (fetching a case's tasks, observables, comments, and other related data): the parent entity is scope-checked before its children are fetched.
 - `manage-entities`: before any by-ID operation (update, delete, comment, promote, merge, apply-template, or creating a child entity inside a case/alert), every
-  referenced entity is scope-checked. An entity outside the filter is reported as "not found or not within the scope" and nothing is mutated.
+  referenced entity is scope-checked. An entity outside the filter is reported as "not found or not within the scope" and nothing is mutated. IDs may be given
+  as the internal `_id` or as a bare case/alert number.
 - `execute-automation`: the filter applies to the **entity the automation acts on**, not to the analyzer or responder. Before running, the target is
   scope-checked — the observable for `run-analyzer`, the entity (case/alert/task/observable) for `run-responder` and `get-action-status`. For `get-job-status`,
   the job's target observable is resolved server-side (`getJob → observable`) and scope-checked before the report is returned. (Analyzers and responders
@@ -408,9 +414,9 @@ Alternatively, users can specify a permissions path when configuring the MCPB in
   an entity (see "Tool filters" above for the exact guarantees and limitations)
 - **Untrusted-data wrapping (deny-by-default)**: TheHive field values returned to the LLM are wrapped in `[UNTRUSTED_DATA]...[/UNTRUSTED_DATA]` boundary tags so
   the model can tell data from instructions. The policy is **deny-by-default**: every string value is wrapped _unless_ its field name is on a small trusted
-  allowlist of structural identifiers, enums/control values, and dates (`_id`, `_type`, `status`, `dataType`, date fields, and more). This means `customFields` values,
-  attachment names, and any field added to the TheHive SDK in the future are wrapped automatically — there is no longer an allowlist of "untrusted" fields that
-  has to be kept in sync. Embedded boundary markers are escaped so the boundary cannot be broken out of.
+  allowlist of structural identifiers, enums/control values, and dates (`_id`, `_type`, `status`, `dataType`, date fields, and more). This means `customFields`
+  values, attachment names, and any field added to the TheHive SDK in the future are wrapped automatically — there is no longer an allowlist of "untrusted"
+  fields that has to be kept in sync. Embedded boundary markers are escaped so the boundary cannot be broken out of.
 - **Logged Operations**: Permission denials logged for auditing
 
 ## TheHive Filter Syntax

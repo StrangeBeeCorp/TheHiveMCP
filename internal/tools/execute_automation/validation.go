@@ -75,7 +75,10 @@ func (t *ExecuteAutomationTool) validateTargetScope(ctx context.Context, perms *
 		return nil
 	}
 
-	inScope, err := utils.IsEntityInScope(ctx, entityType, entityID, permFilters)
+	// Tolerant get-by-idOrName resolution: the automation target id is user/LLM-supplied
+	// and may be bare (not the ~-prefixed _id), which the batched _in{_id} query would
+	// wrongly deny (DL-5764).
+	inScope, err := utils.IsEntityInScopeTolerant(ctx, entityType, entityID, permFilters)
 	if err != nil {
 		return tools.NewToolError("failed to verify entity scope").Cause(err).
 			Hint("The operation was denied because the configured permission filters could not be checked against the target entity")

@@ -42,8 +42,43 @@ func entityOperationName(verb, entityType string) string {
 // GetEntityIDsInScope reports which entity IDs match permFilters for the given
 // type, resolved server-side in one list query. With no filters every ID is in
 // scope. See scopedEntityIDsBatch for the query shape.
+//
+// PRECONDITION: every id must be the ~-prefixed internal _id form. The single
+// _in{_id} query does NOT match a bare id (a plain case number or a name), even
+// one that get-by-idOrName would resolve — TheHive only honours _in on _id for
+// the ~-prefixed form (DL-5764). This is safe for the similarity-expansion path,
+// whose ids come straight from a prior search's _id field. Callers that accept
+// user/LLM-supplied ids (which may be bare) must use ScopedEntityIDsTolerant
+// instead, which resolves each id through the more forgiving get-by-idOrName path.
 func GetEntityIDsInScope(ctx context.Context, entityType string, entityIDs []string, permFilters map[string]any) (map[string]bool, error) {
 	return scopedEntityIDsBatch(ctx, entityType, entityIDs, permFilters)
+}
+
+// ScopedEntityIDsTolerant reports which entity IDs match permFilters for the
+// given type, resolving each id through the get-by-idOrName path (getX
+// idOrName=<id> -> filter(permFilters)). Unlike GetEntityIDsInScope's single
+// _in{_id} query, this tolerates BARE ids — a plain case number or a name that
+// get-by-idOrName accepts, not only the ~-prefixed internal _id (DL-5764
+// regression).
+//
+// Use this on the CRUD/manage and execute-automation paths, where entity ids are
+// supplied by the user/LLM and may be bare. It costs N round-trips (one per id)
+// instead of one; those paths address only a handful of ids, so the tolerance is
+// worth the extra queries. The batched _in path stays on the similarity-expansion
+// fan-out, where ids are provably ~-prefixed and the N-hit round-trip saving matters.
+func ScopedEntityIDsTolerant(ctx context.Context, entityType string, entityIDs []string, permFilters map[string]any) (map[string]bool, error) {
+	return ScopedEntityIDsByGetOneByOne(ctx, entityType, entityIDs, permFilters)
+}
+
+// IsEntityInScopeTolerant is the single-ID form of ScopedEntityIDsTolerant: it
+// resolves the id through the bare-id-tolerant get-by-idOrName path.
+func IsEntityInScopeTolerant(ctx context.Context, entityType, entityID string, permFilters map[string]any) (bool, error) {
+	inScope, err := ScopedEntityIDsTolerant(ctx, entityType, []string{entityID}, permFilters)
+	if err != nil {
+		return false, err
+	}
+
+	return inScope[entityID], nil
 }
 
 // GetScopedEntityIDsBatch is an alias of GetEntityIDsInScope: both resolve the
@@ -119,13 +154,16 @@ func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []st
 	return inScope, nil
 }
 
-// ScopedEntityIDsByGetOneByOne is the earlier per-ID get-by-ID implementation,
-// kept only as the differential oracle for TestGetScopedEntityIDsBatchHonorsIDFilter:
-// each id resolves through the canonical getX -> filter(permFilters) fetch-by-_id
-// path. Production code no longer calls this — GetEntityIDsInScope /
-// GetScopedEntityIDsBatch use the single-query _in path. It is exported solely so
-// the live integration test in package manage_test can diff the _in path against
-// this independent, proven implementation (do not use in production code).
+// ScopedEntityIDsByGetOneByOne resolves scope per id through the canonical getX
+// idOrName=<id> -> filter(permFilters) path. get-by-idOrName tolerates bare ids
+// (a plain case number or a name), where the batched _in{_id} query matches only
+// the ~-prefixed internal _id (DL-5764).
+//
+// It is the implementation behind ScopedEntityIDsTolerant (the CRUD/manage and
+// execute-automation paths) and also the independent differential oracle for
+// TestGetScopedEntityIDsBatchHonorsIDFilter, which diffs the _in path against this
+// one. Prefer the ScopedEntityIDsTolerant / IsEntityInScopeTolerant wrappers in
+// callers so intent reads at the call site; this stays exported for the test.
 func ScopedEntityIDsByGetOneByOne(ctx context.Context, entityType string, entityIDs []string, permFilters map[string]any) (map[string]bool, error) {
 	inScope := make(map[string]bool, len(entityIDs))
 	if len(permFilters) == 0 {
@@ -298,7 +336,9 @@ func executeScopeQueryIDs(ctx context.Context, operations []thehive.InputQueryNa
 	return ids, nil
 }
 
-// IsEntityInScope is the single-ID form of GetEntityIDsInScope.
+// IsEntityInScope is the single-ID form of GetEntityIDsInScope and shares its
+// ~-prefixed-id precondition. For a possibly-bare user/LLM id use
+// IsEntityInScopeTolerant.
 func IsEntityInScope(ctx context.Context, entityType, entityID string, permFilters map[string]any) (bool, error) {
 	inScope, err := GetEntityIDsInScope(ctx, entityType, []string{entityID}, permFilters)
 	if err != nil {

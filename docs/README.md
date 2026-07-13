@@ -40,4 +40,6 @@ Information-oriented, neutral description of the tools and their contracts. Look
 Understanding-oriented discussion of the reasoning behind the project.
 
 - **[ADR-0001 — Accuracy and security testing policy](explanation/adr/0001-security-and-accuracy-testing-policy.md)** — what's tested, how, and why.
+- **[ADR-0002 — Two scope-resolution paths](explanation/adr/0002-scope-resolution-two-paths.md)** — why the permission scope check resolves user-supplied IDs
+  and expansion hits differently.
 - **[Evaluation evidence](evaluation/README.md)** — published per-model accuracy and prompt-injection resilience results, per server version.
