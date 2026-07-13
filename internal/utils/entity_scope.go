@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"unicode"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
@@ -232,8 +231,7 @@ func IsJobObservableInScope(ctx context.Context, jobID string, permFilters map[s
 }
 
 func scopeFilterOperation(permFilters map[string]any) map[string]any {
-	filterOp := make(map[string]any, len(permFilters)+1)
-	maps.Copy(filterOp, permFilters)
+	filterOp := deepCopyFilter(permFilters)
 
 	filterOp = NormalizeFilterKeys(filterOp)
 	filterOp = TranslateDatesToTimestamps(filterOp)
@@ -248,8 +246,7 @@ func scopeFilterOperation(permFilters map[string]any) map[string]any {
 // and date-translated; the _in clause is left untouched so the ~-prefixed ids
 // reach TheHive byte-for-byte.
 func scopeInFilterOperation(permFilters map[string]any, entityIDs []string) map[string]any {
-	normalized := make(map[string]any, len(permFilters))
-	maps.Copy(normalized, permFilters)
+	normalized := deepCopyFilter(permFilters)
 
 	normalized = NormalizeFilterKeys(normalized)
 	normalized = TranslateDatesToTimestamps(normalized)

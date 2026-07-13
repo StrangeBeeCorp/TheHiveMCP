@@ -16,6 +16,7 @@ const (
 	opEq   = "_eq"
 	opLike = "_like"
 	opLTE  = "_lte"
+	opGTE  = "_gte"
 
 	valueCase = "case"
 	fieldTLP  = "tlp"

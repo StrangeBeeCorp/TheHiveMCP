@@ -131,3 +131,42 @@ func TestGetScopedEntityIDsBatchFailsClosedOnCancel(t *testing.T) {
 	require.Error(t, err, "a cancelled batch must report an error, not a partial map")
 	require.Nil(t, inScope, "the partial map must be discarded on cancellation")
 }
+
+// The scope builders normalize + date-translate permFilters in place via
+// mutating recursive transforms. A shallow copy would leave nested maps/slices
+// aliased with the caller's original, so those transforms would rewrite the
+// caller's permFilters (e.g. turn a date string into epoch millis). Deep-copying
+// must keep the input untouched.
+func TestScopeBuildersDoNotMutateCallerPermFilters(t *testing.T) {
+	t.Parallel()
+
+	const dateStr = "2024-01-01T00:00:00"
+
+	newPermFilters := func() map[string]any {
+		return map[string]any{
+			opAnd: []any{
+				map[string]any{opGTE: map[string]any{fieldField: "createdAt", fieldValue: dateStr}},
+				map[string]any{`"` + opLTE + `"`: map[string]any{fieldField: fieldTLP, fieldValue: 2}},
+			},
+		}
+	}
+
+	for _, tc := range []struct {
+		name  string
+		build func(map[string]any)
+	}{
+		{"scopeFilterOperation", func(pf map[string]any) { scopeFilterOperation(pf) }},
+		{"scopeInFilterOperation", func(pf map[string]any) { scopeInFilterOperation(pf, []string{"~1", "~2"}) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			permFilters := newPermFilters()
+
+			tc.build(permFilters)
+
+			require.Equal(t, newPermFilters(), permFilters,
+				"scope builder must not mutate the caller's permFilters (nested date string / malformed key)")
+		})
+	}
+}
