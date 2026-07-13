@@ -99,12 +99,18 @@ func scopeInValues(query []map[string]any) []string {
 	return nil
 }
 
-// inValuesFromAnd returns the string _in._values from the first _and clause that
-// carries one, or nil.
+// inValuesFromAnd returns the string _in._values from the _and clause whose
+// _in targets _field:_id, or nil. Keying on _id (rather than first-_in-wins)
+// keeps extraction correct when permFilters is itself _in-shaped and nests
+// ahead of the id clause.
 func inValuesFromAnd(and []any) []string {
 	for _, clause := range and {
 		clauseMap, _ := clause.(map[string]any)
 		in, _ := clauseMap[opIn].(map[string]any)
+
+		if in[keyField] != fieldID {
+			continue
+		}
 
 		values, ok := in[keyValues].([]any)
 		if !ok {
@@ -184,6 +190,26 @@ func operationNames(query []map[string]any) []string {
 	}
 
 	return names
+}
+
+// TestScopeInValuesIgnoresInShapedPermFilters guards the fake server's id
+// extraction: the production scope filter is _and[ permFilters, _in{_field:_id,
+// _values:ids} ], and when permFilters is itself _in-shaped, scopeInValues must
+// still return the _id clause's values — not the permFilters clause's.
+func TestScopeInValuesIgnoresInShapedPermFilters(t *testing.T) {
+	query := []map[string]any{
+		{
+			opNameKey: opFilter,
+			opAnd: []any{
+				// _in-shaped permFilters, nested first (as production builds it).
+				map[string]any{opIn: map[string]any{keyField: "tags", keyValues: []any{"phishing"}}},
+				// The id clause the fake server must key off.
+				map[string]any{opIn: map[string]any{keyField: fieldID, keyValues: []any{"~1", "~2"}}},
+			},
+		},
+	}
+
+	require.Equal(t, []string{"~1", "~2"}, scopeInValues(query))
 }
 
 func newFakeHiveClient(t *testing.T, srv *httptest.Server) *thehive.APIClient {
