@@ -184,6 +184,43 @@ func TestGetScopedEntityIDsBatchChunksLargeIDSet(t *testing.T) {
 	}
 }
 
+// A failed batch scope query must surface an error that carries enough context
+// to triage the denial: the entity type, the id count, and the underlying API
+// response detail (the server-side reason). Naming only the type — the old
+// batch wrap — loses the diagnostic granularity the per-ID oracle had (DL-5764,
+// Task 04). It must not dump the full id list at error level.
+func TestGetScopedEntityIDsBatchErrorCarriesContext(t *testing.T) {
+	t.Parallel()
+
+	const total = 7
+
+	// Fail the scope list query with a distinctive server-side reason so we can
+	// assert it survives the error wrap.
+	const apiDetail = "invalid query clause XYZ"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, apiDetail, http.StatusBadRequest)
+	}))
+	defer srv.Close()
+
+	client := newFakeHiveClient(t, srv)
+	ctx := context.WithValue(context.Background(), types.HiveClientCtxKey, client)
+
+	entityIDs := make([]string, total)
+	for i := range entityIDs {
+		entityIDs[i] = fmt.Sprintf("~%d", i)
+	}
+
+	inScope, err := GetScopedEntityIDsBatch(ctx, types.EntityTypeCase, entityIDs, tlpLTE2Filters())
+	require.Error(t, err)
+	require.Nil(t, inScope, "a failed batch must not return a partial map")
+
+	msg := err.Error()
+	require.Contains(t, msg, types.EntityTypeCase, "error must name the entity type")
+	require.Contains(t, msg, fmt.Sprintf("%d", total), "error must report the id count for triage")
+	require.Contains(t, msg, apiDetail, "error must preserve the underlying API response detail")
+}
+
 // The scope builders normalize + date-translate permFilters in place via
 // mutating recursive transforms. A shallow copy would leave nested maps/slices
 // aliased with the caller's original, so those transforms would rewrite the

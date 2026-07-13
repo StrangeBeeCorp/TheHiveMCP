@@ -141,7 +141,15 @@ func scopedEntityIDsBatch(ctx context.Context, entityType string, entityIDs []st
 
 		matchedIDs, err := scopedEntityIDsChunk(ctx, listOpName, chunk, permFilters)
 		if err != nil {
-			return nil, fmt.Errorf("failed to verify %s IDs against permission filters: %w", entityType, err)
+			// Batching collapses one query per id into one query per chunk, so the
+			// error can't name the single failing id the per-ID oracle would. Carry
+			// the entity type and id counts (this chunk, and the whole batch) instead,
+			// so a failed denial-path check is still triageable. The underlying
+			// executeScopeQueryIDs wrap preserves the API response detail. The ids
+			// themselves are not logged — they can be large in number and are not
+			// needed to identify which check failed.
+			return nil, fmt.Errorf("failed to verify %d %s IDs (chunk %d-%d of %d total) against permission filters: %w",
+				len(chunk), entityType, start, end, len(entityIDs), err)
 		}
 
 		for _, id := range chunk {
