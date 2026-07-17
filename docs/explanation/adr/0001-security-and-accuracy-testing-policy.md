@@ -47,11 +47,10 @@ release-process docs, and README commitment section), so those artifacts—none 
 
 ### Scoring and the judge model
 
-Many assertions are graded by an LLM-as-judge (rubric grading), so the judge is the measuring stick. Above all, it must be **reproducible**: the same
-transcript must earn the same grade today and in six months, so scores stay comparable across time and across candidates. The pipeline serves **every
-model—candidates and judge alike—through a single pinned provider**, so a model is never silently routed to a different quantization or hardware between
-runs. That removes the cross-provider variance that would otherwise rule out open-weight models and makes it possible to choose the judge on quality and cost
-alone. The policy:
+Many assertions are graded by an LLM-as-judge (rubric grading), so the judge is the measuring stick. Above all, it must be **reproducible**: the same transcript
+must earn the same grade today and in six months, so scores stay comparable across time and across candidates. The pipeline serves **every model—candidates and
+judge alike—through a single pinned provider**, so a model is never silently routed to a different quantization or hardware between runs. That removes the
+cross-provider variance that would otherwise rule out open-weight models and makes it possible to choose the judge on quality and cost alone. The policy:
 
 - The judge is **pinned** to a specific model version and provider, and it runs deterministically (temperature 0), with fixed weights and no silent upgrades.
 - It is **held constant** across runs. A judge change re-baselines every score, so it is recorded with the results and triggers a re-run.
@@ -76,27 +75,27 @@ isn't a meaningful bias concern. Evidence published from runs that predate this 
 
 ### Candidate models for the initial evaluation set
 
-The initial test matrix deliberately spans four segments: frontier hosted models, strong open-weight alternatives, a European-sovereign option, and small
-models for on-premise or budget deployments. This reflects the real range of how users deploy TheHiveMCP. The recommended list is whichever candidates pass.
-This matrix is the starting point, not the outcome.
+The initial test matrix deliberately spans four segments: frontier hosted models, strong open-weight alternatives, a European-sovereign option, and small models
+for on-premise or budget deployments. This reflects the real range of how users deploy TheHiveMCP. The recommended list is whichever candidates pass. This
+matrix is the starting point, not the outcome.
 
-| Segment                                | Models                                                                            |
-| --------------------------------------- | ---------------------------------------------------------------------------------- |
-| Frontier / SOTA (common in production) | `anthropic/claude-sonnet-4.6`, `openai/gpt-5.5`, `google/gemini-3.5-flash`         |
-| Strong open-weight alternatives        | `deepseek/deepseek-v4-pro`, `z-ai/glm-5.2`, `moonshotai/kimi-k2.6`                 |
-| European-sovereign (Mistral)           | `mistralai/mistral-medium-3.5`                                                     |
-| Small (on-premise or budget)           | `google/gemini-3.1-flash-lite`, `qwen/qwen3.5-9b`, `mistralai/ministral-8b-2512`   |
+| Segment                                | Models                                                                           |
+| -------------------------------------- | -------------------------------------------------------------------------------- |
+| Frontier / SOTA (common in production) | `anthropic/claude-sonnet-4.6`, `openai/gpt-5.5`, `google/gemini-3.5-flash`       |
+| Strong open-weight alternatives        | `deepseek/deepseek-v4-pro`, `z-ai/glm-5.2`, `moonshotai/kimi-k2.6`               |
+| European-sovereign (Mistral)           | `mistralai/mistral-medium-3.5`                                                   |
+| Small (on-premise or budget)           | `google/gemini-3.1-flash-lite`, `qwen/qwen3.5-9b`, `mistralai/ministral-8b-2512` |
 
 This set is a **starting proposal, not a fixed benchmark.** It will change as models are released and in response to customer demand. The goal is to keep it
 broadly comparable over time, but comparability is a best-effort aim, not the main objective. Changes follow the recommended-model policy above.
 
 ### Where and how evidence is published
 
-- A single `docs/evaluation/` folder, linked from the README, with **one subfolder per evaluated MCP-server version** (`docs/evaluation/vX.Y.Z/`). Accuracy
-  and security describe the same run against the same version, so they're published together in that version's folder—splitting them invites drift.
+- A single `docs/evaluation/` folder, linked from the README, with **one subfolder per evaluated MCP-server version** (`docs/evaluation/vX.Y.Z/`). Accuracy and
+  security describe the same run against the same version, so they're published together in that version's folder—splitting them invites drift.
 - Each version folder holds three artifacts:
-  - **`results.csv`: the source of truth.** A predictable, machine-readable table: one row per model, with the accuracy and security counts broken down
-    **per suite and per test category** (for example, search, entity management, automation), plus the MCP-server version, date, and judge model. It's
+  - **`results.csv`: the source of truth.** A predictable, machine-readable table: one row per model, with the accuracy and security counts broken down **per
+    suite and per test category** (for example, search, entity management, automation), plus the MCP-server version, date, and judge model. It's
     version-controlled, diffs cleanly release to release (you can see exactly which model moved), and is trivially machine-processable.
   - **`summary.md`**: the human-readable narrative, covering that version's results and a comparison with the previous evaluated version.
   - **`report.html`**: a richer chart-based report for visual inspection. Generated artifacts that embed raw attacker payloads (the prompt-injection showcase)
@@ -108,15 +107,15 @@ broadly comparable over time, but comparability is a best-effort aim, not the ma
 
 Re-testing is tied to **public version publishing**, not to individual feature changes:
 
-- **Default:** every publicly published MCP-server version is evaluated (accuracy and security) before release, and the `docs/evaluation/` table is updated
-  to that version.
+- **Default:** every publicly published MCP-server version is evaluated (accuracy and security) before release, and the `docs/evaluation/` table is updated to
+  that version.
 - **Exception:** if a version contains only changes that can't affect model behavior (internal refactor, dependency bump, docs, or CI/build), the previous
   version's results carry forward, noted in the report and the release notes. When in doubt, re-run.
 
 ## Consequences
 
-**Good**: users get model-specific public evidence and a clear contract. Re-test cost is bounded by releases, not the calendar. Gaps are explicit, and
-hardening is measurable against the same suite.
+**Good**: users get model-specific public evidence and a clear contract. Re-test cost is bounded by releases, not the calendar. Gaps are explicit, and hardening
+is measurable against the same suite.
 
-**Trade-offs**: a narrower supported model set, a possible missed provider-side regression between runs, and latency/throughput that isn't formally
-validated. Each is revisited on real-world signal.
+**Trade-offs**: a narrower supported model set, a possible missed provider-side regression between runs, and latency/throughput that isn't formally validated.
+Each is revisited on real-world signal.

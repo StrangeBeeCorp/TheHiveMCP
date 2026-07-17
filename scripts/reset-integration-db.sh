@@ -51,11 +51,11 @@ LICENSING_FALLBACK_TAG="release-5.6"
 # derive_licensing_tag maps THEHIVE_TEST_IMAGE (e.g. strangebee/thehive:5.6.3)
 # to a licensing tag (release-5.6). Empty if no version can be parsed.
 derive_licensing_tag() {
-	local img="${THEHIVE_TEST_IMAGE:-}"
-	local ver majmin
-	ver="${img##*:}" # 5.6.3
-	majmin="$(echo "$ver" | grep -oE '^[0-9]+\.[0-9]+' || true)"
-	[[ -n "$majmin" ]] && echo "release-${majmin}"
+  local img="${THEHIVE_TEST_IMAGE:-}"
+  local ver majmin
+  ver="${img##*:}" # 5.6.3
+  majmin="$(echo "$ver" | grep -oE '^[0-9]+\.[0-9]+' || true)"
+  [[ -n "$majmin" ]] && echo "release-${majmin}"
 }
 
 # pick_licensing_image echoes the first pullable "<repo>:<tag>" among the
@@ -64,18 +64,18 @@ derive_licensing_tag() {
 # manifest-inspect error when it fails — is logged to stderr so a CI fallback to
 # free mode is never silent (see the log when a run unexpectedly goes sequential).
 pick_licensing_image() {
-	local tag err
-	for tag in "$(derive_licensing_tag)" "$LICENSING_FALLBACK_TAG"; do
-		[[ -n "$tag" ]] || continue
-		echo "Probing ${LICENSING_REPO}:${tag}…" >&2
-		if err="$(docker manifest inspect "${LICENSING_REPO}:${tag}" 2>&1 >/dev/null)"; then
-			echo "  → pullable" >&2
-			echo "${LICENSING_REPO}:${tag}"
-			return 0
-		fi
-		echo "  → not pullable: ${err}" >&2
-	done
-	return 0
+  local tag err
+  for tag in "$(derive_licensing_tag)" "$LICENSING_FALLBACK_TAG"; do
+    [[ -n "$tag" ]] || continue
+    echo "Probing ${LICENSING_REPO}:${tag}…" >&2
+    if err="$(docker manifest inspect "${LICENSING_REPO}:${tag}" 2>&1 >/dev/null)"; then
+      echo "  → pullable" >&2
+      echo "${LICENSING_REPO}:${tag}"
+      return 0
+    fi
+    echo "  → not pullable: ${err}" >&2
+  done
+  return 0
 }
 
 # A ready-made license token supplied out of band (CI secret, local dev). When
@@ -89,35 +89,35 @@ PRESUPPLIED_LICENSE="${THEHIVE_TEST_LICENSE:-}"
 rm -f "${LICENSE_FILE}"
 
 if [[ -n "${PRESUPPLIED_LICENSE}" ]]; then
-	echo "THEHIVE_TEST_LICENSE is set → license (parallel) mode; skipping mint."
-	# TheHive reads the token from the mounted LICENSE_FILE at boot (license
-	# override → license.filePath), so writing it now and booting with the
-	# override is all that's needed — no minting challenge, no activation call.
-	printf '%s' "${PRESUPPLIED_LICENSE}" >"${LICENSE_FILE}"
-	LICENSING_IMAGE=""
-	DC="docker compose -f ${COMPOSE_FILE} -f docker-compose.license.yml"
+  echo "THEHIVE_TEST_LICENSE is set → license (parallel) mode; skipping mint."
+  # TheHive reads the token from the mounted LICENSE_FILE at boot (license
+  # override → license.filePath), so writing it now and booting with the
+  # override is all that's needed — no minting challenge, no activation call.
+  printf '%s' "${PRESUPPLIED_LICENSE}" >"${LICENSE_FILE}"
+  LICENSING_IMAGE=""
+  DC="docker compose -f ${COMPOSE_FILE} -f docker-compose.license.yml"
 else
-	LICENSING_IMAGE="$(pick_licensing_image)"
-	if [[ -n "${LICENSING_IMAGE}" ]]; then
-		echo "Licensing image ${LICENSING_IMAGE} is pullable → license (parallel) mode."
-		# The override mounts LICENSE_FILE; create an empty placeholder so the mount
-		# source exists and TheHive boots in --dev mode (unlicensed-but-dev) for the
-		# minting challenge below.
-		: >"${LICENSE_FILE}"
-		DC="docker compose -f ${COMPOSE_FILE} -f docker-compose.license.yml"
-	else
-		echo "Licensing image not pullable → free (sequential) mode."
-		DC="docker compose -f ${COMPOSE_FILE}"
-	fi
+  LICENSING_IMAGE="$(pick_licensing_image)"
+  if [[ -n "${LICENSING_IMAGE}" ]]; then
+    echo "Licensing image ${LICENSING_IMAGE} is pullable → license (parallel) mode."
+    # The override mounts LICENSE_FILE; create an empty placeholder so the mount
+    # source exists and TheHive boots in --dev mode (unlicensed-but-dev) for the
+    # minting challenge below.
+    : >"${LICENSE_FILE}"
+    DC="docker compose -f ${COMPOSE_FILE} -f docker-compose.license.yml"
+  else
+    echo "Licensing image not pullable → free (sequential) mode."
+    DC="docker compose -f ${COMPOSE_FILE}"
+  fi
 fi
 
 # Tear the stack down if we fail before handing off to the test run. Cleared on
 # success so the stack stays up for fast reruns / inspection.
 cleanup() {
-	status=$?
-	echo "reset failed (status ${status}); tearing the stack down" >&2
-	${DC} down -v || true
-	exit "${status}"
+  status=$?
+  echo "reset failed (status ${status}); tearing the stack down" >&2
+  ${DC} down -v || true
+  exit "${status}"
 }
 trap cleanup EXIT INT TERM
 
@@ -133,35 +133,35 @@ ${DC} up -d
 # disk, and so the Makefile can pass it to the go-test container to select
 # parallel mode.
 if [[ -n "${LICENSING_IMAGE}" ]]; then
-	echo "Waiting for TheHive to accept the licensing challenge…"
-	for _ in $(seq 1 72); do
-		code="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9000/api/status || true)"
-		[[ "${code}" == "200" ]] && break
-		sleep 5
-	done
+  echo "Waiting for TheHive to accept the licensing challenge…"
+  for _ in $(seq 1 72); do
+    code="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9000/api/status || true)"
+    [[ "${code}" == "200" ]] && break
+    sleep 5
+  done
 
-	echo "Minting a multi-instance dev license…"
-	mint_out="$(docker run --network host --rm -i "${LICENSING_IMAGE}" \
-		--key-id dev \
-		--thehive http://admin:secret@localhost:9000 \
-		--expiration 365days \
-		--customer StrangeBee \
-		--plan Platinum \
-		--multiInstance \
-		--quotas users.normal=-1,organisations=-1 \
-		--stdout 2>&1)"
+  echo "Minting a multi-instance dev license…"
+  mint_out="$(docker run --network host --rm -i "${LICENSING_IMAGE}" \
+    --key-id dev \
+    --thehive http://admin:secret@localhost:9000 \
+    --expiration 365days \
+    --customer StrangeBee \
+    --plan Platinum \
+    --multiInstance \
+    --quotas users.normal=-1,organisations=-1 \
+    --stdout 2>&1)"
 
-	# The tool prints logs + "Token: <jwt>" + "Setting license … OK". Extract the
-	# JWT line; fail loudly if it is missing (so we never silently fall back to a
-	# free run when the operator expected parallel).
-	token="$(printf '%s\n' "${mint_out}" | sed -n 's/^Token: //p' | head -1)"
-	if [[ -z "${token}" ]]; then
-		echo "Failed to mint license; tool output was:" >&2
-		printf '%s\n' "${mint_out}" >&2
-		exit 1
-	fi
-	printf '%s' "${token}" >"${LICENSE_FILE}"
-	echo "License minted and activated."
+  # The tool prints logs + "Token: <jwt>" + "Setting license … OK". Extract the
+  # JWT line; fail loudly if it is missing (so we never silently fall back to a
+  # free run when the operator expected parallel).
+  token="$(printf '%s\n' "${mint_out}" | sed -n 's/^Token: //p' | head -1)"
+  if [[ -z "${token}" ]]; then
+    echo "Failed to mint license; tool output was:" >&2
+    printf '%s\n' "${mint_out}" >&2
+    exit 1
+  fi
+  printf '%s' "${token}" >"${LICENSE_FILE}"
+  echo "License minted and activated."
 fi
 
 echo "Resetting databases (DROP keyspace + delete ES indices + restart TheHive)…"

@@ -12,8 +12,8 @@
 
 **v1.0.0 is the production-ready release. The model-facing behavior of the server is unchanged from v0.3.4.** The prompt-injection defense measured here is the
 same one that shipped in v0.3.4: the server wraps every user-generated field it returns in `[UNTRUSTED_DATA]…[/UNTRUSTED_DATA]` boundary tags, and tool
-descriptions instruct the model never to follow instructions found inside them. v1.0.0 adds the production-readiness commitments (supported deployment
-shape, recommended-model constraint, published evidence), but it makes no change that alters how a model drives the tools.
+descriptions instruct the model never to follow instructions found inside them. v1.0.0 adds the production-readiness commitments (supported deployment shape,
+recommended-model constraint, published evidence), but it makes no change that alters how a model drives the tools.
 
 Because the server behavior didn't change, this evaluation isn't a before/after of a code change. It **refreshes the recommended-model matrix**: v1.0.0 is
 measured against a current set of 10 models, and the judge is pinned to `z-ai/glm-5.2` at temperature 0.
@@ -43,10 +43,9 @@ carried-over figures below are indicative, not exact deltas.
 - **Dropped from the v0.3.4 matrix (6):** `google/gemini-3-flash`, `openai/gpt-5.4`, `deepseek/deepseek-v3.2`, `mistralai/mistral-large-2512`, `openai/gpt-4.1`,
   `mistralai/mistral-small-3.2-24b`.
 
-Field-level, v0.3.4 injection resilience ranged 20%–100% (median ~70%). The current matrix ranges 53%–100%, with eight of 10 models at ≥93%.
-`claude-sonnet-4.6` is the clearest carried-over signal—it held perfect accuracy and closed its last injection miss. `qwen3.5-9b` is the same model in both
-runs but measured against a larger, harder accuracy suite and a different judge, so treat its lower percentages as specific to v1.0.0 rather than as a
-regression.
+Field-level, v0.3.4 injection resilience ranged 20%–100% (median ~70%). The current matrix ranges 53%–100%, with eight of 10 models at ≥93%. `claude-sonnet-4.6`
+is the clearest carried-over signal—it held perfect accuracy and closed its last injection miss. `qwen3.5-9b` is the same model in both runs but measured
+against a larger, harder accuracy suite and a different judge, so treat its lower percentages as specific to v1.0.0 rather than as a regression.
 
 ## Results
 
@@ -121,8 +120,8 @@ with `ministral-8b-2512`, the weakest.
   investigations correctly. Only the two smallest models trail.
 - **Security is where model choice changes the risk profile.** With the shipped boundary-tag defense on, injection resilience across the current matrix ranges
   from 100% down to 53%—the whole field is stronger than the older matrix, but the top-to-bottom gap persists and tracks model capability.
-- **The gains over the older matrix come from model selection, not a server change**—the injection defense is identical to v0.3.4. Choosing a recommended
-  model remains the dominant control on injection risk.
+- **The gains over the older matrix come from model selection, not a server change**—the injection defense is identical to v0.3.4. Choosing a recommended model
+  remains the dominant control on injection risk.
 
 ## Residual risks
 

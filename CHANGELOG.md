@@ -8,9 +8,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.0.0] - 2026-07-15
 
-TheHiveMCP is now **production-ready and out of beta**. This release removes the beta warning, publishes accuracy and security evaluation evidence, replaces
-the internal LLM in search with a deterministic filter interface, hardens the security envelope, and relicenses the project under Apache 2.0.
-Read the [Changed](#changed) and [Removed](#removed) sections below before upgrading—the search interface and the OpenAI-related configuration have changed.
+TheHiveMCP is now **production-ready and out of beta**. This release removes the beta warning, publishes accuracy and security evaluation evidence, replaces the
+internal LLM in search with a deterministic filter interface, hardens the security envelope, and relicenses the project under Apache 2.0. Read the
+[Changed](#changed) and [Removed](#removed) sections below before upgrading—the search interface and the OpenAI-related configuration have changed.
 
 ### Added
 
@@ -35,10 +35,10 @@ Read the [Changed](#changed) and [Removed](#removed) sections below before upgra
 ### Changed
 
 - **`search-entities` is now deterministic—provide filters directly.** The tool no longer translates a natural-language query through an internal LLM (MCP
-  sampling with an OpenAI fallback). Instead, the caller supplies TheHive filter DSL through a new optional `filters` parameter, which `search-entities`
-  applies as-is. This makes searches precise, deterministic, and free of an inner LLM round-trip. An empty `filters` parameter matches all. On invalid input,
-  the tool returns actionable errors pointing at the `hive://schema/*` and `hive://docs/overview/filter-dsl` resources. **Action required:** callers that
-  previously passed a `query` string must now pass a `filters` object—see the updated `search-entities` documentation.
+  sampling with an OpenAI fallback). Instead, the caller supplies TheHive filter DSL through a new optional `filters` parameter, which `search-entities` applies
+  as-is. This makes searches precise, deterministic, and free of an inner LLM round-trip. An empty `filters` parameter matches all. On invalid input, the tool
+  returns actionable errors pointing at the `hive://schema/*` and `hive://docs/overview/filter-dsl` resources. **Action required:** callers that previously
+  passed a `query` string must now pass a `filters` object—see the updated `search-entities` documentation.
 - **License changed from MIT to Apache 2.0** (Copyright StrangeBee). As the project exits beta, it now ships with an explicit patent grant and
   patent-retaliation clause. This release adds a `NOTICE` file for attribution and updates the declared license metadata accordingly.
 - **Go toolchain upgraded to 1.26.4.**
@@ -46,9 +46,9 @@ Read the [Changed](#changed) and [Removed](#removed) sections below before upgra
 
 ### Removed
 
-- **OpenAI configuration and the internal LLM plumbing.** With `search-entities` no longer generating filters internally, TheHiveMCP removed the OpenAI
-  client, the sampling infrastructure, and the natural-language filter prompts. TheHiveMCP also dropped the leftover `OPENAI_*` variables from
-  `.env.template` and the generated MCPB manifest. **Action required:** remove any `OPENAI_*` variables from your configuration—they are no longer read.
+- **OpenAI configuration and the internal LLM plumbing.** With `search-entities` no longer generating filters internally, TheHiveMCP removed the OpenAI client,
+  the sampling infrastructure, and the natural-language filter prompts. TheHiveMCP also dropped the leftover `OPENAI_*` variables from `.env.template` and the
+  generated MCPB manifest. **Action required:** remove any `OPENAI_*` variables from your configuration—they are no longer read.
 
 ### Fixed
 

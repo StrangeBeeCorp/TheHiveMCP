@@ -1,4 +1,5 @@
 <!-- Thanks for contributing to TheHiveMCP! -->
+<!-- markdownlint-disable-file MD041 -- a PR template has no H1; the PR title is the heading. -->
 
 ## Summary
 

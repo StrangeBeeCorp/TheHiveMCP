@@ -1,0 +1,556 @@
+#!/usr/bin/env bash
+# Single source of truth for repo lint/format checks. All check tools run from
+# pinned Docker images — no local toolchain required (this is a Go repo with no
+# host Go install; see the Makefile's install-dev-deps).
+#
+# The CLI is defined by a `usage` (usage.jdx.dev) contract, OpenAPI-style. The
+# canonical spec lives in the sb-thehive-mcp PLUGIN (its lint.usage.kdl), NOT in
+# this repo — and drives `usage lint`, doc generation, and shell completions.
+# The #USAGE comments in this file MIRROR that plugin contract. The plugin's
+# lint-script-setup skill enforces the mirror: it runs `usage` FROM A PINNED
+# DOCKER IMAGE (the plugin's Dockerfile.usage — no host-installed `usage`) to
+# (a) validate the plugin .kdl and (b) fail if the plugin .kdl and these #USAGE
+# comments have drifted apart. Because we can't assume host `usage`, this script
+# runs under a plain `bash` shebang and parses its own args — the #USAGE
+# comments are inert at runtime (read only by that offline drift check), so the
+# arg loop below is the actual runtime parser. The plugin .kdl leads; mirror any
+# flag change from it into both the #USAGE block and that loop.
+#
+# Consumers call this script:
+#   • `make lint`             → --all --check         (whole repo, no mutation)
+#   • `make lint-changed`     → --changed --check      (working-tree files only)
+#   • `make lint-fix`         → --all --fix            (whole repo, auto-fix)
+#   • `make lint-fix-changed` → --changed --fix        (working-tree, auto-fix)
+#   • a Stop hook             → --changed --fix --hook  (auto-fix + JSON below)
+#
+# In --hook mode the script speaks the Stop-hook JSON contract on exit 0:
+#   - No blocking issue → {systemMessage (for the user)} plus, when files were
+#     auto-fixed, {hookSpecificOutput:{hookEventName:"Stop", additionalContext}}
+#     carrying the re-read notice + line ranges into the agent's context. The
+#     agent is allowed to stop; the ranges are there for its next turn.
+#   - At least one blocking issue → {decision:"block", reason} folding the
+#     failures, the auto-fixed list, and the stale-chunk ranges together, so the
+#     agent keeps going and sees everything it must fix and re-read.
+# Ranges ride the JSON straight into context — no .claude state file, so no
+# companion UserPromptSubmit hook is required.
+#
+# ── usage spec (mirror of the PLUGIN's lint.usage.kdl — the canonical contract) ──
+# These #USAGE comments are NOT parsed at runtime (plain-bash script; see the
+# shebang note above). They exist only so the plugin's drift check —
+# `usage generate json -f scripts/lint.sh` vs the plugin .kdl, run from Docker
+# by the lint-script-setup skill's verify-setup.sh — normalizes this file to the
+# same JSON as the plugin .kdl and fails on any divergence.
+#
+# NOTE: every #USAGE line below MUST be a byte-for-byte copy of the matching
+# line in the PLUGIN's lint.usage.kdl (minus the leading "#USAGE "). Do not edit
+# the help text here; edit the plugin .kdl first, then re-run the skill.
+#USAGE bin "lint.sh"
+#USAGE about "Single source of truth for repo lint/format checks (all tools run from pinned Docker images)."
+#USAGE flag "--all"         help="Check every tracked file (git ls-files) — the full gate. Default scope."
+#USAGE flag "--changed"     help="Check only this turn's changed files (unstaged + staged + new untracked + committed-this-turn)."
+#USAGE flag "--check"       help="Report problems without modifying files. Default."
+#USAGE flag "--fix"         help="Auto-fix cosmetics (ruff format, shfmt) and ruff's SAFE lint fixes in place, then report loudly."
+#USAGE flag "--hook"        help="Emit the Stop-hook JSON contract (exit 0): a clean stop returns {systemMessage} plus, when files were auto-fixed, hookSpecificOutput.additionalContext with the re-read line ranges; a blocking issue returns {decision:\"block\", reason} folding failures, auto-fixed files, and those ranges together."
+#USAGE flag "--only-custom" help="Run only the checks the sb-thehive-mcp plugin Stop hook doesn't. Example: mypy and compose-overlay validation."
+set -uo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT" || exit 1
+
+# ── Pinned check tools. This script is the source of truth for the repo's check
+# versions (the plugin's Stop hook just launches it). GO_IMAGE is read from the
+# Makefile so `go test`/`go build` here never drift from `make test`. LINT_IMAGE
+# and the rest are pinned right here — this script is their single reference.
+# Only list the images this repo's file types need.
+GO_IMAGE="$(grep -m1 '^GO_IMAGE *:=' "$REPO_ROOT/Makefile" | sed 's/.*:= *//')"
+LINT_IMAGE="golangci/golangci-lint:v2.12.2"
+SHELLCHECK_IMAGE="koalaman/shellcheck:v0.11.0"
+SHFMT_IMAGE="mvdan/shfmt:v3.13.1"
+MARKDOWN_IMAGE="davidanson/markdownlint-cli2:v0.23.0"
+LYCHEE_IMAGE="lycheeverse/lychee:0.24.2"
+PRETTIER_IMAGE="node:22-alpine"
+YAMLLINT_IMAGE="cytopia/yamllint@sha256:3e9eb827ab2b12a5ea5f49d4257bb3aca94bba9f1ba427c8bc7f2456385a5204"
+HADOLINT_IMAGE="hadolint/hadolint:v2.14.0"
+CHECKMAKE_IMAGE="cytopia/checkmake@sha256:23116ee551144f1021b294d3ede266ecb760272e0d6f2833f8a3d38b81beffb8"
+YL_RULES='{extends: relaxed, rules: {line-length: disable, document-start: disable, comments: disable, comments-indentation: disable, empty-lines: disable, trailing-spaces: disable}}'
+
+# ── Args ─────────────────────────────────────────────────────────────────────
+# Hand-parsed (no host `usage` at runtime). The flags, their help, and the
+# defaults documented in the #USAGE block above mirror the plugin's
+# lint.usage.kdl — the contract. Change the plugin .kdl first, then this.
+SCOPE="all" # all | changed
+FIX=0       # 0 = --check, 1 = --fix
+HOOK=0      # 0 = text output, 1 = Stop-hook JSON contract
+ONLY_CUSTOM=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --all) SCOPE="all" ;;
+    --changed) SCOPE="changed" ;;
+    --check) FIX=0 ;;
+    --fix) FIX=1 ;;
+    --hook) HOOK=1 ;;
+    --only-custom) ONLY_CUSTOM=1 ;;
+    -h | --help)
+      sed -n 's/^#USAGE flag "\([^"]*\)"[^=]*help="\(.*\)"$/  \1\t\2/p' "$0"
+      exit 0
+      ;;
+    *)
+      echo "lint.sh: unknown flag '$1'" >&2
+      exit 64
+      ;;
+  esac
+  shift
+done
+
+# ── File selection ───────────────────────────────────────────────────────────
+# Populate the *_files arrays for the chosen scope. Both scopes restrict to
+# files that still exist on disk so deletions never reach a checker.
+go_files=()
+sh_files=()
+md_files=()
+yaml_files=()
+dockerfiles=()
+mk_files=()
+
+# Markdown files exempt from lint/format. These are LLM-facing resource docs
+# whose exact layout is load-bearing — compact single-line JSON and unwrapped
+# table rows are what the model is shown — so markdownlint (--fix) and prettier
+# (--prose-wrap) must not rewrite them. Paths are handed to the tools
+# explicitly, so the tools' own ignore files never see them; skip here instead.
+md_format_exempt() {
+  case "$1" in
+    internal/resources/docs/filter-dsl.md) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+classify() {
+  local f
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    [ -f "$f" ] || continue
+    case "$f" in
+      *.go) go_files+=("$f") ;;
+      *.sh) sh_files+=("$f") ;;
+      *.md | *.mdx) md_format_exempt "$f" || md_files+=("$f") ;;
+      *.yaml | *.yml) yaml_files+=("$f") ;;
+      *.mk) mk_files+=("$f") ;;
+    esac
+    case "$(basename "$f")" in
+      Dockerfile | Dockerfile.*) dockerfiles+=("$f") ;;
+      GNUmakefile | Makefile | makefile | Makefile.*) mk_files+=("$f") ;;
+    esac
+  done
+}
+
+# Files touched by commits made *during this turn* would otherwise escape the
+# --changed scope: once committed, `git diff HEAD` and untracked detection
+# report nothing. The plugin's UserPromptSubmit hook stamps the turn start in
+# .claude/last-prompt-ts; reuse it (we own no UserPromptSubmit hook) to union in
+# files touched by commits made at/after that second. The walk is bounded to
+# this branch's own commits (BASE..HEAD) so a date filter alone can't sweep in
+# base commits others authored. BASE = merge-base(HEAD, upstream|origin/main).
+committed_this_turn() {
+  local ts_file="$REPO_ROOT/.claude/last-prompt-ts" prompt_ts base_ref base range candidate mb
+  [ -r "$ts_file" ] || return 0
+  prompt_ts=$(cat "$ts_file" 2>/dev/null)
+  case "$prompt_ts" in
+    '' | *[!0-9]*) return 0 ;;
+  esac
+  base_ref=$(git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null)
+  for candidate in "$base_ref" origin/main main; do
+    [ -n "$candidate" ] || continue
+    if mb=$(git merge-base "$candidate" HEAD 2>/dev/null); then
+      base="$mb"
+      break
+    fi
+  done
+  range="${base:+$base..}HEAD"
+  git log --no-merges --since="@$prompt_ts" --name-only --pretty=format: "$range" 2>/dev/null || true
+}
+
+if [ "$SCOPE" = all ]; then
+  classify < <(git ls-files)
+else
+  classify < <({
+    git diff --name-only
+    git diff --cached --name-only
+    git ls-files --others --exclude-standard
+    committed_this_turn
+  } | sort -u)
+fi
+
+# ── Pre-fix snapshot (Stop-hook mode only) ─────────────────────────────────────
+# In `--fix --hook` we record the exact NEW-file line ranges each fixer rewrote,
+# so the next prompt can tell the agent which lines to re-read (its in-context
+# copy is now stale). We can't know in advance which files a fixer will touch,
+# so snapshot EVERY candidate up front — before any fixer runs — into a tempdir,
+# then diff each against its post-fix on-disk version in the report section.
+# Only spent when both HOOK and FIX are set; a plain `make lint-fix` at the
+# terminal pays nothing for it.
+SNAPSHOT_DIR=""
+# All candidate paths across every file type, deduped — reused for the snapshot
+# and, in the report section, for the before/after diff. Built from the arrays
+# with the +() guard so an empty array is safe under `set -u`.
+all_candidates() {
+  {
+    [ ${#go_files[@]} -gt 0 ] && printf '%s\n' "${go_files[@]}"
+    [ ${#sh_files[@]} -gt 0 ] && printf '%s\n' "${sh_files[@]}"
+    [ ${#md_files[@]} -gt 0 ] && printf '%s\n' "${md_files[@]}"
+    [ ${#yaml_files[@]} -gt 0 ] && printf '%s\n' "${yaml_files[@]}"
+    [ ${#dockerfiles[@]} -gt 0 ] && printf '%s\n' "${dockerfiles[@]}"
+    [ ${#mk_files[@]} -gt 0 ] && printf '%s\n' "${mk_files[@]}"
+  } | sort -u
+}
+if [ "$HOOK" -eq 1 ] && [ "$FIX" -eq 1 ]; then
+  SNAPSHOT_DIR=$(mktemp -d)
+  trap 'rm -rf "$SNAPSHOT_DIR"' EXIT
+  while IFS= read -r f; do
+    [ -n "$f" ] && [ -f "$f" ] || continue
+    mkdir -p "$SNAPSHOT_DIR/$(dirname "$f")"
+    cp "$f" "$SNAPSHOT_DIR/$f"
+  done < <(all_candidates)
+fi
+
+# ── Checkers ───────────────────────────────────────────────────────────────
+# Each appends a "=== name ===\n<output>\n" block to `failures` on a blocking
+# failure. Auto-fixes are reported loudly but never populate `failures`.
+failures=""
+fixed_files=""
+lint_fixed_files=""
+
+record_fixed() { fixed_files+="${1#./}"$'\n'; }
+record_lint_fixed() { lint_fixed_files+="${1#./}"$'\n'; }
+prepull() { docker pull -q "$1" >/dev/null 2>&1 || true; }
+
+# md5 of each still-existing path so a caller can diff a before/after snapshot
+# to learn which files a tool rewrote in place. Use `md5sum` on Linux hosts.
+file_md5s() {
+  local f
+  for f in "$@"; do [ -f "$f" ] && md5 -r "$f"; done 2>/dev/null || true
+}
+record_changed() {
+  local before="$1" after="$2" line
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    grep -qxF "$line" <<<"$before" || record_lint_fixed "${line#* }"
+  done <<<"$after"
+}
+
+# ── Go (gofmt + golangci-lint + fast tests). Skipped under --only-custom: the
+# plugin's Stop hook already runs all of these, so a local hook delegates them.
+# gofmt -w, then (in --fix) golangci-lint fmt +
+# run --fix, then a blocking `golangci-lint run`, then `go test -short`. The repo
+# ships its own .golangci.yml, so golangci-lint auto-discovers it (no -c). Cache
+# mounts are the Makefile's named volumes (linux-native, populated in-container)
+# so the script works identically on host and docker-in-docker. ────────────────
+check_go() {
+  [ ${#go_files[@]} -gt 0 ] || return 0
+  prepull "$GO_IMAGE"
+  prepull "$LINT_IMAGE"
+  local cache=(-v thehivemcp-gomod:/go/pkg/mod -v thehivemcp-gobuild:/root/.cache/go-build)
+  local lint_cache=("${cache[@]}" -v thehivemcp-golangci-cache:/root/.cache/golangci-lint)
+  local out
+  local -a go_paths=()
+  local f
+  for f in "${go_files[@]}"; do go_paths+=("/app/$f"); done
+
+  if [ "$FIX" -eq 1 ]; then
+    local before after
+    before=$(file_md5s "${go_files[@]}")
+    docker run -i --rm -v "$REPO_ROOT":/app -w /app "$GO_IMAGE" \
+      gofmt -l -w "${go_paths[@]}" >/dev/null 2>&1 || true
+    docker run -i --rm -v "$REPO_ROOT":/app "${lint_cache[@]}" -w /app "$LINT_IMAGE" \
+      golangci-lint fmt ./... >/dev/null 2>&1 || true
+    docker run -i --rm -v "$REPO_ROOT":/app "${lint_cache[@]}" -w /app "$LINT_IMAGE" \
+      golangci-lint run --fix ./... >/dev/null 2>&1 || true
+    after=$(file_md5s "${go_files[@]}")
+    record_changed "$before" "$after"
+  else
+    if ! out=$(docker run -i --rm -v "$REPO_ROOT":/app -w /app "$GO_IMAGE" \
+      gofmt -l "${go_paths[@]}" 2>&1) || [ -n "$out" ]; then
+      failures+="=== gofmt -l (needs formatting) ===
+$out
+
+"
+    fi
+  fi
+
+  # Blocking lint gate over the whole module (cross-file findings still apply).
+  if ! out=$(docker run -i --rm -v "$REPO_ROOT":/app "${lint_cache[@]}" -w /app "$LINT_IMAGE" \
+    golangci-lint run ./... 2>&1); then
+    failures+="=== golangci-lint ===
+$out
+
+"
+  fi
+
+  # Fast unit tests (mirrors `make test`: -short skips the integration suite, so
+  # results are go-test-cached and reruns are near-instant).
+  if ! out=$(docker run -i --rm -v "$REPO_ROOT":/app -w /app "${cache[@]}" "$GO_IMAGE" \
+    go test -short ./... 2>&1); then
+    failures+="=== go test -short ===
+$out
+
+"
+  fi
+}
+
+check_shell() {
+  [ ${#sh_files[@]} -gt 0 ] || return 0
+  prepull "$SHELLCHECK_IMAGE"
+  prepull "$SHFMT_IMAGE"
+  local out
+  if ! out=$(docker run --rm -v "$REPO_ROOT":/mnt -w /mnt "$SHELLCHECK_IMAGE" \
+    "${sh_files[@]}" 2>&1); then
+    failures+="=== shellcheck ===
+$out
+
+"
+  fi
+  if [ "$FIX" -eq 1 ]; then
+    out=$(docker run --rm -v "$REPO_ROOT":/mnt -w /mnt "$SHFMT_IMAGE" \
+      -i 2 -ci -l -w "${sh_files[@]}" 2>&1)
+    if [ -n "$out" ]; then
+      # Don't echo here — record_fixed feeds the single "Auto-fixed:" report
+      # section at the end, so an inline echo would just duplicate it.
+      while IFS= read -r f; do [ -n "$f" ] && record_fixed "$f"; done <<<"$out"
+    fi
+  else
+    # Report-only: list the files that WOULD be reformatted (shfmt -l) rather
+    # than dumping the full per-file diff (shfmt -d), which over the whole-repo
+    # --all scope is a wall of output. Run `make lint-fix` / `--fix` to apply.
+    if out=$(docker run --rm -v "$REPO_ROOT":/mnt -w /mnt "$SHFMT_IMAGE" \
+      -i 2 -ci -l "${sh_files[@]}" 2>&1) && [ -z "$out" ]; then
+      : # all formatted
+    else
+      failures+="=== shfmt (needs formatting; run with --fix) ===
+$out
+
+"
+    fi
+  fi
+}
+
+# ── Markdown: markdownlint-cli2 (--fix in --fix mode, else report), then a
+# link check (lychee --offline: local refs only, so a remote outage can't fail
+# us), then a cosmetic prettier prose-wrap at width 160 (matches the repo's
+# .markdownlint.jsonc MD013 so the two never fight). The repo ships its own
+# .markdownlint.jsonc, auto-discovered under -w /app. ──────────────────────────
+check_markdown() {
+  [ ${#md_files[@]} -gt 0 ] || return 0
+  prepull "$MARKDOWN_IMAGE"
+  prepull "$LYCHEE_IMAGE"
+  local out before after
+  local -a app_paths=()
+  local f
+  for f in "${md_files[@]}"; do app_paths+=("/app/$f"); done
+  before=$(file_md5s "${md_files[@]}")
+
+  if [ "$FIX" -eq 1 ]; then
+    docker run -i --rm -v "$REPO_ROOT":/app -w /app "$MARKDOWN_IMAGE" \
+      markdownlint-cli2 --fix "${app_paths[@]}" >/dev/null 2>&1 || true
+  else
+    if ! out=$(docker run -i --rm -v "$REPO_ROOT":/app -w /app "$MARKDOWN_IMAGE" \
+      markdownlint-cli2 "${app_paths[@]}" 2>&1); then
+      failures+="=== markdownlint-cli2 ===
+$out
+
+"
+    fi
+  fi
+
+  if ! out=$(docker run --init -i --rm -v "$REPO_ROOT":/input -w /input "$LYCHEE_IMAGE" \
+    --offline "${md_files[@]}" 2>&1); then
+    failures+="=== lychee ===
+$out
+
+"
+  fi
+
+  if [ "$FIX" -eq 1 ]; then
+    docker run -i --rm -v "$REPO_ROOT":/app -w /app "$PRETTIER_IMAGE" \
+      npx --yes prettier --prose-wrap always --print-width 160 --write "${app_paths[@]}" >/dev/null 2>&1 || true
+    after=$(file_md5s "${md_files[@]}")
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      grep -qxF "$line" <<<"$before" || record_fixed "${line#* }"
+    done <<<"$after"
+  fi
+}
+
+check_yaml() {
+  [ ${#yaml_files[@]} -gt 0 ] || return 0
+  prepull "$YAMLLINT_IMAGE"
+  local out
+  if ! out=$(docker run --rm -v "$REPO_ROOT":/data -w /data "$YAMLLINT_IMAGE" \
+    -d "$YL_RULES" "${yaml_files[@]}" 2>&1); then
+    failures+="=== yamllint ===
+$out
+
+"
+  fi
+}
+
+check_dockerfiles() {
+  [ ${#dockerfiles[@]} -gt 0 ] || return 0
+  prepull "$HADOLINT_IMAGE"
+  local df out cfg=()
+  [ -f "$REPO_ROOT/.hadolint.yaml" ] &&
+    cfg=(-v "$REPO_ROOT/.hadolint.yaml":/.hadolint.yaml "$HADOLINT_IMAGE" hadolint --config /.hadolint.yaml)
+  for df in "${dockerfiles[@]}"; do
+    if [ ${#cfg[@]} -gt 0 ]; then
+      out=$(docker run --rm -i "${cfg[@]}" - <"$df" 2>&1) || {
+        failures+="=== hadolint ($df) ===
+$out
+
+"
+      }
+    else
+      out=$(docker run --rm -i "$HADOLINT_IMAGE" hadolint - <"$df" 2>&1) || {
+        failures+="=== hadolint ($df) ===
+$out
+
+"
+      }
+    fi
+  done
+}
+
+# ── Makefiles (checkmake). Reads its rule config from the repo's checkmake.ini,
+# mounted read-only. Mirrors the plugin hook's checkmake step. ──────────────────
+check_makefiles() {
+  [ ${#mk_files[@]} -gt 0 ] || return 0
+  prepull "$CHECKMAKE_IMAGE"
+  local out cfg=() flag=()
+  if [ -f "$REPO_ROOT/checkmake.ini" ]; then
+    cfg=(-v "$REPO_ROOT/checkmake.ini":/checkmake.ini:ro)
+    flag=(--config=/checkmake.ini)
+  fi
+  local -a app_paths=()
+  local f
+  for f in "${mk_files[@]}"; do app_paths+=("/app/$f"); done
+  if ! out=$(docker run --rm -v "$REPO_ROOT":/app "${cfg[@]}" -w /app "$CHECKMAKE_IMAGE" \
+    "${flag[@]}" "${app_paths[@]}" 2>&1); then
+    failures+="=== checkmake ===
+$out
+
+"
+  fi
+}
+
+# ── REPO-SPECIFIC CUSTOM CHECKS ───────────────────────────────────────────────
+# --only-custom exists so a repo's OWN local Stop hook can add checks the plugin
+# lacks WITHOUT re-running the plugin's tools. This repo has NO such checks — the
+# plugin Stop hook already covers every file type it contains (Go, shell,
+# markdown, YAML, Dockerfiles, Makefile) — so check_custom is intentionally
+# empty and --only-custom is a no-op. Add repo-only checks here if that changes.
+check_custom() {
+  : # no checks beyond the plugin's; --only-custom does nothing (correct).
+}
+
+# ── Dispatch ──────────────────────────────────────────────────────────────────
+# --only-custom runs ONLY check_custom. Otherwise run the full plugin-mirroring
+# set over this repo's actual file types.
+if [ "$ONLY_CUSTOM" -eq 1 ]; then
+  check_custom
+else
+  check_go
+  check_shell
+  check_markdown
+  check_yaml
+  check_dockerfiles
+  check_makefiles
+  check_custom
+fi
+
+# ── Report ───────────────────────────────────────────────────────────────────
+summary() {
+  local parts=()
+  [ "${#go_files[@]}" -gt 0 ] && parts+=("${#go_files[@]} go")
+  [ "${#sh_files[@]}" -gt 0 ] && parts+=("${#sh_files[@]} sh")
+  [ "${#md_files[@]}" -gt 0 ] && parts+=("${#md_files[@]} md")
+  [ "${#yaml_files[@]}" -gt 0 ] && parts+=("${#yaml_files[@]} yaml")
+  [ "${#dockerfiles[@]}" -gt 0 ] && parts+=("${#dockerfiles[@]} Dockerfile")
+  [ "${#mk_files[@]}" -gt 0 ] && parts+=("${#mk_files[@]} Makefile")
+  if [ "${#parts[@]}" -eq 0 ]; then
+    printf 'no changed files'
+    return
+  fi
+  local out="${parts[0]}" i
+  for i in "${parts[@]:1}"; do out+=", $i"; done
+  printf '%s' "$out"
+}
+
+fixed_block() {
+  local label="$1" list="$2" uniq
+  uniq=$(printf '%s' "$list" | grep -v '^$' | sort -u)
+  [ -n "$uniq" ] || return 0
+  printf '\n%s:\n%s' "$label" "$(printf '%s' "$uniq" | sed 's/^/  /')"
+}
+fixed="$(fixed_block 'Auto-fixed' "$fixed_files")$(fixed_block 'Auto-fixed (lint)' "$lint_fixed_files")"
+
+# ── Auto-fixed line ranges (Stop-hook mode only) ───────────────────────────────
+# For each file a fixer actually rewrote, diff its pre-fix snapshot against the
+# current on-disk content and emit the NEW-file line ranges of each hunk — the
+# lines the agent must re-read (its in-context copy is now stale). Collected into
+# `ranges` and surfaced through the --hook JSON below (additionalContext on a
+# clean stop, or folded into the block `reason` on failure) — NOT written to a
+# file: the Stop hook injects straight into the agent's context, so no companion
+# UserPromptSubmit hook is needed. Guarded on SNAPSHOT_DIR so it only runs in
+# `--fix --hook`. Multiple non-adjacent hunks in one file → a comma-joined list.
+ranges=""
+if [ -n "$SNAPSHOT_DIR" ] && { [ -n "$fixed_files" ] || [ -n "$lint_fixed_files" ]; }; then
+  fixed_rel=$(printf '%s%s' "$fixed_files" "$lint_fixed_files" | grep -v '^$' | sort -u)
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    [ -f "$rel" ] && [ -f "$SNAPSHOT_DIR/$rel" ] || continue
+    # Parse each hunk header "@@ -a,b +c,d @@": the new-file side is +c,d, where
+    # d defaults to 1 when omitted. Emit "c-(c+d-1)" (single line -> "N-N").
+    file_ranges=$(diff -u "$SNAPSHOT_DIR/$rel" "$rel" 2>/dev/null |
+      grep '^@@' |
+      sed -E 's/^@@ -[0-9]+(,[0-9]+)? \+([0-9]+)(,([0-9]+))? @@.*/\2 \4/' |
+      while read -r start len; do
+        len="${len:-1}"
+        echo "$start-$((start + len - 1))"
+      done |
+      paste -sd, - | sed 's/,/, /g')
+    [ -n "$file_ranges" ] && ranges="${ranges}  ${rel}: ${file_ranges}"$'\n'
+  done <<<"$fixed_rel"
+fi
+# The re-read notice, prefixed to the ranges block. Empty when nothing was fixed.
+ranges_block=""
+[ -n "$ranges" ] && ranges_block="
+
+Auto-fixed chunks (your in-context copy is stale — re-read before editing):
+${ranges%$'\n'}"
+
+if [ "$HOOK" -eq 1 ]; then
+  if [ -z "$failures" ]; then
+    # Clean stop: let the agent stop. systemMessage goes to the user; the
+    # auto-fixed ranges (if any) ride additionalContext into the agent's context
+    # so a later user-prompted turn knows those chunks are stale. No block.
+    jq -cn --arg msg "✓ Static analysis passed ($(summary))$fixed" \
+      --arg ctx "$ranges_block" \
+      '{systemMessage: $msg}
+       + (if $ctx == "" then {}
+          else {hookSpecificOutput: {hookEventName: "Stop", additionalContext: $ctx}}
+          end)'
+    exit 0
+  fi
+  # At least one blocking issue: prevent the stop and hand the agent everything
+  # it must act on — the failures, the auto-fixed file list, and the stale-chunk
+  # ranges to re-read — via decision:block + reason (processed only on exit 0).
+  jq -cn --arg reason "Lint checks failed — fix these before stopping:$fixed$ranges_block
+
+$failures" \
+    '{decision: "block", reason: $reason}'
+  exit 0
+fi
+
+if [ -z "$failures" ]; then
+  printf '✓ lint passed (%s)%s\n' "$(summary)" "$fixed"
+  exit 0
+fi
+printf '✗ lint found problems:%s\n\n%s\n' "$fixed" "$failures" >&2
+exit 1

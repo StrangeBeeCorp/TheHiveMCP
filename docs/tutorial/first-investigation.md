@@ -1,8 +1,8 @@
 # Your First Investigation with TheHiveMCP
 
-In this tutorial we will connect TheHiveMCP to an AI assistant and run our first investigation—entirely in natural language, entirely read-only. By the end
-you will have asked the assistant to search your TheHive instance, drill into a case, and inspect its observables, and you will have seen the MCP tools do the
-work behind the scenes.
+In this tutorial we will connect TheHiveMCP to an AI assistant and run our first investigation—entirely in natural language, entirely read-only. By the end you
+will have asked the assistant to search your TheHive instance, drill into a case, and inspect its observables, and you will have seen the MCP tools do the work
+behind the scenes.
 
 We will stay in the safe, default `read_only` mode the whole time, so nothing in TheHive can be changed. This is a lesson, not a production setup—follow the
 steps in order and each one will produce the result described.
@@ -59,8 +59,8 @@ Quit Claude Desktop completely and reopen it. MCP servers connect at startup, so
 Once it reopens, look for the tools icon (🔧) near the message box. Select it—you should see **thehive** listed with four tools: `search-entities`,
 `manage-entities`, `execute-automation`, and `get-resource`. This confirms the server connected successfully.
 
-If **thehive** is missing, the [troubleshooting section of the Claude Code how-to](../how-to/setup-claude-code.md#troubleshooting) covers the same failure
-modes (the config shape is identical).
+If **thehive** is missing, the [troubleshooting section of the Claude Code how-to](../how-to/setup-claude-code.md#troubleshooting) covers the same failure modes
+(the config shape is identical).
 
 ## Step 4 — Ask your first question
 
@@ -70,8 +70,8 @@ In a new conversation, enter:
 Show me the 5 most recent cases in TheHive.
 ```
 
-The assistant will call `search-entities` and return a short list of your most recent cases, each with its ID, title, and severity. You have run a TheHive
-query without writing a single filter—the assistant translated your request and TheHiveMCP executed it.
+The assistant will call `search-entities` and return a short list of your most recent cases, each with its ID, title, and severity. You have run a TheHive query
+without writing a single filter—the assistant translated your request and TheHiveMCP executed it.
 
 ## Step 5 — Drill into one case
 
@@ -81,8 +81,8 @@ Pick a case ID from the list and ask:
 What observables are attached to that case? Summarize what they tell us.
 ```
 
-The assistant will search the case's observables (again through `search-entities`, this time enriched with related data) and summarize them for you. Notice
-that it reasons over the _data_ TheHive returned—IP addresses, file hashes, domains—rather than making anything up.
+The assistant will search the case's observables (again through `search-entities`, this time enriched with related data) and summarize them for you. Notice that
+it reasons over the _data_ TheHive returned—IP addresses, file hashes, domains—rather than making anything up.
 
 ## Step 6 — Explore what else is there
 
@@ -92,8 +92,8 @@ Finally, ask the assistant to look around:
 What kinds of things can you search for in my TheHive, and how many high-severity cases are open right now?
 ```
 
-To answer, the assistant will use `get-resource` to discover the available entity types and schemas, then run a count query. You will get back a
-plain-language answer grounded in your live data.
+To answer, the assistant will use `get-resource` to discover the available entity types and schemas, then run a count query. You will get back a plain-language
+answer grounded in your live data.
 
 ## What we did
 

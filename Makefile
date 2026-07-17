@@ -351,20 +351,32 @@ vulncheck: ## Check for vulnerabilities
 	docker run -i --rm -v $(CURDIR):/app -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@v1.3.0 && govulncheck ./...'
 
 .PHONY: lint
-lint: ## Run linter checks without modifying files
+lint: ## Run linter checks over the whole repo without modifying files
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Linter Checks --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
-	docker run --rm -v $(CURDIR):/app -w /app golangci/golangci-lint:v2.12.2 golangci-lint config verify
-	docker run -v $(CURDIR):/app -w /app -i --rm $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GOLANGCI_CACHE) $(GIT_WORKTREE_MOUNT) golangci/golangci-lint:v2.12.2 golangci-lint run
+	./scripts/lint.sh --all --check
+
+.PHONY: lint-changed
+lint-changed: ## Run linter checks over this turn's changed files only, no modifying
+	@echo $(BGreen)-----------------------------$(Color_Off)
+	@echo $(BGreen)-- Linter Checks: changed --$(Color_Off)
+	@echo $(BGreen)-----------------------------$(Color_Off)
+	./scripts/lint.sh --changed --check
 
 .PHONY: lint-fix
-lint-fix: fmt ## Format the code, then run linter checks with auto-fix
+lint-fix: ## Auto-fix cosmetics + safe lint fixes over the whole repo, reporting fixed files
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Linter Checks with auto-fix --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
-	docker run --rm -v $(CURDIR):/app -w /app golangci/golangci-lint:v2.12.2 golangci-lint config verify
-	docker run -v $(CURDIR):/app -w /app -i --rm $(DOCKER_CACHE_MOUNTS) $(GOLANGCI_CACHE) $(GIT_WORKTREE_MOUNT) golangci/golangci-lint:v2.12.2 golangci-lint run --fix
+	./scripts/lint.sh --all --fix
+
+.PHONY: lint-fix-changed
+lint-fix-changed: ## Auto-fix this turn's changed files only, reporting fixed files
+	@echo $(BGreen)-----------------------------$(Color_Off)
+	@echo $(BGreen)-- Linter Checks: auto-fix changed --$(Color_Off)
+	@echo $(BGreen)-----------------------------$(Color_Off)
+	./scripts/lint.sh --changed --fix
 
 .PHONY: updatedep
 updatedep: ## Update dependencies

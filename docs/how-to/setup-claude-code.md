@@ -7,8 +7,8 @@ There are two ways to run the server locally:
 
 - **Docker (recommended).** It avoids unsigned-binary prompts and works identically from the terminal, VS Code, and any other MCP host. This is the path this
   guide uses.
-- **Native binary (alternative).** A single downloaded executable. On macOS, this triggers a Gatekeeper prompt that blocks GUI hosts (VS Code, Claude
-  Desktop). See [Alternative: Native Binary](#alternative-native-binary) for the workaround.
+- **Native binary (alternative).** A single downloaded executable. On macOS, this triggers a Gatekeeper prompt that blocks GUI hosts (VS Code, Claude Desktop).
+  See [Alternative: Native Binary](#alternative-native-binary) for the workaround.
 
 ## Prerequisites
 
@@ -35,8 +35,8 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
 ```
 
 `OK` confirms the MCP server itself starts and completes the handshake—but the `initialize` step does **not** verify your TheHive credentials (the server
-answers the handshake before contacting TheHive). To confirm the credentials too, re-run the command below and look for a credential error in the stderr logs.
-A clean run with no `ERROR` line about credentials means the credentials are correct.
+answers the handshake before contacting TheHive). To confirm the credentials too, re-run the command below and look for a credential error in the stderr logs. A
+clean run with no `ERROR` line about credentials means the credentials are correct.
 
 If it prints `FAILED`, or to check credentials, re-run without the `grep`/`2>/dev/null` part to read the logs—the server logs to **stderr**:
 
@@ -49,11 +49,11 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
       ghcr.io/strangebeecorp/thehivemcp/thehivemcp:latest /app/server --transport stdio 2>&1 | head -20
 ```
 
-> **Why `docker run -i`, `/app/server`, and `--transport stdio`?** The `-i` flag keeps stdin open so Claude Code can talk to the container—without it the
-> server gets no input and hangs. The image's default command is `/app/server`. Because anything you put after the image name **replaces** that default (the
-> image has no `ENTRYPOINT`), you must name the binary explicitly—otherwise Docker tries to execute `--transport` as a program and fails with _"executable
-> file not found"_. `--transport stdio` then tells the server to speak MCP over stdio. TheHiveMCP defaults to HTTP, so without it you'd get an HTTP server
-> that Claude Code can't reach. `--rm` cleans up the container when the session ends.
+> **Why `docker run -i`, `/app/server`, and `--transport stdio`?** The `-i` flag keeps stdin open so Claude Code can talk to the container—without it the server
+> gets no input and hangs. The image's default command is `/app/server`. Because anything you put after the image name **replaces** that default (the image has
+> no `ENTRYPOINT`), you must name the binary explicitly—otherwise Docker tries to execute `--transport` as a program and fails with _"executable file not
+> found"_. `--transport stdio` then tells the server to speak MCP over stdio. TheHiveMCP defaults to HTTP, so without it you'd get an HTTP server that Claude
+> Code can't reach. `--rm` cleans up the container when the session ends.
 
 ---
 
@@ -79,9 +79,9 @@ Everything after `--` is the command Claude Code runs to launch the server. Note
   the server would never see it.
 
 The `${VAR}` references are wrapped in **single quotes** on purpose: that stops your shell from expanding them at `add` time, so the literal `${VAR}` string is
-written into `.mcp.json`. Claude Code then expands it from your environment each time it launches the server (`${VAR:-default}` supplies a fallback). The
-result is a `.mcp.json` you can safely commit—export `THEHIVE_URL`, `THEHIVE_API_KEY`, and `THEHIVE_ORGANISATION` in your shell before launching `claude`. To
-bake the literal values into the file instead, drop the single quotes and write them directly—but then don't commit the file.
+written into `.mcp.json`. Claude Code then expands it from your environment each time it launches the server (`${VAR:-default}` supplies a fallback). The result
+is a `.mcp.json` you can safely commit—export `THEHIVE_URL`, `THEHIVE_API_KEY`, and `THEHIVE_ORGANISATION` in your shell before launching `claude`. To bake the
+literal values into the file instead, drop the single quotes and write them directly—but then don't commit the file.
 
 ### Choosing a scope
 
@@ -130,9 +130,9 @@ Create `.mcp.json` in your project directory:
 ```
 
 > **Keep secrets out of the file: use `${VAR}` references.** Claude Code expands environment variables in `.mcp.json` before launching the server: `${VAR}`
-> takes the value from your shell environment, and `${VAR:-default}` falls back to `default` when the variable is unset. Expansion works in `command`,
-> `args`, `env`, and (for HTTP servers) `url` and `headers`, in every scope. This lets you commit `.mcp.json` while keeping your API key in your environment
-> instead of in git. Export the variables before launching `claude` (for example, in your shell profile or a local `.env` file you source):
+> takes the value from your shell environment, and `${VAR:-default}` falls back to `default` when the variable is unset. Expansion works in `command`, `args`,
+> `env`, and (for HTTP servers) `url` and `headers`, in every scope. This lets you commit `.mcp.json` while keeping your API key in your environment instead of
+> in git. Export the variables before launching `claude` (for example, in your shell profile or a local `.env` file you source):
 >
 > ```bash
 > export THEHIVE_URL="<thehive_url>"
@@ -154,8 +154,8 @@ Create `.mcp.json` in your project directory:
 Restart Claude Code completely (exit with `/exit`, then relaunch `claude`). MCP servers connect at startup—a running session won't pick up config changes.
 
 > **Project-scoped servers need a one-time approval.** The first time you launch `claude` in a directory that has a `.mcp.json`, Claude Code prompts you to
-> approve the project's MCP servers before running them (a safeguard against executing commands from a cloned repo). Until you approve, `claude mcp list`
-> shows the server as `⏸ Pending approval` and `/mcp` won't show it as connected. Approve it at the startup prompt.
+> approve the project's MCP servers before running them (a safeguard against executing commands from a cloned repo). Until you approve, `claude mcp list` shows
+> the server as `⏸ Pending approval` and `/mcp` won't show it as connected. Approve it at the startup prompt.
 
 After restart, run:
 
@@ -193,8 +193,7 @@ macOS binaries are currently unsigned. When a GUI host (VS Code, Claude Desktop)
 
 > "Apple could not verify 'thehivemcp-darwin-arm64' is free of malware…"
 
-Running it directly from the terminal works because the shell bypasses this check—but MCP hosts don't. Remove the quarantine attribute once, after
-downloading:
+Running it directly from the terminal works because the shell bypasses this check—but MCP hosts don't. Remove the quarantine attribute once, after downloading:
 
 ```bash
 xattr -d com.apple.quarantine /path/to/thehivemcp-darwin-arm64
@@ -216,8 +215,8 @@ claude mcp add thehive \
 ```
 
 Here the `-e` flags belong to `claude mcp add` (there's no container), and they're written into the server's `env` block. As in Step 2, the single-quoted
-`${VAR}` references land literally in `.mcp.json` and are expanded from your environment at launch—export the variables in your shell first, and the file
-stays safe to commit. Use the **absolute** path to the binary.
+`${VAR}` references land literally in `.mcp.json` and are expanded from your environment at launch—export the variables in your shell first, and the file stays
+safe to commit. Use the **absolute** path to the binary.
 
 ---
 
@@ -254,8 +253,7 @@ retrying.
 
 ### Duplicate or broken entry precedence
 
-An entry in `~/.claude.json` (user scope) takes precedence over `.mcp.json` (project scope). If a stale user-scope entry shadows your project config, remove
-it:
+An entry in `~/.claude.json` (user scope) takes precedence over `.mcp.json` (project scope). If a stale user-scope entry shadows your project config, remove it:
 
 ```bash
 claude mcp remove thehive --scope user

@@ -7,7 +7,10 @@ WORKSPACE_DIR=${WORKSPACE_DIR:-$(pwd)}
 
 # Load environment variables from .env file (if not in CI)
 if [[ "$CI_MODE" != "true" ]] && [[ -f "./.env" ]]; then
-    export $(grep -v '^#' ./.env | xargs)
+  # Word-splitting is intentional: split the .env lines into separate KEY=val
+  # args for `export`. .env is a trusted, developer-authored local file.
+  # shellcheck disable=SC2046
+  export $(grep -v '^#' ./.env | xargs)
 fi
 
 # Set default for permissions config
@@ -18,7 +21,7 @@ PERMISSIONS_IS_FILE=false
 # Check if it's a real file path (not the "admin"/"read_only" keywords), handling
 # both absolute and relative paths.
 if [[ -n "$PERMISSIONS_CONFIG" ]] && [[ "$PERMISSIONS_CONFIG" != "admin" ]] && [[ "$PERMISSIONS_CONFIG" != "read_only" ]] && [[ -f "$PERMISSIONS_CONFIG" ]]; then
-    PERMISSIONS_IS_FILE=true
+  PERMISSIONS_IS_FILE=true
 fi
 
 # Choose where to assemble the extension/ tree.
@@ -33,9 +36,9 @@ fi
 # subdir of it. All CI inputs are absolute paths (/usr/local/share,
 # /workspace/binaries), so nothing else depends on the CWD.
 if [[ "$CI_MODE" = "true" ]]; then
-    BUILD_ROOT="${HOME:-/tmp}/mcpb-build"
-    mkdir -p "$BUILD_ROOT"
-    cd "$BUILD_ROOT"
+  BUILD_ROOT="${HOME:-/tmp}/mcpb-build"
+  mkdir -p "$BUILD_ROOT"
+  cd "$BUILD_ROOT"
 fi
 
 # Create extension directory structure
@@ -44,30 +47,30 @@ cd extension
 
 # Copy logo - handle both CI and local modes
 if [[ "$CI_MODE" = "true" ]]; then
-    cp /usr/local/share/icon.png icon.png
+  cp /usr/local/share/icon.png icon.png
 else
-    cp ../docs/images/theHivelogo.png icon.png
+  cp ../docs/images/theHivelogo.png icon.png
 fi
 
 # Copy permissions config if it's a file path and bundle it
 PERMISSIONS_DEFAULT=""
 if [[ "$PERMISSIONS_IS_FILE" = true ]]; then
-    # File exists, copy it to the bundle
-    if [[ "$CI_MODE" = "true" ]]; then
-        cp "$PERMISSIONS_CONFIG" permissions.yaml
-    else
-        # Try relative path from project root first, then absolute/current path
-        if ! cp ../"$PERMISSIONS_CONFIG" permissions.yaml 2>/dev/null && ! cp "$PERMISSIONS_CONFIG" permissions.yaml 2>/dev/null; then
-            echo "Error: Failed to copy permissions config from '$PERMISSIONS_CONFIG'" >&2
-            echo "Tried paths: ../$PERMISSIONS_CONFIG and $PERMISSIONS_CONFIG" >&2
-            exit 1
-        fi
+  # File exists, copy it to the bundle
+  if [[ "$CI_MODE" = "true" ]]; then
+    cp "$PERMISSIONS_CONFIG" permissions.yaml
+  else
+    # Try relative path from project root first, then absolute/current path
+    if ! cp ../"$PERMISSIONS_CONFIG" permissions.yaml 2>/dev/null && ! cp "$PERMISSIONS_CONFIG" permissions.yaml 2>/dev/null; then
+      echo "Error: Failed to copy permissions config from '$PERMISSIONS_CONFIG'" >&2
+      echo "Tried paths: ../$PERMISSIONS_CONFIG and $PERMISSIONS_CONFIG" >&2
+      exit 1
     fi
-    PERMISSIONS_DEFAULT="permissions.yaml"
-    echo "Bundled permissions config: $PERMISSIONS_CONFIG -> permissions.yaml"
+  fi
+  PERMISSIONS_DEFAULT="permissions.yaml"
+  echo "Bundled permissions config: $PERMISSIONS_CONFIG -> permissions.yaml"
 elif [[ -n "$PERMISSIONS_CONFIG" ]]; then
-    # Not a file (empty string, admin, read_only, etc), use as-is
-    PERMISSIONS_DEFAULT="$PERMISSIONS_CONFIG"
+  # Not a file (empty string, admin, read_only, etc), use as-is
+  PERMISSIONS_DEFAULT="$PERMISSIONS_CONFIG"
 fi
 
 # Windows binaries carry a .exe suffix; the entry_point in the manifest must
@@ -76,33 +79,36 @@ BIN_EXT=""
 
 # Handle binary selection - in CI we'll build for all platforms
 if [[ "$CI_MODE" = "true" ]]; then
-    # In CI, expect binaries to be provided in /workspace/binaries/
-    # Use TARGET_ARCH if specified, otherwise default to linux-amd64
-    TARGET_ARCH=${TARGET_ARCH:-linux-amd64}
-    case "$TARGET_ARCH" in
-        windows-*) BIN_EXT=".exe" ;;
-        *) BIN_EXT="" ;;
-    esac
-    BINARY_NAME="thehivemcp-${TARGET_ARCH}${BIN_EXT}"
-    if [[ -f "/workspace/binaries/$BINARY_NAME" ]]; then
-        cp /workspace/binaries/$BINARY_NAME server/thehivemcp${BIN_EXT}
-    else
-        echo "Error: Binary $BINARY_NAME not found in /workspace/binaries/" >&2
-        exit 1
-    fi
+  # In CI, expect binaries to be provided in /workspace/binaries/
+  # Use TARGET_ARCH if specified, otherwise default to linux-amd64
+  TARGET_ARCH=${TARGET_ARCH:-linux-amd64}
+  case "$TARGET_ARCH" in
+    windows-*) BIN_EXT=".exe" ;;
+    *) BIN_EXT="" ;;
+  esac
+  BINARY_NAME="thehivemcp-${TARGET_ARCH}${BIN_EXT}"
+  if [[ -f "/workspace/binaries/$BINARY_NAME" ]]; then
+    cp "/workspace/binaries/$BINARY_NAME" "server/thehivemcp${BIN_EXT}"
+  else
+    echo "Error: Binary $BINARY_NAME not found in /workspace/binaries/" >&2
+    exit 1
+  fi
 else
-    # Local mode: detect platform and copy appropriate binary
-    PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
-    ARCH=$(uname -m)
-    if [[ "$ARCH" = "x86_64" ]]; then
-        ARCH="amd64"
-    fi
-    case "$PLATFORM" in
-        windows*|mingw*|msys*|cygwin*) BIN_EXT=".exe"; PLATFORM="windows" ;;
-        *) BIN_EXT="" ;;
-    esac
-    BINARY_NAME="thehivemcp-${PLATFORM}-${ARCH}${BIN_EXT}"
-    cp ../build/$BINARY_NAME server/thehivemcp${BIN_EXT}
+  # Local mode: detect platform and copy appropriate binary
+  PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
+  ARCH=$(uname -m)
+  if [[ "$ARCH" = "x86_64" ]]; then
+    ARCH="amd64"
+  fi
+  case "$PLATFORM" in
+    windows* | mingw* | msys* | cygwin*)
+      BIN_EXT=".exe"
+      PLATFORM="windows"
+      ;;
+    *) BIN_EXT="" ;;
+  esac
+  BINARY_NAME="thehivemcp-${PLATFORM}-${ARCH}${BIN_EXT}"
+  cp "../build/$BINARY_NAME" "server/thehivemcp${BIN_EXT}"
 fi
 
 # chmod is a no-op for Windows binaries but harmless; only run it for the
@@ -111,18 +117,18 @@ fi
 
 # Extract version - handle both CI and local modes
 if [[ "$CI_MODE" = "true" ]]; then
-    VERSION_FULL=${VERSION:-$(echo "$BINARY_NAME" | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "v0.0.0")}
-    VERSION=$(echo "$VERSION_FULL" | sed 's/^v//')
+  VERSION_FULL=${VERSION:-$(echo "$BINARY_NAME" | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "v0.0.0")}
+  VERSION="${VERSION_FULL#v}"
 else
-    # --no-print-directory + tail -1: when this script runs under `make
-    # mcpb-local`, MAKELEVEL is inherited and a recursive `make version` would
-    # otherwise emit "Entering/Leaving directory" lines onto stdout, which get
-    # captured here and inject literal newlines into the JSON manifest below.
-    VERSION_FULL=$(cd .. && make --no-print-directory version | tail -1)
-    VERSION=$(echo "$VERSION_FULL" | sed 's/^v//')
+  # --no-print-directory + tail -1: when this script runs under `make
+  # mcpb-local`, MAKELEVEL is inherited and a recursive `make version` would
+  # otherwise emit "Entering/Leaving directory" lines onto stdout, which get
+  # captured here and inject literal newlines into the JSON manifest below.
+  VERSION_FULL=$(cd .. && make --no-print-directory version | tail -1)
+  VERSION="${VERSION_FULL#v}"
 fi
 
-cat > manifest.json << EOF
+cat >manifest.json <<EOF
 {
   "manifest_version": "0.2",
   "name": "TheHiveMCP",
@@ -188,14 +194,14 @@ npx @anthropic-ai/mcpb pack
 
 # In CI mode, move the generated file to expected location
 if [[ "$CI_MODE" = "true" ]]; then
-    # Find the generated .mcpb file and copy it to workspace with architecture suffix
-    MCPB_FILE=$(find . -name "*.mcpb" -type f | head -1)
-    if [[ -n "$MCPB_FILE" ]]; then
-        OUTPUT_NAME="/workspace/thehivemcp-${VERSION_FULL}-${TARGET_ARCH}.mcpb"
-        cp "$MCPB_FILE" "$OUTPUT_NAME"
-        echo "MCPB package created: $OUTPUT_NAME"
-    else
-        echo "Error: No .mcpb file generated" >&2
-        exit 1
-    fi
+  # Find the generated .mcpb file and copy it to workspace with architecture suffix
+  MCPB_FILE=$(find . -name "*.mcpb" -type f | head -1)
+  if [[ -n "$MCPB_FILE" ]]; then
+    OUTPUT_NAME="/workspace/thehivemcp-${VERSION_FULL}-${TARGET_ARCH}.mcpb"
+    cp "$MCPB_FILE" "$OUTPUT_NAME"
+    echo "MCPB package created: $OUTPUT_NAME"
+  else
+    echo "Error: No .mcpb file generated" >&2
+    exit 1
+  fi
 fi

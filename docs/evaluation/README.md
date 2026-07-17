@@ -2,8 +2,8 @@
 
 This directory holds the published **accuracy** and **security** evaluation evidence for TheHiveMCP, per
 [ADR-0001](../explanation/adr/0001-security-and-accuracy-testing-policy.md). It's the evidence behind the
-[recommended-model shortlist](../../README.md#-production-ready-what-we-commit-to) in the README: the shortlist consists of the models here that clear both
-the accuracy and injection-resilience bars.
+[recommended-model shortlist](../../README.md#-production-ready-what-we-commit-to) in the README: the shortlist consists of the models here that clear both the
+accuracy and injection-resilience bars.
 
 Evidence is published **one folder per evaluated MCP-server version**. Each version folder contains:
 
@@ -13,10 +13,10 @@ Evidence is published **one folder per evaluated MCP-server version**. Each vers
 - **`report.html`** — a detailed, chart-based visual report.
 
 | Version                       | Released       | Folder                         |
-| ------------------------------ | -------------- | ------------------------------ |
-| **v1.0.0** (latest evaluated)  | July 6, 2026   | [`v1.0.0/`](v1.0.0/summary.md) |
-| v0.3.4                          | May 22, 2026   | [`v0.3.4/`](v0.3.4/summary.md) |
-| v0.3.3                          | March 17, 2026 | [`v0.3.3/`](v0.3.3/summary.md) |
+| ----------------------------- | -------------- | ------------------------------ |
+| **v1.0.0** (latest evaluated) | July 6, 2026   | [`v1.0.0/`](v1.0.0/summary.md) |
+| v0.3.4                        | May 22, 2026   | [`v0.3.4/`](v0.3.4/summary.md) |
+| v0.3.3                        | March 17, 2026 | [`v0.3.3/`](v0.3.3/summary.md) |
 
 ## Latest evaluation — v1.0.0 (released July 6, 2026, and evaluated July 2, 2026)
 
@@ -25,7 +25,7 @@ analyst). v1.0.0 is the production-ready release. Its injection defense is uncha
 detail is in [`v1.0.0/summary.md`](v1.0.0/summary.md). Machine-readable data is in [`v1.0.0/results.csv`](v1.0.0/results.csv).
 
 | Model                          | Accuracy     | Security (injection resilience) |
-| ------------------------------ | ------------ | -------------------------------- |
+| ------------------------------ | ------------ | ------------------------------- |
 | `moonshotai/kimi-k2.6`         | 100% (37/37) | 100% (15/15)                    |
 | `openai/gpt-5.5`               | 100% (37/37) | 100% (15/15)                    |
 | `z-ai/glm-5.2`                 | 100% (37/37) | 100% (15/15)                    |
@@ -63,8 +63,8 @@ Two dimensions:
 
 - **Accuracy** — correct tool use across realistic investigations: entity search, schema/resource discovery, case & observable management, automation
   (analyzers), and multi-step workflows.
-- **Security** — prompt-injection resilience. The suite seeds TheHive data with hidden instructions, and a model passes only if it **both** ignores the injection
-  **and** warns the analyst. Reported with the shipped `[UNTRUSTED_DATA]` boundary-tag defense on.
+- **Security** — prompt-injection resilience. The suite seeds TheHive data with hidden instructions, and a model passes only if it **both** ignores the
+  injection **and** warns the analyst. Reported with the shipped `[UNTRUSTED_DATA]` boundary-tag defense on.
 
 A rubric-based LLM-as-judge grades security assertions. `results.csv` records the judge model for each run. Full test definitions and fixtures live in the
 internal evaluation suite. Raw attacker payloads are not reproduced here.
