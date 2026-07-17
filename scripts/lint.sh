@@ -24,15 +24,18 @@
 #   • a Stop hook             → --changed --fix --hook  (auto-fix + JSON below)
 #
 # In --hook mode the script speaks the Stop-hook JSON contract on exit 0:
-#   - No blocking issue → {systemMessage (for the user)} plus, when files were
-#     auto-fixed, {hookSpecificOutput:{hookEventName:"Stop", additionalContext}}
-#     carrying the re-read notice + line ranges into the agent's context. The
-#     agent is allowed to stop; the ranges are there for its next turn.
+#   - No blocking issue (clean stop) → {systemMessage (for the user)} ONLY. The
+#     Stop event is respected: systemMessage is display-only and does not
+#     continue the turn. additionalContext is NOT emitted here — a Stop hook's
+#     additionalContext would continue the turn, which is exactly the bug we
+#     avoid. Any stale-chunk re-read ranges are instead persisted to
+#     .claude/lint-pending-rereads for the companion UserPromptSubmit hook to
+#     inject on the next prompt (when the user resumes the session).
 #   - At least one blocking issue → {decision:"block", reason} folding the
 #     failures, the auto-fixed list, and the stale-chunk ranges together, so the
-#     agent keeps going and sees everything it must fix and re-read.
-# Ranges ride the JSON straight into context — no .claude state file, so no
-# companion UserPromptSubmit hook is required.
+#     agent keeps going and sees everything it must fix and re-read. A block
+#     already keeps the turn running, so the ranges ride the reason inline and
+#     no state file is written.
 #
 # ── usage spec (mirror of the PLUGIN's lint.usage.kdl — the canonical contract) ──
 # These #USAGE comments are NOT parsed at runtime (plain-bash script; see the
@@ -50,7 +53,7 @@
 #USAGE flag "--changed"     help="Check only this turn's changed files (unstaged + staged + new untracked + committed-this-turn)."
 #USAGE flag "--check"       help="Report problems without modifying files. Default."
 #USAGE flag "--fix"         help="Auto-fix cosmetics (ruff format, shfmt) and ruff's SAFE lint fixes in place, then report loudly."
-#USAGE flag "--hook"        help="Emit the Stop-hook JSON contract (exit 0): a clean stop returns {systemMessage} plus, when files were auto-fixed, hookSpecificOutput.additionalContext with the re-read line ranges; a blocking issue returns {decision:\"block\", reason} folding failures, auto-fixed files, and those ranges together."
+#USAGE flag "--hook"        help="Emit the Stop-hook JSON contract (exit 0): a clean stop returns {systemMessage} only (the Stop event is respected — no additionalContext, which would continue the turn), persisting any re-read line ranges to .claude/lint-pending-rereads for the UserPromptSubmit hook to inject next prompt; a blocking issue returns {decision:\"block\", reason} folding failures, auto-fixed files, and those ranges together."
 #USAGE flag "--only-custom" help="Run only the checks the sb-thehive-mcp plugin Stop hook doesn't. Example: mypy and compose-overlay validation."
 set -uo pipefail
 
@@ -494,10 +497,11 @@ fixed="$(fixed_block 'Auto-fixed' "$fixed_files")$(fixed_block 'Auto-fixed (lint
 # For each file a fixer actually rewrote, diff its pre-fix snapshot against the
 # current on-disk content and emit the NEW-file line ranges of each hunk — the
 # lines the agent must re-read (its in-context copy is now stale). Collected into
-# `ranges` and surfaced through the --hook JSON below (additionalContext on a
-# clean stop, or folded into the block `reason` on failure) — NOT written to a
-# file: the Stop hook injects straight into the agent's context, so no companion
-# UserPromptSubmit hook is needed. Guarded on SNAPSHOT_DIR so it only runs in
+# `ranges` and surfaced through the --hook JSON below: on a clean stop they are
+# persisted to .claude/lint-pending-rereads for the UserPromptSubmit hook to
+# inject next prompt (Stop must not emit additionalContext — it would continue
+# the turn); on a blocking failure they are folded into the block `reason`
+# inline (a block already keeps the turn running). Guarded on SNAPSHOT_DIR so it only runs in
 # `--fix --hook`. Multiple non-adjacent hunks in one file → a comma-joined list.
 ranges=""
 if [ -n "$SNAPSHOT_DIR" ] && { [ -n "$fixed_files" ] || [ -n "$lint_fixed_files" ]; }; then
@@ -527,15 +531,15 @@ ${ranges%$'\n'}"
 
 if [ "$HOOK" -eq 1 ]; then
   if [ -z "$failures" ]; then
-    # Clean stop: let the agent stop. systemMessage goes to the user; the
-    # auto-fixed ranges (if any) ride additionalContext into the agent's context
-    # so a later user-prompted turn knows those chunks are stale. No block.
-    jq -cn --arg msg "✓ Static analysis passed ($(summary))$fixed" \
-      --arg ctx "$ranges_block" \
-      '{systemMessage: $msg}
-       + (if $ctx == "" then {}
-          else {hookSpecificOutput: {hookEventName: "Stop", additionalContext: $ctx}}
-          end)'
+    # Clean stop: RESPECT the Stop event. systemMessage is display-only (does not
+    # continue the turn); additionalContext WOULD continue it, so we must not emit
+    # it here. Persist any stale-chunk ranges for the UserPromptSubmit hook to
+    # inject on the next prompt.
+    if [ -n "$ranges_block" ]; then
+      mkdir -p "$REPO_ROOT/.claude"
+      printf '%s\n' "${ranges_block#$'\n'}" >"$REPO_ROOT/.claude/lint-pending-rereads"
+    fi
+    jq -cn --arg msg "✓ Static analysis passed ($(summary))$fixed" '{systemMessage: $msg}'
     exit 0
   fi
   # At least one blocking issue: prevent the stop and hand the agent everything
