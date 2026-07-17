@@ -93,7 +93,7 @@ SCOPE="all" # all | changed
 FIX=0       # 0 = --check, 1 = --fix
 HOOK=0      # 0 = text output, 1 = Stop-hook JSON contract
 ONLY_CUSTOM=0
-while [ $# -gt 0 ]; do
+while [[ $# -gt 0 ]]; do
   case "$1" in
     --all) SCOPE="all" ;;
     --changed) SCOPE="changed" ;;
@@ -129,7 +129,8 @@ mk_files=()
 # (--prose-wrap) must not rewrite them. Paths are handed to the tools
 # explicitly, so the tools' own ignore files never see them; skip here instead.
 md_format_exempt() {
-  case "$1" in
+  local path="$1"
+  case "$path" in
     internal/resources/docs/filter-dsl.md) return 0 ;;
     *) return 1 ;;
   esac
@@ -138,20 +139,23 @@ md_format_exempt() {
 classify() {
   local f
   while IFS= read -r f; do
-    [ -n "$f" ] || continue
-    [ -f "$f" ] || continue
+    [[ -n "$f" ]] || continue
+    [[ -f "$f" ]] || continue
     case "$f" in
       *.go) go_files+=("$f") ;;
       *.sh) sh_files+=("$f") ;;
       *.md | *.mdx) md_format_exempt "$f" || md_files+=("$f") ;;
       *.yaml | *.yml) yaml_files+=("$f") ;;
       *.mk) mk_files+=("$f") ;;
+      *) ;;
     esac
     case "$(basename "$f")" in
       Dockerfile | Dockerfile.*) dockerfiles+=("$f") ;;
       GNUmakefile | Makefile | makefile | Makefile.*) mk_files+=("$f") ;;
+      *) ;;
     esac
   done
+  return 0
 }
 
 # Files touched by commits made *during this turn* would otherwise escape the
@@ -163,14 +167,15 @@ classify() {
 # base commits others authored. BASE = merge-base(HEAD, upstream|origin/main).
 committed_this_turn() {
   local ts_file="$REPO_ROOT/.claude/last-prompt-ts" prompt_ts base_ref base range candidate mb
-  [ -r "$ts_file" ] || return 0
+  [[ -r "$ts_file" ]] || return 0
   prompt_ts=$(cat "$ts_file" 2>/dev/null)
   case "$prompt_ts" in
     '' | *[!0-9]*) return 0 ;;
+    *) ;;
   esac
   base_ref=$(git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null)
   for candidate in "$base_ref" origin/main main; do
-    [ -n "$candidate" ] || continue
+    [[ -n "$candidate" ]] || continue
     if mb=$(git merge-base "$candidate" HEAD 2>/dev/null); then
       base="$mb"
       break
@@ -180,7 +185,7 @@ committed_this_turn() {
   git log --no-merges --since="@$prompt_ts" --name-only --pretty=format: "$range" 2>/dev/null || true
 }
 
-if [ "$SCOPE" = all ]; then
+if [[ "$SCOPE" = all ]]; then
   classify < <(git ls-files)
 else
   classify < <({
@@ -205,24 +210,25 @@ SNAPSHOT_DIR=""
 # with the +() guard so an empty array is safe under `set -u`.
 all_candidates() {
   {
-    [ ${#go_files[@]} -gt 0 ] && printf '%s\n' "${go_files[@]}"
-    [ ${#sh_files[@]} -gt 0 ] && printf '%s\n' "${sh_files[@]}"
-    [ ${#md_files[@]} -gt 0 ] && printf '%s\n' "${md_files[@]}"
-    [ ${#yaml_files[@]} -gt 0 ] && printf '%s\n' "${yaml_files[@]}"
-    [ ${#dockerfiles[@]} -gt 0 ] && printf '%s\n' "${dockerfiles[@]}"
-    [ ${#mk_files[@]} -gt 0 ] && printf '%s\n' "${mk_files[@]}"
+    [[ ${#go_files[@]} -gt 0 ]] && printf '%s\n' "${go_files[@]}"
+    [[ ${#sh_files[@]} -gt 0 ]] && printf '%s\n' "${sh_files[@]}"
+    [[ ${#md_files[@]} -gt 0 ]] && printf '%s\n' "${md_files[@]}"
+    [[ ${#yaml_files[@]} -gt 0 ]] && printf '%s\n' "${yaml_files[@]}"
+    [[ ${#dockerfiles[@]} -gt 0 ]] && printf '%s\n' "${dockerfiles[@]}"
+    [[ ${#mk_files[@]} -gt 0 ]] && printf '%s\n' "${mk_files[@]}"
     # In --fix mode check_go runs `golangci-lint run --fix ./...` over the WHOLE
     # module, which can rewrite any .go file (not just the changed scope). Snapshot
     # them all so an out-of-scope safe-fix gets a proper re-read range, not just a
     # bare filename in the "Auto-fixed (lint)" list.
-    [ "$FIX" -eq 1 ] && git ls-files '*.go'
+    [[ "$FIX" -eq 1 ]] && git ls-files '*.go'
   } | sort -u
+  return 0
 }
-if [ "$HOOK" -eq 1 ] && [ "$FIX" -eq 1 ]; then
+if [[ "$HOOK" -eq 1 ]] && [[ "$FIX" -eq 1 ]]; then
   SNAPSHOT_DIR=$(mktemp -d)
   trap 'rm -rf "$SNAPSHOT_DIR"' EXIT
   while IFS= read -r f; do
-    [ -n "$f" ] && [ -f "$f" ] || continue
+    [[ -n "$f" ]] && [[ -f "$f" ]] || continue
     mkdir -p "$SNAPSHOT_DIR/$(dirname "$f")"
     cp "$f" "$SNAPSHOT_DIR/$f"
   done < <(all_candidates)
@@ -235,9 +241,18 @@ failures=""
 fixed_files=""
 lint_fixed_files=""
 
-record_fixed() { fixed_files+="${1#./}"$'\n'; }
-record_lint_fixed() { lint_fixed_files+="${1#./}"$'\n'; }
-prepull() { docker pull -q "$1" >/dev/null 2>&1 || true; }
+record_fixed() {
+  local path="$1"
+  fixed_files+="${path#./}"$'\n'
+}
+record_lint_fixed() {
+  local path="$1"
+  lint_fixed_files+="${path#./}"$'\n'
+}
+prepull() {
+  local image="$1"
+  docker pull -q "$image" >/dev/null 2>&1 || true
+}
 
 # ── Formatting delegation ──────────────────────────────────────────────────────
 # fmt.sh is the single source of truth for FORMATTING (gofmt, golangci fmt,
@@ -248,7 +263,7 @@ prepull() { docker pull -q "$1" >/dev/null 2>&1 || true; }
 # formatter, so it remains in check_go (tracked as lint_fixed_files).
 FMT_SCRIPT="$REPO_ROOT/scripts/fmt.sh"
 run_fmt() {
-  [ "$FIX" -eq 1 ] || return 0
+  [[ "$FIX" -eq 1 ]] || return 0
   local f
   # fmt.sh --porcelain emits the files it rewrote as NUL-terminated records on
   # stdout (machine-readable, path-safe — no scraping the human "Formatted:"
@@ -256,8 +271,9 @@ run_fmt() {
   # --fix mode. Read via process substitution (not a pipe) so record_fixed
   # mutates fixed_files in THIS shell.
   while IFS= read -r -d '' f; do
-    [ -n "$f" ] && record_fixed "$f"
+    [[ -n "$f" ]] && record_fixed "$f"
   done < <("$FMT_SCRIPT" "--$SCOPE" --fix --porcelain 2>/dev/null || true)
+  return 0
 }
 
 # md5 of each still-existing path so a caller can diff a before/after snapshot to
@@ -266,22 +282,30 @@ run_fmt() {
 # normalize to a single-space "<hash> <path>" line the callers split on
 # `${line#* }`. Kept byte-for-byte in sync with fmt.sh's file_md5s.
 if command -v md5sum >/dev/null 2>&1; then
-  _hash_one() { md5sum "$1" | sed 's/  / /'; }
+  _hash_one() {
+    local path="$1"
+    md5sum "$path" | sed 's/  / /'
+  }
 elif command -v md5 >/dev/null 2>&1; then
-  _hash_one() { md5 -r "$1"; }
+  _hash_one() {
+    local path="$1"
+    md5 -r "$path"
+  }
 else
   _hash_one() { :; } # no hasher: change detection degrades to "nothing changed"
 fi
 file_md5s() {
   local f
-  for f in "$@"; do [ -f "$f" ] && _hash_one "$f"; done 2>/dev/null || true
+  for f in "$@"; do [[ -f "$f" ]] && _hash_one "$f"; done 2>/dev/null || true
+  return 0
 }
 record_changed() {
   local before="$1" after="$2" line
   while IFS= read -r line; do
-    [ -n "$line" ] || continue
+    [[ -n "$line" ]] || continue
     grep -qxF "$line" <<<"$before" || record_lint_fixed "${line#* }"
   done <<<"$after"
+  return 0
 }
 
 # ── Go (golangci-lint + fast tests). Skipped under --only-custom: the plugin's
@@ -294,7 +318,7 @@ record_changed() {
 # (linux-native, populated in-container) so the script works identically on host
 # and docker-in-docker. ─────────────────────────────────────────────────────────
 check_go() {
-  [ ${#go_files[@]} -gt 0 ] || return 0
+  [[ ${#go_files[@]} -gt 0 ]] || return 0
   prepull "$GO_IMAGE"
   prepull "$LINT_IMAGE"
   local cache=(-v thehivemcp-gomod:/go/pkg/mod -v thehivemcp-gobuild:/root/.cache/go-build)
@@ -304,7 +328,7 @@ check_go() {
   local f
   for f in "${go_files[@]}"; do go_paths+=("/app/$f"); done
 
-  if [ "$FIX" -eq 1 ]; then
+  if [[ "$FIX" -eq 1 ]]; then
     # Formatting already ran via run_fmt(). Apply golangci's SAFE lint fixes and
     # record them separately (lint_fixed_files), keeping the "lint fix" vs
     # "format" distinction the Stop-hook report relies on.
@@ -317,7 +341,7 @@ check_go() {
     # is cheap next to the golangci/docker run itself.
     local before after
     local -a all_go=()
-    while IFS= read -r f; do [ -n "$f" ] && all_go+=("$f"); done < <(git ls-files '*.go')
+    while IFS= read -r f; do [[ -n "$f" ]] && all_go+=("$f"); done < <(git ls-files '*.go')
     before=$(file_md5s "${all_go[@]}")
     docker run -i --rm -v "$REPO_ROOT":/app "${lint_cache[@]}" -w /app "$LINT_IMAGE" \
       golangci-lint run --fix ./... >/dev/null 2>&1 || true
@@ -325,7 +349,7 @@ check_go() {
     record_changed "$before" "$after"
   else
     if ! out=$(docker run -i --rm -v "$REPO_ROOT":/app -w /app "$GO_IMAGE" \
-      gofmt -l "${go_paths[@]}" 2>&1) || [ -n "$out" ]; then
+      gofmt -l "${go_paths[@]}" 2>&1) || [[ -n "$out" ]]; then
       failures+="=== gofmt -l (needs formatting) ===
 $out
 
@@ -351,13 +375,14 @@ $out
 
 "
   fi
+  return 0
 }
 
 # Shell: shellcheck (lint) always runs here. shfmt FORMATTING is delegated to
 # fmt.sh via run_fmt() in --fix mode; in --check mode we still report files that
 # would be reformatted (shfmt -l) as a blocking failure.
 check_shell() {
-  [ ${#sh_files[@]} -gt 0 ] || return 0
+  [[ ${#sh_files[@]} -gt 0 ]] || return 0
   prepull "$SHELLCHECK_IMAGE"
   prepull "$SHFMT_IMAGE"
   local out
@@ -368,12 +393,12 @@ $out
 
 "
   fi
-  if [ "$FIX" -eq 0 ]; then
+  if [[ "$FIX" -eq 0 ]]; then
     # Report-only: list the files that WOULD be reformatted (shfmt -l) rather
     # than dumping the full per-file diff (shfmt -d), which over the whole-repo
     # --all scope is a wall of output. Run `make lint-fix` / `--fix` to apply.
     if out=$(docker run --rm -v "$REPO_ROOT":/mnt -w /mnt "$SHFMT_IMAGE" \
-      -i 2 -ci -l "${sh_files[@]}" 2>&1) && [ -z "$out" ]; then
+      -i 2 -ci -l "${sh_files[@]}" 2>&1) && [[ -z "$out" ]]; then
       : # all formatted
     else
       failures+="=== shfmt (needs formatting; run with --fix) ===
@@ -382,6 +407,7 @@ $out
 "
     fi
   fi
+  return 0
 }
 
 # ── Markdown: markdownlint-cli2 (lint) + lychee link check. FORMATTING
@@ -391,7 +417,7 @@ $out
 # us), which always runs. The repo ships its own .markdownlint.jsonc,
 # auto-discovered under -w /app. ────────────────────────────────────────────────
 check_markdown() {
-  [ ${#md_files[@]} -gt 0 ] || return 0
+  [[ ${#md_files[@]} -gt 0 ]] || return 0
   prepull "$MARKDOWN_IMAGE"
   prepull "$LYCHEE_IMAGE"
   local out
@@ -399,14 +425,12 @@ check_markdown() {
   local f
   for f in "${md_files[@]}"; do app_paths+=("/app/$f"); done
 
-  if [ "$FIX" -eq 0 ]; then
-    if ! out=$(docker run -i --rm -v "$REPO_ROOT":/app -w /app "$MARKDOWN_IMAGE" \
-      markdownlint-cli2 "${app_paths[@]}" 2>&1); then
-      failures+="=== markdownlint-cli2 ===
+  if [[ "$FIX" -eq 0 ]] && ! out=$(docker run -i --rm -v "$REPO_ROOT":/app -w /app "$MARKDOWN_IMAGE" \
+    markdownlint-cli2 "${app_paths[@]}" 2>&1); then
+    failures+="=== markdownlint-cli2 ===
 $out
 
 "
-    fi
   fi
 
   if ! out=$(docker run --init -i --rm -v "$REPO_ROOT":/input -w /input "$LYCHEE_IMAGE" \
@@ -416,10 +440,11 @@ $out
 
 "
   fi
+  return 0
 }
 
 check_yaml() {
-  [ ${#yaml_files[@]} -gt 0 ] || return 0
+  [[ ${#yaml_files[@]} -gt 0 ]] || return 0
   prepull "$YAMLLINT_IMAGE"
   local out
   if ! out=$(docker run --rm -v "$REPO_ROOT":/data -w /data "$YAMLLINT_IMAGE" \
@@ -429,16 +454,17 @@ $out
 
 "
   fi
+  return 0
 }
 
 check_dockerfiles() {
-  [ ${#dockerfiles[@]} -gt 0 ] || return 0
+  [[ ${#dockerfiles[@]} -gt 0 ]] || return 0
   prepull "$HADOLINT_IMAGE"
   local df out cfg=()
-  [ -f "$REPO_ROOT/.hadolint.yaml" ] &&
+  [[ -f "$REPO_ROOT/.hadolint.yaml" ]] &&
     cfg=(-v "$REPO_ROOT/.hadolint.yaml":/.hadolint.yaml "$HADOLINT_IMAGE" hadolint --config /.hadolint.yaml)
   for df in "${dockerfiles[@]}"; do
-    if [ ${#cfg[@]} -gt 0 ]; then
+    if [[ ${#cfg[@]} -gt 0 ]]; then
       out=$(docker run --rm -i "${cfg[@]}" - <"$df" 2>&1) || {
         failures+="=== hadolint ($df) ===
 $out
@@ -454,15 +480,16 @@ $out
       }
     fi
   done
+  return 0
 }
 
 # ── Makefiles (checkmake). Reads its rule config from the repo's checkmake.ini,
 # mounted read-only. Mirrors the plugin hook's checkmake step. ──────────────────
 check_makefiles() {
-  [ ${#mk_files[@]} -gt 0 ] || return 0
+  [[ ${#mk_files[@]} -gt 0 ]] || return 0
   prepull "$CHECKMAKE_IMAGE"
   local out cfg=() flag=()
-  if [ -f "$REPO_ROOT/checkmake.ini" ]; then
+  if [[ -f "$REPO_ROOT/checkmake.ini" ]]; then
     cfg=(-v "$REPO_ROOT/checkmake.ini":/checkmake.ini:ro)
     flag=(--config=/checkmake.ini)
   fi
@@ -476,6 +503,7 @@ $out
 
 "
   fi
+  return 0
 }
 
 # ── REPO-SPECIFIC CUSTOM CHECKS ───────────────────────────────────────────────
@@ -494,7 +522,7 @@ check_custom() {
 # run_fmt is a no-op in --check mode. It runs AFTER the Stop-hook snapshot above
 # (so its rewrites are captured for re-read ranges) and BEFORE the checkers (so a
 # gofmt/shfmt problem is fixed, not re-reported).
-if [ "$ONLY_CUSTOM" -eq 1 ]; then
+if [[ "$ONLY_CUSTOM" -eq 1 ]]; then
   check_custom
 else
   run_fmt
@@ -510,26 +538,28 @@ fi
 # ── Report ───────────────────────────────────────────────────────────────────
 summary() {
   local parts=()
-  [ "${#go_files[@]}" -gt 0 ] && parts+=("${#go_files[@]} go")
-  [ "${#sh_files[@]}" -gt 0 ] && parts+=("${#sh_files[@]} sh")
-  [ "${#md_files[@]}" -gt 0 ] && parts+=("${#md_files[@]} md")
-  [ "${#yaml_files[@]}" -gt 0 ] && parts+=("${#yaml_files[@]} yaml")
-  [ "${#dockerfiles[@]}" -gt 0 ] && parts+=("${#dockerfiles[@]} Dockerfile")
-  [ "${#mk_files[@]}" -gt 0 ] && parts+=("${#mk_files[@]} Makefile")
-  if [ "${#parts[@]}" -eq 0 ]; then
+  [[ "${#go_files[@]}" -gt 0 ]] && parts+=("${#go_files[@]} go")
+  [[ "${#sh_files[@]}" -gt 0 ]] && parts+=("${#sh_files[@]} sh")
+  [[ "${#md_files[@]}" -gt 0 ]] && parts+=("${#md_files[@]} md")
+  [[ "${#yaml_files[@]}" -gt 0 ]] && parts+=("${#yaml_files[@]} yaml")
+  [[ "${#dockerfiles[@]}" -gt 0 ]] && parts+=("${#dockerfiles[@]} Dockerfile")
+  [[ "${#mk_files[@]}" -gt 0 ]] && parts+=("${#mk_files[@]} Makefile")
+  if [[ "${#parts[@]}" -eq 0 ]]; then
     printf 'no changed files'
-    return
+    return 0
   fi
   local out="${parts[0]}" i
   for i in "${parts[@]:1}"; do out+=", $i"; done
   printf '%s' "$out"
+  return 0
 }
 
 fixed_block() {
   local label="$1" list="$2" uniq
   uniq=$(printf '%s' "$list" | grep -v '^$' | sort -u)
-  [ -n "$uniq" ] || return 0
+  [[ -n "$uniq" ]] || return 0
   printf '\n%s:\n%s' "$label" "$(printf '%s' "$uniq" | sed 's/^/  /')"
+  return 0
 }
 fixed="$(fixed_block 'Auto-fixed' "$fixed_files")$(fixed_block 'Auto-fixed (lint)' "$lint_fixed_files")"
 
@@ -544,11 +574,11 @@ fixed="$(fixed_block 'Auto-fixed' "$fixed_files")$(fixed_block 'Auto-fixed (lint
 # inline (a block already keeps the turn running). Guarded on SNAPSHOT_DIR so it only runs in
 # `--fix --hook`. Multiple non-adjacent hunks in one file → a comma-joined list.
 ranges=""
-if [ -n "$SNAPSHOT_DIR" ] && { [ -n "$fixed_files" ] || [ -n "$lint_fixed_files" ]; }; then
+if [[ -n "$SNAPSHOT_DIR" ]] && { [[ -n "$fixed_files" ]] || [[ -n "$lint_fixed_files" ]]; }; then
   fixed_rel=$(printf '%s%s' "$fixed_files" "$lint_fixed_files" | grep -v '^$' | sort -u)
   while IFS= read -r rel; do
-    [ -n "$rel" ] || continue
-    [ -f "$rel" ] && [ -f "$SNAPSHOT_DIR/$rel" ] || continue
+    [[ -n "$rel" ]] || continue
+    [[ -f "$rel" ]] && [[ -f "$SNAPSHOT_DIR/$rel" ]] || continue
     # Parse each hunk header "@@ -a,b +c,d @@": the new-file side is +c,d, where
     # d defaults to 1 when omitted. Emit "c-(c+d-1)" (single line -> "N-N").
     file_ranges=$(diff -u "$SNAPSHOT_DIR/$rel" "$rel" 2>/dev/null |
@@ -559,23 +589,23 @@ if [ -n "$SNAPSHOT_DIR" ] && { [ -n "$fixed_files" ] || [ -n "$lint_fixed_files"
         echo "$start-$((start + len - 1))"
       done |
       paste -sd, - | sed 's/,/, /g')
-    [ -n "$file_ranges" ] && ranges="${ranges}  ${rel}: ${file_ranges}"$'\n'
+    [[ -n "$file_ranges" ]] && ranges="${ranges}  ${rel}: ${file_ranges}"$'\n'
   done <<<"$fixed_rel"
 fi
 # The re-read notice, prefixed to the ranges block. Empty when nothing was fixed.
 ranges_block=""
-[ -n "$ranges" ] && ranges_block="
+[[ -n "$ranges" ]] && ranges_block="
 
 Auto-fixed chunks (your in-context copy is stale — re-read before editing):
 ${ranges%$'\n'}"
 
-if [ "$HOOK" -eq 1 ]; then
-  if [ -z "$failures" ]; then
+if [[ "$HOOK" -eq 1 ]]; then
+  if [[ -z "$failures" ]]; then
     # Clean stop: RESPECT the Stop event. systemMessage is display-only (does not
     # continue the turn); additionalContext WOULD continue it, so we must not emit
     # it here. Persist any stale-chunk ranges for the UserPromptSubmit hook to
     # inject on the next prompt.
-    if [ -n "$ranges_block" ]; then
+    if [[ -n "$ranges_block" ]]; then
       mkdir -p "$REPO_ROOT/.claude"
       printf '%s\n' "${ranges_block#$'\n'}" >"$REPO_ROOT/.claude/lint-pending-rereads"
     fi
@@ -592,7 +622,7 @@ $failures" \
   exit 0
 fi
 
-if [ -z "$failures" ]; then
+if [[ -z "$failures" ]]; then
   printf '✓ lint passed (%s)%s\n' "$(summary)" "$fixed"
   exit 0
 fi

@@ -68,7 +68,7 @@ PRETTIER_VERSION="3.9.5"
 SCOPE="all" # all | changed
 FIX=1       # 1 = --fix (rewrite), 0 = --check (report only)
 PORCELAIN=0 # 1 = porcelain output (see note above)
-while [ $# -gt 0 ]; do
+while [[ $# -gt 0 ]]; do
   case "$1" in
     --all) SCOPE="all" ;;
     --changed) SCOPE="changed" ;;
@@ -99,7 +99,8 @@ md_files=()
 # layout is load-bearing (compact JSON, unwrapped tables). MUST stay in sync with
 # lint.sh's md_format_exempt.
 md_format_exempt() {
-  case "$1" in
+  local path="$1"
+  case "$path" in
     internal/resources/docs/filter-dsl.md) return 0 ;;
     *) return 1 ;;
   esac
@@ -108,14 +109,16 @@ md_format_exempt() {
 classify() {
   local f
   while IFS= read -r f; do
-    [ -n "$f" ] || continue
-    [ -f "$f" ] || continue
+    [[ -n "$f" ]] || continue
+    [[ -f "$f" ]] || continue
     case "$f" in
       *.go) go_files+=("$f") ;;
       *.sh) sh_files+=("$f") ;;
       *.md | *.mdx) md_format_exempt "$f" || md_files+=("$f") ;;
+      *) ;;
     esac
   done
+  return 0
 }
 
 # Same as lint.sh: union in files touched by commits made during this turn, which
@@ -123,14 +126,15 @@ classify() {
 # rationale (.claude/last-prompt-ts, BASE..HEAD bound).
 committed_this_turn() {
   local ts_file="$REPO_ROOT/.claude/last-prompt-ts" prompt_ts base_ref base range candidate mb
-  [ -r "$ts_file" ] || return 0
+  [[ -r "$ts_file" ]] || return 0
   prompt_ts=$(cat "$ts_file" 2>/dev/null)
   case "$prompt_ts" in
     '' | *[!0-9]*) return 0 ;;
+    *) ;;
   esac
   base_ref=$(git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null)
   for candidate in "$base_ref" origin/main main; do
-    [ -n "$candidate" ] || continue
+    [[ -n "$candidate" ]] || continue
     if mb=$(git merge-base "$candidate" HEAD 2>/dev/null); then
       base="$mb"
       break
@@ -140,7 +144,7 @@ committed_this_turn() {
   git log --no-merges --since="@$prompt_ts" --name-only --pretty=format: "$range" 2>/dev/null || true
 }
 
-if [ "$SCOPE" = all ]; then
+if [[ "$SCOPE" = all ]]; then
   classify < <(git ls-files)
 else
   classify < <({
@@ -157,9 +161,18 @@ fi
 # without mutating, and the script exits 1 if any is non-empty.
 fixed_files=""
 unformatted=""
-record_fixed() { fixed_files+="${1#./}"$'\n'; }
-record_unformatted() { unformatted+="${1#./}"$'\n'; }
-prepull() { docker pull -q "$1" >/dev/null 2>&1 || true; }
+record_fixed() {
+  local path="$1"
+  fixed_files+="${path#./}"$'\n'
+}
+record_unformatted() {
+  local path="$1"
+  unformatted+="${path#./}"$'\n'
+}
+prepull() {
+  local image="$1"
+  docker pull -q "$image" >/dev/null 2>&1 || true
+}
 
 # md5 of each still-existing path, so a before/after snapshot reveals which files
 # a formatter rewrote (used for both --fix reporting and by lint.sh's delegation).
@@ -168,28 +181,36 @@ prepull() { docker pull -q "$1" >/dev/null 2>&1 || true; }
 # a single-space "<hash> <path>" line the callers below can split on `${line#* }`.
 # Kept byte-for-byte in sync with lint.sh's file_md5s.
 if command -v md5sum >/dev/null 2>&1; then
-  _hash_one() { md5sum "$1" | sed 's/  / /'; }
+  _hash_one() {
+    local path="$1"
+    md5sum "$path" | sed 's/  / /'
+  }
 elif command -v md5 >/dev/null 2>&1; then
-  _hash_one() { md5 -r "$1"; }
+  _hash_one() {
+    local path="$1"
+    md5 -r "$path"
+  }
 else
   _hash_one() { :; } # no hasher: change detection degrades to "nothing changed"
 fi
 file_md5s() {
   local f
-  for f in "$@"; do [ -f "$f" ] && _hash_one "$f"; done 2>/dev/null || true
+  for f in "$@"; do [[ -f "$f" ]] && _hash_one "$f"; done 2>/dev/null || true
+  return 0
 }
 # Emit the paths present in $after (md5 list) but changed vs $before, via the
 # recorder passed as $3.
 report_changed() {
   local before="$1" after="$2" recorder="$3" line
   while IFS= read -r line; do
-    [ -n "$line" ] || continue
+    [[ -n "$line" ]] || continue
     grep -qxF "$line" <<<"$before" || "$recorder" "${line#* }"
   done <<<"$after"
+  return 0
 }
 
 fmt_go() {
-  [ ${#go_files[@]} -gt 0 ] || return 0
+  [[ ${#go_files[@]} -gt 0 ]] || return 0
   prepull "$GO_IMAGE"
   prepull "$LINT_IMAGE"
   local lint_cache=(-v thehivemcp-gomod:/go/pkg/mod -v thehivemcp-gobuild:/root/.cache/go-build -v thehivemcp-golangci-cache:/root/.cache/golangci-lint)
@@ -199,7 +220,7 @@ fmt_go() {
   for f in "${go_files[@]}"; do go_paths+=("/app/$f"); done
   before=$(file_md5s "${go_files[@]}")
 
-  if [ "$FIX" -eq 1 ]; then
+  if [[ "$FIX" -eq 1 ]]; then
     docker run -i --rm -v "$REPO_ROOT":/app -w /app "$GO_IMAGE" \
       gofmt -l -w "${go_paths[@]}" >/dev/null 2>&1 || true
     docker run -i --rm -v "$REPO_ROOT":/app "${lint_cache[@]}" -w /app "$LINT_IMAGE" \
@@ -209,29 +230,29 @@ fmt_go() {
   else
     local out
     if ! out=$(docker run -i --rm -v "$REPO_ROOT":/app -w /app "$GO_IMAGE" \
-      gofmt -l "${go_paths[@]}" 2>&1) || [ -n "$out" ]; then
-      while IFS= read -r f; do [ -n "$f" ] && record_unformatted "${f#/app/}"; done <<<"$out"
+      gofmt -l "${go_paths[@]}" 2>&1) || [[ -n "$out" ]]; then
+      while IFS= read -r f; do [[ -n "$f" ]] && record_unformatted "${f#/app/}"; done <<<"$out"
     fi
   fi
 }
 
 fmt_shell() {
-  [ ${#sh_files[@]} -gt 0 ] || return 0
+  [[ ${#sh_files[@]} -gt 0 ]] || return 0
   prepull "$SHFMT_IMAGE"
   local out
-  if [ "$FIX" -eq 1 ]; then
+  if [[ "$FIX" -eq 1 ]]; then
     out=$(docker run --rm -v "$REPO_ROOT":/mnt -w /mnt "$SHFMT_IMAGE" \
       -i 2 -ci -l -w "${sh_files[@]}" 2>&1)
-    while IFS= read -r f; do [ -n "$f" ] && record_fixed "$f"; done <<<"$out"
+    while IFS= read -r f; do [[ -n "$f" ]] && record_fixed "$f"; done <<<"$out"
   else
     out=$(docker run --rm -v "$REPO_ROOT":/mnt -w /mnt "$SHFMT_IMAGE" \
       -i 2 -ci -l "${sh_files[@]}" 2>&1)
-    while IFS= read -r f; do [ -n "$f" ] && record_unformatted "$f"; done <<<"$out"
+    while IFS= read -r f; do [[ -n "$f" ]] && record_unformatted "$f"; done <<<"$out"
   fi
 }
 
 fmt_markdown() {
-  [ ${#md_files[@]} -gt 0 ] || return 0
+  [[ ${#md_files[@]} -gt 0 ]] || return 0
   prepull "$MARKDOWN_IMAGE"
   prepull "$PRETTIER_IMAGE"
   local before after
@@ -240,7 +261,7 @@ fmt_markdown() {
   for f in "${md_files[@]}"; do app_paths+=("/app/$f"); done
   before=$(file_md5s "${md_files[@]}")
 
-  if [ "$FIX" -eq 1 ]; then
+  if [[ "$FIX" -eq 1 ]]; then
     docker run -i --rm -v "$REPO_ROOT":/app -w /app "$MARKDOWN_IMAGE" \
       markdownlint-cli2 --fix "${app_paths[@]}" >/dev/null 2>&1 || true
     docker run -i --rm -v "$REPO_ROOT":/app -w /app "$PRETTIER_IMAGE" \
@@ -258,11 +279,11 @@ fmt_markdown() {
     out=$(docker run -i --rm -v "$REPO_ROOT":/app -w /app "$PRETTIER_IMAGE" \
       npx --yes "prettier@$PRETTIER_VERSION" --prose-wrap always --print-width 160 --list-different "${app_paths[@]}")
     rc=$?
-    if [ "$rc" -ge 2 ]; then
+    if [[ "$rc" -ge 2 ]]; then
       echo "fmt.sh: prettier check failed (exit $rc)" >&2
       exit "$rc"
     fi
-    while IFS= read -r f; do [ -n "$f" ] && record_unformatted "${f#/app/}"; done <<<"$out"
+    while IFS= read -r f; do [[ -n "$f" ]] && record_unformatted "${f#/app/}"; done <<<"$out"
   fi
 }
 
@@ -274,26 +295,28 @@ fmt_markdown
 # ── Report ───────────────────────────────────────────────────────────────────
 summary() {
   local parts=()
-  [ "${#go_files[@]}" -gt 0 ] && parts+=("${#go_files[@]} go")
-  [ "${#sh_files[@]}" -gt 0 ] && parts+=("${#sh_files[@]} sh")
-  [ "${#md_files[@]}" -gt 0 ] && parts+=("${#md_files[@]} md")
-  if [ "${#parts[@]}" -eq 0 ]; then
+  [[ "${#go_files[@]}" -gt 0 ]] && parts+=("${#go_files[@]} go")
+  [[ "${#sh_files[@]}" -gt 0 ]] && parts+=("${#sh_files[@]} sh")
+  [[ "${#md_files[@]}" -gt 0 ]] && parts+=("${#md_files[@]} md")
+  if [[ "${#parts[@]}" -eq 0 ]]; then
     printf 'no files'
-    return
+    return 0
   fi
   local out="${parts[0]}" i
   for i in "${parts[@]:1}"; do out+=", $i"; done
   printf '%s' "$out"
+  return 0
 }
 
 list_block() {
   local label="$1" list="$2" uniq
   uniq=$(printf '%s' "$list" | grep -v '^$' | sort -u)
-  [ -n "$uniq" ] || return 0
+  [[ -n "$uniq" ]] || return 0
   printf '\n%s:\n%s' "$label" "$(printf '%s' "$uniq" | sed 's/^/  /')"
+  return 0
 }
 
-if [ "$PORCELAIN" -eq 1 ]; then
+if [[ "$PORCELAIN" -eq 1 ]]; then
   # Machine-readable output for programmatic callers (lint.sh): one NUL-terminated
   # changed-file path per record, deduped, nothing else on stdout. NUL-termination
   # keeps it robust against any path (spaces, colons, leading whitespace), unlike
@@ -302,12 +325,12 @@ if [ "$PORCELAIN" -eq 1 ]; then
   exit 0
 fi
 
-if [ "$FIX" -eq 1 ]; then
+if [[ "$FIX" -eq 1 ]]; then
   # summary() counts files CONSIDERED; fixed_files is what actually changed. Only
   # claim work was done when something was reformatted, so a no-op re-run reads as
   # "already formatted" rather than a misleading "fmt done (N sh)".
   n_fixed=$(printf '%s' "$fixed_files" | grep -vc '^$')
-  if [ "$n_fixed" -gt 0 ]; then
+  if [[ "$n_fixed" -gt 0 ]]; then
     printf '✓ formatted %d of %s%s\n' "$n_fixed" "$(summary)" "$(list_block 'Formatted' "$fixed_files")"
   else
     printf '✓ already formatted (%s)\n' "$(summary)"
@@ -315,7 +338,7 @@ if [ "$FIX" -eq 1 ]; then
   exit 0
 fi
 
-if [ -z "$unformatted" ]; then
+if [[ -z "$unformatted" ]]; then
   printf '✓ fmt check passed (%s)\n' "$(summary)"
   exit 0
 fi
