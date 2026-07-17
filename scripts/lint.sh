@@ -211,6 +211,11 @@ all_candidates() {
     [ ${#yaml_files[@]} -gt 0 ] && printf '%s\n' "${yaml_files[@]}"
     [ ${#dockerfiles[@]} -gt 0 ] && printf '%s\n' "${dockerfiles[@]}"
     [ ${#mk_files[@]} -gt 0 ] && printf '%s\n' "${mk_files[@]}"
+    # In --fix mode check_go runs `golangci-lint run --fix ./...` over the WHOLE
+    # module, which can rewrite any .go file (not just the changed scope). Snapshot
+    # them all so an out-of-scope safe-fix gets a proper re-read range, not just a
+    # bare filename in the "Auto-fixed (lint)" list.
+    [ "$FIX" -eq 1 ] && git ls-files '*.go'
   } | sort -u
 }
 if [ "$HOOK" -eq 1 ] && [ "$FIX" -eq 1 ]; then
@@ -244,21 +249,32 @@ prepull() { docker pull -q "$1" >/dev/null 2>&1 || true; }
 FMT_SCRIPT="$REPO_ROOT/scripts/fmt.sh"
 run_fmt() {
   [ "$FIX" -eq 1 ] || return 0
-  local out f
-  # fmt.sh prints an indented "  path" list under a "Formatted:" header; harvest
-  # those lines into fixed_files. It never fails in --fix mode. Read via process
-  # substitution (not a pipe) so record_fixed mutates fixed_files in THIS shell.
-  out=$("$FMT_SCRIPT" "--$SCOPE" --fix 2>&1) || true
-  while IFS= read -r f; do
+  local f
+  # fmt.sh --porcelain emits the files it rewrote as NUL-terminated records on
+  # stdout (machine-readable, path-safe — no scraping the human "Formatted:"
+  # block). Diagnostics go to stderr, which we let through. It never fails in
+  # --fix mode. Read via process substitution (not a pipe) so record_fixed
+  # mutates fixed_files in THIS shell.
+  while IFS= read -r -d '' f; do
     [ -n "$f" ] && record_fixed "$f"
-  done < <(printf '%s\n' "$out" | sed -n 's/^  //p')
+  done < <("$FMT_SCRIPT" "--$SCOPE" --fix --porcelain 2>/dev/null || true)
 }
 
-# md5 of each still-existing path so a caller can diff a before/after snapshot
-# to learn which files a tool rewrote in place. Use `md5sum` on Linux hosts.
+# md5 of each still-existing path so a caller can diff a before/after snapshot to
+# learn which files a tool rewrote in place. Portable across Linux (`md5sum`) and
+# macOS (`md5 -r`): both emit the hash first, but md5sum uses two spaces, so
+# normalize to a single-space "<hash> <path>" line the callers split on
+# `${line#* }`. Kept byte-for-byte in sync with fmt.sh's file_md5s.
+if command -v md5sum >/dev/null 2>&1; then
+  _hash_one() { md5sum "$1" | sed 's/  / /'; }
+elif command -v md5 >/dev/null 2>&1; then
+  _hash_one() { md5 -r "$1"; }
+else
+  _hash_one() { :; } # no hasher: change detection degrades to "nothing changed"
+fi
 file_md5s() {
   local f
-  for f in "$@"; do [ -f "$f" ] && md5 -r "$f"; done 2>/dev/null || true
+  for f in "$@"; do [ -f "$f" ] && _hash_one "$f"; done 2>/dev/null || true
 }
 record_changed() {
   local before="$1" after="$2" line
@@ -292,11 +308,20 @@ check_go() {
     # Formatting already ran via run_fmt(). Apply golangci's SAFE lint fixes and
     # record them separately (lint_fixed_files), keeping the "lint fix" vs
     # "format" distinction the Stop-hook report relies on.
+    #
+    # `golangci-lint run --fix ./...` operates on the WHOLE module, so it can
+    # rewrite .go files outside the changed scope. Snapshot EVERY tracked .go file
+    # (not just go_files) before/after, so an out-of-scope safe-fix is reported and
+    # — in Stop-hook mode — gets a re-read range instead of silently mutating a
+    # file whose in-context copy then goes stale. The md5 pass over all .go files
+    # is cheap next to the golangci/docker run itself.
     local before after
-    before=$(file_md5s "${go_files[@]}")
+    local -a all_go=()
+    while IFS= read -r f; do [ -n "$f" ] && all_go+=("$f"); done < <(git ls-files '*.go')
+    before=$(file_md5s "${all_go[@]}")
     docker run -i --rm -v "$REPO_ROOT":/app "${lint_cache[@]}" -w /app "$LINT_IMAGE" \
       golangci-lint run --fix ./... >/dev/null 2>&1 || true
-    after=$(file_md5s "${go_files[@]}")
+    after=$(file_md5s "${all_go[@]}")
     record_changed "$before" "$after"
   else
     if ! out=$(docker run -i --rm -v "$REPO_ROOT":/app -w /app "$GO_IMAGE" \

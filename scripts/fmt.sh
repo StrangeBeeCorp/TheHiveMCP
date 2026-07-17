@@ -20,9 +20,9 @@
 # Formatters, by file type:
 #   • Go       — gofmt -w, then golangci-lint fmt (gofumpt/gci/etc. per .golangci.yml)
 #   • Shell    — shfmt -i 2 -ci -w
-#   • Markdown — markdownlint-cli2 --fix, then prettier --prose-wrap always
-#                --print-width 160 (matches .markdownlint.jsonc MD013 so they
-#                never fight)
+#   • Markdown — markdownlint-cli2 --fix, then prettier (pinned, see
+#                PRETTIER_VERSION) --prose-wrap always --print-width 160 (matches
+#                .markdownlint.jsonc MD013 so they never fight)
 #
 # NOTE: unlike lint.sh, this script runs NO checkers — no golangci-lint run, no
 # go test, and none of shellcheck / yamllint / hadolint / checkmake. Those are
@@ -40,6 +40,7 @@
 #USAGE flag "--changed" help="Format only this turn's changed files (unstaged + staged + new untracked + committed-this-turn)."
 #USAGE flag "--check"   help="Report files that would be reformatted without modifying them; exit 1 if any. Default is to rewrite."
 #USAGE flag "--fix"     help="Rewrite files in place (gofmt, golangci fmt, shfmt, markdownlint --fix, prettier), then report what changed. Default."
+#USAGE flag "--porcelain" help="With --fix, print one NUL-terminated changed-file path to stdout instead of the human summary. For programmatic callers (lint.sh)."
 set -uo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -53,19 +54,27 @@ LINT_IMAGE="golangci/golangci-lint:v2.12.2"
 SHFMT_IMAGE="mvdan/shfmt:v3.13.1"
 MARKDOWN_IMAGE="davidanson/markdownlint-cli2:v0.23.0"
 PRETTIER_IMAGE="node:22-alpine"
+# prettier itself is NOT baked into node:22-alpine; npx fetches it. Pin the exact
+# version (not a floating range) so the same wrapping is produced on every host —
+# otherwise a --check on one prettier release disagrees with a --fix on another.
+PRETTIER_VERSION="3.9.5"
 
 # ── Args ─────────────────────────────────────────────────────────────────────
 # Mirrors lint.sh's parser for the shared flags. NOTE the default MODE here is
 # --fix (a formatter's natural action is to rewrite), whereas lint.sh defaults to
 # --check. Scope default is --all, matching lint.sh.
+# PORCELAIN=1 emits NUL-terminated "<path>" records on stdout (for lint.sh) and
+# suppresses the human summary — machine-readable and path-safe.
 SCOPE="all" # all | changed
 FIX=1       # 1 = --fix (rewrite), 0 = --check (report only)
+PORCELAIN=0 # 1 = porcelain output (see note above)
 while [ $# -gt 0 ]; do
   case "$1" in
     --all) SCOPE="all" ;;
     --changed) SCOPE="changed" ;;
     --check) FIX=0 ;;
     --fix) FIX=1 ;;
+    --porcelain) PORCELAIN=1 ;;
     -h | --help)
       sed -n 's/^#USAGE flag "\([^"]*\)"[^=]*help="\(.*\)"$/  \1\t\2/p' "$0"
       exit 0
@@ -154,9 +163,20 @@ prepull() { docker pull -q "$1" >/dev/null 2>&1 || true; }
 
 # md5 of each still-existing path, so a before/after snapshot reveals which files
 # a formatter rewrote (used for both --fix reporting and by lint.sh's delegation).
+# Portable across macOS (`md5 -r` → "<hash> <path>") and Linux (`md5sum` → "<hash>
+#   <path>"): both emit the hash first, but md5sum uses two spaces, so normalize to
+# a single-space "<hash> <path>" line the callers below can split on `${line#* }`.
+# Kept byte-for-byte in sync with lint.sh's file_md5s.
+if command -v md5sum >/dev/null 2>&1; then
+  _hash_one() { md5sum "$1" | sed 's/  / /'; }
+elif command -v md5 >/dev/null 2>&1; then
+  _hash_one() { md5 -r "$1"; }
+else
+  _hash_one() { :; } # no hasher: change detection degrades to "nothing changed"
+fi
 file_md5s() {
   local f
-  for f in "$@"; do [ -f "$f" ] && md5 -r "$f"; done 2>/dev/null || true
+  for f in "$@"; do [ -f "$f" ] && _hash_one "$f"; done 2>/dev/null || true
 }
 # Emit the paths present in $after (md5 list) but changed vs $before, via the
 # recorder passed as $3.
@@ -224,16 +244,24 @@ fmt_markdown() {
     docker run -i --rm -v "$REPO_ROOT":/app -w /app "$MARKDOWN_IMAGE" \
       markdownlint-cli2 --fix "${app_paths[@]}" >/dev/null 2>&1 || true
     docker run -i --rm -v "$REPO_ROOT":/app -w /app "$PRETTIER_IMAGE" \
-      npx --yes prettier --prose-wrap always --print-width 160 --write "${app_paths[@]}" >/dev/null 2>&1 || true
+      npx --yes "prettier@$PRETTIER_VERSION" --prose-wrap always --print-width 160 --write "${app_paths[@]}" >/dev/null 2>&1 || true
     after=$(file_md5s "${md_files[@]}")
     report_changed "$before" "$after" record_fixed
   else
-    # Report-only: prettier --check reports files it would rewrite. markdownlint
-    # violations are a *lint* concern (lint.sh), not formatting, so --check here
-    # only flags prettier-level reformatting.
-    local out
+    # Report-only: prettier --list-different exits 0 (all formatted), 1 (some would
+    # be rewritten — file list on stdout), or ≥2 (prettier itself errored).
+    # markdownlint violations are a *lint* concern (lint.sh), not formatting, so
+    # --check here only flags prettier-level reformatting. Keep stdout (the file
+    # list) separate from stderr (diagnostics, passed through) and honor the exit
+    # code so a real prettier failure surfaces instead of masquerading as "clean".
+    local out rc
     out=$(docker run -i --rm -v "$REPO_ROOT":/app -w /app "$PRETTIER_IMAGE" \
-      npx --yes prettier --prose-wrap always --print-width 160 --list-different "${app_paths[@]}" 2>/dev/null || true)
+      npx --yes "prettier@$PRETTIER_VERSION" --prose-wrap always --print-width 160 --list-different "${app_paths[@]}")
+    rc=$?
+    if [ "$rc" -ge 2 ]; then
+      echo "fmt.sh: prettier check failed (exit $rc)" >&2
+      exit "$rc"
+    fi
     while IFS= read -r f; do [ -n "$f" ] && record_unformatted "${f#/app/}"; done <<<"$out"
   fi
 }
@@ -264,6 +292,15 @@ list_block() {
   [ -n "$uniq" ] || return 0
   printf '\n%s:\n%s' "$label" "$(printf '%s' "$uniq" | sed 's/^/  /')"
 }
+
+if [ "$PORCELAIN" -eq 1 ]; then
+  # Machine-readable output for programmatic callers (lint.sh): one NUL-terminated
+  # changed-file path per record, deduped, nothing else on stdout. NUL-termination
+  # keeps it robust against any path (spaces, colons, leading whitespace), unlike
+  # scraping the human "Formatted:" block. --porcelain implies --fix.
+  printf '%s' "$fixed_files" | grep -v '^$' | sort -u | tr '\n' '\0'
+  exit 0
+fi
 
 if [ "$FIX" -eq 1 ]; then
   # summary() counts files CONSIDERED; fixed_files is what actually changed. Only
