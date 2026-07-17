@@ -88,7 +88,7 @@ RELEASE_TARGETS := linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd
 bin_ext = $(if $(filter windows-%,$(1)),.exe,)
 
 .PHONY: all
-all: fmt security test build ## Format, run security checks, test, and build
+all: fmt lint security test build ## Format, lint, run security checks, test, and build
 
 .PHONY: lint-makefile
 lint-makefile: ## Lint the Makefile
@@ -101,15 +101,21 @@ lint-makefile: ## Lint the Makefile
 	@echo "checkmake OK"
 
 .PHONY: fmt
-fmt: ## Format the code
+fmt: ## Format every tracked file (Go, shell, markdown)
 	@echo $(BGreen)-------------$(Color_Off)
 	@echo $(BGreen)--- Format --$(Color_Off)
 	@echo $(BGreen)-------------$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go fmt ./...
-	@echo "Code formatted"
+	./scripts/fmt.sh --all --fix
+
+.PHONY: fmt-changed
+fmt-changed: ## Format only this turn's changed files
+	@echo $(BGreen)-------------$(Color_Off)
+	@echo $(BGreen)--- Format --$(Color_Off)
+	@echo $(BGreen)-------------$(Color_Off)
+	./scripts/fmt.sh --changed --fix
 
 .PHONY: security
-security: vulncheck sast lint dockerlint dockersec secrets ## Run security checks
+security: vulncheck sast dockerlint dockersec secrets ## Run security checks
 
 .PHONY: help
 help: ## Display this help
@@ -190,7 +196,6 @@ build: ## Build binary for current host OS/Arch
 	HOST_ARCH=$$(uname -m); \
 	if [ "$$HOST_ARCH" = "x86_64" ]; then HOST_ARCH="amd64"; fi; \
 	if [ "$$HOST_ARCH" = "aarch64" ]; then HOST_ARCH="arm64"; fi; \
-	echo "Building for $$HOST_OS-$$HOST_ARCH..."; \
 	$(MAKE) build-$$HOST_OS-$$HOST_ARCH
 
 # Coverage is opt-in via COVERAGE=1. The unit-test (-short) runs skip the

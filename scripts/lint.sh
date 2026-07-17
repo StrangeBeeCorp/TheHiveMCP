@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
-# Single source of truth for repo lint/format checks. All check tools run from
+# Single source of truth for repo lint/format CHECKS. All check tools run from
 # pinned Docker images — no local toolchain required (this is a Go repo with no
 # host Go install; see the Makefile's install-dev-deps).
+#
+# FORMATTING lives in a sibling script, scripts/fmt.sh (gofmt, golangci fmt,
+# shfmt, markdownlint --fix, prettier). In --fix mode this script delegates the
+# mutation pass to fmt.sh (see run_fmt) and then layers the read-only checkers on
+# top; the observable CLI contract is unchanged (--fix still "auto-fixes
+# cosmetics + safe lint fixes"). `golangci-lint run --fix` (a LINT fix, not a
+# formatter) stays here.
 #
 # The CLI is defined by a `usage` (usage.jdx.dev) contract, OpenAPI-style. The
 # canonical spec lives in the sb-thehive-mcp PLUGIN (its lint.usage.kdl), NOT in
@@ -71,7 +78,8 @@ SHELLCHECK_IMAGE="koalaman/shellcheck:v0.11.0"
 SHFMT_IMAGE="mvdan/shfmt:v3.13.1"
 MARKDOWN_IMAGE="davidanson/markdownlint-cli2:v0.23.0"
 LYCHEE_IMAGE="lycheeverse/lychee:0.24.2"
-PRETTIER_IMAGE="node:22-alpine"
+# prettier (markdown prose-wrap) moved to scripts/fmt.sh — the formatter source
+# of truth. lint.sh only runs read-only checks now, so no PRETTIER_IMAGE here.
 YAMLLINT_IMAGE="cytopia/yamllint@sha256:3e9eb827ab2b12a5ea5f49d4257bb3aca94bba9f1ba427c8bc7f2456385a5204"
 HADOLINT_IMAGE="hadolint/hadolint:v2.14.0"
 CHECKMAKE_IMAGE="cytopia/checkmake@sha256:23116ee551144f1021b294d3ede266ecb760272e0d6f2833f8a3d38b81beffb8"
@@ -226,6 +234,26 @@ record_fixed() { fixed_files+="${1#./}"$'\n'; }
 record_lint_fixed() { lint_fixed_files+="${1#./}"$'\n'; }
 prepull() { docker pull -q "$1" >/dev/null 2>&1 || true; }
 
+# ── Formatting delegation ──────────────────────────────────────────────────────
+# fmt.sh is the single source of truth for FORMATTING (gofmt, golangci fmt,
+# shfmt, markdownlint --fix, prettier). In --fix mode we invoke it once, for the
+# same scope, and fold the files it rewrote into `fixed_files` so the Stop-hook
+# re-read machinery and the "Auto-fixed" report see them. The checkers below stay
+# here; only mutation moved. `golangci-lint run --fix` is a LINT fix, not a
+# formatter, so it remains in check_go (tracked as lint_fixed_files).
+FMT_SCRIPT="$REPO_ROOT/scripts/fmt.sh"
+run_fmt() {
+  [ "$FIX" -eq 1 ] || return 0
+  local out f
+  # fmt.sh prints an indented "  path" list under a "Formatted:" header; harvest
+  # those lines into fixed_files. It never fails in --fix mode. Read via process
+  # substitution (not a pipe) so record_fixed mutates fixed_files in THIS shell.
+  out=$("$FMT_SCRIPT" "--$SCOPE" --fix 2>&1) || true
+  while IFS= read -r f; do
+    [ -n "$f" ] && record_fixed "$f"
+  done < <(printf '%s\n' "$out" | sed -n 's/^  //p')
+}
+
 # md5 of each still-existing path so a caller can diff a before/after snapshot
 # to learn which files a tool rewrote in place. Use `md5sum` on Linux hosts.
 file_md5s() {
@@ -240,13 +268,15 @@ record_changed() {
   done <<<"$after"
 }
 
-# ── Go (gofmt + golangci-lint + fast tests). Skipped under --only-custom: the
-# plugin's Stop hook already runs all of these, so a local hook delegates them.
-# gofmt -w, then (in --fix) golangci-lint fmt +
-# run --fix, then a blocking `golangci-lint run`, then `go test -short`. The repo
-# ships its own .golangci.yml, so golangci-lint auto-discovers it (no -c). Cache
-# mounts are the Makefile's named volumes (linux-native, populated in-container)
-# so the script works identically on host and docker-in-docker. ────────────────
+# ── Go (golangci-lint + fast tests). Skipped under --only-custom: the plugin's
+# Stop hook already runs all of these, so a local hook delegates them.
+# FORMATTING (gofmt -w, golangci-lint fmt) is delegated to fmt.sh via run_fmt();
+# what stays here is the LINT auto-fix (`golangci-lint run --fix`, a lint fix not
+# a formatter), the check-only gofmt -l gate, the blocking `golangci-lint run`,
+# and `go test -short`. The repo ships its own .golangci.yml, so golangci-lint
+# auto-discovers it (no -c). Cache mounts are the Makefile's named volumes
+# (linux-native, populated in-container) so the script works identically on host
+# and docker-in-docker. ─────────────────────────────────────────────────────────
 check_go() {
   [ ${#go_files[@]} -gt 0 ] || return 0
   prepull "$GO_IMAGE"
@@ -259,12 +289,11 @@ check_go() {
   for f in "${go_files[@]}"; do go_paths+=("/app/$f"); done
 
   if [ "$FIX" -eq 1 ]; then
+    # Formatting already ran via run_fmt(). Apply golangci's SAFE lint fixes and
+    # record them separately (lint_fixed_files), keeping the "lint fix" vs
+    # "format" distinction the Stop-hook report relies on.
     local before after
     before=$(file_md5s "${go_files[@]}")
-    docker run -i --rm -v "$REPO_ROOT":/app -w /app "$GO_IMAGE" \
-      gofmt -l -w "${go_paths[@]}" >/dev/null 2>&1 || true
-    docker run -i --rm -v "$REPO_ROOT":/app "${lint_cache[@]}" -w /app "$LINT_IMAGE" \
-      golangci-lint fmt ./... >/dev/null 2>&1 || true
     docker run -i --rm -v "$REPO_ROOT":/app "${lint_cache[@]}" -w /app "$LINT_IMAGE" \
       golangci-lint run --fix ./... >/dev/null 2>&1 || true
     after=$(file_md5s "${go_files[@]}")
@@ -299,6 +328,9 @@ $out
   fi
 }
 
+# Shell: shellcheck (lint) always runs here. shfmt FORMATTING is delegated to
+# fmt.sh via run_fmt() in --fix mode; in --check mode we still report files that
+# would be reformatted (shfmt -l) as a blocking failure.
 check_shell() {
   [ ${#sh_files[@]} -gt 0 ] || return 0
   prepull "$SHELLCHECK_IMAGE"
@@ -311,15 +343,7 @@ $out
 
 "
   fi
-  if [ "$FIX" -eq 1 ]; then
-    out=$(docker run --rm -v "$REPO_ROOT":/mnt -w /mnt "$SHFMT_IMAGE" \
-      -i 2 -ci -l -w "${sh_files[@]}" 2>&1)
-    if [ -n "$out" ]; then
-      # Don't echo here — record_fixed feeds the single "Auto-fixed:" report
-      # section at the end, so an inline echo would just duplicate it.
-      while IFS= read -r f; do [ -n "$f" ] && record_fixed "$f"; done <<<"$out"
-    fi
-  else
+  if [ "$FIX" -eq 0 ]; then
     # Report-only: list the files that WOULD be reformatted (shfmt -l) rather
     # than dumping the full per-file diff (shfmt -d), which over the whole-repo
     # --all scope is a wall of output. Run `make lint-fix` / `--fix` to apply.
@@ -335,25 +359,22 @@ $out
   fi
 }
 
-# ── Markdown: markdownlint-cli2 (--fix in --fix mode, else report), then a
-# link check (lychee --offline: local refs only, so a remote outage can't fail
-# us), then a cosmetic prettier prose-wrap at width 160 (matches the repo's
-# .markdownlint.jsonc MD013 so the two never fight). The repo ships its own
-# .markdownlint.jsonc, auto-discovered under -w /app. ──────────────────────────
+# ── Markdown: markdownlint-cli2 (lint) + lychee link check. FORMATTING
+# (markdownlint --fix, prettier prose-wrap) is delegated to fmt.sh via run_fmt();
+# what stays here is the read-only markdownlint gate (--check mode) and the
+# lychee --offline link check (local refs only, so a remote outage can't fail
+# us), which always runs. The repo ships its own .markdownlint.jsonc,
+# auto-discovered under -w /app. ────────────────────────────────────────────────
 check_markdown() {
   [ ${#md_files[@]} -gt 0 ] || return 0
   prepull "$MARKDOWN_IMAGE"
   prepull "$LYCHEE_IMAGE"
-  local out before after
+  local out
   local -a app_paths=()
   local f
   for f in "${md_files[@]}"; do app_paths+=("/app/$f"); done
-  before=$(file_md5s "${md_files[@]}")
 
-  if [ "$FIX" -eq 1 ]; then
-    docker run -i --rm -v "$REPO_ROOT":/app -w /app "$MARKDOWN_IMAGE" \
-      markdownlint-cli2 --fix "${app_paths[@]}" >/dev/null 2>&1 || true
-  else
+  if [ "$FIX" -eq 0 ]; then
     if ! out=$(docker run -i --rm -v "$REPO_ROOT":/app -w /app "$MARKDOWN_IMAGE" \
       markdownlint-cli2 "${app_paths[@]}" 2>&1); then
       failures+="=== markdownlint-cli2 ===
@@ -369,16 +390,6 @@ $out
 $out
 
 "
-  fi
-
-  if [ "$FIX" -eq 1 ]; then
-    docker run -i --rm -v "$REPO_ROOT":/app -w /app "$PRETTIER_IMAGE" \
-      npx --yes prettier --prose-wrap always --print-width 160 --write "${app_paths[@]}" >/dev/null 2>&1 || true
-    after=$(file_md5s "${md_files[@]}")
-    while IFS= read -r line; do
-      [ -n "$line" ] || continue
-      grep -qxF "$line" <<<"$before" || record_fixed "${line#* }"
-    done <<<"$after"
   fi
 }
 
@@ -453,11 +464,15 @@ check_custom() {
 }
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
-# --only-custom runs ONLY check_custom. Otherwise run the full plugin-mirroring
-# set over this repo's actual file types.
+# --only-custom runs ONLY check_custom. Otherwise: in --fix mode do the FORMATTING
+# pass first (run_fmt → fmt.sh), then run the full plugin-mirroring checker set.
+# run_fmt is a no-op in --check mode. It runs AFTER the Stop-hook snapshot above
+# (so its rewrites are captured for re-read ranges) and BEFORE the checkers (so a
+# gofmt/shfmt problem is fixed, not re-reported).
 if [ "$ONLY_CUSTOM" -eq 1 ]; then
   check_custom
 else
+  run_fmt
   check_go
   check_shell
   check_markdown
