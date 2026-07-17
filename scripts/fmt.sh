@@ -164,14 +164,17 @@ unformatted=""
 record_fixed() {
   local path="$1"
   fixed_files+="${path#./}"$'\n'
+  return 0
 }
 record_unformatted() {
   local path="$1"
   unformatted+="${path#./}"$'\n'
+  return 0
 }
 prepull() {
   local image="$1"
   docker pull -q "$image" >/dev/null 2>&1 || true
+  return 0
 }
 
 # md5 of each still-existing path, so a before/after snapshot reveals which files
@@ -184,14 +187,17 @@ if command -v md5sum >/dev/null 2>&1; then
   _hash_one() {
     local path="$1"
     md5sum "$path" | sed 's/  / /'
+    return 0
   }
 elif command -v md5 >/dev/null 2>&1; then
   _hash_one() {
     local path="$1"
     md5 -r "$path"
+    return 0
   }
 else
-  _hash_one() { :; } # no hasher: change detection degrades to "nothing changed"
+  # no hasher: change detection degrades to "nothing changed"
+  _hash_one() { return 0; }
 fi
 file_md5s() {
   local f

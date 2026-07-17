@@ -244,14 +244,17 @@ lint_fixed_files=""
 record_fixed() {
   local path="$1"
   fixed_files+="${path#./}"$'\n'
+  return 0
 }
 record_lint_fixed() {
   local path="$1"
   lint_fixed_files+="${path#./}"$'\n'
+  return 0
 }
 prepull() {
   local image="$1"
   docker pull -q "$image" >/dev/null 2>&1 || true
+  return 0
 }
 
 # ── Formatting delegation ──────────────────────────────────────────────────────
@@ -285,14 +288,17 @@ if command -v md5sum >/dev/null 2>&1; then
   _hash_one() {
     local path="$1"
     md5sum "$path" | sed 's/  / /'
+    return 0
   }
 elif command -v md5 >/dev/null 2>&1; then
   _hash_one() {
     local path="$1"
     md5 -r "$path"
+    return 0
   }
 else
-  _hash_one() { :; } # no hasher: change detection degrades to "nothing changed"
+  # no hasher: change detection degrades to "nothing changed"
+  _hash_one() { return 0; }
 fi
 file_md5s() {
   local f
@@ -513,7 +519,8 @@ $out
 # markdown, YAML, Dockerfiles, Makefile) — so check_custom is intentionally
 # empty and --only-custom is a no-op. Add repo-only checks here if that changes.
 check_custom() {
-  : # no checks beyond the plugin's; --only-custom does nothing (correct).
+  # no checks beyond the plugin's; --only-custom does nothing (correct).
+  return 0
 }
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
