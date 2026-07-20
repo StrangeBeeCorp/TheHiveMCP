@@ -88,7 +88,7 @@ RELEASE_TARGETS := linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd
 bin_ext = $(if $(filter windows-%,$(1)),.exe,)
 
 .PHONY: all
-all: fmt security test build ## Format, run security checks, test, and build
+all: fmt lint security test build ## Format, lint, run security checks, test, and build
 
 .PHONY: lint-makefile
 lint-makefile: ## Lint the Makefile
@@ -101,15 +101,21 @@ lint-makefile: ## Lint the Makefile
 	@echo "checkmake OK"
 
 .PHONY: fmt
-fmt: ## Format the code
+fmt: ## Format every tracked file (Go, shell, markdown)
 	@echo $(BGreen)-------------$(Color_Off)
 	@echo $(BGreen)--- Format --$(Color_Off)
 	@echo $(BGreen)-------------$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go fmt ./...
-	@echo "Code formatted"
+	./scripts/fmt.sh --all --fix
+
+.PHONY: fmt-changed
+fmt-changed: ## Format only this turn's changed files
+	@echo $(BGreen)-------------$(Color_Off)
+	@echo $(BGreen)--- Format --$(Color_Off)
+	@echo $(BGreen)-------------$(Color_Off)
+	./scripts/fmt.sh --changed --fix
 
 .PHONY: security
-security: vulncheck sast lint dockerlint dockersec secrets ## Run security checks
+security: vulncheck sast dockerlint dockersec secrets ## Run security checks
 
 .PHONY: help
 help: ## Display this help
@@ -190,7 +196,6 @@ build: ## Build binary for current host OS/Arch
 	HOST_ARCH=$$(uname -m); \
 	if [ "$$HOST_ARCH" = "x86_64" ]; then HOST_ARCH="amd64"; fi; \
 	if [ "$$HOST_ARCH" = "aarch64" ]; then HOST_ARCH="arm64"; fi; \
-	echo "Building for $$HOST_OS-$$HOST_ARCH..."; \
 	$(MAKE) build-$$HOST_OS-$$HOST_ARCH
 
 # Coverage is opt-in via COVERAGE=1. The unit-test (-short) runs skip the
@@ -351,20 +356,32 @@ vulncheck: ## Check for vulnerabilities
 	docker run -i --rm -v $(CURDIR):/app -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@v1.3.0 && govulncheck ./...'
 
 .PHONY: lint
-lint: ## Run linter checks without modifying files
+lint: ## Run linter checks over the whole repo without modifying files
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Linter Checks --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
-	docker run --rm -v $(CURDIR):/app -w /app golangci/golangci-lint:v2.12.2 golangci-lint config verify
-	docker run -v $(CURDIR):/app -w /app -i --rm $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GOLANGCI_CACHE) $(GIT_WORKTREE_MOUNT) golangci/golangci-lint:v2.12.2 golangci-lint run
+	./scripts/lint.sh --all --check
+
+.PHONY: lint-changed
+lint-changed: ## Run linter checks over this turn's changed files only, no modifying
+	@echo $(BGreen)-----------------------------$(Color_Off)
+	@echo $(BGreen)-- Linter Checks: changed --$(Color_Off)
+	@echo $(BGreen)-----------------------------$(Color_Off)
+	./scripts/lint.sh --changed --check
 
 .PHONY: lint-fix
-lint-fix: fmt ## Format the code, then run linter checks with auto-fix
+lint-fix: ## Auto-fix cosmetics + safe lint fixes over the whole repo, reporting fixed files
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Linter Checks with auto-fix --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
-	docker run --rm -v $(CURDIR):/app -w /app golangci/golangci-lint:v2.12.2 golangci-lint config verify
-	docker run -v $(CURDIR):/app -w /app -i --rm $(DOCKER_CACHE_MOUNTS) $(GOLANGCI_CACHE) $(GIT_WORKTREE_MOUNT) golangci/golangci-lint:v2.12.2 golangci-lint run --fix
+	./scripts/lint.sh --all --fix
+
+.PHONY: lint-fix-changed
+lint-fix-changed: ## Auto-fix this turn's changed files only, reporting fixed files
+	@echo $(BGreen)-----------------------------$(Color_Off)
+	@echo $(BGreen)-- Linter Checks: auto-fix changed --$(Color_Off)
+	@echo $(BGreen)-----------------------------$(Color_Off)
+	./scripts/lint.sh --changed --fix
 
 .PHONY: updatedep
 updatedep: ## Update dependencies

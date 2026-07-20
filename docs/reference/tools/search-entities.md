@@ -11,8 +11,8 @@ directly to TheHive, so searches are precise and deterministic.
 To build a filter you need to know the available fields and the operator grammar:
 
 - **Fields and types** are entity-specific—read `hive://schema/<entity-type>` (for example, `hive://schema/alert`) before filtering.
-- **Operator grammar**—see the [Filter DSL](#filter-dsl) below, the full JSON schema at `hive://schema/filter`, the filtering rules at
-  `hive://rule/filtering`, and the worked-example cheatsheet at `hive://docs/overview/filter-dsl`.
+- **Operator grammar**—see the [Filter DSL](#filter-dsl) below, the full JSON schema at `hive://schema/filter`, the filtering rules at `hive://rule/filtering`,
+  and the worked-example cheatsheet at `hive://docs/overview/filter-dsl`.
 
 ## Parameters
 
@@ -32,23 +32,23 @@ To build a filter you need to know the available fields and the operator grammar
 
 A filter is a JSON object with exactly **one operator at its root**. Nest `_and` / `_or` / `_not` to combine conditions.
 
-| Operator                    | Shape                                               | Meaning                                                           |
-| --------------------------- | --------------------------------------------------- | ----------------------------------------------------------------- |
-| `_eq`                       | `{"_eq": {"_field": F, "_value": V}}`               | field equals value                                                |
-| `_ne`                       | `{"_ne": {"_field": F, "_value": V}}`               | field not equal to value                                          |
-| `_gt` / `_gte`              | `{"_gt": {"_field": F, "_value": V}}`               | greater than / or equal                                           |
-| `_lt` / `_lte`              | `{"_lt": {"_field": F, "_value": V}}`               | less than / or equal                                              |
-| `_between`                  | `{"_between": {"_field": F, "_from": A, "_to": B}}` | A ≤ field < B (**upper bound exclusive**)                         |
-| `_in`                       | `{"_in": {"_field": F, "_values": [V1, V2]}}`       | field is one of values (works on multi-valued fields like `tags`) |
-| `_like`                     | `{"_like": {"_field": F, "_value": "*term*"}}`      | wildcard match, case-insensitive (`*` wildcards, **not** `%`)     |
-| `_startsWith` / `_endsWith` | `{"_startsWith": {"_field": F, "_value": V}}`       | prefix / suffix match                                             |
-| `_match`                    | `{"_match": {"_field": F, "_value": V}}`            | full-text match: value matches a token of the analyzed text field |
+| Operator                    | Shape                                               | Meaning                                                            |
+| --------------------------- | --------------------------------------------------- | ------------------------------------------------------------------ |
+| `_eq`                       | `{"_eq": {"_field": F, "_value": V}}`               | field equals value                                                 |
+| `_ne`                       | `{"_ne": {"_field": F, "_value": V}}`               | field not equal to value                                           |
+| `_gt` / `_gte`              | `{"_gt": {"_field": F, "_value": V}}`               | greater than / or equal                                            |
+| `_lt` / `_lte`              | `{"_lt": {"_field": F, "_value": V}}`               | less than / or equal                                               |
+| `_between`                  | `{"_between": {"_field": F, "_from": A, "_to": B}}` | A ≤ field < B (**upper bound exclusive**)                          |
+| `_in`                       | `{"_in": {"_field": F, "_values": [V1, V2]}}`       | field is one of values (works on multi-valued fields like `tags`)  |
+| `_like`                     | `{"_like": {"_field": F, "_value": "*term*"}}`      | wildcard match, case-insensitive (`*` wildcards, **not** `%`)      |
+| `_startsWith` / `_endsWith` | `{"_startsWith": {"_field": F, "_value": V}}`       | prefix / suffix match                                              |
+| `_match`                    | `{"_match": {"_field": F, "_value": V}}`            | full-text match: value matches a token of the analyzed text field  |
 | `_contains`                 | `{"_contains": "fieldName"}`                        | the entity has that field set (presence test on a bare field name) |
-| `_id`                       | `{"_id": "~354"}`                                   | match by internal id                                              |
-| `_any`                      | `{"_any": {}}`                                      | match everything                                                  |
-| `_and`                      | `{"_and": [filter, filter, ...]}`                   | all must hold                                                     |
-| `_or`                       | `{"_or": [filter, filter, ...]}`                    | any may hold                                                      |
-| `_not`                      | `{"_not": filter}`                                  | negation                                                          |
+| `_id`                       | `{"_id": "~354"}`                                   | match by internal id                                               |
+| `_any`                      | `{"_any": {}}`                                      | match everything                                                   |
+| `_and`                      | `{"_and": [filter, filter, ...]}`                   | all must hold                                                      |
+| `_or`                       | `{"_or": [filter, filter, ...]}`                    | any may hold                                                       |
+| `_not`                      | `{"_not": filter}`                                  | negation                                                           |
 
 ### Fields, values and dates
 
