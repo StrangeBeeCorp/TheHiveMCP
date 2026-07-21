@@ -82,7 +82,8 @@ LYCHEE_IMAGE="lycheeverse/lychee:0.24.2"
 # of truth. lint.sh only runs read-only checks now, so no PRETTIER_IMAGE here.
 YAMLLINT_IMAGE="cytopia/yamllint@sha256:3e9eb827ab2b12a5ea5f49d4257bb3aca94bba9f1ba427c8bc7f2456385a5204"
 HADOLINT_IMAGE="hadolint/hadolint:v2.14.0"
-CHECKMAKE_IMAGE="cytopia/checkmake@sha256:23116ee551144f1021b294d3ede266ecb760272e0d6f2833f8a3d38b81beffb8"
+# checkmake is pinned in scripts/lint-makefile.sh (the single source of truth for
+# the Makefile check, shared with `make lint-makefile`); not duplicated here.
 YL_RULES='{extends: relaxed, rules: {line-length: disable, document-start: disable, comments: disable, comments-indentation: disable, empty-lines: disable, trailing-spaces: disable}}'
 
 # ── Args ─────────────────────────────────────────────────────────────────────
@@ -495,21 +496,13 @@ $out
   return 0
 }
 
-# ── Makefiles (checkmake). Reads its rule config from the repo's checkmake.ini,
-# mounted read-only. Mirrors the plugin hook's checkmake step. ──────────────────
+# ── Makefiles (checkmake). Delegates to scripts/lint-makefile.sh — the single
+# source of truth for the checkmake image, config, and invocation, shared with
+# the `make lint-makefile` target. Mirrors the plugin hook's checkmake step. ────
 check_makefiles() {
   [[ ${#mk_files[@]} -gt 0 ]] || return 0
-  prepull "$CHECKMAKE_IMAGE"
-  local out cfg=() flag=()
-  if [[ -f "$REPO_ROOT/checkmake.ini" ]]; then
-    cfg=(-v "$REPO_ROOT/checkmake.ini":/checkmake.ini:ro)
-    flag=(--config=/checkmake.ini)
-  fi
-  local -a app_paths=()
-  local f
-  for f in "${mk_files[@]}"; do app_paths+=("/app/$f"); done
-  if ! out=$(docker run --rm -v "$REPO_ROOT":/app "${cfg[@]}" -w /app "$CHECKMAKE_IMAGE" \
-    "${flag[@]}" "${app_paths[@]}" 2>&1); then
+  local out
+  if ! out=$("$REPO_ROOT/scripts/lint-makefile.sh" "${mk_files[@]}" 2>&1); then
     failures+="=== checkmake ===
 $out
 

@@ -6,6 +6,12 @@ GO_IMAGE := golang:1.26.5-alpine
 # GO_IMAGE_CGO is the Debian-based image used by `make test-race`; it ships gcc, so
 # `-race` builds there with CGO_ENABLED=1.
 GO_IMAGE_CGO := golang:1.26.5
+# Bind mount of the working tree at /app, used by nearly every `docker run` below.
+# Hoisted into a variable so the literal `$(CURDIR):/app` never appears on a recipe
+# line: checkmake's parser reparses such a line as a target (the `:` reads as the
+# rule separator) when it directly follows an `ifeq (…)` conditional, a false
+# positive that would otherwise trip the phonydeclared / uniquetargets rules.
+MOUNT_APP := $(CURDIR):/app
 # All Go work runs inside the $(GO_IMAGE) container — there is NO host Go install
 # (see install-dev-deps). So every cache is a Docker named volume, never a host
 # path: named volumes are linux-native, populated in-container, and — unlike a
@@ -97,7 +103,7 @@ lint-makefile: ## Lint the Makefile
 	@echo $(BGreen)----------------------$(Color_Off)
 	@make --dry-run -n all > /dev/null || exit 1
 	@echo "Syntax OK"
-	@docker run --rm --workdir / -v $(CURDIR)/Makefile:/Makefile -v $(CURDIR)/checkmake.ini:/checkmake.ini quay.io/checkmake/checkmake:latest || exit 1
+	@./scripts/lint-makefile.sh Makefile || exit 1
 	@echo "checkmake OK"
 
 .PHONY: fmt
@@ -142,7 +148,7 @@ sast: ## Static Application Security Testing
 	@echo $(BGreen)---------------------------$(Color_Off)
 	@echo $(BGreen)-- Running SAST Analysis --$(Color_Off)
 	@echo $(BGreen)---------------------------$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install github.com/securego/gosec/v2/cmd/gosec@v2.26.1 && gosec ./...'
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install github.com/securego/gosec/v2/cmd/gosec@v2.26.1 && gosec ./...'
 
 # Every Dockerfile in the repo. hadolint lints each — the production image plus
 # the MCPB and LibreChat helper images — so a misconfig regression in any of them
@@ -239,9 +245,9 @@ test: pre ## Run fast unit tests, skipping integration tests (COVERAGE=1 for cov
 	@echo $(BGreen)-----------------------$(Color_Off)
 	@echo $(BGreen)-- Running UnitTests --$(Color_Off)
 	@echo $(BGreen)-----------------------$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go test $(GO_TEST_COVER) $(GO_TEST_RUN) -short -v ./...
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go test $(GO_TEST_COVER) $(GO_TEST_RUN) -short -v ./...
 ifeq ($(COVERAGE),1)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
 endif
 
 # test-race runs -short only: the race detector is meaningful on our own
@@ -252,47 +258,19 @@ endif
 .PHONY: test-race
 test-race: pre ## Run fast unit tests under the race detector (RUN=<regexp> to filter)
 	@echo $(BGreen)-- Running UnitTests under -race --$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app -e CGO_ENABLED=1 $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE_CGO) go test -race $(GO_TEST_RUN) -short ./...
+	docker run -i --rm -v $(MOUNT_APP) -w /app -e CGO_ENABLED=1 $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE_CGO) go test -race $(GO_TEST_RUN) -short ./...
 
 .PHONY: test-integration
 test-integration: pre ## Run the full test suite against the docker-compose test stack (COVERAGE=1 for coverage, RUN=<regexp> to filter). Leaves the stack UP for fast reruns; use `make test-integration-down` to tear it down.
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Running Integration Tests --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
-	# Bring up the TheHive + Elasticsearch + Cassandra + MITRE stack
-	# (THEHIVE_TEST_IMAGE selects the version) and reset its databases to a clean
-	# state (scripts/reset-integration-db.sh — see it for the why), then run the
-	# suite against it on the host network. The stack is deliberately LEFT UP for
-	# fast reruns; `make test-integration-down` tears it down.
-	#
-	# The reset script decides the mode (presupplied THEHIVE_TEST_LICENSE, else
-	# pullable image ⇒ mint, else free — see the LICENSE_FILE note above) and
-	# writes the token (or nothing) to LICENSE_FILE. We read that file here to
-	# configure the go-test container:
-	#   - Non-empty (token present) ⇒ export THEHIVE_TEST_LICENSE so the Go suite
-	#     runs per-test org + user via t.Parallel (testutils.Parallel), packages
-	#     concurrent (no -p 1).
-	#   - Empty/absent (free license) ⇒ one shared org, testutils.Parallel no-ops
-	#     so tests run sequentially and purge their own data; `-p 1` stops packages
-	#     from racing on that shared org.
-	# Isolation in either mode comes from internal/testutils/orgs.go.
-	#
-	# -timeout 20m raises the per-package deadline above the default 10m: under
-	# memory pressure a single request can stall, and the setup helpers retry
-	# those (each capped at the client's 90s transport timeout), so the headroom
-	# keeps a transient stall from tripping the package timeout. The sequential
-	# free-license path is the slowest run, so it needs this headroom most.
-	./scripts/reset-integration-db.sh docker-compose.test.yml
-	@if [ -s "$(LICENSE_FILE)" ]; then \
-		echo "License present → parallel multi-org mode."; \
-		LIC="$$(cat "$(LICENSE_FILE)")"; PARALLELISM=""; \
-	else \
-		echo "No license → sequential shared-org mode."; \
-		LIC=""; PARALLELISM="-p 1"; \
-	fi; \
-	docker run -i --rm --network host -v $(CURDIR):/app -w /app -e THEHIVE_TEST_URL -e LOG_LEVEL -e THEHIVE_TEST_IMAGE -e THEHIVE_TEST_LICENSE="$$LIC" $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c "command -v gotestsum >/dev/null 2>&1 || go install gotest.tools/gotestsum@v1.13.0 ; gotestsum --format pkgname --hide-summary=skipped -- $(GO_TEST_COVER) $(GO_TEST_RUN) $$PARALLELISM -timeout 20m ./..."
+	@LICENSE_FILE="$(LICENSE_FILE)" MOUNT_APP="$(MOUNT_APP)" GO_IMAGE="$(GO_IMAGE)" \
+		GO_RUN_AS_HOST_UID="$(GO_RUN_AS_HOST_UID)" DOCKER_CACHE_MOUNTS="$(DOCKER_CACHE_MOUNTS)" \
+		GO_TOOLS_CACHE="$(GO_TOOLS_CACHE)" GO_TEST_COVER="$(GO_TEST_COVER)" GO_TEST_RUN="$(GO_TEST_RUN)" \
+		./scripts/run-integration-tests.sh
 ifeq ($(COVERAGE),1)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
 endif
 
 .PHONY: test-integration-down
@@ -353,7 +331,7 @@ vulncheck: ## Check for vulnerabilities
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Security Vulnerability  --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@v1.3.0 && govulncheck ./...'
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@v1.3.0 && govulncheck ./...'
 
 .PHONY: lint
 lint: ## Run linter checks over the whole repo without modifying files
@@ -388,7 +366,7 @@ updatedep: ## Update dependencies
 	@echo $(BGreen)-----------------------$(Color_Off)
 	@echo $(BGreen)-- Update Dependencies --$(Color_Off)
 	@echo $(BGreen)-----------------------$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) sh -c 'go get -u ./... && go mod tidy'
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) sh -c 'go get -u ./... && go mod tidy'
 
 .PHONY: install-dev-deps
 install-dev-deps: ## Install development dependencies
@@ -403,7 +381,7 @@ build-%: pre
 	@echo "Building for $*..."
 	@OS=$$(echo $* | cut -d- -f1); \
 	ARCH=$$(echo $* | cut -d- -f2); \
-	docker run -i --rm -v $(CURDIR):/app -w /app -e GOOS=$$OS -e GOARCH=$$ARCH $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go build $(GOLDFLAGS) -o $(BUILDDIR)/$(BINARY_NAME)-$*$(call bin_ext,$*) ./cmd/server/main.go
+	docker run -i --rm -v $(MOUNT_APP) -w /app -e GOOS=$$OS -e GOARCH=$$ARCH $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go build $(GOLDFLAGS) -o $(BUILDDIR)/$(BINARY_NAME)-$*$(call bin_ext,$*) ./cmd/server/main.go
 
 .PHONY: pre-dist
 pre-dist: ## Create distribution directory
@@ -427,16 +405,9 @@ package-from-built: pre-dist mcpb-ci-nobuild ## Package pre-built (already-signe
 	@echo $(BGreen)--------------------------------$(Color_Off)
 	@echo $(BGreen)-- Packaging release binaries --$(Color_Off)
 	@echo $(BGreen)--------------------------------$(Color_Off)
-	@for target in $(RELEASE_TARGETS); do \
-		echo "Packaging $$target..."; \
-		case "$$target" in windows-*) ext=".exe";; *) ext="";; esac; \
-		cp $(BUILDDIR)/$(BINARY_NAME)-$$target$$ext $(DISTDIR)/$(BINARY_NAME)-$$target$$ext; \
-		(cd $(DISTDIR) && tar -czf $(BINARY_NAME)-$(VERSION)-$$target.tar.gz $(BINARY_NAME)-$$target$$ext); \
-		shasum -a 256 $(DISTDIR)/$(BINARY_NAME)-$(VERSION)-$$target.tar.gz > $(DISTDIR)/$(BINARY_NAME)-$(VERSION)-$$target.tar.gz.sha256; \
-		rm $(DISTDIR)/$(BINARY_NAME)-$$target$$ext; \
-	done
-	@echo "All release packages created in $(DISTDIR)/"
-	@ls -1 $(DISTDIR)/
+	@VERSION="$(VERSION)" BUILDDIR="$(BUILDDIR)" DISTDIR="$(DISTDIR)" \
+		BINARY_NAME="$(BINARY_NAME)" RELEASE_TARGETS="$(RELEASE_TARGETS)" \
+		./scripts/package-tarballs.sh
 
 .PHONY: version
 version: ## Display current version
@@ -482,25 +453,9 @@ mcpb-ci-nobuild: pre-dist mcpb-build-image ## Generate MCPB packages from pre-bu
 	@echo $(BGreen)----------------------------------$(Color_Off)
 	@echo $(BGreen)-- Generating MCPB Packages CI --$(Color_Off)
 	@echo $(BGreen)----------------------------------$(Color_Off)
-	@set -e; for target in $(MCPB_TARGETS); do \
-		echo "Generating MCPB for $$target..."; \
-		case "$$target" in windows-*) ext=".exe";; *) ext="";; esac; \
-		ws=/tmp/mcpb-workspace-$$target; \
-		mkdir -p $$ws/binaries; \
-		cp $(BUILDDIR)/thehivemcp-$$target$$ext $$ws/binaries/; \
-		docker run --rm \
-			--user "$$(id -u):$$(id -g)" \
-			-v $$ws:/workspace \
-			-e HOME=/workspace \
-			-e CI_MODE=true \
-			-e VERSION=$(VERSION) \
-			-e TARGET_ARCH=$$target \
-			thehivemcp-mcpb:latest; \
-		cp $$ws/thehivemcp-$(VERSION)-$$target.mcpb $(DISTDIR)/; \
-		shasum -a 256 $(DISTDIR)/thehivemcp-$(VERSION)-$$target.mcpb > $(DISTDIR)/thehivemcp-$(VERSION)-$$target.mcpb.sha256; \
-		docker run --rm -v $$ws:/workspace alpine:latest rm -rf /workspace/* || rm -rf $$ws || true; \
-	done
-	@echo "All MCPB packages created in $(DISTDIR)/"
+	@VERSION="$(VERSION)" BUILDDIR="$(BUILDDIR)" DISTDIR="$(DISTDIR)" \
+		MCPB_TARGETS="$(MCPB_TARGETS)" \
+		./scripts/package-mcpb-ci.sh
 
 # The windows release targets, expanded to their built .exe paths.
 WINDOWS_TARGETS := $(filter windows-%,$(RELEASE_TARGETS))
