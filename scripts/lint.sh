@@ -279,28 +279,34 @@ run_fmt() {
   return 0
 }
 
-# md5 of each still-existing path so a caller can diff a before/after snapshot to
-# learn which files a tool rewrote in place. Portable across Linux (`md5sum`) and
-# macOS (`md5 -r`): both emit the hash first, but md5sum uses two spaces, so
-# normalize to a single-space "<hash> <path>" line the callers split on
-# `${line#* }`. Kept byte-for-byte in sync with fmt.sh's file_md5s.
-if command -v md5sum >/dev/null 2>&1; then
+# Content fingerprint of each still-existing path so a caller can diff a
+# before/after snapshot to learn which files a tool rewrote in place. Not a
+# security context — just change detection — but we use SHA-256 so scanners don't
+# flag a weak hash. Portable across Linux (`sha256sum`) and macOS (`shasum -a
+# 256`): both print "<hash>  <path>" with two spaces. Anchor the sed to the
+# hash→path separator only — a SHA-256 hash is 64 hex chars, so
+# `^<64hex><space><space>` → `<hash><space>` collapses just the separator,
+# leaving any double-space *inside a path* intact (a plain `s/  / /` would eat
+# the first double-space anywhere on the line and desync the snapshot). Callers
+# split the single-space line on `${line#* }`. Kept byte-for-byte in sync with
+# fmt.sh's file_hashes.
+if command -v sha256sum >/dev/null 2>&1; then
   _hash_one() {
     local path="$1"
-    md5sum "$path" | sed 's/  / /'
+    sha256sum "$path" | sed -E 's/^([0-9a-f]{64})  /\1 /'
     return 0
   }
-elif command -v md5 >/dev/null 2>&1; then
+elif command -v shasum >/dev/null 2>&1; then
   _hash_one() {
     local path="$1"
-    md5 -r "$path"
+    shasum -a 256 "$path" | sed -E 's/^([0-9a-f]{64})  /\1 /'
     return 0
   }
 else
   # no hasher: change detection degrades to "nothing changed"
   _hash_one() { return 0; }
 fi
-file_md5s() {
+file_hashes() {
   local f
   for f in "$@"; do [[ -f "$f" ]] && _hash_one "$f"; done 2>/dev/null || true
   return 0
@@ -343,15 +349,15 @@ check_go() {
     # rewrite .go files outside the changed scope. Snapshot EVERY tracked .go file
     # (not just go_files) before/after, so an out-of-scope safe-fix is reported and
     # — in Stop-hook mode — gets a re-read range instead of silently mutating a
-    # file whose in-context copy then goes stale. The md5 pass over all .go files
+    # file whose in-context copy then goes stale. The hash pass over all .go files
     # is cheap next to the golangci/docker run itself.
     local before after
     local -a all_go=()
     while IFS= read -r f; do [[ -n "$f" ]] && all_go+=("$f"); done < <(git ls-files '*.go')
-    before=$(file_md5s "${all_go[@]}")
+    before=$(file_hashes "${all_go[@]}")
     docker run -i --rm -v "$REPO_ROOT":/app "${lint_cache[@]}" -w /app "$LINT_IMAGE" \
       golangci-lint run --fix ./... >/dev/null 2>&1 || true
-    after=$(file_md5s "${all_go[@]}")
+    after=$(file_hashes "${all_go[@]}")
     record_changed "$before" "$after"
   else
     if ! out=$(docker run -i --rm -v "$REPO_ROOT":/app -w /app "$GO_IMAGE" \
