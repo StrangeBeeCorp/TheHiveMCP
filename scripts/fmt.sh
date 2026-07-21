@@ -21,8 +21,9 @@
 #   • Go       — gofmt -w, then golangci-lint fmt (gofumpt/gci/etc. per .golangci.yml)
 #   • Shell    — shfmt -i 2 -ci -w
 #   • Markdown — markdownlint-cli2 --fix, then prettier (pinned, see
-#                PRETTIER_VERSION) --prose-wrap always --print-width 160 (matches
-#                .markdownlint.jsonc MD013 so they never fight)
+#                PRETTIER_VERSION); options in .prettierrc.json (prose-wrap always,
+#                print-width 160). Prettier owns markdown line width; MD013 is
+#                disabled in .markdownlint.jsonc so the two never fight over it.
 #
 # NOTE: unlike lint.sh, this script runs NO checkers — no golangci-lint run, no
 # go test, and none of shellcheck / yamllint / hadolint / checkmake. Those are
@@ -276,7 +277,7 @@ fmt_markdown() {
     docker run -i --rm -v "$REPO_ROOT":/app -w /app "$MARKDOWN_IMAGE" \
       markdownlint-cli2 --fix "${app_paths[@]}" >/dev/null 2>&1 || true
     docker run -i --rm -v "$REPO_ROOT":/app -w /app "$PRETTIER_IMAGE" \
-      npx --yes "prettier@$PRETTIER_VERSION" --prose-wrap always --print-width 160 --write "${app_paths[@]}" >/dev/null 2>&1 || true
+      npx --yes "prettier@$PRETTIER_VERSION" --write "${app_paths[@]}" >/dev/null 2>&1 || true
     after=$(file_hashes "${md_files[@]}")
     report_changed "$before" "$after" record_fixed
   else
@@ -288,7 +289,7 @@ fmt_markdown() {
     # code so a real prettier failure surfaces instead of masquerading as "clean".
     local out rc
     out=$(docker run -i --rm -v "$REPO_ROOT":/app -w /app "$PRETTIER_IMAGE" \
-      npx --yes "prettier@$PRETTIER_VERSION" --prose-wrap always --print-width 160 --list-different "${app_paths[@]}")
+      npx --yes "prettier@$PRETTIER_VERSION" --list-different "${app_paths[@]}")
     rc=$?
     if [[ "$rc" -ge 2 ]]; then
       echo "fmt.sh: prettier check failed (exit $rc)" >&2
