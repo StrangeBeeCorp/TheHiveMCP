@@ -187,7 +187,12 @@ committed_this_turn() {
 }
 
 if [[ "$SCOPE" = all ]]; then
-  classify < <(git ls-files)
+  # Tracked (--cached) PLUS untracked-but-not-gitignored (--others
+  # --exclude-standard), so a new file that isn't committed yet still faces the
+  # full gate. Ignored files stay excluded. --cached is explicit here: with
+  # --others present, ls-files lists only the categories named, so omitting it
+  # would drop the tracked files.
+  classify < <(git ls-files --cached --others --exclude-standard | sort -u)
 else
   classify < <({
     git diff --name-only
