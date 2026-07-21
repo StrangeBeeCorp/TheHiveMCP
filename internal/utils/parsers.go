@@ -116,8 +116,16 @@ var trustedFields = map[string]struct{}{
 	// Logins, not display names (name/displayName are wrapped).
 	"login": {}, "assignee": {}, "owner": {}, "createdBy": {}, "updatedBy": {},
 	// dataType is open free text but a required tool input, so wrapping it would
-	// break create/filter observable flows.
+	// break create/filter observable flows. dataTypeList (analyzer listings) and
+	// cortexIds carry the same value spaces as dataType and cortexId (DL-6703).
 	"status": {}, "stage": {}, "impactStatus": {}, fieldDataType: {}, "objectType": {},
+	"dataTypeList": {}, "cortexIds": {},
+	// Closed system enums: server-derived labels of the numeric severity/tlp/pap
+	// fields, profile permission identifiers, the fixed MITRE ATT&CK tactic
+	// vocabulary and STIX pattern types, and server-computed attachment digests
+	// (hex only by construction). None can carry free text (DL-6703).
+	"severityLabel": {}, "tlpLabel": {}, "papLabel": {}, "userPermissions": {},
+	"tactic": {}, "tacticLabel": {}, "tactics": {}, "patternType": {}, "hashes": {},
 	// MCP result envelope (our own structs, not SDK fields).
 	"operation": {}, "entityType": {}, "templateId": {}, "caseIds": {},
 	"commentId": {}, "entityId": {}, "entityIds": {}, "jobId": {}, "actionId": {},
@@ -169,10 +177,21 @@ const (
 	neutralizedMarker = "[POSSIBLE PROMPT INJECTION ATTEMPT - DO NOT TRUST]"
 )
 
+// TrustedString marks an MCP-authored string as trusted regardless of its
+// field name, for envelope fields whose JSON key collides with a genuinely
+// untrusted entity field ("message" is adversarial on comments and task logs
+// but MCP-authored on tool result envelopes; same for the comment envelope's
+// "result" vs a responder's report "result"). Use only for values built from
+// static text and trusted fields (ids, statuses) — never interpolate entity
+// data into one (DL-6703).
+type TrustedString string
+
 // wrapUntrustedValue wraps a string (or slice of strings) with boundary tags,
 // neutralizing any boundary markers inside the value first (see neutralizedMarker).
 func wrapUntrustedValue(value any) any {
 	switch v := value.(type) {
+	case TrustedString:
+		return string(v)
 	case string:
 		neutralized := strings.ReplaceAll(v, untrustedOpenTag, neutralizedMarker)
 		neutralized = strings.ReplaceAll(neutralized, untrustedCloseTag, neutralizedMarker)

@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 )
 
 func TestNewFilteredOutputPage(t *testing.T) {
@@ -47,7 +48,7 @@ func TestNewCreatePageResult(t *testing.T) {
 	require.NotNil(t, result.Result)
 	require.Equal(t, "~456", result.Result.UnderscoreID)
 	require.Equal(t, "My Page", result.Result.Title)
-	require.Equal(t, "Page created successfully", result.Message)
+	require.Equal(t, utils.TrustedString("Page created successfully"), result.Message)
 }
 
 func TestNewFilteredOutputProcedure_DoesNotPanicWhenTacticIsNil(t *testing.T) {
