@@ -82,7 +82,8 @@ LYCHEE_IMAGE="lycheeverse/lychee:0.24.2"
 # of truth. lint.sh only runs read-only checks now, so no PRETTIER_IMAGE here.
 YAMLLINT_IMAGE="cytopia/yamllint@sha256:3e9eb827ab2b12a5ea5f49d4257bb3aca94bba9f1ba427c8bc7f2456385a5204"
 HADOLINT_IMAGE="hadolint/hadolint:v2.14.0"
-CHECKMAKE_IMAGE="cytopia/checkmake@sha256:23116ee551144f1021b294d3ede266ecb760272e0d6f2833f8a3d38b81beffb8"
+# checkmake is pinned in scripts/lint-makefile.sh (the single source of truth for
+# the Makefile check, shared with `make lint-makefile`); not duplicated here.
 YL_RULES='{extends: relaxed, rules: {line-length: disable, document-start: disable, comments: disable, comments-indentation: disable, empty-lines: disable, trailing-spaces: disable}}'
 
 # ── Args ─────────────────────────────────────────────────────────────────────
@@ -186,7 +187,12 @@ committed_this_turn() {
 }
 
 if [[ "$SCOPE" = all ]]; then
-  classify < <(git ls-files)
+  # Tracked (--cached) PLUS untracked-but-not-gitignored (--others
+  # --exclude-standard), so a new file that isn't committed yet still faces the
+  # full gate. Ignored files stay excluded. --cached is explicit here: with
+  # --others present, ls-files lists only the categories named, so omitting it
+  # would drop the tracked files.
+  classify < <(git ls-files --cached --others --exclude-standard | sort -u)
 else
   classify < <({
     git diff --name-only
@@ -279,28 +285,34 @@ run_fmt() {
   return 0
 }
 
-# md5 of each still-existing path so a caller can diff a before/after snapshot to
-# learn which files a tool rewrote in place. Portable across Linux (`md5sum`) and
-# macOS (`md5 -r`): both emit the hash first, but md5sum uses two spaces, so
-# normalize to a single-space "<hash> <path>" line the callers split on
-# `${line#* }`. Kept byte-for-byte in sync with fmt.sh's file_md5s.
-if command -v md5sum >/dev/null 2>&1; then
+# Content fingerprint of each still-existing path so a caller can diff a
+# before/after snapshot to learn which files a tool rewrote in place. Not a
+# security context — just change detection — but we use SHA-256 so scanners don't
+# flag a weak hash. Portable across Linux (`sha256sum`) and macOS (`shasum -a
+# 256`): both print "<hash>  <path>" with two spaces. Anchor the sed to the
+# hash→path separator only — a SHA-256 hash is 64 hex chars, so
+# `^<64hex><space><space>` → `<hash><space>` collapses just the separator,
+# leaving any double-space *inside a path* intact (a plain `s/  / /` would eat
+# the first double-space anywhere on the line and desync the snapshot). Callers
+# split the single-space line on `${line#* }`. Kept byte-for-byte in sync with
+# fmt.sh's file_hashes.
+if command -v sha256sum >/dev/null 2>&1; then
   _hash_one() {
     local path="$1"
-    md5sum "$path" | sed 's/  / /'
+    sha256sum "$path" | sed -E 's/^([0-9a-f]{64})  /\1 /'
     return 0
   }
-elif command -v md5 >/dev/null 2>&1; then
+elif command -v shasum >/dev/null 2>&1; then
   _hash_one() {
     local path="$1"
-    md5 -r "$path"
+    shasum -a 256 "$path" | sed -E 's/^([0-9a-f]{64})  /\1 /'
     return 0
   }
 else
   # no hasher: change detection degrades to "nothing changed"
   _hash_one() { return 0; }
 fi
-file_md5s() {
+file_hashes() {
   local f
   for f in "$@"; do [[ -f "$f" ]] && _hash_one "$f"; done 2>/dev/null || true
   return 0
@@ -343,15 +355,15 @@ check_go() {
     # rewrite .go files outside the changed scope. Snapshot EVERY tracked .go file
     # (not just go_files) before/after, so an out-of-scope safe-fix is reported and
     # — in Stop-hook mode — gets a re-read range instead of silently mutating a
-    # file whose in-context copy then goes stale. The md5 pass over all .go files
+    # file whose in-context copy then goes stale. The hash pass over all .go files
     # is cheap next to the golangci/docker run itself.
     local before after
     local -a all_go=()
     while IFS= read -r f; do [[ -n "$f" ]] && all_go+=("$f"); done < <(git ls-files '*.go')
-    before=$(file_md5s "${all_go[@]}")
+    before=$(file_hashes "${all_go[@]}")
     docker run -i --rm -v "$REPO_ROOT":/app "${lint_cache[@]}" -w /app "$LINT_IMAGE" \
       golangci-lint run --fix ./... >/dev/null 2>&1 || true
-    after=$(file_md5s "${all_go[@]}")
+    after=$(file_hashes "${all_go[@]}")
     record_changed "$before" "$after"
   else
     if ! out=$(docker run -i --rm -v "$REPO_ROOT":/app -w /app "$GO_IMAGE" \
@@ -489,21 +501,13 @@ $out
   return 0
 }
 
-# ── Makefiles (checkmake). Reads its rule config from the repo's checkmake.ini,
-# mounted read-only. Mirrors the plugin hook's checkmake step. ──────────────────
+# ── Makefiles (checkmake). Delegates to scripts/lint-makefile.sh — the single
+# source of truth for the checkmake image, config, and invocation, shared with
+# the `make lint-makefile` target. Mirrors the plugin hook's checkmake step. ────
 check_makefiles() {
   [[ ${#mk_files[@]} -gt 0 ]] || return 0
-  prepull "$CHECKMAKE_IMAGE"
-  local out cfg=() flag=()
-  if [[ -f "$REPO_ROOT/checkmake.ini" ]]; then
-    cfg=(-v "$REPO_ROOT/checkmake.ini":/checkmake.ini:ro)
-    flag=(--config=/checkmake.ini)
-  fi
-  local -a app_paths=()
-  local f
-  for f in "${mk_files[@]}"; do app_paths+=("/app/$f"); done
-  if ! out=$(docker run --rm -v "$REPO_ROOT":/app "${cfg[@]}" -w /app "$CHECKMAKE_IMAGE" \
-    "${flag[@]}" "${app_paths[@]}" 2>&1); then
+  local out
+  if ! out=$("$REPO_ROOT/scripts/lint-makefile.sh" "${mk_files[@]}" 2>&1); then
     failures+="=== checkmake ===
 $out
 

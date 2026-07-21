@@ -1,0 +1,10 @@
+{
+  "proseWrap": "always",
+  "printWidth": 160,
+  "overrides": [
+    {
+      "files": ["AGENTS.md"],
+      "options": { "proseWrap": "preserve" }
+    }
+  ]
+}

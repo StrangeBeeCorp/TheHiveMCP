@@ -21,8 +21,9 @@
 #   • Go       — gofmt -w, then golangci-lint fmt (gofumpt/gci/etc. per .golangci.yml)
 #   • Shell    — shfmt -i 2 -ci -w
 #   • Markdown — markdownlint-cli2 --fix, then prettier (pinned, see
-#                PRETTIER_VERSION) --prose-wrap always --print-width 160 (matches
-#                .markdownlint.jsonc MD013 so they never fight)
+#                PRETTIER_VERSION); options in .prettierrc.json (prose-wrap always,
+#                print-width 160). Prettier owns markdown line width; MD013 is
+#                disabled in .markdownlint.jsonc so the two never fight over it.
 #
 # NOTE: unlike lint.sh, this script runs NO checkers — no golangci-lint run, no
 # go test, and none of shellcheck / yamllint / hadolint / checkmake. Those are
@@ -177,34 +178,39 @@ prepull() {
   return 0
 }
 
-# md5 of each still-existing path, so a before/after snapshot reveals which files
-# a formatter rewrote (used for both --fix reporting and by lint.sh's delegation).
-# Portable across macOS (`md5 -r` → "<hash> <path>") and Linux (`md5sum` → "<hash>
-#   <path>"): both emit the hash first, but md5sum uses two spaces, so normalize to
-# a single-space "<hash> <path>" line the callers below can split on `${line#* }`.
-# Kept byte-for-byte in sync with lint.sh's file_md5s.
-if command -v md5sum >/dev/null 2>&1; then
+# Content fingerprint of each still-existing path, so a before/after snapshot
+# reveals which files a formatter rewrote (used for both --fix reporting and by
+# lint.sh's delegation). Not a security context — just change detection — but we
+# use SHA-256 so scanners don't flag a weak hash. Portable across Linux
+# (`sha256sum`) and macOS (`shasum -a 256`): both print "<hash>  <path>" with two
+# spaces. Anchor the sed to the hash→path separator only — a SHA-256 hash is 64
+# hex chars, so `^<64hex><space><space>` → `<hash><space>` collapses just the
+# separator, leaving any double-space *inside a path* intact (a plain `s/  / /`
+# would eat the first double-space anywhere on the line and desync the snapshot).
+# Callers below split the single-space line on `${line#* }`. Kept byte-for-byte
+# in sync with lint.sh's file_hashes.
+if command -v sha256sum >/dev/null 2>&1; then
   _hash_one() {
     local path="$1"
-    md5sum "$path" | sed 's/  / /'
+    sha256sum "$path" | sed -E 's/^([0-9a-f]{64})  /\1 /'
     return 0
   }
-elif command -v md5 >/dev/null 2>&1; then
+elif command -v shasum >/dev/null 2>&1; then
   _hash_one() {
     local path="$1"
-    md5 -r "$path"
+    shasum -a 256 "$path" | sed -E 's/^([0-9a-f]{64})  /\1 /'
     return 0
   }
 else
   # no hasher: change detection degrades to "nothing changed"
   _hash_one() { return 0; }
 fi
-file_md5s() {
+file_hashes() {
   local f
   for f in "$@"; do [[ -f "$f" ]] && _hash_one "$f"; done 2>/dev/null || true
   return 0
 }
-# Emit the paths present in $after (md5 list) but changed vs $before, via the
+# Emit the paths present in $after (hash list) but changed vs $before, via the
 # recorder passed as $3.
 report_changed() {
   local before="$1" after="$2" recorder="$3" line
@@ -224,14 +230,14 @@ fmt_go() {
   local -a go_paths=()
   local f
   for f in "${go_files[@]}"; do go_paths+=("/app/$f"); done
-  before=$(file_md5s "${go_files[@]}")
+  before=$(file_hashes "${go_files[@]}")
 
   if [[ "$FIX" -eq 1 ]]; then
     docker run -i --rm -v "$REPO_ROOT":/app -w /app "$GO_IMAGE" \
       gofmt -l -w "${go_paths[@]}" >/dev/null 2>&1 || true
     docker run -i --rm -v "$REPO_ROOT":/app "${lint_cache[@]}" -w /app "$LINT_IMAGE" \
       golangci-lint fmt ./... >/dev/null 2>&1 || true
-    after=$(file_md5s "${go_files[@]}")
+    after=$(file_hashes "${go_files[@]}")
     report_changed "$before" "$after" record_fixed
   else
     local out
@@ -265,14 +271,14 @@ fmt_markdown() {
   local -a app_paths=()
   local f
   for f in "${md_files[@]}"; do app_paths+=("/app/$f"); done
-  before=$(file_md5s "${md_files[@]}")
+  before=$(file_hashes "${md_files[@]}")
 
   if [[ "$FIX" -eq 1 ]]; then
     docker run -i --rm -v "$REPO_ROOT":/app -w /app "$MARKDOWN_IMAGE" \
       markdownlint-cli2 --fix "${app_paths[@]}" >/dev/null 2>&1 || true
     docker run -i --rm -v "$REPO_ROOT":/app -w /app "$PRETTIER_IMAGE" \
-      npx --yes "prettier@$PRETTIER_VERSION" --prose-wrap always --print-width 160 --write "${app_paths[@]}" >/dev/null 2>&1 || true
-    after=$(file_md5s "${md_files[@]}")
+      npx --yes "prettier@$PRETTIER_VERSION" --write "${app_paths[@]}" >/dev/null 2>&1 || true
+    after=$(file_hashes "${md_files[@]}")
     report_changed "$before" "$after" record_fixed
   else
     # Report-only: prettier --list-different exits 0 (all formatted), 1 (some would
@@ -283,7 +289,7 @@ fmt_markdown() {
     # code so a real prettier failure surfaces instead of masquerading as "clean".
     local out rc
     out=$(docker run -i --rm -v "$REPO_ROOT":/app -w /app "$PRETTIER_IMAGE" \
-      npx --yes "prettier@$PRETTIER_VERSION" --prose-wrap always --print-width 160 --list-different "${app_paths[@]}")
+      npx --yes "prettier@$PRETTIER_VERSION" --list-different "${app_paths[@]}")
     rc=$?
     if [[ "$rc" -ge 2 ]]; then
       echo "fmt.sh: prettier check failed (exit $rc)" >&2

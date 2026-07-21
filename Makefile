@@ -6,6 +6,16 @@ GO_IMAGE := golang:1.26.5-alpine
 # GO_IMAGE_CGO is the Debian-based image used by `make test-race`; it ships gcc, so
 # `-race` builds there with CGO_ENABLED=1.
 GO_IMAGE_CGO := golang:1.26.5
+# jq and yq run the help-xml pipeline (JSON assembly + JSON→XML). Pinned by digest
+# so `make help-xml` needs no host jq/yq — everything stays in Docker.
+JQ_IMAGE := ghcr.io/jqlang/jq@sha256:b9c68867e5766576263a222e91db3de422d802069c7af70440e667a95344e486
+YQ_IMAGE := mikefarah/yq@sha256:11a1f0b604b13dbbdc662260d8db6f644b22d8553122a25c1b5b2e8713ca6977
+# Bind mount of the working tree at /app, used by nearly every `docker run` below.
+# Hoisted into a variable so the literal `$(CURDIR):/app` never appears on a recipe
+# line: checkmake's parser reparses such a line as a target (the `:` reads as the
+# rule separator) when it directly follows an `ifeq (…)` conditional, a false
+# positive that would otherwise trip the phonydeclared / uniquetargets rules.
+MOUNT_APP := $(CURDIR):/app
 # All Go work runs inside the $(GO_IMAGE) container — there is NO host Go install
 # (see install-dev-deps). So every cache is a Docker named volume, never a host
 # path: named volumes are linux-native, populated in-container, and — unlike a
@@ -88,44 +98,115 @@ RELEASE_TARGETS := linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd
 bin_ext = $(if $(filter windows-%,$(1)),.exe,)
 
 .PHONY: all
-all: fmt lint security test build ## Format, lint, run security checks, test, and build
+all: fmt lint security test build ## Full local gate before pushing: fmt, lint, security, test, build ##@ make all
 
 .PHONY: lint-makefile
-lint-makefile: ## Lint the Makefile
+lint-makefile: ## Check the Makefile's syntax and hygiene (checkmake) ##@ make lint-makefile
 	@echo $(BGreen)----------------------$(Color_Off)
 	@echo $(BGreen)-- Linting Makefile --$(Color_Off)
 	@echo $(BGreen)----------------------$(Color_Off)
 	@make --dry-run -n all > /dev/null || exit 1
 	@echo "Syntax OK"
-	@docker run --rm --workdir / -v $(CURDIR)/Makefile:/Makefile -v $(CURDIR)/checkmake.ini:/checkmake.ini quay.io/checkmake/checkmake:latest || exit 1
+	@./scripts/lint-makefile.sh Makefile || exit 1
 	@echo "checkmake OK"
 
 .PHONY: fmt
-fmt: ## Format every tracked file (Go, shell, markdown)
+fmt: ## Auto-format the whole repo (Go, shell, markdown) before committing ##@ make fmt
 	@echo $(BGreen)-------------$(Color_Off)
 	@echo $(BGreen)--- Format --$(Color_Off)
 	@echo $(BGreen)-------------$(Color_Off)
 	./scripts/fmt.sh --all --fix
 
 .PHONY: fmt-changed
-fmt-changed: ## Format only this turn's changed files
+fmt-changed: ## Fast format loop while iterating: only git-changed files ##@ make fmt-changed
 	@echo $(BGreen)-------------$(Color_Off)
 	@echo $(BGreen)--- Format --$(Color_Off)
 	@echo $(BGreen)-------------$(Color_Off)
 	./scripts/fmt.sh --changed --fix
 
 .PHONY: security
-security: vulncheck sast dockerlint dockersec secrets ## Run security checks
+security: vulncheck sast dockerlint dockersec secrets ## Run every security check at once (vuln, SAST, docker, secrets) ##@ make security
+
+# Help system. Each documented target carries a `## <purpose>` comment and an
+# optional `##@ <usage>` marker on the same line, e.g.
+#   test: ## Run fast unit tests ##@ make test [COVERAGE=1]
+# HELP_PARSE turns those grepped lines into TAB-separated `target<TAB>purpose
+# <TAB>usage` records (no formatting), so both `help` (pretty table) and
+# `help-json` (machine-readable) render from the exact same source of truth.
+# Targets with no `##@` marker fall back to `make <target>` as the usage.
+# No leading `@`: recipes prefix their own (help/help-json) so this stays pure
+# command text usable inside `$$(...)` (help-xml captures it to guard on empty).
+define HELP_PARSE
+	grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk ' \
+	{ \
+		target = $$0; sub(/:.*/, "", target); \
+		rest = $$0; sub(/^[^#]*## /, "", rest); \
+		usage = "make " target; purpose = rest; \
+		idx = index(rest, "##@ "); \
+		if (idx > 0) { usage = substr(rest, idx + 4); purpose = substr(rest, 1, idx - 1); sub(/[ \t]+$$/, "", purpose); } \
+		printf "%s\t%s\t%s\n", target, purpose, usage; \
+	}'
+endef
+
+# HELP_TABLE renders TAB-separated records as an aligned 3-column table. It
+# buffers every row to size the TARGET and PURPOSE columns to their longest
+# entry (auto-fit — no truncation when the terminal is wide enough), but caps
+# PURPOSE so the USAGE column still fits in COLUMNS, trimming with `…` only when
+# the terminal is too narrow. Column separator is two spaces.
+define HELP_TABLE
+	awk -F'\t' -v cols="$${COLUMNS:-0}" ' \
+	{ t[NR]=$$1; p[NR]=$$2; u[NR]=$$3; \
+	  if (length($$1)>tw) tw=length($$1); if (length($$2)>pw) pw=length($$2); if (length($$3)>uw) uw=length($$3); } \
+	END { \
+		if (tw<6) tw=6; \
+		hdr_pw=pw; if (hdr_pw<7) hdr_pw=7; \
+		if (cols>0) { avail=cols-tw-uw-4; if (avail<10) avail=10; if (pw>avail) pw=avail; } \
+		if (pw<hdr_pw && cols<=0) pw=hdr_pw; \
+		printf "\033[1;36m%-*s\033[0m  \033[1m%-*s\033[0m  %s\n", tw, "TARGET", pw, "PURPOSE", "USAGE"; \
+		for (i=1;i<=NR;i++) { \
+			pp=p[i]; if (length(pp)>pw) pp=substr(pp,1,pw-1) "…"; \
+			printf "\033[1;36m%-*s\033[0m  %-*s  %s\n", tw, t[i], pw, pp, u[i]; \
+		} \
+	}'
+endef
+
+# HELP_JSON renders the records as a JSON array of {target,purpose,usage}.
+# json_escape guards the few chars that would break JSON in these short strings.
+define HELP_JSON
+	awk -F'\t' ' \
+	function esc(s) { gsub(/\\/,"\\\\",s); gsub(/"/,"\\\"",s); gsub(/\t/,"\\t",s); return s; } \
+	BEGIN { printf "[" } \
+	{ printf "%s\n  {\"target\":\"%s\",\"purpose\":\"%s\",\"usage\":\"%s\"}", (NR>1?",":""), esc($$1), esc($$2), esc($$3) } \
+	END { printf "%s]\n", (NR>0?"\n":"") }'
+endef
 
 .PHONY: help
-help: ## Display this help
-	@echo $(BGreen)--------------$(Color_Off)
-	@echo $(BGreen)-- Help : --$(Color_Off)
-	@echo $(BGreen)--------------$(Color_Off)
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[1;36m%-30s\033[0m %s\n", $$1, $$2}'
+help: ## Display this help as a table ##@ make help
+	@$(HELP_PARSE) | $(HELP_TABLE)
+
+.PHONY: help-json
+help-json: ## Display this help as JSON (for agents/tooling) ##@ make help-json
+	@$(HELP_PARSE) | $(HELP_JSON)
+
+.PHONY: help-xml
+# jq/yq run in pinned containers so this stays fully in Docker (no host deps).
+# Guard against an empty parse: "[]" means no documented targets were matched,
+# which would otherwise emit a near-empty doc with exit 0 and look like success.
+# The stages run one at a time through captured variables (not a single `|`
+# pipe) so a jq/yq/docker failure aborts under `set -e` instead of a broken
+# stage silently emitting empty XML with the last stage's exit 0. `pipefail` is
+# avoided on purpose — recipes run under /bin/sh, which is dash on many hosts.
+# Each record is wrapped in <command> (not <target>) so the inner <target> name
+# field stays unambiguous: `//target` selects only the names, never the wrapper.
+help-xml: ## Display this help as XML (for agents/tooling) ##@ make help-xml
+	@set -e; \
+		json=$$($(HELP_PARSE) | $(HELP_JSON)); \
+		case "$$json" in ""|"[]") echo "help-xml: no documented targets found" >&2; exit 1;; esac; \
+		wrapped=$$(printf '%s' "$$json" | docker run -i --rm $(JQ_IMAGE) '{targets: {command: .}}'); \
+		printf '%s' "$$wrapped" | docker run -i --rm $(YQ_IMAGE) -p=json -o=xml
 
 .PHONY: clean
-clean: ## Remove build artifacts and coverage files
+clean: ## Wipe build/dist artifacts and coverage.out for a clean slate ##@ make clean
 	@echo $(BGreen)-------------------$(Color_Off)
 	@echo $(BGreen)-- Cleaning up   --$(Color_Off)
 	@echo $(BGreen)-------------------$(Color_Off)
@@ -134,15 +215,15 @@ clean: ## Remove build artifacts and coverage files
 	@rm -f coverage.out
 
 .PHONY: pre
-pre: ## Create build directory
+pre: ## Internal: ensure the build/ directory exists (a build dependency) ##@ make pre (usually run automatically)
 	@mkdir -p $(BUILDDIR)
 
 .PHONY: sast
-sast: ## Static Application Security Testing
+sast: ## Find insecure code patterns via SAST (gosec) ##@ make sast
 	@echo $(BGreen)---------------------------$(Color_Off)
 	@echo $(BGreen)-- Running SAST Analysis --$(Color_Off)
 	@echo $(BGreen)---------------------------$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install github.com/securego/gosec/v2/cmd/gosec@v2.26.1 && gosec ./...'
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install github.com/securego/gosec/v2/cmd/gosec@v2.26.1 && gosec ./...'
 
 # Every Dockerfile in the repo. hadolint lints each — the production image plus
 # the MCPB and LibreChat helper images — so a misconfig regression in any of them
@@ -150,7 +231,7 @@ sast: ## Static Application Security Testing
 DOCKERFILES := deployment/Dockerfile scripts/Dockerfile.mcpb docs/how-to/docker/Dockerfile.librechat
 
 .PHONY: dockerlint
-dockerlint: ## Lint the Dockerfiles (hadolint)
+dockerlint: ## Catch Dockerfile hygiene issues in all images (hadolint) ##@ make dockerlint
 	@echo $(BGreen)---------------------------$(Color_Off)
 	@echo $(BGreen)-- Linting Dockerfiles   --$(Color_Off)
 	@echo $(BGreen)---------------------------$(Color_Off)
@@ -169,7 +250,7 @@ dockerlint: ## Lint the Dockerfiles (hadolint)
 # and populated in-container, so it is not bind-mounted from the host.
 TRIVY_CACHE := -v thehivemcp-trivy-cache:/root/.cache/trivy
 .PHONY: dockersec
-dockersec: ## Scan the Dockerfiles for security misconfigurations (trivy)
+dockersec: ## Scan Dockerfiles for HIGH+ security misconfigs (trivy) ##@ make dockersec
 	@echo $(BGreen)---------------------------$(Color_Off)
 	@echo $(BGreen)-- Scanning Dockerfiles  --$(Color_Off)
 	@echo $(BGreen)---------------------------$(Color_Off)
@@ -181,14 +262,14 @@ dockersec: ## Scan the Dockerfiles for security misconfigurations (trivy)
 	@echo "Dockerfiles security OK"
 
 .PHONY: secrets
-secrets: ## Scan the working tree for committed secrets (gitleaks)
+secrets: ## Detect committed secrets in the working tree (gitleaks) ##@ make secrets
 	@echo $(BGreen)---------------------------$(Color_Off)
 	@echo $(BGreen)-- Scanning for secrets  --$(Color_Off)
 	@echo $(BGreen)---------------------------$(Color_Off)
 	docker run --rm -v $(CURDIR):/repo -w /repo $(GIT_WORKTREE_MOUNT) zricethezav/gitleaks:v8.30.1 dir --redact --verbose --config /repo/.gitleaks.toml .
 
 .PHONY: build
-build: ## Build binary for current host OS/Arch
+build: ## Build the binary for your current host OS/arch ##@ make build (output: build/thehivemcp-<os>-<arch>)
 	@echo $(BGreen)----------------------------$(Color_Off)
 	@echo $(BGreen)-- Building TheHive MCP --$(Color_Off)
 	@echo $(BGreen)----------------------------$(Color_Off)
@@ -235,13 +316,13 @@ export THEHIVE_TEST_LICENSE
 LICENSE_FILE := internal/testutils/testdata/.test-license.lic.local
 
 .PHONY: test
-test: pre ## Run fast unit tests, skipping integration tests (COVERAGE=1 for coverage, RUN=<regexp> to filter)
+test: pre ## Default test loop: fast, cached unit tests (no live TheHive) ##@ make test [COVERAGE=1] [RUN=<regexp>]
 	@echo $(BGreen)-----------------------$(Color_Off)
 	@echo $(BGreen)-- Running UnitTests --$(Color_Off)
 	@echo $(BGreen)-----------------------$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go test $(GO_TEST_COVER) $(GO_TEST_RUN) -short -v ./...
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go test $(GO_TEST_COVER) $(GO_TEST_RUN) -short -v ./...
 ifeq ($(COVERAGE),1)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
 endif
 
 # test-race runs -short only: the race detector is meaningful on our own
@@ -250,57 +331,29 @@ endif
 # It uses GO_IMAGE_CGO with CGO_ENABLED=1 because -race needs cgo (the Alpine
 # GO_IMAGE has no C toolchain).
 .PHONY: test-race
-test-race: pre ## Run fast unit tests under the race detector (RUN=<regexp> to filter)
+test-race: pre ## Catch data races in our concurrency (unit tests, -race) ##@ make test-race [RUN=<regexp>]
 	@echo $(BGreen)-- Running UnitTests under -race --$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app -e CGO_ENABLED=1 $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE_CGO) go test -race $(GO_TEST_RUN) -short ./...
+	docker run -i --rm -v $(MOUNT_APP) -w /app -e CGO_ENABLED=1 $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE_CGO) go test -race $(GO_TEST_RUN) -short ./...
 
 .PHONY: test-integration
-test-integration: pre ## Run the full test suite against the docker-compose test stack (COVERAGE=1 for coverage, RUN=<regexp> to filter). Leaves the stack UP for fast reruns; use `make test-integration-down` to tear it down.
+test-integration: pre ## Full suite vs a live TheHive stack; slow, leaves stack up ##@ make test-integration [COVERAGE=1] [RUN=<regexp>] [THEHIVE_TEST_IMAGE=..] [THEHIVE_TEST_URL=..]; then make test-integration-down
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Running Integration Tests --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
-	# Bring up the TheHive + Elasticsearch + Cassandra + MITRE stack
-	# (THEHIVE_TEST_IMAGE selects the version) and reset its databases to a clean
-	# state (scripts/reset-integration-db.sh — see it for the why), then run the
-	# suite against it on the host network. The stack is deliberately LEFT UP for
-	# fast reruns; `make test-integration-down` tears it down.
-	#
-	# The reset script decides the mode (presupplied THEHIVE_TEST_LICENSE, else
-	# pullable image ⇒ mint, else free — see the LICENSE_FILE note above) and
-	# writes the token (or nothing) to LICENSE_FILE. We read that file here to
-	# configure the go-test container:
-	#   - Non-empty (token present) ⇒ export THEHIVE_TEST_LICENSE so the Go suite
-	#     runs per-test org + user via t.Parallel (testutils.Parallel), packages
-	#     concurrent (no -p 1).
-	#   - Empty/absent (free license) ⇒ one shared org, testutils.Parallel no-ops
-	#     so tests run sequentially and purge their own data; `-p 1` stops packages
-	#     from racing on that shared org.
-	# Isolation in either mode comes from internal/testutils/orgs.go.
-	#
-	# -timeout 20m raises the per-package deadline above the default 10m: under
-	# memory pressure a single request can stall, and the setup helpers retry
-	# those (each capped at the client's 90s transport timeout), so the headroom
-	# keeps a transient stall from tripping the package timeout. The sequential
-	# free-license path is the slowest run, so it needs this headroom most.
-	./scripts/reset-integration-db.sh docker-compose.test.yml
-	@if [ -s "$(LICENSE_FILE)" ]; then \
-		echo "License present → parallel multi-org mode."; \
-		LIC="$$(cat "$(LICENSE_FILE)")"; PARALLELISM=""; \
-	else \
-		echo "No license → sequential shared-org mode."; \
-		LIC=""; PARALLELISM="-p 1"; \
-	fi; \
-	docker run -i --rm --network host -v $(CURDIR):/app -w /app -e THEHIVE_TEST_URL -e LOG_LEVEL -e THEHIVE_TEST_IMAGE -e THEHIVE_TEST_LICENSE="$$LIC" $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c "command -v gotestsum >/dev/null 2>&1 || go install gotest.tools/gotestsum@v1.13.0 ; gotestsum --format pkgname --hide-summary=skipped -- $(GO_TEST_COVER) $(GO_TEST_RUN) $$PARALLELISM -timeout 20m ./..."
+	@LICENSE_FILE="$(LICENSE_FILE)" MOUNT_APP="$(MOUNT_APP)" GO_IMAGE="$(GO_IMAGE)" \
+		GO_RUN_AS_HOST_UID="$(GO_RUN_AS_HOST_UID)" DOCKER_CACHE_MOUNTS="$(DOCKER_CACHE_MOUNTS)" \
+		GO_TOOLS_CACHE="$(GO_TOOLS_CACHE)" GO_TEST_COVER="$(GO_TEST_COVER)" GO_TEST_RUN="$(GO_TEST_RUN)" \
+		./scripts/run-integration-tests.sh
 ifeq ($(COVERAGE),1)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
 endif
 
 .PHONY: test-integration-down
-test-integration-down: ## Tear down the integration test stack left up by `make test-integration` (containers, network, volumes)
+test-integration-down: ## Tear down the stack left up by test-integration ##@ make test-integration-down
 	docker compose -f docker-compose.test.yml down -v
 
 .PHONY: docker-build
-docker-build: ## Build Docker image
+docker-build: ## Build the production Docker image (thehivemcp:latest) ##@ make docker-build
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Building Docker Image --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
@@ -313,7 +366,7 @@ docker-build: ## Build Docker image
 		-f deployment/Dockerfile .
 
 .PHONY: docker-run
-docker-run: docker-build ## Run production Docker container
+docker-run: docker-build ## Build + run the prod container using your .env config ##@ make docker-run [ARGS=".."] (needs a .env file)
 	@echo $(BGreen)--------------------------------$(Color_Off)
 	@echo $(BGreen)-- Starting production mode --$(Color_Off)
 	@echo $(BGreen)--------------------------------$(Color_Off)
@@ -326,7 +379,7 @@ docker-run: docker-build ## Run production Docker container
 		${BINARY_NAME}:latest $(ARGS)
 
 .PHONY: dev
-dev: ## Run development server with hot reload
+dev: ## Iterate locally: hot-reloading dev server (air) ##@ make dev
 	@echo $(BGreen)--------------------------------$(Color_Off)
 	@echo $(BGreen)-- Starting development mode --$(Color_Off)
 	@echo $(BGreen)--------------------------------$(Color_Off)
@@ -337,7 +390,7 @@ dev: ## Run development server with hot reload
 	air
 
 .PHONY: run
-run: build ## Run the application (usage: make run ARGS="your arguments here")
+run: build ## Build then run the binary from the host ##@ make run ARGS="your arguments here"
 	@echo $(BGreen)---------------------------$(Color_Off)
 	@echo $(BGreen)-- Starting application  --$(Color_Off)
 	@echo $(BGreen)---------------------------$(Color_Off)
@@ -349,49 +402,49 @@ run: build ## Run the application (usage: make run ARGS="your arguments here")
 
 
 .PHONY: vulncheck
-vulncheck: ## Check for vulnerabilities
+vulncheck: ## Check dependencies for known CVEs (govulncheck) ##@ make vulncheck
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Security Vulnerability  --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@v1.3.0 && govulncheck ./...'
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@v1.3.0 && govulncheck ./...'
 
 .PHONY: lint
-lint: ## Run linter checks over the whole repo without modifying files
+lint: ## Check the whole repo for lint issues, read-only ##@ make lint
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Linter Checks --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	./scripts/lint.sh --all --check
 
 .PHONY: lint-changed
-lint-changed: ## Run linter checks over this turn's changed files only, no modifying
+lint-changed: ## Fast read-only lint of git-changed files only ##@ make lint-changed
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Linter Checks: changed --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	./scripts/lint.sh --changed --check
 
 .PHONY: lint-fix
-lint-fix: ## Auto-fix cosmetics + safe lint fixes over the whole repo, reporting fixed files
+lint-fix: ## Auto-apply safe lint fixes across the whole repo ##@ make lint-fix
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Linter Checks with auto-fix --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	./scripts/lint.sh --all --fix
 
 .PHONY: lint-fix-changed
-lint-fix-changed: ## Auto-fix this turn's changed files only, reporting fixed files
+lint-fix-changed: ## Auto-apply safe lint fixes to git-changed files only ##@ make lint-fix-changed
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Linter Checks: auto-fix changed --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	./scripts/lint.sh --changed --fix
 
 .PHONY: updatedep
-updatedep: ## Update dependencies
+updatedep: ## Upgrade Go deps to latest and tidy go.mod/go.sum ##@ make updatedep
 	@echo $(BGreen)-----------------------$(Color_Off)
 	@echo $(BGreen)-- Update Dependencies --$(Color_Off)
 	@echo $(BGreen)-----------------------$(Color_Off)
-	docker run -i --rm -v $(CURDIR):/app -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) sh -c 'go get -u ./... && go mod tidy'
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) sh -c 'go get -u ./... && go mod tidy'
 
 .PHONY: install-dev-deps
-install-dev-deps: ## Install development dependencies
+install-dev-deps: ## No-op: tooling runs on-demand via Docker (kept for habit) ##@ make install-dev-deps
 	@echo $(BGreen)----------------------------------------$(Color_Off)
 	@echo $(BGreen)-- Installing development dependencies --$(Color_Off)
 	@echo $(BGreen)----------------------------------------$(Color_Off)
@@ -403,54 +456,47 @@ build-%: pre
 	@echo "Building for $*..."
 	@OS=$$(echo $* | cut -d- -f1); \
 	ARCH=$$(echo $* | cut -d- -f2); \
-	docker run -i --rm -v $(CURDIR):/app -w /app -e GOOS=$$OS -e GOARCH=$$ARCH $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go build $(GOLDFLAGS) -o $(BUILDDIR)/$(BINARY_NAME)-$*$(call bin_ext,$*) ./cmd/server/main.go
+	docker run -i --rm -v $(MOUNT_APP) -w /app -e GOOS=$$OS -e GOARCH=$$ARCH $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go build $(GOLDFLAGS) -o $(BUILDDIR)/$(BINARY_NAME)-$*$(call bin_ext,$*) ./cmd/server/main.go
 
 .PHONY: pre-dist
-pre-dist: ## Create distribution directory
+pre-dist: ## Internal: ensure the dist/ directory exists (packaging dep) ##@ make pre-dist (usually run automatically)
 	@mkdir -p $(DISTDIR)
 
 .PHONY: build-current
-build-current: build ## Alias for build (builds for current host platform)
+build-current: build ## Alias for `build` (current host platform) ##@ make build-current
 
 .PHONY: build-all
-build-all: $(addprefix build-,$(RELEASE_TARGETS)) ## Build binaries for all release targets
+build-all: $(addprefix build-,$(RELEASE_TARGETS)) ## Cross-compile binaries for every release target ##@ make build-all
 
 .PHONY: package-release
-package-release: build-all package-from-built ## Build, then package all binaries and MCPB for release (local: no signing)
+package-release: build-all package-from-built ## Local release dry-run: build all + package tarballs/MCPB (no signing) ##@ make package-release
 
 # package-from-built packages whatever binaries already exist in $(BUILDDIR) — it
 # does NOT (re)build. This is the seam the release CI needs: build-all -> sign the
 # windows .exe in place -> package-from-built, so packaging consumes the *signed*
 # binaries instead of clobbering them with a fresh build-all.
 .PHONY: package-from-built
-package-from-built: pre-dist mcpb-ci-nobuild ## Package pre-built (already-signed) binaries + MCPB
+package-from-built: pre-dist mcpb-ci-nobuild ## Release CI: package existing (signed) build/ binaries, no rebuild ##@ make package-from-built
 	@echo $(BGreen)--------------------------------$(Color_Off)
 	@echo $(BGreen)-- Packaging release binaries --$(Color_Off)
 	@echo $(BGreen)--------------------------------$(Color_Off)
-	@for target in $(RELEASE_TARGETS); do \
-		echo "Packaging $$target..."; \
-		case "$$target" in windows-*) ext=".exe";; *) ext="";; esac; \
-		cp $(BUILDDIR)/$(BINARY_NAME)-$$target$$ext $(DISTDIR)/$(BINARY_NAME)-$$target$$ext; \
-		(cd $(DISTDIR) && tar -czf $(BINARY_NAME)-$(VERSION)-$$target.tar.gz $(BINARY_NAME)-$$target$$ext); \
-		shasum -a 256 $(DISTDIR)/$(BINARY_NAME)-$(VERSION)-$$target.tar.gz > $(DISTDIR)/$(BINARY_NAME)-$(VERSION)-$$target.tar.gz.sha256; \
-		rm $(DISTDIR)/$(BINARY_NAME)-$$target$$ext; \
-	done
-	@echo "All release packages created in $(DISTDIR)/"
-	@ls -1 $(DISTDIR)/
+	@VERSION="$(VERSION)" BUILDDIR="$(BUILDDIR)" DISTDIR="$(DISTDIR)" \
+		BINARY_NAME="$(BINARY_NAME)" RELEASE_TARGETS="$(RELEASE_TARGETS)" \
+		./scripts/package-tarballs.sh
 
 .PHONY: version
-version: ## Display current version
+version: ## Print the version string baked into builds ##@ make version
 	@echo $(VERSION)
 
 .PHONY: mcpb-build-image
-mcpb-build-image: ## Build Docker image for MCPB generation
+mcpb-build-image: ## Internal: build the MCPB packaging image (dep of mcpb-*) ##@ make mcpb-build-image (usually run automatically)
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Building MCPB CI Image  --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	docker build -f scripts/Dockerfile.mcpb -t thehivemcp-mcpb:latest .
 
 .PHONY: mcpb-local
-mcpb-local: build ## Generate MCPB package locally
+mcpb-local: build ## Build + package a single MCPB for your host, to test it ##@ make mcpb-local
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Generating MCPB Package --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
@@ -462,14 +508,14 @@ mcpb-local: build ## Generate MCPB package locally
 MCPB_TARGETS ?= $(RELEASE_TARGETS)
 
 .PHONY: mcpb-ci
-mcpb-ci: build-all mcpb-ci-nobuild ## Build, then generate MCPB packages for all architectures
+mcpb-ci: build-all mcpb-ci-nobuild ## Build all + package MCPB for every architecture ##@ make mcpb-ci
 
 # mcpb-smoke exercises the MCPB packaging path (container permissions, manifest
 # generation, non-empty output) for a single target — fast enough to run on
 # every PR that touches the packaging inputs. Reuses build-<target> +
 # mcpb-ci-nobuild with MCPB_TARGETS narrowed to one arch.
 .PHONY: mcpb-smoke
-mcpb-smoke: ## Smoke-test MCPB packaging for MCPB_SMOKE_TARGET (default linux-amd64)
+mcpb-smoke: ## Fast PR check: MCPB packaging works for one arch ##@ make mcpb-smoke [MCPB_SMOKE_TARGET=linux-amd64]
 	@$(MAKE) build-$(MCPB_SMOKE_TARGET)
 	@$(MAKE) mcpb-ci-nobuild MCPB_TARGETS=$(MCPB_SMOKE_TARGET)
 MCPB_SMOKE_TARGET ?= linux-amd64
@@ -478,36 +524,20 @@ MCPB_SMOKE_TARGET ?= linux-amd64
 # binaries in $(BUILDDIR) into MCPB packages. It deliberately does NOT depend on
 # build-all so a signing step can run between build-all and packaging.
 .PHONY: mcpb-ci-nobuild
-mcpb-ci-nobuild: pre-dist mcpb-build-image ## Generate MCPB packages from pre-built binaries
+mcpb-ci-nobuild: pre-dist mcpb-build-image ## Release CI: MCPB-package existing build/ binaries, no rebuild ##@ make mcpb-ci-nobuild [MCPB_TARGETS="..."]
 	@echo $(BGreen)----------------------------------$(Color_Off)
 	@echo $(BGreen)-- Generating MCPB Packages CI --$(Color_Off)
 	@echo $(BGreen)----------------------------------$(Color_Off)
-	@set -e; for target in $(MCPB_TARGETS); do \
-		echo "Generating MCPB for $$target..."; \
-		case "$$target" in windows-*) ext=".exe";; *) ext="";; esac; \
-		ws=/tmp/mcpb-workspace-$$target; \
-		mkdir -p $$ws/binaries; \
-		cp $(BUILDDIR)/thehivemcp-$$target$$ext $$ws/binaries/; \
-		docker run --rm \
-			--user "$$(id -u):$$(id -g)" \
-			-v $$ws:/workspace \
-			-e HOME=/workspace \
-			-e CI_MODE=true \
-			-e VERSION=$(VERSION) \
-			-e TARGET_ARCH=$$target \
-			thehivemcp-mcpb:latest; \
-		cp $$ws/thehivemcp-$(VERSION)-$$target.mcpb $(DISTDIR)/; \
-		shasum -a 256 $(DISTDIR)/thehivemcp-$(VERSION)-$$target.mcpb > $(DISTDIR)/thehivemcp-$(VERSION)-$$target.mcpb.sha256; \
-		docker run --rm -v $$ws:/workspace alpine:latest rm -rf /workspace/* || rm -rf $$ws || true; \
-	done
-	@echo "All MCPB packages created in $(DISTDIR)/"
+	@VERSION="$(VERSION)" BUILDDIR="$(BUILDDIR)" DISTDIR="$(DISTDIR)" \
+		MCPB_TARGETS="$(MCPB_TARGETS)" \
+		./scripts/package-mcpb-ci.sh
 
 # The windows release targets, expanded to their built .exe paths.
 WINDOWS_TARGETS := $(filter windows-%,$(RELEASE_TARGETS))
 WINDOWS_BINARIES := $(foreach t,$(WINDOWS_TARGETS),$(BUILDDIR)/$(BINARY_NAME)-$(t).exe)
 
 .PHONY: sign-windows
-sign-windows: ## Sign the built windows .exe binaries in place (release CI; mechanism-agnostic)
+sign-windows: ## Release CI: code-sign the built Windows .exe files in place ##@ make sign-windows
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Signing Windows binaries --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
