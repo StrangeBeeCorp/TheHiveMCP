@@ -140,14 +140,14 @@ func (t *Tool) updatePage(ctx context.Context, client *thehive.APIClient, entity
 		defer closeResponse(resp)
 
 		return updateResult(entityID, err, "failed to update page in case",
-			fmt.Sprintf("Check that the page %s and case %s exist and you have permissions. API response: %v", entityID, targetID, resp))
+			fmt.Sprintf("Check that the page %s and case %s exist and you have permissions.", entityID, targetID))
 	}
 
 	resp, err := client.PageAPI.UpdateAPage(ctx, entityID).InputUpdatePage(input).Execute()
 	defer closeResponse(resp)
 
 	return updateResult(entityID, err, "failed to update page",
-		fmt.Sprintf("Check that the page %s exists and you have permissions. For case-attached pages, provide the parent case ID in target-id. API response: %v", entityID, resp))
+		fmt.Sprintf("Check that the page %s exists and you have permissions. For case-attached pages, provide the parent case ID in target-id.", entityID))
 }
 
 // unmarshalUpdate decodes jsonData into target. ok is false when decoding fails,

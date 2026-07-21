@@ -70,3 +70,31 @@ func TestNewFilteredOutputProcedure_DoesNotPanicWhenTacticIsNil(t *testing.T) {
 		require.Empty(t, result.Tactic)
 	})
 }
+
+// TestEnvelopeTrustClassification pins the deliberate trust split on the
+// manage envelopes (DL-6703): MCP-authored status text is unwrapped, while
+// upstream-derived content keeps its [UNTRUSTED_DATA] tags. If this test fails
+// after a type "harmonization", the change reopened an injection channel.
+func TestEnvelopeTrustClassification(t *testing.T) {
+	t.Parallel()
+
+	merge := NewMergeObservablesResult(`{"deduplicated": ["~1"]}`, "~99")
+	update := SingleEntityUpdateResult{EntityID: "~7", Result: resultUpdated}
+
+	processedMerge, err := utils.ProcessDatesRecursive(merge, true)
+	require.NoError(t, err)
+
+	mergeMap, ok := processedMerge.(map[string]any)
+	require.True(t, ok)
+	// API merge summary: upstream content, must stay wrapped.
+	require.Equal(t, `[UNTRUSTED_DATA]{"deduplicated": ["~1"]}[/UNTRUSTED_DATA]`, mergeMap["result"])
+	require.Equal(t, "Observables merged/deduplicated successfully", mergeMap["message"])
+
+	processedUpdate, err := utils.ProcessDatesRecursive(update, true)
+	require.NoError(t, err)
+
+	updateMap, ok := processedUpdate.(map[string]any)
+	require.True(t, ok)
+	// MCP-authored constant: must not be wrapped.
+	require.Equal(t, "updated", updateMap["result"])
+}

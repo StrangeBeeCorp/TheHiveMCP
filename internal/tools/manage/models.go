@@ -319,9 +319,9 @@ func NewCreateProcedureResult(procedure *thehive.OutputProcedure) *CreateProcedu
 
 // SingleEntityUpdateResult is the per-entity outcome of an update operation.
 type SingleEntityUpdateResult struct {
-	EntityID string         `json:"_id"`
-	Result   string         `json:"result,omitempty"`
-	Error    map[string]any `json:"error,omitempty"`
+	EntityID string              `json:"_id"`
+	Result   utils.TrustedString `json:"result,omitempty"`
+	Error    map[string]any      `json:"error,omitempty"`
 }
 
 // UpdateEntityResult aggregates the per-entity outcomes of an update operation.
@@ -447,11 +447,13 @@ func NewMergeAlertsResult(caseEntity *thehive.OutputCase, alertIDs []string, tar
 
 // MergeObservablesResult is the tool result returned after merging/deduplicating observables.
 type MergeObservablesResult struct {
-	Operation  string              `json:"operation"`
-	EntityType string              `json:"entityType"`
-	TargetID   string              `json:"targetId,omitempty"`
-	Result     string              `json:"result,omitempty"`
-	Message    utils.TrustedString `json:"message,omitempty"`
+	Operation  string `json:"operation"`
+	EntityType string `json:"entityType"`
+	TargetID   string `json:"targetId,omitempty"`
+	// Result stays a plain string on purpose: it echoes the API merge summary
+	// (upstream content) and must remain [UNTRUSTED_DATA]-wrapped.
+	Result  string              `json:"result,omitempty"`
+	Message utils.TrustedString `json:"message,omitempty"`
 }
 
 // NewMergeObservablesResult builds a MergeObservablesResult from the API summary and target case ID.

@@ -32,6 +32,9 @@ const (
 	fieldID = "_id"
 	// fieldDataType is the observable data-type field.
 	fieldDataType = "dataType"
+	// fieldHashes is the attachment digests field; fieldTactics the pattern tactics field.
+	fieldHashes  = "hashes"
+	fieldTactics = "tactics"
 	// fieldObservableCount is a similarity match-context meta field.
 	fieldObservableCount = "observableCount"
 

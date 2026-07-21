@@ -47,7 +47,7 @@ All operators below are verified end-to-end against TheHive.
 
 ## Field types and values
 
-- **Severity** is numeric: `1=Low, 2=Medium, 3=High, 4=Critical` by default (configurable per org). Filter with numbers, e.g. `{"_gte": {"_field": "severity", "_value": 3}}`. The human-readable label lives in `severityLabel`.
+- **Severity** is numeric: `1=Low, 2=Medium, 3=High, 4=Critical` (fixed scale). Filter with numbers, e.g. `{"_gte": {"_field": "severity", "_value": 3}}`. The derived label lives in `severityLabel`.
 - **Status / stage** are strings, e.g. alerts use `"New"`, `"Imported"`; cases use `"New"`, `"InProgress"`, `"Closed"`. Check the entity schema for valid values.
 - **Tags** is a multi-valued field — use `_in` to match any of several tags, or `_eq` for an exact single tag.
 - **Cases** have a human-readable `number` field (e.g. `42`) distinct from the internal `_id` (`~<n>`). "case #42" → filter `{"_eq": {"_field": "number", "_value": 42}}`, not `_id`.

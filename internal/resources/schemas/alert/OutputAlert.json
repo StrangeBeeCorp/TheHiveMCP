@@ -85,7 +85,7 @@
     },
     "severityLabel": {
       "type": "string",
-      "description": "Human-readable label corresponding to the severity value (e.g., 'Low', 'Medium', 'High', 'Critical'). Defined in organisation configuration."
+      "description": "Human-readable label derived from the severity value; fixed server-side enum ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')."
     },
     "date": {
       "type": "string",
