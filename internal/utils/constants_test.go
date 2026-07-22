@@ -22,6 +22,11 @@ const (
 	fieldTLP  = "tlp"
 	fieldTags = "tags"
 
+	fieldMessage = "message"
+	fieldSummary = "summary"
+
+	valueInitialAccess = "initial-access"
+
 	valueNew = "New"
 
 	opGetCase  = "getCase"

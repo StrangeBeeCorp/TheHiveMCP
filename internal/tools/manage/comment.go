@@ -50,7 +50,7 @@ func (t *Tool) addComment(ctx context.Context, client *thehive.APIClient, entity
 		return SingleEntityCommentResult{
 			EntityID:  entityID,
 			CommentID: result.GetUnderscoreId(),
-			Result:    "comment added with ID " + result.GetUnderscoreId(),
+			Result:    utils.Trustedf("comment added with ID %s", result.GetUnderscoreId()),
 		}
 
 	case types.EntityTypeTask:
@@ -71,7 +71,7 @@ func (t *Tool) addComment(ctx context.Context, client *thehive.APIClient, entity
 		return SingleEntityCommentResult{
 			EntityID:  entityID,
 			CommentID: result.GetUnderscoreId(),
-			Result:    "task log added with ID " + result.GetUnderscoreId(),
+			Result:    utils.Trustedf("task log added with ID %s", result.GetUnderscoreId()),
 		}
 
 	default:

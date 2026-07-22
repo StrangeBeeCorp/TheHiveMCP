@@ -1,8 +1,6 @@
 package execute_automation
 
 import (
-	"fmt"
-
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
@@ -70,15 +68,15 @@ const (
 
 // FilteredOutputJob is a reduced view of a Cortex analyzer job returned to clients.
 type FilteredOutputJob struct {
-	UnderscoreID string         `json:"_id"`
-	AnalyzerID   string         `json:"analyzerId"`
-	AnalyzerName string         `json:"analyzerName"`
-	Status       string         `json:"status"`
-	StartDate    int64          `json:"startDate"`
-	EndDate      int64          `json:"endDate,omitempty"`
-	Report       map[string]any `json:"report,omitempty"`
-	CortexID     string         `json:"cortexId"`
-	CortexJobID  string         `json:"cortexJobId"`
+	UnderscoreID string                 `json:"_id"`
+	AnalyzerID   string                 `json:"analyzerId"`
+	AnalyzerName string                 `json:"analyzerName"`
+	Status       string                 `json:"status"`
+	StartDate    int64                  `json:"startDate"`
+	EndDate      int64                  `json:"endDate,omitempty"`
+	Report       utils.UntrustedSubtree `json:"report,omitempty"`
+	CortexID     string                 `json:"cortexId"`
+	CortexJobID  string                 `json:"cortexJobId"`
 }
 
 // NewFilteredOutputJob builds a FilteredOutputJob from a thehive OutputJob.
@@ -90,7 +88,7 @@ func NewFilteredOutputJob(job *thehive.OutputJob) *FilteredOutputJob {
 		Status:       job.GetStatus(),
 		StartDate:    job.GetStartDate(),
 		EndDate:      job.GetEndDate(),
-		Report:       job.GetReport(),
+		Report:       utils.UntrustedSubtree(job.GetReport()),
 		CortexID:     job.GetCortexId(),
 		CortexJobID:  job.GetCortexJobId(),
 	}
@@ -98,9 +96,9 @@ func NewFilteredOutputJob(job *thehive.OutputJob) *FilteredOutputJob {
 
 // AnalyzerJobResult is the result of a run-analyzer operation.
 type AnalyzerJobResult struct {
-	Operation string             `json:"operation"`
-	Job       *FilteredOutputJob `json:"job"`
-	Message   string             `json:"message"`
+	Operation string              `json:"operation"`
+	Job       *FilteredOutputJob  `json:"job"`
+	Message   utils.TrustedString `json:"message"`
 }
 
 // NewAnalyzerJobResult builds an AnalyzerJobResult from a created analyzer job.
@@ -108,7 +106,7 @@ func NewAnalyzerJobResult(job *thehive.OutputJob) *AnalyzerJobResult {
 	return &AnalyzerJobResult{
 		Operation: OperationRunAnalyzer,
 		Job:       NewFilteredOutputJob(job),
-		Message:   fmt.Sprintf("Analyzer job created successfully. Job ID: %s. Use get-job-status to check progress.", job.GetUnderscoreId()),
+		Message:   utils.Trustedf("Analyzer job created successfully. Job ID: %s. Use get-job-status to check progress.", job.GetUnderscoreId()),
 	}
 }
 
@@ -146,7 +144,7 @@ func NewFilteredOutputAction(action *thehive.OutputAction) *FilteredOutputAction
 type ResponderActionResult struct {
 	Operation string                `json:"operation"`
 	Action    *FilteredOutputAction `json:"action"`
-	Message   string                `json:"message"`
+	Message   utils.TrustedString   `json:"message"`
 }
 
 // NewResponderActionResult builds a ResponderActionResult from a created responder action.
@@ -154,19 +152,19 @@ func NewResponderActionResult(action *thehive.OutputAction) *ResponderActionResu
 	return &ResponderActionResult{
 		Operation: OperationRunResponder,
 		Action:    NewFilteredOutputAction(action),
-		Message:   fmt.Sprintf("Responder action created successfully. Action ID: %s. Status: %s", action.GetUnderscoreId(), action.GetStatus()),
+		Message:   utils.Trustedf("Responder action created successfully. Action ID: %s. Status: %s", action.GetUnderscoreId(), action.GetStatus()),
 	}
 }
 
 // AnalyzerJobStatusResult is the result of a get-job-status operation.
 type AnalyzerJobStatusResult struct {
-	Operation    string         `json:"operation"`
-	JobID        string         `json:"jobId"`
-	AnalyzerID   string         `json:"analyzerId"`
-	AnalyzerName string         `json:"analyzerName"`
-	Status       string         `json:"status"`
-	Result       map[string]any `json:"result,omitempty"`
-	Message      string         `json:"message"`
+	Operation    string                 `json:"operation"`
+	JobID        string                 `json:"jobId"`
+	AnalyzerID   string                 `json:"analyzerId"`
+	AnalyzerName string                 `json:"analyzerName"`
+	Status       string                 `json:"status"`
+	Result       utils.UntrustedSubtree `json:"result,omitempty"`
+	Message      utils.TrustedString    `json:"message"`
 }
 
 // NewAnalyzerJobStatusResult builds an AnalyzerJobStatusResult from a job, including its report when available.
@@ -177,12 +175,12 @@ func NewAnalyzerJobStatusResult(job *thehive.OutputJob) *AnalyzerJobStatusResult
 		AnalyzerID:   job.GetAnalyzerId(),
 		AnalyzerName: job.GetAnalyzerName(),
 		Status:       job.GetStatus(),
-		Message:      fmt.Sprintf("Job status: %s. Use get-job-status to check for updates.", job.GetStatus()),
+		Message:      utils.Trustedf("Job status: %s. Use get-job-status to check for updates.", job.GetStatus()),
 	}
 
 	if job.HasReport() {
-		result.Result = job.GetReport()
-		result.Message = fmt.Sprintf("Job completed with status: %s. Report available.", job.GetStatus())
+		result.Result = utils.UntrustedSubtree(job.GetReport())
+		result.Message = utils.Trustedf("Job completed with status: %s. Report available.", job.GetStatus())
 	}
 
 	return result
@@ -197,8 +195,10 @@ type ResponderActionStatusResult struct {
 	EntityType    string `json:"entityType"`
 	EntityID      string `json:"entityId"`
 	Status        string `json:"status"`
-	Result        string `json:"result,omitempty"`
-	Message       string `json:"message"`
+	// Result stays a plain string on purpose: it holds the responder report
+	// (third-party content) and must remain [UNTRUSTED_DATA]-wrapped.
+	Result  string              `json:"result,omitempty"`
+	Message utils.TrustedString `json:"message"`
 }
 
 // NewResponderActionStatusResult builds a ResponderActionStatusResult from a responder action.
@@ -212,7 +212,7 @@ func NewResponderActionStatusResult(action *thehive.OutputAction) *ResponderActi
 		EntityID:      action.GetObjectId(),
 		Status:        action.GetStatus(),
 		Result:        action.GetReport(),
-		Message:       fmt.Sprintf("Action status: %s. Use get-action-status to check for updates.", action.GetStatus()),
+		Message:       utils.Trustedf("Action status: %s. Use get-action-status to check for updates.", action.GetStatus()),
 	}
 }
 

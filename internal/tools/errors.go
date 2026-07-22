@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 )
 
 // ToolError represents a tool error with optional context.
@@ -110,11 +112,16 @@ func (e *ToolError) Error() string {
 	return string(errorJSON)
 }
 
-// ToMap returns the error as a structured map for JSON serialization
+// ToMap returns the error as a structured map for JSON serialization. These
+// maps are embedded in successful bulk results and pass through the
+// [UNTRUSTED_DATA] wrapping middleware: message and hints are MCP-authored
+// recovery guidance (static text plus agent-supplied inputs) and stay
+// unwrapped, while cause and apiResponse carry upstream content and must stay
+// plain so they are wrapped (DL-6703).
 func (e *ToolError) ToMap() map[string]any {
 	errorObj := map[string]any{
 		"error":   true,
-		"message": e.message,
+		"message": utils.TrustedString(e.message),
 	}
 
 	if e.cause != nil {
@@ -122,7 +129,12 @@ func (e *ToolError) ToMap() map[string]any {
 	}
 
 	if len(e.hints) > 0 {
-		errorObj["hints"] = e.hints
+		hints := make([]utils.TrustedString, len(e.hints))
+		for i, hint := range e.hints {
+			hints[i] = utils.TrustedString(hint)
+		}
+
+		errorObj["hints"] = hints
 	}
 
 	if e.apiResponse != nil {

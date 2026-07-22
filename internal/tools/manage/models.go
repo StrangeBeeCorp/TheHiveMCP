@@ -143,7 +143,7 @@ type CreateAlertResult struct {
 	Operation  string               `json:"operation"`
 	EntityType string               `json:"entityType"`
 	Result     *FilteredOutputAlert `json:"result,omitempty"`
-	Message    string               `json:"message,omitempty"`
+	Message    utils.TrustedString  `json:"message,omitempty"`
 }
 
 // NewCreateAlertResult builds a CreateAlertResult from a created OutputAlert.
@@ -181,7 +181,7 @@ type CreateCaseResult struct {
 	Operation  string              `json:"operation"`
 	EntityType string              `json:"entityType"`
 	Result     *FilteredOutputCase `json:"result,omitempty"`
-	Message    string              `json:"message,omitempty"`
+	Message    utils.TrustedString `json:"message,omitempty"`
 }
 
 // NewCreateCaseResult builds a CreateCaseResult from a created OutputCase.
@@ -219,7 +219,7 @@ type CreateTaskResult struct {
 	Operation  string              `json:"operation"`
 	EntityType string              `json:"entityType"`
 	Result     *FilteredOutputTask `json:"result,omitempty"`
-	Message    string              `json:"message,omitempty"`
+	Message    utils.TrustedString `json:"message,omitempty"`
 }
 
 // NewCreateTaskResult builds a CreateTaskResult from a created OutputTask.
@@ -253,7 +253,7 @@ type CreateObservableResult struct {
 	Operation  string                     `json:"operation"`
 	EntityType string                     `json:"entityType"`
 	Result     []FilteredOutputObservable `json:"result,omitempty"`
-	Message    string                     `json:"message,omitempty"`
+	Message    utils.TrustedString        `json:"message,omitempty"`
 }
 
 // NewCreateObservableResult builds a CreateObservableResult from created OutputObservables.
@@ -304,7 +304,7 @@ type CreateProcedureResult struct {
 	Operation  string                  `json:"operation"`
 	EntityType string                  `json:"entityType"`
 	Result     FilteredOutputProcedure `json:"result"`
-	Message    string                  `json:"message,omitempty"`
+	Message    utils.TrustedString     `json:"message,omitempty"`
 }
 
 // NewCreateProcedureResult builds a CreateProcedureResult from a created OutputProcedure.
@@ -319,9 +319,9 @@ func NewCreateProcedureResult(procedure *thehive.OutputProcedure) *CreateProcedu
 
 // SingleEntityUpdateResult is the per-entity outcome of an update operation.
 type SingleEntityUpdateResult struct {
-	EntityID string         `json:"_id"`
-	Result   string         `json:"result,omitempty"`
-	Error    map[string]any `json:"error,omitempty"`
+	EntityID string              `json:"_id"`
+	Result   utils.TrustedString `json:"result,omitempty"`
+	Error    map[string]any      `json:"error,omitempty"`
 }
 
 // UpdateEntityResult aggregates the per-entity outcomes of an update operation.
@@ -365,10 +365,10 @@ func NewDeleteEntityResult(entityType string, results []SingleEntityDeleteResult
 
 // SingleEntityCommentResult is the per-entity outcome of a comment operation.
 type SingleEntityCommentResult struct {
-	CommentID string         `json:"commentId,omitempty"`
-	EntityID  string         `json:"entityId"`
-	Result    string         `json:"result,omitempty"`
-	Error     map[string]any `json:"error,omitempty"`
+	CommentID string              `json:"commentId,omitempty"`
+	EntityID  string              `json:"entityId"`
+	Result    utils.TrustedString `json:"result,omitempty"`
+	Error     map[string]any      `json:"error,omitempty"`
 }
 
 // CommentEntityResult aggregates the per-entity outcomes of a comment operation.
@@ -409,7 +409,7 @@ type MergeCasesResult struct {
 	EntityType string              `json:"entityType"`
 	EntityIDs  []string            `json:"entityIds,omitempty"`
 	Result     *FilteredOutputCase `json:"result,omitempty"`
-	Message    string              `json:"message,omitempty"`
+	Message    utils.TrustedString `json:"message,omitempty"`
 }
 
 // NewMergeCasesResult builds a MergeCasesResult from the merged case and the source case IDs.
@@ -430,7 +430,7 @@ type MergeAlertsIntoCaseResult struct {
 	EntityIDs  []string            `json:"entityIds,omitempty"`
 	TargetID   string              `json:"targetId,omitempty"`
 	Result     *FilteredOutputCase `json:"result,omitempty"`
-	Message    string              `json:"message,omitempty"`
+	Message    utils.TrustedString `json:"message,omitempty"`
 }
 
 // NewMergeAlertsResult builds a MergeAlertsIntoCaseResult from the target case, merged alert IDs, and target case ID.
@@ -450,8 +450,10 @@ type MergeObservablesResult struct {
 	Operation  string `json:"operation"`
 	EntityType string `json:"entityType"`
 	TargetID   string `json:"targetId,omitempty"`
-	Result     string `json:"result,omitempty"`
-	Message    string `json:"message,omitempty"`
+	// Result stays a plain string on purpose: it echoes the API merge summary
+	// (upstream content) and must remain [UNTRUSTED_DATA]-wrapped.
+	Result  string              `json:"result,omitempty"`
+	Message utils.TrustedString `json:"message,omitempty"`
 }
 
 // NewMergeObservablesResult builds a MergeObservablesResult from the API summary and target case ID.
@@ -512,7 +514,7 @@ type CreatePageResult struct {
 	Operation  string              `json:"operation"`
 	EntityType string              `json:"entityType"`
 	Result     *FilteredOutputPage `json:"result,omitempty"`
-	Message    string              `json:"message,omitempty"`
+	Message    utils.TrustedString `json:"message,omitempty"`
 }
 
 // NewCreatePageResult builds a CreatePageResult from a created OutputPage.
@@ -550,7 +552,7 @@ type CreateCaseTemplateResult struct {
 	Operation  string                      `json:"operation"`
 	EntityType string                      `json:"entityType"`
 	Result     *FilteredOutputCaseTemplate `json:"result,omitempty"`
-	Message    string                      `json:"message,omitempty"`
+	Message    utils.TrustedString         `json:"message,omitempty"`
 }
 
 // NewCreateCaseTemplateResult builds a CreateCaseTemplateResult from a created OutputCaseTemplate.
@@ -565,11 +567,11 @@ func NewCreateCaseTemplateResult(ct *thehive.OutputCaseTemplate) *CreateCaseTemp
 
 // ApplyTemplateResult is the tool result returned after applying a case template to cases.
 type ApplyTemplateResult struct {
-	Operation  string   `json:"operation"`
-	EntityType string   `json:"entityType"`
-	TemplateID string   `json:"templateId"`
-	CaseIDs    []string `json:"caseIds"`
-	Message    string   `json:"message,omitempty"`
+	Operation  string              `json:"operation"`
+	EntityType string              `json:"entityType"`
+	TemplateID string              `json:"templateId"`
+	CaseIDs    []string            `json:"caseIds"`
+	Message    utils.TrustedString `json:"message,omitempty"`
 }
 
 // NewApplyTemplateResult builds an ApplyTemplateResult from the template ID and target case IDs.

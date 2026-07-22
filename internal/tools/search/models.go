@@ -21,7 +21,7 @@ A filter is a JSON object with exactly ONE operator at its root. Nest _and / _or
 
 ## Fields, values and dates
 - Fields are entity-specific. ALWAYS consult hive://schema/<entity-type> (e.g. hive://schema/alert) for valid field names and types before filtering. Never filter on a field that does not exist — TheHive rejects the whole query (the error lists the valid fields; correct it and retry).
-- severity is numeric: 1=Low, 2=Medium, 3=High, 4=Critical (configurable per org; severityLabel holds the label). status/stage are strings.
+- severity is numeric: 1=Low, 2=Medium, 3=High, 4=Critical (fixed scale; severityLabel holds the derived label). status/stage are strings.
 - Dates: ISO strings like "2024-08-01T00:00:00" (converted automatically) or epoch milliseconds. TheHive has no "now" — for relative ranges read hive://config/server-time and compute the absolute bound yourself.
 
 ## Examples
