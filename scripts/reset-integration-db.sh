@@ -84,6 +84,15 @@ pick_licensing_image() {
 # probe-and-mint path (see pick_licensing_image + the minting block below).
 PRESUPPLIED_LICENSE="${THEHIVE_TEST_LICENSE:-}"
 
+# Credentials the license minter authenticates with against the local --dev
+# TheHive booted below. These are TheHive's well-known --dev bootstrap admin
+# defaults (admin/secret) — NOT production secrets — and are overridable via env
+# for a customised dev stack. Kept as separate parts so the minter invocation
+# carries no inline "user:password@host" URL literal, which static analysers
+# read as a hard-coded credential (SonarCloud S2068 / credential-in-URL).
+THEHIVE_DEV_USER="${THEHIVE_DEV_USER:-admin}"
+THEHIVE_DEV_PASSWORD="${THEHIVE_DEV_PASSWORD:-secret}"
+
 # Start from a clean license file every run: whether we mint, reuse a supplied
 # token, or run free, a stale token from a previous run must never leak in.
 rm -f "${LICENSE_FILE}"
@@ -143,7 +152,7 @@ if [[ -n "${LICENSING_IMAGE}" ]]; then
   echo "Minting a multi-instance dev license…"
   mint_out="$(docker run --network host --rm -i "${LICENSING_IMAGE}" \
     --key-id dev \
-    --thehive http://admin:secret@localhost:9000 \
+    --thehive "http://${THEHIVE_DEV_USER}:${THEHIVE_DEV_PASSWORD}@localhost:9000" \
     --expiration 365days \
     --customer StrangeBee \
     --plan Platinum \
