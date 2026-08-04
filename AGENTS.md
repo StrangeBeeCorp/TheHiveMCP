@@ -12,7 +12,7 @@ It builds an MCP server (`bootstrap.GetMCPServerAndRegisterTools`) and serves it
 - `bootstrap/` — server construction, tool registration, transports (`stdio.go`, `http.go`), auth middleware, URL allowlist, validation cache.
 - `internal/tools/` — the MCP **tools**, grouped by capability: `manage/` (CRUD), `search/`, `resource/`, `execute_automation/`. Shared middlewares in `middlewares.go`.
 - `internal/resources/` — MCP **resources** (static + dynamic) and their `facts/`, `rules/`, `schemas/`; registered via `resource_registry.go`.
-- `internal/prompts/` — MCP **prompts** (system prompt, filters, templates).
+- `internal/confirmation/` — the approval gate for mutating operations; `Prompter` isolates how the question reaches the MCP client.
 - `internal/{types,permissions,auth,logging,utils,testutils}/` — config/options, RBAC, auth, logging, helpers, and the integration-test container harness.
 
 ## Main DevEx/AgentEx entrypoint (commands)
