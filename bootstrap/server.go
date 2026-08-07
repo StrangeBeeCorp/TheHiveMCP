@@ -19,13 +19,20 @@ import (
 // GetMCPServer builds an MCP server configured with TheHiveMCP's capabilities,
 // logging hooks, elicitation, and authentication middleware, but without any
 // tools registered.
+//
+// Neither prompts nor resource subscriptions are declared, because neither is
+// implemented: nothing calls AddPrompt, and mcp-go has no resources/subscribe
+// handler and we have no change events to feed one. Advertising either would
+// invite a request that fails. AddPrompt registers its own capability, so adding
+// prompts later needs no change here. capabilities_test.go asserts both.
 func GetMCPServer() *server.MCPServer {
 	mcpServer := server.NewMCPServer(
 		"TheHiveMCP",
 		version.GetVersion(),
 		server.WithToolCapabilities(true),
-		server.WithPromptCapabilities(true),
-		server.WithResourceCapabilities(true, true),
+		// listChanged=true is trivially satisfied: the resource list is fixed at
+		// startup, so no notification is ever owed.
+		server.WithResourceCapabilities(false, true),
 		server.WithHooks(logging.GetLoggingHooks()),
 		server.WithElicitation(),
 		server.WithToolHandlerMiddleware(auth.AuthenticationMiddleware()),

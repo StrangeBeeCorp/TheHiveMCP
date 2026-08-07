@@ -44,8 +44,9 @@ func GetInprocessServer(creds *TheHiveCredentials, permissionsConfigPath string)
 		"TheHiveMCP",
 		version.GetVersion(),
 		server.WithToolCapabilities(true),
-		server.WithPromptCapabilities(true),
-		server.WithResourceCapabilities(true, true),
+		// Must mirror GetMCPServer, or integration tests exercise a capability set
+		// no deployment serves.
+		server.WithResourceCapabilities(false, true),
 		server.WithHooks(logging.GetLoggingHooks()),
 		server.WithElicitation(),
 		server.WithToolHandlerMiddleware(AuthMiddleware(creds, permissionsConfigPath)),

@@ -123,7 +123,7 @@ forward for no-behavior-change releases). The full policy is in [RELEASING.md](R
 TheHiveMCP/
 ├── cmd/server/         # Main entrypoint
 ├── bootstrap/          # Server initialization (public API)
-├── internal/           # Core components (tools, resources, prompts, utils)
+├── internal/           # Core components (tools, resources, permissions, confirmation, utils)
 ├── deployment/         # Docker configuration
 └── Makefile
 ```
@@ -598,8 +598,8 @@ break against any of them fails the PR. The image is a single source of truth: s
 - `make clean` - Remove build artifacts
 - `make help` - Display all available targets
 
-**Architecture:** Transport (`bootstrap/`), Tools (`internal/tools/`), Resources (`internal/resources/`), Integration (`internal/utils/`), Prompts
-(`internal/prompts/`)
+**Architecture:** Transport (`bootstrap/`), Tools (`internal/tools/`), Resources (`internal/resources/`), Integration (`internal/utils/`), Permissions
+(`internal/permissions/`), Confirmation (`internal/confirmation/`)
 
 </details>
 
