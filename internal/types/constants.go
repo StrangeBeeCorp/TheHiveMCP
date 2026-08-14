@@ -163,6 +163,7 @@ const (
 	fieldSeverity  = "severity"
 	fieldStatus    = "status"
 	fieldTitle     = "title"
+	fieldStartDate = "startDate"
 )
 
 // Entity type constants for TheHive entities
@@ -178,6 +179,8 @@ const (
 	EntityTypeProcedure    = "procedure"
 	EntityTypePattern      = "pattern"
 	EntityTypeCaseTemplate = "case-template"
+	EntityTypeJob          = "job"
+	EntityTypeAction       = "action"
 )
 
 // OutputEntity is a union type representing possible output entities
@@ -202,6 +205,27 @@ var DefaultFields = map[string][]string{
 	EntityTypeProcedure:    {fieldID, "patternId", "patternName", "description", "occurDate"},
 	EntityTypePattern:      {fieldID, "patternId", "name", "tactics", "platforms"},
 	EntityTypeCaseTemplate: {fieldID, "name", "displayName", "description", fieldSeverity, "tags"},
+	EntityTypeJob:          {fieldID, "analyzerName", fieldStatus, fieldStartDate, "cortexId"},
+	EntityTypeAction:       {fieldID, "responderName", fieldStatus, fieldStartDate, "objectType", "objectId"},
+}
+
+// defaultSortFields holds the entity types whose default sort column is not
+// _createdAt. Cortex jobs and actions expose startDate as their sortable date
+// field, so sorting them on _createdAt would reference a field TheHive does not
+// declare for those types.
+var defaultSortFields = map[string]string{
+	EntityTypeJob:    fieldStartDate,
+	EntityTypeAction: fieldStartDate,
+}
+
+// DefaultSortField returns the column search results are sorted on when the
+// caller does not pick one.
+func DefaultSortField(entityType string) string {
+	if field, ok := defaultSortFields[entityType]; ok {
+		return field
+	}
+
+	return fieldCreatedAt
 }
 
 // DateFormat is the timestamp layout used for TheHive date fields.

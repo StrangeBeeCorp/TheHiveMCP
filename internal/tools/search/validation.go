@@ -26,7 +26,7 @@ func (t *Tool) ValidatePermissions(ctx context.Context, _ EntitiesParams) error 
 // ValidateParams applies defaults and validates the search parameters in place.
 func (t *Tool) ValidateParams(params *EntitiesParams) error {
 	if params.SortBy == "" {
-		params.SortBy = "_createdAt"
+		params.SortBy = types.DefaultSortField(params.EntityType)
 	}
 
 	if params.SortOrder == "" {
@@ -53,7 +53,7 @@ func (t *Tool) ValidateParams(params *EntitiesParams) error {
 		params.AdditionalQueries = []string{}
 	}
 
-	validEntityTypes := []string{types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable, types.EntityTypeProcedure, types.EntityTypePattern, types.EntityTypeCaseTemplate, types.EntityTypePage}
+	validEntityTypes := []string{types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable, types.EntityTypeProcedure, types.EntityTypePattern, types.EntityTypeCaseTemplate, types.EntityTypePage, types.EntityTypeJob, types.EntityTypeAction}
 
 	var isValidEntityType bool
 
@@ -62,7 +62,7 @@ func (t *Tool) ValidateParams(params *EntitiesParams) error {
 	}
 
 	if !isValidEntityType {
-		return tools.NewToolErrorf("invalid entity-type '%s'. Must be one of: 'alert', 'case', 'task', 'observable', 'procedure', 'pattern', 'case-template', 'page'", params.EntityType)
+		return tools.NewToolErrorf("invalid entity-type '%s'. Must be one of: 'alert', 'case', 'task', 'observable', 'procedure', 'pattern', 'case-template', 'page', 'job', 'action'", params.EntityType)
 	}
 
 	// Filters are optional (empty = match-all) and validated by TheHive at query time, not here.

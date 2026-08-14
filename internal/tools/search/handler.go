@@ -185,27 +185,25 @@ func (t *Tool) executeQuery(ctx context.Context, hiveQuery thehive.InputQuery, e
 	return resultsSlice, nil
 }
 
-func (t *Tool) getExcludedFields(entityType string, keptColumns []string, extraData []string) []string {
-	var baseModel any
+// baseModels holds the output model each entity type projects onto, used to work
+// out which fields to exclude from a result. An entity type absent from the map
+// gets no exclusions.
+var baseModels = map[string]any{
+	types.EntityTypeAlert:        thehive.OutputAlert{},
+	types.EntityTypeCase:         thehive.OutputCase{},
+	types.EntityTypeTask:         thehive.OutputTask{},
+	types.EntityTypeObservable:   thehive.OutputObservable{},
+	types.EntityTypeProcedure:    thehive.OutputProcedure{},
+	types.EntityTypePattern:      thehive.OutputPattern{},
+	types.EntityTypeCaseTemplate: thehive.OutputCaseTemplate{},
+	types.EntityTypePage:         thehive.OutputPage{},
+	types.EntityTypeJob:          thehive.OutputJob{},
+	types.EntityTypeAction:       thehive.OutputAction{},
+}
 
-	switch entityType {
-	case types.EntityTypeAlert:
-		baseModel = thehive.OutputAlert{}
-	case types.EntityTypeCase:
-		baseModel = thehive.OutputCase{}
-	case types.EntityTypeTask:
-		baseModel = thehive.OutputTask{}
-	case types.EntityTypeObservable:
-		baseModel = thehive.OutputObservable{}
-	case types.EntityTypeProcedure:
-		baseModel = thehive.OutputProcedure{}
-	case types.EntityTypePattern:
-		baseModel = thehive.OutputPattern{}
-	case types.EntityTypeCaseTemplate:
-		baseModel = thehive.OutputCaseTemplate{}
-	case types.EntityTypePage:
-		baseModel = thehive.OutputPage{}
-	default:
+func (t *Tool) getExcludedFields(entityType string, keptColumns []string, extraData []string) []string {
+	baseModel, known := baseModels[entityType]
+	if !known {
 		return []string{}
 	}
 

@@ -180,6 +180,43 @@ func GetPatternSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("ttp/OutputPattern")
 }
 
+// registerAutomationSchemaResources registers the Cortex job and action schemas.
+// Kept out of RegisterSchemaResources, which is already at the limit of what one
+// function should hold.
+func registerAutomationSchemaResources(registry *ResourceRegistry) {
+	jobSchema := mcp.NewResource(
+		"hive://schema/job",
+		"Analyzer Job Schema",
+		mcp.WithResourceDescription("Output and filterable fields for Cortex analyzer jobs returned from TheHive API"),
+		mcp.WithMIMEType(mimeApplicationJSON),
+	)
+
+	registry.Register(jobSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetJobSchemaHandler()
+	})
+
+	actionSchema := mcp.NewResource(
+		"hive://schema/action",
+		"Responder Action Schema",
+		mcp.WithResourceDescription("Output and filterable fields for Cortex responder actions returned from TheHive API"),
+		mcp.WithMIMEType(mimeApplicationJSON),
+	)
+
+	registry.Register(actionSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetActionSchemaHandler()
+	})
+}
+
+// GetJobSchemaHandler returns the Cortex analyzer job output schema.
+func GetJobSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("automation/OutputJob")
+}
+
+// GetActionSchemaHandler returns the Cortex responder action output schema.
+func GetActionSchemaHandler() ([]mcp.ResourceContents, error) {
+	return getSchemaContent("automation/OutputAction")
+}
+
 // GetCaseTemplateSchemaHandler returns the case template output schema.
 func GetCaseTemplateSchemaHandler() ([]mcp.ResourceContents, error) {
 	return getSchemaContent("case_template/OutputCaseTemplate")
@@ -350,6 +387,8 @@ func GetCatalogData() map[string]any {
 					types.EntityTypePage,
 					types.EntityTypePage + suffixCreate,
 					types.EntityTypePage + suffixUpdate,
+					types.EntityTypeJob,
+					types.EntityTypeAction,
 					"filter",
 				},
 			},
@@ -586,6 +625,8 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 	registry.Register(patternSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetPatternSchemaHandler()
 	})
+
+	registerAutomationSchemaResources(registry)
 
 	caseTemplateSchema := mcp.NewResource(
 		uriCaseTemplateSchema,

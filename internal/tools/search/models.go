@@ -24,10 +24,21 @@ A filter is a JSON object with exactly ONE operator at its root. Nest _and / _or
 - severity is numeric: 1=Low, 2=Medium, 3=High, 4=Critical (fixed scale; severityLabel holds the derived label). status/stage are strings.
 - Dates: ISO strings like "2024-08-01T00:00:00" (converted automatically) or epoch milliseconds. TheHive has no "now" — for relative ranges read hive://config/server-time and compute the absolute bound yourself.
 
+## Automation history (entity-type "job" and "action")
+Cortex runs are searchable like any other entity: "job" holds analyzer runs, "action" holds responder runs. Use them to find out what enrichment already happened instead of re-running an analyzer.
+- Job fields: analyzerId, analyzerName, analyzerDefinition, cortexId, status, startDate. Sorting/filtering on dates uses startDate, NOT _createdAt.
+- Action fields: responderId, responderName, objectType, objectId, cortexId, status, startDate.
+- status is one of: Waiting, InProgress, Success, Failure, Deleted.
+- Pass extra-data=["report"] on a job search to include the analyzer report.
+- To list the runs of one observable, search entity-type "observable" with additional-queries=["jobs"] (or ["actions"]) rather than filtering jobs by target.
+- These types require TheHive's Cortex connector to be enabled; without it the query fails.
+
 ## Examples
 - Critical alerts still in New status: {"_and": [{"_eq": {"_field": "severity", "_value": 4}}, {"_eq": {"_field": "status", "_value": "New"}}]}
 - High+ severity cases since a date, enriched with tasks and observables: filters={"_and": [{"_gte": {"_field": "severity", "_value": 3}}, {"_gte": {"_field": "_createdAt", "_value": "2024-07-01T00:00:00"}}]}, additional-queries=["tasks", "observables"]
 - Title contains malware or phishing: {"_or": [{"_like": {"_field": "title", "_value": "*malware*"}}, {"_like": {"_field": "title", "_value": "*phishing*"}}]}
+- Failed VirusTotal runs: entity-type="job", filters={"_and": [{"_eq": {"_field": "analyzerName", "_value": "VirusTotal_GetReport_3_1"}}, {"_eq": {"_field": "status", "_value": "Failure"}}]}
+- Enrichment already run on an observable: entity-type="observable", filters={"_id": "~123456"}, additional-queries=["jobs"]
 
 The applied filter is echoed back as "rawFilters". If results are unexpected, inspect "rawFilters", re-check fields against the schema, and call again. Full grammar and more examples: hive://schema/filter and hive://docs/overview/filter-dsl. See each parameter below for the non-filter options (sorting, columns, enrichment, count).
 
@@ -52,7 +63,7 @@ type EntitiesParams struct {
 	Limit             int            `json:"limit,omitempty"              jsonschema_description:"Number of results to return. Default is 10. Not applicable if count=true."`
 	ExtraColumns      []string       `json:"extra-columns,omitempty"      jsonschema_description:"List of columns to keep in the output. Defaults are entity-specific: alerts include severity/status, cases include status/severity, tasks include assignee, etc. Query the [entity]-schema from server resources for available columns."`
 	ExtraData         []string       `json:"extra-data,omitempty"         jsonschema_description:"List of additional data fields to include in the output. Query the [entity]-schema from server resources for available extra data fields."`
-	AdditionalQueries []string       `json:"additional-queries,omitempty" jsonschema_description:"Additional queries to perform on the results to enrich them with related data. Supported queries depend on the entity type: cases support 'tasks', 'observables', 'comments', 'pages', 'attachments', 'procedures', 'similarCases' (other cases that share observables with the case — the classic 'similar cases' correlation), and 'similarAlerts' (alerts that share observables with the case); alerts support 'observables', 'comments', 'pages', 'attachments', 'procedures', 'similarCases' (cases that share observables with the alert), and 'similarAlerts' (other alerts that share observables with the alert); tasks support 'task-logs'. Prefer the native 'similarCases'/'similarAlerts' queries over fetching observables and comparing them client-side — they run server-side on TheHive's similarity engine and are far more efficient for correlation and similarity questions. Refer to the entity schema from server resources for the full list of supported additional queries."`
+	AdditionalQueries []string       `json:"additional-queries,omitempty" jsonschema_description:"Additional queries to perform on the results to enrich them with related data. Supported queries depend on the entity type: cases support 'tasks', 'observables', 'comments', 'pages', 'attachments', 'procedures', 'similarCases' (other cases that share observables with the case — the classic 'similar cases' correlation), and 'similarAlerts' (alerts that share observables with the case); alerts support 'observables', 'comments', 'pages', 'attachments', 'procedures', 'similarCases' (cases that share observables with the alert), and 'similarAlerts' (other alerts that share observables with the alert); tasks support 'task-logs'; observables support 'jobs' (Cortex analyzer runs) and 'actions' (Cortex responder runs); cases, alerts and tasks also support 'actions'. Prefer the native 'similarCases'/'similarAlerts' queries over fetching observables and comparing them client-side — they run server-side on TheHive's similarity engine and are far more efficient for correlation and similarity questions. Refer to the entity schema from server resources for the full list of supported additional queries."`
 	Count             bool           `json:"count,omitempty"              jsonschema_description:"If true, returns only the count of matching entities instead of the entities themselves."`
 }
 

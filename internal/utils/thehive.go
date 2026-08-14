@@ -130,3 +130,29 @@ func GetSimilarAlertsFromAlertID(ctx context.Context, client *thehive.APIClient,
 func GetTaskLogsFromTaskID(ctx context.Context, client *thehive.APIClient, taskID string) ([]map[string]any, error) {
 	return executeQuery(ctx, client, "getTask", taskID, "logs")
 }
+
+// GetJobsFromObservableID returns the Cortex analyzer runs of the given
+// observable. Requires TheHive's Cortex connector to be enabled.
+func GetJobsFromObservableID(ctx context.Context, client *thehive.APIClient, observableID string) ([]map[string]any, error) {
+	return executeQuery(ctx, client, "getObservable", observableID, "jobs")
+}
+
+// GetActionsFromObservableID returns the Cortex responder runs of the given observable.
+func GetActionsFromObservableID(ctx context.Context, client *thehive.APIClient, observableID string) ([]map[string]any, error) {
+	return executeQuery(ctx, client, "getObservable", observableID, "actions")
+}
+
+// GetActionsFromCaseID returns the Cortex responder runs of the given case.
+func GetActionsFromCaseID(ctx context.Context, client *thehive.APIClient, caseID string) ([]map[string]any, error) {
+	return executeQuery(ctx, client, "getCase", caseID, "actions")
+}
+
+// GetActionsFromAlertID returns the Cortex responder runs of the given alert.
+func GetActionsFromAlertID(ctx context.Context, client *thehive.APIClient, alertID string) ([]map[string]any, error) {
+	return executeQuery(ctx, client, "getAlert", alertID, "actions")
+}
+
+// GetActionsFromTaskID returns the Cortex responder runs of the given task.
+func GetActionsFromTaskID(ctx context.Context, client *thehive.APIClient, taskID string) ([]map[string]any, error) {
+	return executeQuery(ctx, client, "getTask", taskID, "actions")
+}

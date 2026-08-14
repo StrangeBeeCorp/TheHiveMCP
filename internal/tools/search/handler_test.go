@@ -22,6 +22,8 @@ func TestGetExcludedFields_IdNeverExcluded(t *testing.T) {
 		types.EntityTypePattern,
 		types.EntityTypeCaseTemplate,
 		types.EntityTypePage,
+		types.EntityTypeJob,
+		types.EntityTypeAction,
 	}
 
 	for _, entityType := range entityTypes {

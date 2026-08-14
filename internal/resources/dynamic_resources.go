@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -30,6 +31,113 @@ func derefString(s *string) string {
 	}
 
 	return *s
+}
+
+const (
+	// cortexRangeAll asks Cortex for the whole result set instead of a window:
+	// its range parser maps "all" to (0, Int.MaxValue). The catalog has to be
+	// complete before permission filtering, otherwise an allow-list can hide
+	// analyzers that merely sat outside the fetched window.
+	cortexRangeAll = "all"
+
+	// errListAnalyzers is shared by both catalog fetch paths.
+	errListAnalyzers = "failed to find analyzers: %w. Check that Cortex integration is enabled and you have permissions to list analyzers. API response: %v"
+
+	// defaultWorkerPageLimit bounds one catalog page so a large Cortex install
+	// does not flood the caller's context. Raise it per call with ?limit=.
+	defaultWorkerPageLimit = 50
+	maxWorkerPageLimit     = 500
+)
+
+// workerPage is a page of Cortex workers (analyzers or responders) together with
+// the counters that tell the caller whether it saw the whole catalog. Reporting
+// truncation matters: a silently clipped list reads as "this is all there is".
+type workerPage struct {
+	Kind      string                 `json:"kind"`
+	Total     int                    `json:"total"`
+	Returned  int                    `json:"returned"`
+	Offset    int                    `json:"offset"`
+	Truncated bool                   `json:"truncated"`
+	Workers   []thehive.OutputWorker `json:"workers"`
+}
+
+// newWorkerPage windows workers, clamping an out-of-range offset to the end of
+// the list rather than erroring.
+func newWorkerPage(kind string, workers []thehive.OutputWorker, offset, limit int) workerPage {
+	total := len(workers)
+	offset = min(offset, total)
+	end := min(offset+limit, total)
+
+	page := make([]thehive.OutputWorker, 0, end-offset)
+	page = append(page, workers[offset:end]...)
+
+	return workerPage{
+		Kind:      kind,
+		Total:     total,
+		Returned:  len(page),
+		Offset:    offset,
+		Truncated: end < total,
+		Workers:   page,
+	}
+}
+
+// stringArgument reads a string query parameter, returning "" when absent.
+func stringArgument(req mcp.ReadResourceRequest, name string) string {
+	value, _ := req.Params.Arguments[name].(string)
+
+	return value
+}
+
+// intArgument reads a numeric query parameter. URI parameters arrive as strings,
+// but a client calling the resource directly may pass a JSON number.
+func intArgument(req mcp.ReadResourceRequest, name string, fallback int) (int, error) {
+	raw, present := req.Params.Arguments[name]
+	if !present {
+		return fallback, nil
+	}
+
+	switch value := raw.(type) {
+	case string:
+		if value == "" {
+			return fallback, nil
+		}
+
+		parsed, err := strconv.Atoi(value)
+		if err != nil {
+			return 0, fmt.Errorf("%s must be an integer, got %q", name, value)
+		}
+
+		return parsed, nil
+	case float64:
+		return int(value), nil
+	case int:
+		return value, nil
+	default:
+		return 0, fmt.Errorf("%s must be an integer, got %T", name, raw)
+	}
+}
+
+// paginationArguments resolves the offset/limit window for a worker catalog.
+func paginationArguments(req mcp.ReadResourceRequest) (offset, limit int, err error) {
+	offset, err = intArgument(req, "offset", 0)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	limit, err = intArgument(req, "limit", defaultWorkerPageLimit)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if offset < 0 {
+		return 0, 0, fmt.Errorf("offset must be zero or greater, got %d", offset)
+	}
+
+	if limit < 1 {
+		return 0, 0, fmt.Errorf("limit must be at least 1, got %d", limit)
+	}
+
+	return offset, min(limit, maxWorkerPageLimit), nil
 }
 
 func parseUsers(results any) (string, error) {
@@ -132,35 +240,76 @@ func GetAvailableCaseTemplates(ctx context.Context, _ mcp.ReadResourceRequest) (
 	}, nil
 }
 
+// listAnalyzers fetches the analyzer catalog from Cortex. With a dataType, only
+// the analyzers accepting that observable type are asked for, which Cortex
+// resolves itself; without one, the whole catalog is fetched so the caller can
+// filter and window it without losing entries to a fetch cap.
+//
+// Each SDK call stays inside its own branch so this file never names
+// *http.Response: importing net/http here makes bodyclose flag every SDK call in
+// the package, and those reports are false positives — the generated client
+// already reads and closes the body inside Execute().
+func listAnalyzers(ctx context.Context, hiveClient *thehive.APIClient, dataType string) ([]thehive.OutputWorker, error) {
+	if dataType != "" {
+		analyzers, resp, err := hiveClient.CortexAPI.ListAnalyzersByType(ctx, dataType).Execute()
+		if err != nil {
+			return nil, fmt.Errorf(errListAnalyzers, err, resp)
+		}
+
+		return analyzers, nil
+	}
+
+	analyzers, resp, err := hiveClient.CortexAPI.ListAnalyzers(ctx).Range_(cortexRangeAll).Execute()
+	if err != nil {
+		return nil, fmt.Errorf(errListAnalyzers, err, resp)
+	}
+
+	return analyzers, nil
+}
+
 // GetAvailableAnalyzers returns the Cortex analyzers the session may use as a JSON resource.
-func GetAvailableAnalyzers(ctx context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+//
+// Accepts three optional query parameters:
+//   - dataType: only analyzers accepting that observable type (hash, ip, domain,
+//     …). Cortex resolves it server-side, so this is the cheap way to answer
+//     "what can run on this observable?".
+//   - offset/limit: window over the allowed analyzers.
+//
+// The full catalog is fetched (range=all) and permission-filtered BEFORE the
+// window is applied. Filtering after a fixed fetch window used to hide every
+// allowed analyzer whose position fell outside it.
+func GetAvailableAnalyzers(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	hiveClient, err := utils.GetHiveClientFromContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get TheHive client from context: %w. Check authentication and connection settings", err)
 	}
 
-	analyzers, resp, err := hiveClient.CortexAPI.ListAnalyzers(ctx).Range_("0-100").Execute()
+	analyzers, err := listAnalyzers(ctx, hiveClient, stringArgument(req, "dataType"))
 	if err != nil {
-		return nil, fmt.Errorf("failed to find analyzers: %w. Check that Cortex integration is enabled and you have permissions to list analyzers. API response: %v", err, resp)
+		return nil, err
 	}
 
-	perms, err := utils.GetPermissionsFromContext(ctx)
-	if err == nil {
-		filteredAnalyzers := []thehive.OutputWorker{}
+	allowed := analyzers
+
+	perms, permErr := utils.GetPermissionsFromContext(ctx)
+	if permErr == nil {
+		allowed = []thehive.OutputWorker{}
 
 		for _, analyzer := range analyzers {
-			analyzerID := analyzer.GetId()
-			analyzerName := analyzer.GetName()
-
-			if perms.IsAnalyzerAllowed(analyzerID) || perms.IsAnalyzerAllowed(analyzerName) {
-				filteredAnalyzers = append(filteredAnalyzers, analyzer)
+			if perms.IsAnalyzerAllowed(analyzer.GetId()) || perms.IsAnalyzerAllowed(analyzer.GetName()) {
+				allowed = append(allowed, analyzer)
 			}
 		}
-
-		analyzers = filteredAnalyzers
 	}
 
-	analyzersJSON, err := json.MarshalIndent(analyzers, "", "  ")
+	offset, limit, err := paginationArguments(req)
+	if err != nil {
+		return nil, err
+	}
+
+	page := newWorkerPage("analyzers", allowed, offset, limit)
+
+	pageJSON, err := json.MarshalIndent(page, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal analyzers: %w", err)
 	}
@@ -169,7 +318,7 @@ func GetAvailableAnalyzers(ctx context.Context, _ mcp.ReadResourceRequest) ([]mc
 		mcp.TextResourceContents{
 			URI:      "hive://metadata/automation/analyzers",
 			MIMEType: mimeApplicationJSON,
-			Text:     string(analyzersJSON),
+			Text:     string(pageJSON),
 		},
 	}, nil
 }
@@ -208,23 +357,25 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 		return nil, fmt.Errorf("failed to find responders for %s %s: %w. Check that Cortex integration is enabled and you have permissions to list responders. API response: %v", entityType, entityID, err, resp)
 	}
 
-	perms, err := utils.GetPermissionsFromContext(ctx)
-	if err == nil {
-		filteredResponders := []thehive.OutputWorker{}
+	allowed := responders
+
+	perms, permErr := utils.GetPermissionsFromContext(ctx)
+	if permErr == nil {
+		allowed = []thehive.OutputWorker{}
 
 		for _, responder := range responders {
-			responderID := responder.GetId()
-			responderName := responder.GetName()
-
-			if perms.IsResponderAllowed(responderID) || perms.IsResponderAllowed(responderName) {
-				filteredResponders = append(filteredResponders, responder)
+			if perms.IsResponderAllowed(responder.GetId()) || perms.IsResponderAllowed(responder.GetName()) {
+				allowed = append(allowed, responder)
 			}
 		}
-
-		responders = filteredResponders
 	}
 
-	respondersJSON, err := json.MarshalIndent(responders, "", "  ")
+	offset, limit, err := paginationArguments(req)
+	if err != nil {
+		return nil, err
+	}
+
+	respondersJSON, err := json.MarshalIndent(newWorkerPage("responders", allowed, offset, limit), "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal responders: %w", err)
 	}
@@ -399,7 +550,7 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 	availableAnalyzers := mcp.NewResource(
 		"hive://metadata/automation/analyzers",
 		"Analyzers",
-		mcp.WithResourceDescription("Available Cortex analyzers for observable enrichment"),
+		mcp.WithResourceDescription("Available Cortex analyzers for observable enrichment. Optional query parameters: dataType (only analyzers accepting that observable type, e.g. ?dataType=hash), offset and limit (paging)."),
 		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(availableAnalyzers, GetAvailableAnalyzers)
@@ -407,7 +558,7 @@ func RegisterDynamicResources(registry *ResourceRegistry) {
 	availableResponders := mcp.NewResource(
 		"hive://metadata/automation/responders",
 		"Responders",
-		mcp.WithResourceDescription("Available Cortex responders for active response. Requires entityType and entityId query parameters."),
+		mcp.WithResourceDescription("Available Cortex responders for active response. Requires entityType and entityId query parameters; optional offset and limit (paging)."),
 		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 	registry.Register(availableResponders, GetAvailableResponders)

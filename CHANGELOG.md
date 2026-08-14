@@ -8,19 +8,27 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Automation history is searchable.** `search-entities` accepts two new entity types: `job` (Cortex analyzer runs) and `action` (Cortex responder runs), with
+  the same filter DSL, sorting, paging and permission scoping as every other entity. Filter on `analyzerName`, `status`, `startDate`, `cortexId` and more, and
+  pass `extra-data: ["report"]` to include an analyzer report. New `hive://schema/job` and `hive://schema/action` resources document the filterable fields.
+  These types require TheHive's Cortex connector to be enabled.
+- **Cortex runs as related data.** `additional-queries` now expands observables with `jobs` and `actions`, and cases, alerts and tasks with `actions` — the
+  direct way to answer "what enrichment already ran on this observable?" without re-running an analyzer.
+- **Analyzer discovery by observable type.** `hive://metadata/automation/analyzers` accepts a `dataType` query parameter (for example `?dataType=hash`), which
+  Cortex resolves server-side, instead of the caller fetching the whole catalog and sifting it.
+- **Paging on the automation catalogs.** Both analyzer and responder catalogs accept `offset` and `limit`, and report `total`, `returned`, `offset` and
+  `truncated` so a clipped list is no longer indistinguishable from a complete one.
+
 ### Changed
 
 - **MCP SDK upgraded to `mark3labs/mcp-go` v1.0.0**, which implements MCP revision `2026-07-28`. No client-visible protocol change: the HTTP transport
   deliberately continues to serve the handshake-based revisions only, so clients negotiate exactly as before. Serving `2026-07-28` is a separate, later change.
   See [ADR-0003](docs/explanation/adr/0003-track-mcp-2026-07-28-on-mark3labs-mcp-go.md).
 
-### Fixed
-
-- **Tool input schemas are advertised again.** The mcp-go v1.0.0 upgrade moved schema inference to `github.com/google/jsonschema-go`, which rejects the
-  `jsonschema:"enum=...,required=true"` struct-tag syntax the parameter structs used. Inference failed silently — `mcp.WithInputSchema` writes the error to
-  stderr and returns without setting a schema — so `manage-entities`, `search-entities` and `execute-automation` each advertised **zero parameters** while
-  continuing to work when called correctly. Enumerations and defaults now live in explicit constraints applied on top of inference, and the advertised schemas
-  are asserted against their parameter structs so this cannot regress unnoticed.
+- **Automation catalog responses are now an object, not a bare array.** `hive://metadata/automation/analyzers` and `hive://metadata/automation/responders`
+  return `{kind, total, returned, offset, truncated, workers}`; the previous array is now the `workers` field.
 
 ### Removed
 
@@ -40,6 +48,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Removed rather than ported because MCP `2026-07-28` drops server-initiated requests, and its replacement (MRTR) would require rebuilding the layer — including
   a signed `requestState`, since the token round-trips through the client — for a feature with almost no client adoption. Reconsidering it is tracked in
   [#170](https://github.com/StrangeBee/TheHiveMCP/issues/170).
+
+### Fixed
+
+- **Tool input schemas are advertised again.** The mcp-go v1.0.0 upgrade moved schema inference to `github.com/google/jsonschema-go`, which rejects the
+  `jsonschema:"enum=...,required=true"` struct-tag syntax the parameter structs used. Inference failed silently — `mcp.WithInputSchema` writes the error to
+  stderr and returns without setting a schema — so `manage-entities`, `search-entities` and `execute-automation` each advertised **zero parameters** while
+  continuing to work when called correctly. Enumerations and defaults now live in explicit constraints applied on top of inference, and the advertised schemas
+  are asserted against their parameter structs so this cannot regress unnoticed.
+
+- **Analyzers could go missing from the catalog.** `hive://metadata/automation/analyzers` fetched a hard-coded first 100 analyzers and applied the permission
+  allow-list afterwards, so allowed analyzers positioned beyond that window were silently dropped — a restrictive allow-list could return an empty catalog on a
+  Cortex install with more than 100 analyzers. The full catalog is now fetched and permission-filtered before any paging is applied.
 
 ## [1.0.0] - 2026-07-15
 

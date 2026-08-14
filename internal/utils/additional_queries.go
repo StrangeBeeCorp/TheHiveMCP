@@ -68,6 +68,7 @@ var queryRegistry = map[string]EntityQueryConfig{
 			Func: GetSimilarAlertsFromCaseID, EntityType: types.EntityTypeAlert,
 			ResultsAreIndependent: true, MetaFields: similarityMetaFields,
 		},
+		queryActions: {Func: GetActionsFromCaseID, EntityType: types.EntityTypeAction},
 	},
 	types.EntityTypeAlert: {
 		"observables": {Func: GetObservablesFromAlertID, EntityType: types.EntityTypeObservable},
@@ -83,12 +84,16 @@ var queryRegistry = map[string]EntityQueryConfig{
 			Func: GetSimilarAlertsFromAlertID, EntityType: types.EntityTypeAlert,
 			ResultsAreIndependent: true, MetaFields: similarityMetaFields,
 		},
+		queryActions: {Func: GetActionsFromAlertID, EntityType: types.EntityTypeAction},
 	},
 	types.EntityTypeTask: {
-		"task-logs": {Func: GetTaskLogsFromTaskID, EntityType: types.EntityTypeTaskLog},
+		"task-logs":  {Func: GetTaskLogsFromTaskID, EntityType: types.EntityTypeTaskLog},
+		queryActions: {Func: GetActionsFromTaskID, EntityType: types.EntityTypeAction},
 	},
 	types.EntityTypeObservable: {
-		// No additional queries supported yet
+		// Cortex runs on the observable. Both need TheHive's Cortex connector enabled.
+		"jobs":       {Func: GetJobsFromObservableID, EntityType: types.EntityTypeJob},
+		queryActions: {Func: GetActionsFromObservableID, EntityType: types.EntityTypeAction},
 	},
 	types.EntityTypeCaseTemplate: {
 		// No additional queries supported yet
