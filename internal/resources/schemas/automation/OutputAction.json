@@ -1,6 +1,6 @@
 {
   "type": "object",
-  "description": "A Cortex responder run on a case, alert, task, task log or observable. Filterable and sortable fields: responderId, responderName, objectType, objectId, cortexId, status, startDate. Use startDate (not _createdAt) for date filters and sorting. Requires TheHive's Cortex connector to be enabled.",
+  "description": "A Cortex responder run on a case, alert, task, task log or observable. Filterable and sortable fields: responderId, responderName, objectId, cortexId, status, startDate, plus the metadata fields (_id, _createdAt, _createdBy, _updatedAt). objectType is advertised as filterable by TheHive but matches nothing in practice — see its description. Requires TheHive's Cortex connector to be enabled.",
   "required": [
     "_id",
     "_type",
@@ -29,7 +29,7 @@
       "type": "string",
       "format": "date-time",
       "example": "15-01-2022T10:30:00",
-      "description": "Date-time string when the action was created. NOT filterable or sortable on actions — use startDate instead."
+      "description": "Date-time string when the action was created. Filterable and sortable. In practice it tracks startDate closely; prefer startDate when you mean when the responder actually ran."
     },
     "_updatedBy": {
       "type": "string",
@@ -43,11 +43,11 @@
     },
     "responderId": {
       "type": "string",
-      "description": "Cortex responder identifier, including its flavour and version (e.g. 'Mailer_1_0'). Filterable. Get valid values from hive://metadata/automation/responders?entityType=case&entityId=~123456."
+      "description": "Opaque Cortex worker id, e.g. '545a2c61970cba90ba48c063df96aa66' — it matches the 'id' field of hive://metadata/automation/responders, NOT the responder name. Filterable, but filtering on a human-readable name here silently returns zero rows: use responderName for that."
     },
     "responderName": {
       "type": "string",
-      "description": "Human-readable responder name (e.g. 'Mailer_1_0'). Filterable."
+      "description": "Responder name including flavour and version, e.g. 'Mailer_1_0'. Filterable — this is the field to use when matching a responder."
     },
     "responderDefinition": {
       "type": "string",
@@ -55,8 +55,7 @@
     },
     "objectType": {
       "type": "string",
-      "enum": ["case", "case_task", "case_task_log", "case_artifact", "alert"],
-      "description": "Type of the entity the responder acted upon. Filterable."
+      "description": "Type of the entity the responder acted upon, returned capitalised (e.g. 'Case', 'Alert', 'Task', 'Observable'). TheHive derives it from a graph traversal rather than storing it, so filtering on it matches NOTHING — not even the value returned here — and silently yields zero rows. To scope by target, filter on objectId, or search the entity and expand it with additional-queries: [\"actions\"]."
     },
     "objectId": {
       "type": "string",
@@ -64,14 +63,20 @@
     },
     "status": {
       "type": "string",
-      "enum": ["Waiting", "InProgress", "Success", "Failure", "Deleted"],
+      "enum": [
+        "Waiting",
+        "InProgress",
+        "Success",
+        "Failure",
+        "Deleted"
+      ],
       "description": "Execution status of the responder run. Filterable."
     },
     "startDate": {
       "type": "string",
       "format": "date-time",
       "example": "15-01-2022T10:30:00",
-      "description": "When the run started. Filterable and sortable — this is the date field to use for actions."
+      "description": "When the run started. Filterable and sortable — the most meaningful date field for a run."
     },
     "endDate": {
       "type": "string",

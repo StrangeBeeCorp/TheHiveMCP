@@ -26,10 +26,11 @@ A filter is a JSON object with exactly ONE operator at its root. Nest _and / _or
 
 ## Automation history (entity-type "job" and "action")
 Cortex runs are searchable like any other entity: "job" holds analyzer runs, "action" holds responder runs. Use them to find out what enrichment already happened instead of re-running an analyzer.
-- Job fields: analyzerId, analyzerName, analyzerDefinition, cortexId, status, startDate. Sorting/filtering on dates uses startDate, NOT _createdAt.
-- Action fields: responderId, responderName, objectType, objectId, cortexId, status, startDate.
+- Job fields: analyzerName, analyzerId, analyzerDefinition, cortexId, status, startDate. Match analyzers on analyzerName ("VirusTotal_GetReport_3_1"): analyzerId holds an opaque Cortex id, and analyzerDefinition holds the same versioned value as analyzerName, so filtering either with a plain analyzer name silently returns zero rows.
+- Action fields: responderName, responderId, objectId, cortexId, status, startDate. objectType is NOT usefully filterable (TheHive derives it from a traversal, so it matches nothing) — scope by objectId instead.
 - status is one of: Waiting, InProgress, Success, Failure, Deleted.
-- Pass extra-data=["report"] on a job search to include the analyzer report.
+- Dates: startDate is the run start and the field to sort on; _createdAt also works.
+- Pass extra-data=["report"] on a job search to include the full analyzer report.
 - To list the runs of one observable, search entity-type "observable" with additional-queries=["jobs"] (or ["actions"]) rather than filtering jobs by target.
 - These types require TheHive's Cortex connector to be enabled; without it the query fails.
 

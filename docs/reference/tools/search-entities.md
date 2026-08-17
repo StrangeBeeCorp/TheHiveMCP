@@ -153,16 +153,27 @@ Search for documentation pages (standalone or case-attached) with filters on tit
 
 ### Jobs (analyzer runs)
 
-Search the history of Cortex analyzer runs with filters on `analyzerId`, `analyzerName`, `analyzerDefinition`, `cortexId`, `status` (`Waiting`, `InProgress`,
+Search the history of Cortex analyzer runs with filters on `analyzerName`, `analyzerId`, `analyzerDefinition`, `cortexId`, `status` (`Waiting`, `InProgress`,
 `Success`, `Failure`, `Deleted`) and `startDate`. Use this to find out what enrichment already happened instead of re-running an analyzer.
 
-Dates filter and sort on `startDate`, **not** `_createdAt`, which TheHive does not expose for jobs. Add `"extra-data": ["report"]` to include the analyzer
-report. Requires TheHive's Cortex connector to be enabled.
+**Match analyzers on `analyzerName`** (`VirusTotal_GetReport_3_1`). The two neighbouring fields look usable and are not: `analyzerId` holds an opaque Cortex id
+(`bc265b6aa7d3131998bb6125d548d880`), and `analyzerDefinition` holds the same versioned value as `analyzerName` rather than a version-agnostic one — so
+filtering either with a plain analyzer name returns zero rows and no error. For version-agnostic matching use a wildcard on the name:
+`{"_like": {"_field": "analyzerName", "_value": "VirusTotal*"}}`.
+
+Dates sort and filter on `startDate` (when the run happened, and the default sort for this type); `_createdAt` also works.
+
+Analyzer reports are omitted by default — TheHive attaches a partial report to every job row, which is bulky untrusted third-party content. Add
+`"extra-data": ["report"]` to get the full report. Requires TheHive's Cortex connector to be enabled.
 
 ### Actions (responder runs)
 
-Search the history of Cortex responder runs with filters on `responderId`, `responderName`, `objectType`, `objectId`, `cortexId`, `status` and `startDate`. As
-with jobs, dates use `startDate` and the Cortex connector must be enabled.
+Search the history of Cortex responder runs with filters on `responderName`, `responderId`, `objectId`, `cortexId`, `status` and `startDate`. As with jobs,
+`responderId` is an opaque Cortex id, dates behave the same way, and the Cortex connector must be enabled.
+
+`objectType` is returned (as `Case`, `Alert`, …) but **cannot be filtered on**: TheHive derives it from a graph traversal rather than storing it, so any filter
+on it silently matches nothing — not even the value it just returned. Scope by `objectId`, or search the target entity and expand it with
+`additional-queries: ["actions"]`.
 
 To list the runs of a single entity, prefer the `additional-queries` expansions (`jobs`, `actions`) over filtering the history by target — see below.
 

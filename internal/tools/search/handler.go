@@ -62,6 +62,8 @@ func (t *Tool) Handle(ctx context.Context, req mcp.CallToolRequest, params Entit
 	}
 
 	if !params.Count {
+		dropUnrequestedJobReport(params, results)
+
 		results, err = utils.ExpandEntitiesWithQueries(ctx, params.EntityType, results, params.AdditionalQueries, permFilters)
 		if err != nil {
 			return EntitiesResult{}, tools.NewToolError("failed to perform additional queries").Cause(err)
@@ -69,6 +71,34 @@ func (t *Tool) Handle(ctx context.Context, req mcp.CallToolRequest, params Entit
 	}
 
 	return NewSearchEntitiesResult(results, params, rawFilters)
+}
+
+// dropUnrequestedJobReport strips the analyzer report TheHive attaches to every
+// job row whether or not it was asked for. Excluding it server-side does not work
+// — exclude_fields has no effect on a job's extraData — so it is dropped here.
+//
+// Two reasons it must go: the report embeds the observables the analyzer
+// extracted, which measured ~8KB per row on a real deployment and swamps a
+// chronological page of history; and it is third-party content, so carrying it
+// into context unasked widens the prompt-injection surface for no benefit.
+// extra-data ["report"] opts back in and returns the full report.
+func dropUnrequestedJobReport(params EntitiesParams, results []map[string]any) {
+	if params.EntityType != types.EntityTypeJob || slices.Contains(params.ExtraData, "report") {
+		return
+	}
+
+	for _, row := range results {
+		extraData, isObject := row["extraData"].(map[string]any)
+		if !isObject {
+			continue
+		}
+
+		delete(extraData, "report")
+
+		if len(extraData) == 0 {
+			delete(row, "extraData")
+		}
+	}
 }
 
 func (t *Tool) buildHiveQuery(params EntitiesParams, rawFilters map[string]any) thehive.InputQuery {

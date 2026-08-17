@@ -9,11 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	argOffset = "offset"
-	argLimit  = "limit"
-)
-
 func workers(count int) []thehive.OutputWorker {
 	list := make([]thehive.OutputWorker, 0, count)
 	for i := range count {
@@ -30,7 +25,7 @@ func requestWithArguments(arguments map[string]any) mcp.ReadResourceRequest {
 func TestNewWorkerPageReportsTruncation(t *testing.T) {
 	t.Parallel()
 
-	page := newWorkerPage("analyzers", workers(10), 0, 4)
+	page := newWorkerPage("analyzers", workers(10), 0, 0, 4)
 
 	assert.Equal(t, 10, page.Total)
 	assert.Equal(t, 4, page.Returned)
@@ -41,7 +36,7 @@ func TestNewWorkerPageReportsTruncation(t *testing.T) {
 func TestNewWorkerPageCompleteCatalogIsNotTruncated(t *testing.T) {
 	t.Parallel()
 
-	page := newWorkerPage("analyzers", workers(3), 0, 50)
+	page := newWorkerPage("analyzers", workers(3), 0, 0, 50)
 
 	assert.Equal(t, 3, page.Total)
 	assert.Equal(t, 3, page.Returned)
@@ -51,7 +46,7 @@ func TestNewWorkerPageCompleteCatalogIsNotTruncated(t *testing.T) {
 func TestNewWorkerPageOffsetWindow(t *testing.T) {
 	t.Parallel()
 
-	page := newWorkerPage("analyzers", workers(5), 3, 2)
+	page := newWorkerPage("analyzers", workers(5), 0, 3, 2)
 
 	assert.Equal(t, 3, page.Offset)
 	assert.Equal(t, 2, page.Returned)
@@ -64,7 +59,7 @@ func TestNewWorkerPageOffsetWindow(t *testing.T) {
 func TestNewWorkerPageOffsetBeyondCatalog(t *testing.T) {
 	t.Parallel()
 
-	page := newWorkerPage("responders", workers(2), 99, 10)
+	page := newWorkerPage("responders", workers(2), 0, 99, 10)
 
 	assert.Equal(t, 2, page.Total)
 	assert.Equal(t, 0, page.Returned)
@@ -75,10 +70,57 @@ func TestNewWorkerPageOffsetBeyondCatalog(t *testing.T) {
 func TestNewWorkerPageEmptyCatalogSerializesAsList(t *testing.T) {
 	t.Parallel()
 
-	page := newWorkerPage("analyzers", nil, 0, 50)
+	page := newWorkerPage("analyzers", nil, 0, 0, 50)
 
 	assert.NotNil(t, page.Workers, "workers must marshal as [] rather than null")
 	assert.Empty(t, page.Workers)
+}
+
+// An empty catalog caused by an allow-list must be distinguishable from a
+// deployment that genuinely has no analyzers: the shipped read-only default
+// blocks every analyzer, and silence there reads as "Cortex is not connected".
+func TestNewWorkerPageReportsPolicyBlockedCount(t *testing.T) {
+	t.Parallel()
+
+	page := newWorkerPage("analyzers", nil, 29, 0, 50)
+
+	assert.Equal(t, 0, page.Total)
+	assert.Equal(t, 29, page.BlockedByPolicy)
+	assert.Empty(t, page.Workers)
+}
+
+func TestRejectUnknownArguments(t *testing.T) {
+	t.Parallel()
+
+	// A responder-shaped call against the analyzer catalog is the likeliest wrong
+	// guess; ignoring it would return the whole catalog as if it were filtered.
+	err := rejectUnknownArguments(requestWithArguments(map[string]any{"entityType": "observable"}), argDataType, argOffset, argLimit)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `unknown query parameter "entityType"`)
+	assert.Contains(t, err.Error(), argDataType)
+
+	// A misspelled known parameter is rejected rather than silently ignored.
+	require.Error(t, rejectUnknownArguments(requestWithArguments(map[string]any{"datatype": "ip"}), argDataType))
+
+	require.NoError(t, rejectUnknownArguments(requestWithArguments(map[string]any{argDataType: "ip", argLimit: "5"}), argDataType, argOffset, argLimit))
+	require.NoError(t, rejectUnknownArguments(requestWithArguments(nil), argDataType))
+}
+
+func TestDataTypeArgument(t *testing.T) {
+	t.Parallel()
+
+	value, err := dataTypeArgument(requestWithArguments(map[string]any{argDataType: "hash"}))
+	require.NoError(t, err)
+	assert.Equal(t, "hash", value)
+
+	// Absent is fine — it means "whole catalog".
+	value, err = dataTypeArgument(requestWithArguments(nil))
+	require.NoError(t, err)
+	assert.Empty(t, value)
+
+	// Present but blank is not: it would silently widen the answer.
+	_, err = dataTypeArgument(requestWithArguments(map[string]any{argDataType: "  "}))
+	require.Error(t, err)
 }
 
 func TestPaginationArgumentsDefaults(t *testing.T) {
@@ -132,6 +174,6 @@ func TestPaginationArgumentsRejectsInvalidValues(t *testing.T) {
 func TestStringArgumentMissingIsEmpty(t *testing.T) {
 	t.Parallel()
 
-	assert.Empty(t, stringArgument(requestWithArguments(nil), "dataType"))
-	assert.Equal(t, "hash", stringArgument(requestWithArguments(map[string]any{"dataType": "hash"}), "dataType"))
+	assert.Empty(t, stringArgument(requestWithArguments(nil), argDataType))
+	assert.Equal(t, "hash", stringArgument(requestWithArguments(map[string]any{argDataType: "hash"}), argDataType))
 }

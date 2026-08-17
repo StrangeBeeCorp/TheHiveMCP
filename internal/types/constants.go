@@ -210,9 +210,9 @@ var DefaultFields = map[string][]string{
 }
 
 // defaultSortFields holds the entity types whose default sort column is not
-// _createdAt. Cortex jobs and actions expose startDate as their sortable date
-// field, so sorting them on _createdAt would reference a field TheHive does not
-// declare for those types.
+// _createdAt. For a Cortex run, startDate is when the analyzer or responder
+// actually ran, which is what "most recent run" means to a caller; _createdAt is
+// also filterable and sortable, it just answers a slightly different question.
 var defaultSortFields = map[string]string{
 	EntityTypeJob:    fieldStartDate,
 	EntityTypeAction: fieldStartDate,

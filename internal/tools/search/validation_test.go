@@ -25,9 +25,8 @@ func TestValidateParamsAcceptsAutomationEntityTypes(t *testing.T) {
 	}
 }
 
-// Cortex jobs and actions declare startDate, not _createdAt, as their sortable
-// date field: defaulting them to _createdAt would make every unsorted search
-// fail on a field TheHive does not expose for those types.
+// For a Cortex run, startDate is when the analyzer or responder actually ran, so
+// it is what an unsorted search should order by.
 func TestValidateParamsDefaultsSortFieldPerEntityType(t *testing.T) {
 	t.Parallel()
 

@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -43,6 +45,11 @@ const (
 	// errListAnalyzers is shared by both catalog fetch paths.
 	errListAnalyzers = "failed to find analyzers: %w. Check that Cortex integration is enabled and you have permissions to list analyzers. API response: %v"
 
+	// Query parameter names accepted by the automation catalogs.
+	argDataType = "dataType"
+	argOffset   = "offset"
+	argLimit    = "limit"
+
 	// defaultWorkerPageLimit bounds one catalog page so a large Cortex install
 	// does not flood the caller's context. Raise it per call with ?limit=.
 	defaultWorkerPageLimit = 50
@@ -52,33 +59,56 @@ const (
 // workerPage is a page of Cortex workers (analyzers or responders) together with
 // the counters that tell the caller whether it saw the whole catalog. Reporting
 // truncation matters: a silently clipped list reads as "this is all there is".
+//
+// BlockedByPolicy serves the same honesty goal for permissions. The shipped
+// read-only default is an empty analyzer allow-list, so an out-of-the-box catalog
+// is empty — and an empty catalog is otherwise indistinguishable from "Cortex is
+// not connected" or "this deployment has no analyzers".
 type workerPage struct {
-	Kind      string                 `json:"kind"`
-	Total     int                    `json:"total"`
-	Returned  int                    `json:"returned"`
-	Offset    int                    `json:"offset"`
-	Truncated bool                   `json:"truncated"`
-	Workers   []thehive.OutputWorker `json:"workers"`
+	Kind            string                 `json:"kind"`
+	Total           int                    `json:"total"`
+	Returned        int                    `json:"returned"`
+	Offset          int                    `json:"offset"`
+	Truncated       bool                   `json:"truncated"`
+	BlockedByPolicy int                    `json:"blockedByPolicy"`
+	Workers         []thehive.OutputWorker `json:"workers"`
 }
 
-// newWorkerPage windows workers, clamping an out-of-range offset to the end of
-// the list rather than erroring.
-func newWorkerPage(kind string, workers []thehive.OutputWorker, offset, limit int) workerPage {
-	total := len(workers)
+// newWorkerPage windows allowed, clamping an out-of-range offset to the end of
+// the list rather than erroring. blocked is how many workers the permission
+// allow-list removed before windowing.
+func newWorkerPage(kind string, allowed []thehive.OutputWorker, blocked, offset, limit int) workerPage {
+	total := len(allowed)
 	offset = min(offset, total)
 	end := min(offset+limit, total)
 
 	page := make([]thehive.OutputWorker, 0, end-offset)
-	page = append(page, workers[offset:end]...)
+	page = append(page, allowed[offset:end]...)
 
 	return workerPage{
-		Kind:      kind,
-		Total:     total,
-		Returned:  len(page),
-		Offset:    offset,
-		Truncated: end < total,
-		Workers:   page,
+		Kind:            kind,
+		Total:           total,
+		Returned:        len(page),
+		Offset:          offset,
+		Truncated:       end < total,
+		BlockedByPolicy: blocked,
+		Workers:         page,
 	}
+}
+
+// rejectUnknownArguments fails on a query parameter this resource does not
+// understand. Ignoring one silently is worse than erroring: '?datatype=ip' (wrong
+// case) or '?entityType=observable' on the analyzer catalog — a natural guess,
+// since the responder catalog requires exactly those parameters — would otherwise
+// return the entire unfiltered catalog and read as a filtered answer.
+func rejectUnknownArguments(req mcp.ReadResourceRequest, allowed ...string) error {
+	for name := range req.Params.Arguments {
+		if !slices.Contains(allowed, name) {
+			return fmt.Errorf("unknown query parameter %q. Supported parameters: %s", name, strings.Join(allowed, ", "))
+		}
+	}
+
+	return nil
 }
 
 // stringArgument reads a string query parameter, returning "" when absent.
@@ -86,6 +116,27 @@ func stringArgument(req mcp.ReadResourceRequest, name string) string {
 	value, _ := req.Params.Arguments[name].(string)
 
 	return value
+}
+
+// dataTypeArgument reads the optional dataType filter, rejecting it when present
+// and blank. '?dataType=' would otherwise fall back to the unfiltered catalog,
+// answering a much broader question than the caller asked.
+func dataTypeArgument(req mcp.ReadResourceRequest) (string, error) {
+	raw, present := req.Params.Arguments[argDataType]
+	if !present {
+		return "", nil
+	}
+
+	value, isString := raw.(string)
+	if !isString {
+		return "", fmt.Errorf("%s must be a string, got %T", argDataType, raw)
+	}
+
+	if strings.TrimSpace(value) == "" {
+		return "", fmt.Errorf("%s must not be empty. Omit it entirely to list the whole catalog", argDataType)
+	}
+
+	return value, nil
 }
 
 // intArgument reads a numeric query parameter. URI parameters arrive as strings,
@@ -119,12 +170,12 @@ func intArgument(req mcp.ReadResourceRequest, name string, fallback int) (int, e
 
 // paginationArguments resolves the offset/limit window for a worker catalog.
 func paginationArguments(req mcp.ReadResourceRequest) (offset, limit int, err error) {
-	offset, err = intArgument(req, "offset", 0)
+	offset, err = intArgument(req, argOffset, 0)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	limit, err = intArgument(req, "limit", defaultWorkerPageLimit)
+	limit, err = intArgument(req, argLimit, defaultWorkerPageLimit)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -284,7 +335,17 @@ func GetAvailableAnalyzers(ctx context.Context, req mcp.ReadResourceRequest) ([]
 		return nil, fmt.Errorf("failed to get TheHive client from context: %w. Check authentication and connection settings", err)
 	}
 
-	analyzers, err := listAnalyzers(ctx, hiveClient, stringArgument(req, "dataType"))
+	err = rejectUnknownArguments(req, argDataType, argOffset, argLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	dataType, err := dataTypeArgument(req)
+	if err != nil {
+		return nil, err
+	}
+
+	analyzers, err := listAnalyzers(ctx, hiveClient, dataType)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +368,7 @@ func GetAvailableAnalyzers(ctx context.Context, req mcp.ReadResourceRequest) ([]
 		return nil, err
 	}
 
-	page := newWorkerPage("analyzers", allowed, offset, limit)
+	page := newWorkerPage("analyzers", allowed, len(analyzers)-len(allowed), offset, limit)
 
 	pageJSON, err := json.MarshalIndent(page, "", "  ")
 	if err != nil {
@@ -326,6 +387,11 @@ func GetAvailableAnalyzers(ctx context.Context, req mcp.ReadResourceRequest) ([]
 // GetAvailableResponders returns the Cortex responders for the entity named by the
 // request's entityType and entityId parameters as a JSON resource.
 func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	err := rejectUnknownArguments(req, "entityType", "entityId", argOffset, argLimit)
+	if err != nil {
+		return nil, err
+	}
+
 	entityType, ok := req.Params.Arguments["entityType"].(string)
 	if !ok {
 		return nil, errors.New("entityType query parameter is required and must be a string. Example: hive://metadata/automation/responders?entityType=case&entityId=~123456")
@@ -342,7 +408,7 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 
 	// Both values are interpolated into the Cortex endpoint path; reject
 	// anything but a well-formed entity reference before any call.
-	err := validateResponderParams(entityType, entityID)
+	err = validateResponderParams(entityType, entityID)
 	if err != nil {
 		return nil, err
 	}
@@ -375,7 +441,7 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 		return nil, err
 	}
 
-	respondersJSON, err := json.MarshalIndent(newWorkerPage("responders", allowed, offset, limit), "", "  ")
+	respondersJSON, err := json.MarshalIndent(newWorkerPage("responders", allowed, len(responders)-len(allowed), offset, limit), "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal responders: %w", err)
 	}

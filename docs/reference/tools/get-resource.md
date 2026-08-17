@@ -88,8 +88,13 @@ get-resource(uri="hive://metadata/automation/analyzers")
 
 ### Automation catalogs
 
-Both automation catalogs return a page: `kind`, `total` (how many the caller may use), `returned`, `offset`, `truncated`, and the `workers` themselves. Check
-`truncated` before concluding a tool is unavailable.
+Both automation catalogs return a page: `kind`, `total` (how many the caller may use), `returned`, `offset`, `truncated`, `blockedByPolicy`, and the `workers`
+themselves. Check `truncated` before concluding a tool is unavailable, and `blockedByPolicy` before concluding the deployment has none: an empty catalog is
+usually the permissions allow-list at work, not a missing Cortex. The shipped read-only default blocks every analyzer, so `total: 0` with a non-zero
+`blockedByPolicy` means "your configuration hides these", not "they do not exist".
+
+Unknown query parameters are rejected rather than ignored, so a misspelling (`?datatype=hash`) or a parameter borrowed from the other catalog
+(`?entityType=observable` on the analyzers resource) fails loudly instead of returning the whole unfiltered catalog as if it were a filtered answer.
 
 | Parameter    | Applies to            | Description                                                                                           |
 | ------------ | --------------------- | ----------------------------------------------------------------------------------------------------- |

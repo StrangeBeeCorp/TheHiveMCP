@@ -20,6 +20,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Cortex resolves server-side, instead of the caller fetching the whole catalog and sifting it.
 - **Paging on the automation catalogs.** Both analyzer and responder catalogs accept `offset` and `limit`, and report `total`, `returned`, `offset` and
   `truncated` so a clipped list is no longer indistinguishable from a complete one.
+- **`blockedByPolicy` on the automation catalogs.** An empty catalog now says whether the permissions allow-list emptied it. The shipped read-only default
+  blocks every analyzer, so an out-of-the-box catalog was previously indistinguishable from "Cortex is not connected" or "this deployment has no analyzers".
+- **Unknown query parameters on the automation catalogs are rejected**, instead of being ignored. A misspelling (`?datatype=hash`) or a parameter borrowed from
+  the sibling catalog (`?entityType=observable` on the analyzers resource) used to return the whole unfiltered catalog and read as a filtered answer.
 
 ### Changed
 
@@ -28,7 +32,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   See [ADR-0003](docs/explanation/adr/0003-track-mcp-2026-07-28-on-mark3labs-mcp-go.md).
 
 - **Automation catalog responses are now an object, not a bare array.** `hive://metadata/automation/analyzers` and `hive://metadata/automation/responders`
-  return `{kind, total, returned, offset, truncated, workers}`; the previous array is now the `workers` field.
+  return `{kind, total, returned, offset, truncated, blockedByPolicy, workers}`; the previous array is now the `workers` field.
+- **Analyzer reports are no longer returned unasked on job searches.** TheHive attaches a partial report to every job row and `exclude_fields` does not suppress
+  it, so a chronological page of ten jobs carried ~76 KB of embedded observables — untrusted third-party content nobody requested. `search-entities` now drops
+  it unless `extra-data` includes `report`, which cut that same query to ~1.7 KB.
 
 ### Removed
 
