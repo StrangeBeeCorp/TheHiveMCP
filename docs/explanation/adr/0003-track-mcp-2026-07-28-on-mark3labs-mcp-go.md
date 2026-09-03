@@ -196,8 +196,8 @@ justification that the maintenance argument alone does not carry.
 **Bump to v1.0.0 but keep serving legacy only.** Viable as a holding position between steps 1 and 2, and named above as the fence. Rejected as a destination: it
 takes the upgrade's cost without its benefit.
 
-**Stay on v0.43.1.** Rejected. It was defensible while the alternative was a rewrite; it is not defensible against an 8-line bump. It also leaves us three
-revisions behind, and forgoes 15 releases of unrelated fixes.
+**Stay on v0.43.1.** Rejected. It was defensible while the alternative was a rewrite; it is not defensible against an 8-line bump. It also leaves us two
+revisions behind (2025-11-25 and 2026-07-28), and forgoes the 20 intervening releases of unrelated fixes.
 
 **Run both SDKs side by side.** Rejected: two servers to keep consistent, and the permission and confirmation layers would need duplicating — precisely the code
 where divergence is most dangerous.
