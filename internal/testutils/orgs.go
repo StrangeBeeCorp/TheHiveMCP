@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 )
@@ -39,6 +41,18 @@ var (
 	// whole (sequential) suite; createOrgUser already treats a 409 as success,
 	// so this is belt-and-suspenders against redundant CreateUser calls.
 	sharedUserOnce sync.Once
+	// createUserMu serialises CreateUser calls across parallel tests. TheHive's
+	// handler is not concurrency-safe: two overlapping calls make it fail with
+	//
+	//	java.lang.IllegalStateException: Sink.asPublisher(fanout = false) only
+	//	supports one subscriber
+	//
+	// which surfaced as a flaky 500 during provisioning.
+	//
+	// It guards one attempt, never the retry loop around it: holding a global
+	// lock across a backoff sleep would serialise the whole suite behind the
+	// slowest provision, which is far worse than the flake it fixes.
+	createUserMu sync.Mutex
 )
 
 // Parallel marks a test as safe to run concurrently, but ONLY in license mode.
@@ -189,12 +203,45 @@ func sanitizeOrgName(name string) string {
 	return sanitized
 }
 
+// createUserRetryBudget bounds the retry loop in createOrgUser. It mirrors the
+// readiness budget ensureOrganisation already applies to organisation creation:
+// the same freshly-booted TheHive that 5xxs on one also 5xxs on the other.
+const createUserRetryBudget = 2 * time.Minute
+
 // createOrgUser creates a dedicated org-admin user directly in orgName with the
 // given password, in a single CreateUser call. A 409 (already exists, e.g. a
-// retried provision) is treated as success. Uses the bootstrap admin client;
-// mutates no shared user, so it is safe to run concurrently across tests.
+// retried provision) is treated as success.
+//
+// Transient 5xx responses are retried until createUserRetryBudget expires,
+// matching ensureOrganisation: a TheHive that answers /api/status is not yet
+// necessarily done migrating, and it returns 500 until it is. Each attempt
+// takes createUserMu; the waiting between attempts does not.
 func createOrgUser(ctx context.Context, t *testing.T, client *thehive.APIClient, orgName, login, password string) {
 	t.Helper()
+
+	deadline := time.Now().Add(createUserRetryBudget)
+
+	for {
+		status, err := tryCreateOrgUser(ctx, client, orgName, login, password)
+		if err == nil {
+			return
+		}
+
+		// 5xx only: a 4xx is a genuine bad request and will never succeed.
+		if status < 500 || time.Now().After(deadline) {
+			t.Fatalf("Failed to create org-admin user %q in %q: %v, status: %d", login, orgName, err, status)
+		}
+
+		time.Sleep(3 * time.Second)
+	}
+}
+
+// tryCreateOrgUser performs one CreateUser attempt, returning the HTTP status
+// so the caller can decide whether it is worth retrying. A 409 counts as
+// success: the user already exists, which is all the caller needs.
+func tryCreateOrgUser(ctx context.Context, client *thehive.APIClient, orgName, login, password string) (int, error) {
+	createUserMu.Lock()
+	defer createUserMu.Unlock()
 
 	input := thehive.NewInputCreateUser(login, login, "org-admin")
 	input.SetPassword(password)
@@ -203,18 +250,13 @@ func createOrgUser(ctx context.Context, t *testing.T, client *thehive.APIClient,
 	_, httpResp, err := client.UserAPI.CreateUser(ctx).InputCreateUser(*input).Execute()
 	closeResponse(httpResp)
 
-	if err == nil {
-		return
-	}
-
 	status := 0
 	if httpResp != nil {
 		status = httpResp.StatusCode
 	}
 
-	if status == 409 {
-		// Already created (e.g. provision retry) — fine for test setup.
-		return
+	if err == nil || status == http.StatusConflict {
+		return status, nil
 	}
 
 	body := ""
@@ -224,5 +266,5 @@ func createOrgUser(ctx context.Context, t *testing.T, client *thehive.APIClient,
 		body = string(apiErr.Body())
 	}
 
-	t.Fatalf("Failed to create org-admin user %q in %q: %v, status: %d, body: %s", login, orgName, err, status, body)
+	return status, fmt.Errorf("create user %q in %q: %w (body: %s)", login, orgName, err, body)
 }
