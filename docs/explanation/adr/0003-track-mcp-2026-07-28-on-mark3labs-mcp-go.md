@@ -39,7 +39,9 @@ open — but it has been overtaken by #951 and is no longer evidence of anything
 ## Verification
 
 Release notes are a claim, not a result. The claim was tested against this repository: `go get github.com/mark3labs/mcp-go@v1.0.0` on `main` (755a282), then
-`go build`, `go vet`, the `-short` suite, and a spike exercising the real server over both protocol eras.
+`go build`, `go vet`, the `-short` suite, a spike exercising the real server over both protocol eras, the full integration suite against a live TheHive, and
+finally the shipped `cmd/server` binary driven by a plain HTTP client against a live TheHive. The last of these is what the rest of this section rests on: it is
+the only measurement taken on the artefact we actually deploy.
 
 ### The bump costs three files
 
@@ -102,10 +104,74 @@ And a modern session does report the client's capability, so the gate takes its 
     modern: haveSession=true elicitation advertised=true
 ```
 
-Consequently, on a modern connection from an elicitation-capable client, **every modifying operation fails**. The error is not
-`server.ErrElicitationNotSupported`, so it does not even take the deliberate fail-closed branch (DL-6005) — it falls through to the generic
+Consequently, over Streamable HTTP, a modern connection from an elicitation-capable client **fails every modifying operation**. (The qualifier matters: over the
+in-process transport the same call succeeds — see [the next section but one](#the-breakage-is-transport-specific-and-the-integration-suite-is-blind-to-it).) The
+error is not `server.ErrElicitationNotSupported`, so it does not even take the deliberate fail-closed branch (DL-6005) — it falls through to the generic
 `elicitation request failed:` wrapper. Porting the gate to MRTR is therefore a hard prerequisite to advertising modern support, exactly as the earlier revision
 of this ADR concluded. What changed is that it is now the _only_ substantial work, rather than one step in a whole-SDK migration.
+
+### End to end on the shipped binary, both eras
+
+The spikes above construct servers in-process. This one does not: `cmd/server` was built against v1.0.0 and run as it ships — HTTP transport, its own auth
+middleware and URL allowlist — against TheHive 5.6.3 (Cassandra + Elasticsearch), with a real organisation, an org-admin user and a real API key. The client was
+`curl`, so nothing in the MCP client library could paper over a protocol mistake.
+
+Legacy (`2025-11-25`), the full handshake:
+
+```text
+initialize      → "2025-11-25", session mcp-session-edeb4fc2…
+tools/list      → execute-automation, get-resource, manage-entities, search-entities
+resources/list  → 49 resources
+search-entities → {"count":0,"entityType":"case","results":[]}
+manage-entities → "Case created successfully"  _id ~8614056
+```
+
+Modern (`2026-07-28`), stateless, no session:
+
+```text
+server/discover → supportedVersions [2026-07-28 2025-11-25 2025-06-18 2025-03-26 2024-11-05], resultType "complete"
+tools/list      → all 4 tools, resultType "complete"
+tools/call      → "Case created successfully"  _id ~8687784   (client advertising no elicitation)
+```
+
+Both cases were then read back out of TheHive's own API rather than trusted from the MCP response:
+
+```text
+~8614056  E2E real-binary case
+~8687784  modern-no-elicit
+```
+
+The binary also enforces the new header routing: without `Mcp-Method` a modern request is rejected with `-32020 header mismatch`, which is SEP-2243 behaving as
+specified.
+
+### The breakage is transport-specific, and the integration suite is blind to it
+
+The failure above is **not** universal to modern connections — it depends on the transport, which matters because our test harness and our deployment do not use
+the same one.
+
+Over the **in-process** transport, a modern session negotiates `2026-07-28`, the gate fires, and the write succeeds:
+
+```text
+NEGOTIATED = "2026-07-28"  (modern=true)
+WRITE isError=false → "Case created successfully" _id ~3903640
+ELICITATIONS SEEN = 1
+```
+
+Over **Streamable HTTP** — the production transport, `bootstrap/http.go` — the same server, same client, same modern protocol:
+
+```text
+NEGOTIATED = "2026-07-28"  (modern=true)
+WRITE → elicitation request failed: "elicitation/create": server-initiated requests are not
+        supported in protocol version 2026-07-28 or later
+ELICITATIONS SEEN = 0
+```
+
+`testutils.GetMCPTestClientWithPermissions` builds its client on `transport.NewInProcessTransportWithOptions`, so **the entire integration suite runs on the one
+path where this works**. It was run both ways to confirm the point: 348 tests, zero failures, on v0.43.1 and on v1.0.0 alike. A green suite is therefore not
+evidence that modern clients can write, and would stay green through the whole regression window.
+
+Note also that `LATEST_PROTOCOL_VERSION` silently changed meaning: the test client at `internal/testutils/mcp_client.go` asks for it by name, so the same source
+line requests `2025-06-18` on v0.43.1 and `2026-07-28` on v1.0.0. The suite quietly moved to the modern protocol without anybody choosing that.
 
 ### The SDK's documented escape hatch does not work
 
@@ -133,19 +199,29 @@ release of v1.0.0 — its case rested on `mcp-go` not having the revision.
 
 Sequence the work in two independent changes:
 
-1. **The bump** (v0.43.1 → v1.0.0, the three files above). Small, reviewable, and carries no protocol behaviour change for existing clients, which the SDK's own
-   conformance archive pins. Landable on its own.
-2. **The MRTR port of the confirmation gate**, before modern support is advertised anywhere. Until step 2 lands, a modern elicitation-capable client cannot
-   perform modifying operations — see [Consequences](#consequences).
+1. **The bump, fenced to legacy** (v0.43.1 → v1.0.0, the three files above, plus `server.WithStreamableHTTPProtocolVersions(mcp.LegacyProtocolVersions()...)` on
+   the transport). Small, reviewable, and carries no protocol behaviour change for existing clients, which the SDK's own conformance archive pins. Landable on
+   its own.
+2. **The MRTR port of the confirmation gate**, plus the Streamable HTTP coverage that would have caught the gap, and only then lifting the fence.
+
+**The fence belongs in step 1, not in a contingency.** An earlier revision of this ADR made it the fallback for "if step 2 cannot follow closely". The
+verification above argues it should be the default, for two reasons. First, an unfenced bump ships a state in which every modern elicitation-capable client
+fails every write, and nothing in our test suite reports it. Second, fencing to legacy keeps us on the code path `mcp-go` pins byte-for-byte with its
+`legacy_unchanged.txtar` conformance archive, which is the mature half of a library whose modern half is days old and already known to contain the deadlock
+documented above. Fencing therefore decouples _becoming current_ — 20 releases of unrelated fixes, no longer two revisions behind — from _serving the modern
+protocol_, which is the part that still needs design work. The cost of the fence is one line and a behaviour modern clients already handle: they negotiate down.
 
 ## Consequences
 
-### The window between step 1 and step 2 is a real regression, and must be closed or fenced
+### The fence is what makes step 1 safe to land alone
 
-After the bump, a modern client that advertises elicitation gets an error on every write. Nothing in tier-1 client shipping today reaches us that way, which is
-why step 1 is safe to land first — but the gap is not hypothetical, and step 2 should follow closely. If it cannot, pin the transport to legacy-only with
-`server.WithStreamableHTTPProtocolVersions(mcp.LegacyProtocolVersions()...)`, which makes the server advertise legacy versions and lets modern clients negotiate
-down cleanly, instead of failing at the first write.
+An unfenced bump ships a real regression: a modern client that advertises elicitation gets an error on every write, over the transport we deploy. Nothing in
+tier-1 clients shipping today reaches us that way, but "no current client does this" is a weak guarantee to rest on when the alternative costs one line — and
+when, as recorded above, our own suite cannot tell us the day it stops being true.
+
+With the fence, the server advertises legacy versions only, modern clients negotiate down cleanly, and there is no window at all. What is deferred is not
+correctness but reach: until step 2, TheHiveMCP does not serve `2026-07-28`, and `server/discover` is not offered. That is the honest trade, and it is the same
+posture we have today on v0.43.1 — with 20 releases of fixes and none of the drift.
 
 ### We are choosing a community SDK over the reference implementation, knowingly
 
@@ -169,11 +245,15 @@ Recorded so the number is not re-derived if the question reopens. 685 SDK symbol
 | `internal/auth`      | 16   | 1     | Middleware signature change                                                               |
 | `internal/utils`     | 6    | 1     | Minimal                                                                                   |
 
-### It must still be validated against a live TheHive
+### It must still be validated against a live TheHive — and the suite is the wrong instrument for the modern path
 
 The `-short` suite passing is necessary, not sufficient. The integration suite gates on `testutils.StartTheHiveContainer`; neither step is done until it passes.
 This is much less of a risk for a bump than it would have been for a rewrite, but the bump does change result marshalling on the legacy path, so it is not
-skippable.
+skippable. It has been run: 348 tests, zero failures, on v0.43.1 and v1.0.0 alike.
+
+That result must not be over-read. Because the suite is in-process, it exercises the legacy semantics of the confirmation gate no matter which protocol version
+it negotiates, so it certifies the fenced configuration and nothing beyond it. Step 2 cannot be signed off by the suite as it stands; it needs the Streamable
+HTTP coverage named below, and an end-to-end run against the real binary of the kind recorded in [Verification](#verification).
 
 ### `hive://config/*` resource output may shift on modern connections
 
@@ -193,8 +273,9 @@ Rejected only on cost, now that `mcp-go` v1.0.0 offers the same bidirectional MR
 `NewInputRequestBuilder` and `server.ElicitationResponse`. Paying for a 685-reference rewrite to obtain a protocol we can have for eight lines needs a
 justification that the maintenance argument alone does not carry.
 
-**Bump to v1.0.0 but keep serving legacy only.** Viable as a holding position between steps 1 and 2, and named above as the fence. Rejected as a destination: it
-takes the upgrade's cost without its benefit.
+**Bump to v1.0.0 but keep serving legacy only.** Adopted as step 1, not rejected — this is the fence. It is a waypoint rather than a destination: held
+indefinitely it would take the upgrade's cost without its headline benefit, since the point of reaching v1.0.0 is eventually to serve `2026-07-28`. Its value is
+that it banks the 20 releases of fixes immediately, at zero protocol risk, while the MRTR work proceeds on its own schedule.
 
 **Stay on v0.43.1.** Rejected. It was defensible while the alternative was a rewrite; it is not defensible against an 8-line bump. It also leaves us two
 revisions behind (2025-11-25 and 2026-07-28), and forgoes the 20 intervening releases of unrelated fixes.
@@ -226,12 +307,14 @@ replaces the accident with the intended behaviour on both eras.
 
 ## Work, gated on accepting this ADR
 
-1. Bump `mcp-go` to v1.0.0: type-assert in `onAfterCallToolHook`, replace the two `&struct{}{}` capability literals, `go mod tidy`. Validate against a live
-   TheHive.
+1. Bump `mcp-go` to v1.0.0: type-assert in `onAfterCallToolHook`, replace the two `&struct{}{}` capability literals, `go mod tidy`. Add
+   `server.WithStreamableHTTPProtocolVersions(mcp.LegacyProtocolVersions()...)` in `StartHTTPServer`, so the bump lands fenced. Validate against a live TheHive.
 2. Port the confirmation gate from `http.RoundTripper` to the tool handler, expressed as MRTR input requests via `NewInputRequestBuilder` /
    `server.ElicitationResponse`. Sign `requestState` — HMAC or AEAD over the authenticated principal, a short TTL, and a digest of the originating request,
    since it travels through the client and the spec treats it as attacker-controlled. Preserve today's behaviour for clients that cannot elicit.
-3. Add coverage asserting both a modern and a legacy client work, over Streamable HTTP and in-process. The spike tests above are the starting point.
-4. `ttlMs`/`cacheScope` via `WithCacheHints`, resource-not-found `-32002` → `-32602`. Deterministic `tools/list` ordering is already satisfied incidentally.
-5. Replace the hand-written `initialize` snippets in `docs/how-to/` with `server/discover`.
-6. Report the `WithLegacyServerInitiatedRequests()` deadlock upstream.
+3. Add coverage asserting both a modern and a legacy client work **over Streamable HTTP**, not only in-process — the in-process-only suite is what hid this
+   breakage. Assert the modern write path explicitly, so removing the fence cannot pass silently. The spike tests above are the starting point.
+4. Remove the fence, as the last step and on its own commit, so the change that begins serving `2026-07-28` is reviewable in isolation and revertible by itself.
+5. `ttlMs`/`cacheScope` via `WithCacheHints`, resource-not-found `-32002` → `-32602`. Deterministic `tools/list` ordering is already satisfied incidentally.
+6. Replace the hand-written `initialize` snippets in `docs/how-to/` with `server/discover`.
+7. Report the `WithLegacyServerInitiatedRequests()` deadlock upstream.
