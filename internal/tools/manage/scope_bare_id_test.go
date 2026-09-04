@@ -31,7 +31,7 @@ func TestManageScopeUpdateAcceptsBareID(t *testing.T) {
 	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, permsPath)
 	authContext := testutils.GetAuthContext(t)
 
 	// In-scope (tlp=2). Number is the bare case number the LLM may legitimately

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
@@ -174,6 +175,40 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 	}
 }
 
+// StreamableHTTPOptions assembles the transport options StartHTTPServer serves
+// with. Extracted so tests can drive the real configuration over httptest
+// rather than binding a port — in particular the protocol-version fence, which
+// is otherwise unobservable.
+func StreamableHTTPOptions(options *types.TheHiveMcpDefaultOptions) []server.StreamableHTTPOption {
+	httpOptions := []server.StreamableHTTPOption{
+		server.WithEndpointPath(options.MCPServerEndpointPath),
+		server.WithStateLess(false),
+		server.WithHTTPContextFunc(GetHTTPAuthContextFunc(options)),
+
+		// Serve the handshake-based protocol revisions only, so modern clients
+		// negotiate down instead of reaching the 2026-07-28 path. Elicitation
+		// aside, that path is not yet exercised by any test over this transport
+		// — the suite is in-process — so we hold on the revisions mcp-go pins
+		// byte-for-byte with its legacy_unchanged.txtar conformance archive
+		// until it is. Lifting this is a deliberate, separate change (ADR-0003).
+		server.WithStreamableHTTPProtocolVersions(mcp.LegacyProtocolVersions()...),
+	}
+
+	if options.MCPHeartbeatInterval != "" {
+		duration, parseErr := time.ParseDuration(options.MCPHeartbeatInterval)
+		if parseErr != nil {
+			slog.Warn("Invalid heartbeat interval format, using default",
+				"error", parseErr,
+				"interval", options.MCPHeartbeatInterval)
+		} else {
+			httpOptions = append(httpOptions, server.WithHeartbeatInterval(duration))
+			slog.Info("Configured custom heartbeat interval", "interval", duration)
+		}
+	}
+
+	return httpOptions
+}
+
 // StartHTTPServer starts the HTTP server with production-ready configuration
 func StartHTTPServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOptions) error {
 	if s == nil {
@@ -190,25 +225,7 @@ func StartHTTPServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOption
 		return fmt.Errorf("invalid TheHive URL allowlist configuration: %w", err)
 	}
 
-	var httpOptions []server.StreamableHTTPOption
-
-	httpOptions = append(httpOptions, server.WithEndpointPath(options.MCPServerEndpointPath))
-	httpOptions = append(httpOptions, server.WithStateLess(false))
-	httpOptions = append(httpOptions, server.WithHTTPContextFunc(GetHTTPAuthContextFunc(options)))
-
-	if options.MCPHeartbeatInterval != "" {
-		duration, parseErr := time.ParseDuration(options.MCPHeartbeatInterval)
-		if parseErr != nil {
-			slog.Warn("Invalid heartbeat interval format, using default",
-				"error", parseErr,
-				"interval", options.MCPHeartbeatInterval)
-		} else {
-			httpOptions = append(httpOptions, server.WithHeartbeatInterval(duration))
-			slog.Info("Configured custom heartbeat interval", "interval", duration)
-		}
-	}
-
-	httpServer := server.NewStreamableHTTPServer(s, httpOptions...)
+	httpServer := server.NewStreamableHTTPServer(s, StreamableHTTPOptions(options)...)
 
 	slog.Info("Starting HTTP server",
 		"bind_addr", options.BindAddr,

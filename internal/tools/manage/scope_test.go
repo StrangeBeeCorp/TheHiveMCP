@@ -67,7 +67,7 @@ func TestManageScopeUpdateDeniedOutOfScope(t *testing.T) {
 	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, permsPath)
 	authContext := testutils.GetAuthContext(t)
 
 	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope case", 3)
@@ -109,7 +109,7 @@ func TestManageScopeBatchUpdateDeniedWhenAnyOutOfScope(t *testing.T) {
 	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, permsPath)
 	authContext := testutils.GetAuthContext(t)
 
 	inScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "In scope batch case", 2)
@@ -144,7 +144,7 @@ func TestManageScopeDeleteDeniedOutOfScope(t *testing.T) {
 	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, permsPath)
 	authContext := testutils.GetAuthContext(t)
 
 	outOfScopeAlert := createAlertWithTLP(t, hiveClient, "scope-delete-001", 3)
@@ -174,7 +174,7 @@ func TestManageScopeCommentDeniedOutOfScope(t *testing.T) {
 	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, permsPath)
 
 	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope comment case", 3)
 	inScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "In scope comment case", 2)
@@ -207,7 +207,7 @@ func TestManageScopeCreateChildDeniedOutOfScopeParent(t *testing.T) {
 	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, permsPath)
 
 	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope parent case", 3)
 	inScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "In scope parent case", 2)
@@ -241,7 +241,7 @@ func TestManageScopeCreateObservableInScopeAlertParent(t *testing.T) {
 	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, permsPath)
 
 	inScopeAlert := createAlertWithTLP(t, hiveClient, "scope-obs-in-001", 2)
 	outOfScopeAlert := createAlertWithTLP(t, hiveClient, "scope-obs-out-001", 3)
@@ -278,7 +278,7 @@ func TestManageScopePromoteDeniedOutOfScope(t *testing.T) {
 	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, permsPath)
 
 	outOfScopeAlert := createAlertWithTLP(t, hiveClient, "scope-promote-001", 3)
 
@@ -303,7 +303,7 @@ func TestManageScopeMergeDeniedWhenAnyCaseOutOfScope(t *testing.T) {
 	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, permsPath)
 
 	inScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "In scope merge case", 2)
 	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope merge case", 3)
@@ -328,7 +328,7 @@ func TestManageScopeMergeDeniedWhenAnyCaseOutOfScope(t *testing.T) {
 func TestManageScopeNoFiltersBackwardCompatible(t *testing.T) {
 	testutils.Parallel(t)
 	hiveClient := scopedManageClient(t)
-	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+	mcpClient := testutils.GetMCPTestClient(t)
 	authContext := testutils.GetAuthContext(t)
 
 	highTLPCase := testutils.CreateCaseWithTLP(t, hiveClient, "High TLP case", 3)

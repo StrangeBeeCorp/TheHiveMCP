@@ -6,6 +6,31 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > **Note:** All `0.x` releases (v0.3.4 and earlier) were **beta / pre-release** versions. **v1.0.0 is the first production-ready release** — see its notes
 > below.
 
+## [Unreleased]
+
+### Changed
+
+- **MCP SDK upgraded to `mark3labs/mcp-go` v1.0.0**, which implements MCP revision `2026-07-28`. No client-visible protocol change: the HTTP transport
+  deliberately continues to serve the handshake-based revisions only, so clients negotiate exactly as before. Serving `2026-07-28` is a separate, later change.
+  See ADR-0003 ([#167](https://github.com/StrangeBee/TheHiveMCP/pull/167)).
+
+### Removed
+
+- **Elicitation-based write confirmation has been removed.** ⚠️ **Behaviour change for clients that support elicitation.** Create, update and delete operations
+  no longer trigger a confirmation prompt; they execute directly. In practice this affects GitHub Copilot, effectively the only client that implemented the
+  prompt — most clients, Claude Desktop included, never displayed one and already executed these operations unconfirmed.
+
+  This also **supersedes the "Destructive operations fail closed" behaviour** introduced in 1.0.0: with no prompt advertised, there is no prompt that can fail
+  to complete, so nothing fails closed on that basis. The `elicitation` server capability is no longer advertised.
+
+  **Authorisation is unchanged.** What a caller may do is still governed by the TheHive API key and the permissions configuration; elicitation was an optional
+  confirmation layer above both, never the access-control boundary. **Action required** only if you relied on the prompt as a safety net: tighten the
+  [permissions configuration](docs/reference/permissions.md) or scope the API key.
+
+  Removed rather than ported because MCP `2026-07-28` drops server-initiated requests, and its replacement (MRTR) would require rebuilding the layer — including
+  a signed `requestState`, since the token round-trips through the client — for a feature with almost no client adoption. Reconsidering it is tracked in
+  [#170](https://github.com/StrangeBee/TheHiveMCP/issues/170).
+
 ## [1.0.0] - 2026-07-15
 
 TheHiveMCP is now **production-ready and out of beta**. This release removes the beta warning, publishes accuracy and security evaluation evidence, replaces the

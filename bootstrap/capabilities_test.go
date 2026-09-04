@@ -79,6 +79,25 @@ func TestPromptCapabilities_AreNotAdvertised(t *testing.T) {
 	}
 }
 
+// The confirmation layer was removed with the mcp-go v1.0.0 upgrade: MCP
+// 2026-07-28 has no server-initiated requests, and elicitation saw almost no
+// client adoption (ADR-0003, #170). Authorisation is the caller's API key plus
+// the permissions config, so nothing about access changed — but the capability
+// must stop being advertised along with the implementation, or clients are told
+// to expect prompts that will never arrive.
+func TestElicitationCapability_IsNotAdvertised(t *testing.T) {
+	t.Parallel()
+
+	for name, mcpServer := range testServers(t) {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Nil(t, advertisedCapabilities(t, mcpServer).Elicitation,
+				"elicitation is no longer implemented, so the capability must not be advertised")
+		})
+	}
+}
+
 // Guards why dropping it is safe: AddPrompt registers the capability itself, so
 // adding prompts later cannot leave it undeclared.
 func TestPromptCapabilities_ReappearWhenAPromptIsRegistered(t *testing.T) {

@@ -96,8 +96,15 @@ func onBeforeCallToolHook(ctx context.Context, id any, message *mcp.CallToolRequ
 	slog.Info("Calling tool", "id", id, "message", message, "session_id", getSessionID(ctx))
 }
 
-func onAfterCallToolHook(ctx context.Context, id any, _ *mcp.CallToolRequest, result *mcp.CallToolResult) {
-	slog.Info("Tool called", "id", id, "result", result, "is_error", result.IsError, "session_id", getSessionID(ctx))
+// result is `any` since mcp-go v0.58.0: multi round-trip results also flow
+// through this hook, so a CallToolResult is no longer the only possibility.
+func onAfterCallToolHook(ctx context.Context, id any, _ *mcp.CallToolRequest, result any) {
+	isError := false
+	if callToolResult, ok := result.(*mcp.CallToolResult); ok {
+		isError = callToolResult.IsError
+	}
+
+	slog.Info("Tool called", "id", id, "result", result, "is_error", isError, "session_id", getSessionID(ctx))
 }
 
 // GetLoggingHooks returns the MCP server hooks that log session, resource,
