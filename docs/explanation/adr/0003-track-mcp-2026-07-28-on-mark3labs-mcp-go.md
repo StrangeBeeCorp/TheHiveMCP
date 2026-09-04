@@ -1,9 +1,10 @@
 # ADR-0003 - Track MCP 2026-07-28 on mark3labs/mcp-go v1.0.0, rather than migrating to the official Go SDK
 
 - Status: proposed
-- Date: September 3, 2026
+- Date: September 4, 2026
 - Deciders: TheHiveMCP maintainers
-- Related: DL-6920, [MCP 2026-07-28 changelog](https://modelcontextprotocol.io/specification/2026-07-28/changelog)
+- Related: DL-6920, [#170](https://github.com/StrangeBee/TheHiveMCP/issues/170),
+  [MCP 2026-07-28 changelog](https://modelcontextprotocol.io/specification/2026-07-28/changelog)
 
 ## Context and problem statement
 
@@ -107,8 +108,10 @@ And a modern session does report the client's capability, so the gate takes its 
 Consequently, over Streamable HTTP, a modern connection from an elicitation-capable client **fails every modifying operation**. (The qualifier matters: over the
 in-process transport the same call succeeds — see [the next section but one](#the-breakage-is-transport-specific-and-the-integration-suite-is-blind-to-it).) The
 error is not `server.ErrElicitationNotSupported`, so it does not even take the deliberate fail-closed branch (DL-6005) — it falls through to the generic
-`elicitation request failed:` wrapper. Porting the gate to MRTR is therefore a hard prerequisite to advertising modern support, exactly as the earlier revision
-of this ADR concluded. What changed is that it is now the _only_ substantial work, rather than one step in a whole-SDK migration.
+`elicitation request failed:` wrapper.
+
+This is the _only_ thing that breaks. Everything else about the modern path works untouched, which is what makes the resolution below possible: **the
+confirmation layer is removed rather than ported to MRTR** (see [Decision](#decision) and [#170](https://github.com/StrangeBee/TheHiveMCP/issues/170)).
 
 ### End to end on the shipped binary, both eras
 
@@ -197,31 +200,53 @@ bump that leaves every handler, tool and resource untouched and is verified gree
 complete until the container suite passes. When two options reach the same protocol, the cheap one wins, and no argument from the earlier revision survives the
 release of v1.0.0 — its case rested on `mcp-go` not having the revision.
 
-Sequence the work in two independent changes:
+**Remove the elicitation confirmation layer as part of the bump; do not port it to MRTR.** Recorded as
+[#170](https://github.com/StrangeBee/TheHiveMCP/issues/170), to be reconsidered if MRTR earns the client adoption elicitation never did.
 
-1. **The bump, fenced to legacy** (v0.43.1 → v1.0.0, the three files above, plus `server.WithStreamableHTTPProtocolVersions(mcp.LegacyProtocolVersions()...)` on
-   the transport). Small, reviewable, and carries no protocol behaviour change for existing clients, which the SDK's own conformance archive pins. Landable on
-   its own.
-2. **The MRTR port of the confirmation gate**, plus the Streamable HTTP coverage that would have caught the gap, and only then lifting the fence.
+This is a product decision, and it rests on adoption rather than on protocol mechanics. Elicitation has been available for a long time and remains
+near-unsupported: our own README records that GitHub Copilot implements it and that most clients, Claude Desktop included, do not. Real-world use has been close
+to nil, and the feedback we have is negative. There is no reason to expect MRTR to land differently in the short term.
 
-**The fence belongs in step 1, not in a contingency.** An earlier revision of this ADR made it the fallback for "if step 2 cannot follow closely". The
-verification above argues it should be the default, for two reasons. First, an unfenced bump ships a state in which every modern elicitation-capable client
-fails every write, and nothing in our test suite reports it. Second, fencing to legacy keeps us on the code path `mcp-go` pins byte-for-byte with its
-`legacy_unchanged.txtar` conformance archive, which is the mature half of a library whose modern half is days old and already known to contain the deadlock
-documented above. Fencing therefore decouples _becoming current_ — 20 releases of unrelated fixes, no longer two revisions behind — from _serving the modern
-protocol_, which is the part that still needs design work. The cost of the fence is one line and a behaviour modern clients already handle: they negotiate down.
+Crucially, it is not the security boundary. Authorisation is the caller's TheHive API key and the permissions configuration; confirmation is one optional layer
+above both, and clients that do not advertise the capability already write unconfirmed today. Removing it does not widen what any principal may do — it removes
+a prompt most clients never displayed. Meanwhile porting it is the single most expensive and most security-sensitive piece of the upgrade: MRTR inverts when the
+server must know confirmation is needed, and `requestState` travels through the client, so it must be signed or the confirmation is forgeable and therefore
+decorative. That is a design worth doing carefully for a feature people use, and hard to justify for one they do not.
+
+Sequence the work in three changes:
+
+1. **The bump, with elicitation removed, fenced to legacy** (v0.43.1 → v1.0.0, the three files above, minus the confirmation layer, plus
+   `server.WithStreamableHTTPProtocolVersions(mcp.LegacyProtocolVersions()...)` on the transport). Removing the layer must include dropping
+   `server.WithElicitation()`, so the capability is no longer advertised — advertising what we do not implement is the bug fixed in #168.
+2. **Streamable HTTP coverage on both eras**, which does not exist today and is why this breakage was invisible.
+3. **Lift the fence**, as its own reviewable, revertible commit.
+
+**Why keep the fence at all, once elicitation is gone?** With the layer removed there is no known modern-path regression — verified: a modern client advertising
+no elicitation creates a case successfully against a live TheHive. The fence is therefore no longer protection against a known fault, and step 1 could
+reasonably ship unfenced. It is retained for one narrower reason: the coverage in step 2 does not exist yet, so nothing would tell us if the modern path
+regressed. Fencing keeps us on the code path `mcp-go` pins byte-for-byte with its `legacy_unchanged.txtar` conformance archive — the mature half of a library
+whose modern half is days old and already known to contain the deadlock documented above — until we can actually observe the other one. It costs one line, and
+modern clients simply negotiate down. Shipping step 1 unfenced is a defensible alternative if the coverage lands alongside it.
 
 ## Consequences
 
-### The fence is what makes step 1 safe to land alone
+### Deployments using an elicitation-capable client lose their confirmation prompts
 
-An unfenced bump ships a real regression: a modern client that advertises elicitation gets an error on every write, over the transport we deploy. Nothing in
-tier-1 clients shipping today reaches us that way, but "no current client does this" is a weak guarantee to rest on when the alternative costs one line — and
-when, as recorded above, our own suite cannot tell us the day it stops being true.
+This is the real user-visible cost of the decision, and it must not be discovered in production. For the minority running a client that implements elicitation —
+GitHub Copilot, in practice — create, update and delete stop prompting. The DL-6005 fail-closed behaviour goes with it: there is no longer an advertised prompt
+that can fail to complete, so there is nothing to fail closed on.
 
-With the fence, the server advertises legacy versions only, modern clients negotiate down cleanly, and there is no window at all. What is deferred is not
-correctness but reach: until step 2, TheHiveMCP does not serve `2026-07-28`, and `server/discover` is not offered. That is the honest trade, and it is the same
-posture we have today on v0.43.1 — with 20 releases of fixes and none of the drift.
+Anyone who relied on the prompt should restrict the permissions configuration or scope the TheHive API key, which were always the actual controls. This needs a
+clear CHANGELOG entry and a release note, plus removal of the README and `docs/reference/tools/manage-entities.md` sections that promise the behaviour.
+
+### The fence buys observability, not correctness
+
+Once elicitation is gone there is no known modern-path fault to fence against. What the fence still buys is time: until the Streamable HTTP coverage in step 2
+exists, we have no instrument that would notice a modern-path regression, and the in-process suite will keep reporting green regardless. Fencing holds us on the
+conformance-pinned legacy path until that instrument exists.
+
+What is deferred is reach, not correctness: until step 3, TheHiveMCP does not serve `2026-07-28` and does not offer `server/discover`. That is the same posture
+as today on v0.43.1 — with 20 releases of fixes and none of the drift.
 
 ### We are choosing a community SDK over the reference implementation, knowingly
 
@@ -252,8 +277,10 @@ This is much less of a risk for a bump than it would have been for a rewrite, bu
 skippable. It has been run: 348 tests, zero failures, on v0.43.1 and v1.0.0 alike.
 
 That result must not be over-read. Because the suite is in-process, it exercises the legacy semantics of the confirmation gate no matter which protocol version
-it negotiates, so it certifies the fenced configuration and nothing beyond it. Step 2 cannot be signed off by the suite as it stands; it needs the Streamable
-HTTP coverage named below, and an end-to-end run against the real binary of the kind recorded in [Verification](#verification).
+it negotiates, so it certifies the fenced configuration and nothing beyond it. Removing the gate narrows the gap — with no server-initiated requests left, the
+two transports stop diverging on the one behaviour that separated them — but it does not close it: the suite still never exercises Streamable HTTP. Lifting the
+fence cannot be signed off by the suite as it stands; it needs the coverage named below, and an end-to-end run against the real binary of the kind recorded in
+[Verification](#verification).
 
 ### `hive://config/*` resource output may shift on modern connections
 
@@ -275,7 +302,7 @@ justification that the maintenance argument alone does not carry.
 
 **Bump to v1.0.0 but keep serving legacy only.** Adopted as step 1, not rejected — this is the fence. It is a waypoint rather than a destination: held
 indefinitely it would take the upgrade's cost without its headline benefit, since the point of reaching v1.0.0 is eventually to serve `2026-07-28`. Its value is
-that it banks the 20 releases of fixes immediately, at zero protocol risk, while the MRTR work proceeds on its own schedule.
+that it banks the 20 releases of fixes immediately, at zero protocol risk, while the Streamable HTTP coverage is written.
 
 **Stay on v0.43.1.** Rejected. It was defensible while the alternative was a rewrite; it is not defensible against an 8-line bump. It also leaves us two
 revisions behind (2025-11-25 and 2026-07-28), and forgoes the 20 intervening releases of unrelated fixes.
@@ -291,27 +318,32 @@ Three changes were prototyped alongside this investigation and **rejected as pre
   change has no effect until then and belongs with the work that enables it.
 - **Consolidating the logging correlation keys.** The `session_id` placeholder only becomes noise once protocol sessions are gone, and it stays meaningful for
   as long as legacy clients are served — which, per the dual-era design, is indefinitely. Revisit only if the legacy path is retired.
-- **Moving write confirmation out of the `http.RoundTripper`.** No longer premature: it is step 2, and the verification above shows why it is required rather
-  than merely tidy. It should still not be done as a speculative refactor ahead of the bump, because MRTR semantics determine its shape.
+- **Moving write confirmation out of the `http.RoundTripper`.** Overtaken: the confirmation layer is being deleted rather than relocated, so the refactor has no
+  subject. If [#170](https://github.com/StrangeBee/TheHiveMCP/issues/170) is ever taken up, this becomes live again — and MRTR semantics, not tidiness, should
+  determine its shape.
 
-### Elicitation is an optional layer, by design
+### Elicitation was an optional layer, by design — which is what makes removing it defensible
 
-Stated explicitly because step 2 passes through this code. When a client does not advertise `elicitation`, modifying requests proceed unconfirmed. **That is
-intentional, not a defect.** Authorisation is the permissions configuration and the caller's TheHive API key; elicitation is one optional convenience layer
-above that, and clients manage approval in their own ways. `TestRoundTrip_NoCapabilityProceeds` records the reasoning.
+When a client does not advertise `elicitation`, modifying requests already proceed unconfirmed. **That is intentional, not a defect.** Authorisation is the
+permissions configuration and the caller's TheHive API key; elicitation is one optional convenience layer above both, and clients manage approval in their own
+ways. `TestRoundTrip_NoCapabilityProceeds` records the reasoning.
 
-The MRTR port must preserve it. Turning a missing client capability into a refusal would change the security posture of every deployment using a non-elicitation
-client — a product decision, not part of a protocol migration. Note that this cuts both ways after the bump: the current failure mode for modern
-elicitation-capable clients is an _accidental_ refusal, arising from an SDK error that is not `ErrElicitationNotSupported`, not from a deliberate policy. Step 2
-replaces the accident with the intended behaviour on both eras.
+That property is precisely why the layer can be dropped rather than ported. Removing it does not change what any principal is permitted to do; it generalises
+the unconfirmed path that most clients were already on. What would have been a genuine security-posture change is the opposite move — turning a missing
+capability into a refusal — and that is not what is happening here.
+
+One honest note on what is lost. Before this decision, the modern-client failure was an _accidental_ refusal: an SDK error that is not
+`ErrElicitationNotSupported`, not a deliberate policy. Removing the layer resolves the accident by deleting the policy along with it, rather than by expressing
+the policy correctly on both eras. That is the trade [#170](https://github.com/StrangeBee/TheHiveMCP/issues/170) exists to revisit.
 
 ## Work, gated on accepting this ADR
 
 1. Bump `mcp-go` to v1.0.0: type-assert in `onAfterCallToolHook`, replace the two `&struct{}{}` capability literals, `go mod tidy`. Add
    `server.WithStreamableHTTPProtocolVersions(mcp.LegacyProtocolVersions()...)` in `StartHTTPServer`, so the bump lands fenced. Validate against a live TheHive.
-2. Port the confirmation gate from `http.RoundTripper` to the tool handler, expressed as MRTR input requests via `NewInputRequestBuilder` /
-   `server.ElicitationResponse`. Sign `requestState` — HMAC or AEAD over the authenticated principal, a short TTL, and a digest of the originating request,
-   since it travels through the client and the spec treats it as attacker-controlled. Preserve today's behaviour for clients that cannot elicit.
+2. Remove the confirmation layer in the same change: delete `internal/utils/elicitation_transport.go` and its test, stop wrapping the HTTP client in
+   `bootstrap/common.go`, and drop `server.WithElicitation()` from both `bootstrap/server.go` and `bootstrap/inprocess.go` so the capability is no longer
+   advertised. Drop the now-unused elicitation and sampling handlers from `internal/testutils/mcp_client.go`. Update the README section,
+   `docs/reference/tools/manage-entities.md`, and the CHANGELOG — the behaviour change is user-visible and must be announced, not discovered.
 3. Add coverage asserting both a modern and a legacy client work **over Streamable HTTP**, not only in-process — the in-process-only suite is what hid this
    breakage. Assert the modern write path explicitly, so removing the fence cannot pass silently. The spike tests above are the starting point.
 4. Remove the fence, as the last step and on its own commit, so the change that begins serving `2026-07-28` is reviewable in isolation and revertible by itself.
