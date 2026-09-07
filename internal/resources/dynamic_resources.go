@@ -155,19 +155,29 @@ func intArgument(req mcp.ReadResourceRequest, name string, fallback int) (int, e
 			return fallback, nil
 		}
 
-		parsed, err := strconv.Atoi(value)
-		if err != nil {
-			return 0, fmt.Errorf("%s must be an integer, got %q", name, value)
-		}
-
-		return parsed, nil
+		return parseIntArgument(name, value)
 	case float64:
-		return int(value), nil
+		// Rendered and re-parsed rather than truncated with int(value), so a
+		// JSON number is held to the same contract as a numeric string: 1.9,
+		// NaN, +Inf and 1e30 are rejected instead of silently becoming 1, or an
+		// implementation-defined value for the last three. FormatFloat with
+		// precision -1 renders a whole float exactly ("2", never "2.0").
+		return parseIntArgument(name, strconv.FormatFloat(value, 'f', -1, 64))
 	case int:
 		return value, nil
 	default:
 		return 0, fmt.Errorf("%s must be an integer, got %T", name, raw)
 	}
+}
+
+// parseIntArgument parses one already-stringified query parameter value.
+func parseIntArgument(name, value string) (int, error) {
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be an integer, got %q", name, value)
+	}
+
+	return parsed, nil
 }
 
 // paginationArguments resolves the offset/limit window for a worker catalog.

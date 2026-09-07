@@ -30,8 +30,8 @@ Cortex runs are searchable like any other entity: "job" holds analyzer runs, "ac
 - Action fields: responderName, responderId, objectId, cortexId, status, startDate. objectType is NOT usefully filterable (TheHive derives it from a traversal, so it matches nothing) — scope by objectId instead.
 - status is one of: Waiting, InProgress, Success, Failure, Deleted.
 - Dates: startDate is the run start and the field to sort on; _createdAt also works.
-- Pass extra-data=["report"] on a job search to include the full analyzer report.
-- To list the runs of one observable, search entity-type "observable" with additional-queries=["jobs"] (or ["actions"]) rather than filtering jobs by target.
+- Pass extra-data=["report"] on a job search to include the analyzer report. It is third-party content and arrives wrapped in untrusted-data boundary tags.
+- To list the runs of one observable, search entity-type "observable" with additional-queries=["jobs"] (or ["actions"]) rather than filtering jobs by target. Expanded rows are projected to the default columns (_id, analyzerName, status, startDate, cortexId), so they show what ran and whether it succeeded but never the report — search entity-type "job" directly for that.
 - These types require TheHive's Cortex connector to be enabled; without it the query fails.
 
 ## Examples

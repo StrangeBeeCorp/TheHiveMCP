@@ -73,30 +73,57 @@ func (t *Tool) Handle(ctx context.Context, req mcp.CallToolRequest, params Entit
 	return NewSearchEntitiesResult(results, params, rawFilters)
 }
 
-// dropUnrequestedJobReport strips the analyzer report TheHive attaches to every
-// job row whether or not it was asked for. Excluding it server-side does not work
-// — exclude_fields has no effect on a job's extraData — so it is dropped here.
+const (
+	// fieldExtraData is the result key holding optional, opt-in fields.
+	fieldExtraData = "extraData"
+	// fieldReport is the analyzer report key, both the extra-data name a caller
+	// asks for and the key it arrives under.
+	fieldReport = "report"
+)
+
+// dropUnrequestedJobReport drops the analyzer report TheHive attaches to every
+// job row whether or not it was asked for, and types the report as untrusted
+// when the caller did ask. Excluding it server-side does not work —
+// exclude_fields has no effect on a job's extraData — so both happen here.
 //
-// Two reasons it must go: the report embeds the observables the analyzer
+// Two reasons it goes by default: the report embeds the observables the analyzer
 // extracted, which measured ~8KB per row on a real deployment and swamps a
 // chronological page of history; and it is third-party content, so carrying it
 // into context unasked widens the prompt-injection surface for no benefit.
 // extra-data ["report"] opts back in and returns the full report.
+//
+// A report that IS returned must be typed utils.UntrustedSubtree. The boundary
+// allowlist classifies TheHive's own schema field names and matches them at
+// every nesting depth, so a Cortex report — arbitrary third-party JSON that
+// reuses names like "status", "objectId" or "hashes" — would otherwise emit
+// attacker-controlled values with no boundary tags (DL-6703).
+// execute-automation types its own report the same way.
 func dropUnrequestedJobReport(params EntitiesParams, results []map[string]any) {
-	if params.EntityType != types.EntityTypeJob || slices.Contains(params.ExtraData, "report") {
+	if params.EntityType != types.EntityTypeJob {
 		return
 	}
 
+	keepReport := slices.Contains(params.ExtraData, fieldReport)
+
 	for _, row := range results {
-		extraData, isObject := row["extraData"].(map[string]any)
+		extraData, isObject := row[fieldExtraData].(map[string]any)
 		if !isObject {
 			continue
 		}
 
-		delete(extraData, "report")
+		if keepReport {
+			report, isReportObject := extraData[fieldReport].(map[string]any)
+			if isReportObject {
+				extraData[fieldReport] = utils.UntrustedSubtree(report)
+			}
+
+			continue
+		}
+
+		delete(extraData, fieldReport)
 
 		if len(extraData) == 0 {
-			delete(row, "extraData")
+			delete(row, fieldExtraData)
 		}
 	}
 }
@@ -249,7 +276,7 @@ func (t *Tool) getExcludedFields(entityType string, keptColumns []string, extraD
 				continue
 			}
 
-			if field == "extraData" && len(extraData) > 0 {
+			if field == fieldExtraData && len(extraData) > 0 {
 				continue
 			}
 

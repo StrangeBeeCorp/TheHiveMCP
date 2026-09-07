@@ -238,7 +238,9 @@ Enrich results with related information:
 ```
 
 Cases, alerts and tasks also support `actions` (responder runs). Observables support `jobs` (analyzer runs) and `actions`, which is the direct way to answer
-"what enrichment already ran on this observable, and what did it return?":
+"what enrichment already ran on this observable?". Expansion results are projected through the entity's default columns, so a `jobs` row carries `_id`,
+`analyzerName`, `status`, `startDate` and `cortexId` — enough to see what ran and whether it succeeded, but not what it returned. For report content, search
+`entity-type: "job"` directly with `extra-data: ["report"]`:
 
 ```json
 {

@@ -58,10 +58,13 @@ var ValidEntityTypes = []string{
 // Exported so the schema tests can check every key against the struct.
 var EntitiesParamConstraints = map[string]tools.SchemaConstraint{
 	"entity-type": {Enum: ValidEntityTypes},
-	// job and action default to startDate instead; see types.DefaultSortField.
-	// A JSON Schema default is a single value, so it states the general case and
-	// the sort-by description carries the exception.
-	"sort-by":    {Default: types.GeneralDefaultSortField},
+	// sort-by deliberately advertises NO default. The applied default is
+	// per-entity-type (types.DefaultSortField: startDate for job and action,
+	// _createdAt otherwise) and a JSON Schema default is a single value, so any
+	// value here would be a false claim for two of the ten types. Worse, a
+	// client that materializes defaults would send _createdAt explicitly and
+	// silently defeat the per-type default it was trying to honour. The rule
+	// lives in the sort-by description instead, which is what a model reads.
 	"sort-order": {Enum: []string{SortOrderAsc, SortOrderDesc}, Default: SortOrderDesc},
 	"limit":      {Default: DefaultSearchLimit},
 }

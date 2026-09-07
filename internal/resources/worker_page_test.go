@@ -2,6 +2,7 @@ package resources
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
@@ -218,5 +219,37 @@ func TestCatalogsRejectBadPagingBeforeFetching(t *testing.T) {
 		require.Error(t, err)
 		assert.NotContains(t, err.Error(), "TheHive client",
 			"paging was validated after the fetch: the request reached the client")
+	})
+}
+
+// A JSON number must be held to the same contract as a numeric string. int(1.9)
+// used to truncate to 1 while "1.9" was rejected, and int() on a non-finite or
+// out-of-range float is implementation-defined.
+func TestIntArgumentRejectsNonIntegerNumbers(t *testing.T) {
+	t.Parallel()
+
+	rejected := map[string]any{
+		"fractional":    1.9,
+		"negative zero": -0.5,
+		"not a number":  math.NaN(),
+		"infinity":      math.Inf(1),
+		"out of range":  1e30,
+	}
+
+	for name, value := range rejected {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := intArgument(requestWithArguments(map[string]any{argLimit: value}), argLimit, defaultWorkerPageLimit)
+			require.Error(t, err, "%v must not be accepted as an integer", value)
+		})
+	}
+
+	t.Run("whole float is accepted", func(t *testing.T) {
+		t.Parallel()
+
+		parsed, err := intArgument(requestWithArguments(map[string]any{argLimit: float64(25)}), argLimit, defaultWorkerPageLimit)
+		require.NoError(t, err)
+		assert.Equal(t, 25, parsed)
 	})
 }

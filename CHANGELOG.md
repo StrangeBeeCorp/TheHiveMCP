@@ -67,6 +67,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`search-entities` advertises exactly the entity types it accepts.** The advertised enum and the list the handler validates against were two hand-maintained
   slices; both now derive from one, and a test asserts the wire schema agrees with the code path that enforces it. A type accepted by the handler but missing
   from the enum is invisible to clients, which is indistinguishable from unsupported.
+- **A requested analyzer report is marked untrusted.** `extra-data: ["report"]` on a job search returned the Cortex report as a plain object, so the
+  untrusted-data boundary allowlist — which classifies TheHive's own field names at every nesting depth — emitted attacker-controlled values sitting under
+  trusted-looking report keys (`status`, `objectId`, `hashes`) with no boundary tags. The report is now typed `utils.UntrustedSubtree`, as `execute-automation`
+  already typed its own (DL-6703).
+- **Numeric catalog parameters are validated consistently.** `?limit=1.9` passed as a JSON number was truncated to `1` while the string `"1.9"` was rejected,
+  and a non-finite or out-of-range float produced an implementation-defined value. Both forms are now parsed identically.
 - **Analyzers could go missing from the catalog.** `hive://metadata/automation/analyzers` fetched a hard-coded first 100 analyzers and applied the permission
   allow-list afterwards, so allowed analyzers positioned beyond that window were silently dropped — a restrictive allow-list could return an empty catalog on a
   Cortex install with more than 100 analyzers. The full catalog is now fetched and permission-filtered before any paging is applied.

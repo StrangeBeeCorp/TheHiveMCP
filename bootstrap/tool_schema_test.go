@@ -318,7 +318,9 @@ func TestToolSchemas_DefaultsSurviveInference(t *testing.T) {
 
 	expected := map[string]map[string]any{
 		toolSearchEntities: {
-			"sort-by":    "_createdAt",
+			// sort-by is absent on purpose: its applied default is
+			// per-entity-type, so advertising one value would be wrong for job
+			// and action. TestSearchEntitiesSortByAdvertisesNoDefault pins that.
 			"sort-order": "desc",
 			"limit":      float64(10),
 		},
@@ -386,4 +388,28 @@ func TestSearchEntityTypes_AdvertisedEnumMatchesValidation(t *testing.T) {
 		require.NoError(t, err, "advertised entity-type %q is rejected by ValidateParams", entityType)
 		assert.NotEmpty(t, params.SortBy, "advertised entity-type %q gets no default sort field", entityType)
 	}
+}
+
+// sort-by must advertise no default.
+//
+// The applied default depends on the entity type (types.DefaultSortField gives
+// startDate for job and action, _createdAt otherwise), so a single advertised
+// value would be a false claim for two of the ten types. It is also actively
+// harmful: a client that materializes schema defaults would send _createdAt
+// explicitly, and ValidateParams only applies the per-type default when the
+// caller omits the field. The rule is documented in the parameter description.
+func TestSearchEntitiesSortByAdvertisesNoDefault(t *testing.T) {
+	t.Parallel()
+
+	properties := propertiesOf(t, search.NewSearchTool().Definition())
+
+	property, ok := properties["sort-by"].(map[string]any)
+	require.True(t, ok, "search-entities has no sort-by property")
+
+	assert.NotContains(t, property, "default",
+		"sort-by advertises a default, but the applied default is per-entity-type")
+
+	description, _ := property["description"].(string)
+	assert.Contains(t, description, "startDate",
+		"sort-by advertises no default, so its description must state the per-type rule")
 }
