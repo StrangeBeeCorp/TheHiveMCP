@@ -1,11 +1,11 @@
 BUILD_DATE := $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 GIT_COMMIT=$(shell git rev-parse HEAD)
 VERSION=$(shell git describe --tags 2> /dev/null || echo "v0.0.0-${GIT_COMMIT}")
-GO_IMAGE := golang:1.26.5-alpine
+GO_IMAGE := golang:1.26.8-alpine
 # The race detector requires cgo (a C toolchain), which the Alpine GO_IMAGE lacks.
 # GO_IMAGE_CGO is the Debian-based image used by `make test-race`; it ships gcc, so
 # `-race` builds there with CGO_ENABLED=1.
-GO_IMAGE_CGO := golang:1.26.5
+GO_IMAGE_CGO := golang:1.26.8
 # jq and yq run the help-xml pipeline (JSON assembly + JSON→XML). Pinned by digest
 # so `make help-xml` needs no host jq/yq — everything stays in Docker.
 JQ_IMAGE := ghcr.io/jqlang/jq@sha256:b9c68867e5766576263a222e91db3de422d802069c7af70440e667a95344e486

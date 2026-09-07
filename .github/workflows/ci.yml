@@ -139,7 +139,7 @@ jobs:
           # in go.mod). Combined with the job-level GOTOOLCHAIN=local, this keeps
           # the toolchain out of GOMODCACHE so the module-cache restore doesn't
           # collide with it.
-          go-version: '1.26.5'
+          go-version: '1.26.8'
 
       - name: Package MCPB (smoke-test)
         if: steps.changes.outputs.run == 'true'
