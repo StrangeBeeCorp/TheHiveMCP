@@ -31,10 +31,13 @@ func (t *Tool) Handler() server.ToolHandlerFunc {
 // HasUntrustedData reports that this tool's results may contain untrusted, user-generated data.
 func (t *Tool) HasUntrustedData() bool { return true }
 
-// entityParamConstraints carries the enumerations that EntityParams can no
-// longer express as struct tags. Kept beside the definition so the permitted
+// EntityParamConstraints carries the enumerations that EntityParams can no
+// longer express as struct tags, kept beside the definition so the permitted
 // values sit next to the tool that accepts them.
-var entityParamConstraints = map[string]tools.SchemaConstraint{
+//
+// Exported so the schema tests can check every key against the struct: a
+// constraint naming a field that no longer exists is otherwise a silent no-op.
+var EntityParamConstraints = map[string]tools.SchemaConstraint{
 	"operation": {Enum: []string{
 		OperationCreate, OperationUpdate, OperationDelete, OperationComment,
 		OperationPromote, OperationMerge, OperationApplyTemplate,
@@ -49,7 +52,7 @@ func (t *Tool) Definition() mcp.Tool {
 	return mcp.NewTool(
 		t.Name(),
 		mcp.WithDescription(ManageToolDescription),
-		tools.WithInputSchemaConstraints[EntityParams](entityParamConstraints),
+		tools.WithInputSchemaConstraints[EntityParams](EntityParamConstraints),
 		mcp.WithOutputSchema[EntityResult](),
 	)
 }

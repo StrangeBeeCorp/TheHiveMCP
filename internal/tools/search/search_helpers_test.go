@@ -10,7 +10,8 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
 )
 
-// Admin client with a sampling handler that fails if hit: search-entities must never sample.
+// Admin client. Sampling is no longer wired up at all — the client advertises
+// no such capability — so search-entities could not reach an LLM if it tried.
 func newSearchClient(t *testing.T) *client.Client {
 	t.Helper()
 	return testutils.GetMCPTestClient(t)

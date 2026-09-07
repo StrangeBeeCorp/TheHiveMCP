@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools/execute_automation"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools/manage"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools/resource"
@@ -227,6 +228,117 @@ func TestToolSchemas_RequiredParameters(t *testing.T) {
 			}
 
 			assert.ElementsMatch(t, want, got, "tool %q advertises the wrong required parameters", name)
+		})
+	}
+}
+
+// constraintsUnderTest pairs each tool with the constraint map its definition
+// applies, so the tests can check the maps themselves rather than only the
+// handful of values another test happens to spell out.
+func constraintsUnderTest() map[string]map[string]tools.SchemaConstraint {
+	return map[string]map[string]tools.SchemaConstraint{
+		toolManageEntities:    manage.EntityParamConstraints,
+		toolSearchEntities:    search.EntitiesParamConstraints,
+		toolExecuteAutomation: execute_automation.ExecuteAutomationParamConstraints,
+	}
+}
+
+// A constraint naming a property the struct does not declare is silently
+// skipped: WithInputSchemaConstraints logs it and moves on, so a typo or a
+// renamed field would quietly drop an enum or a default from the wire schema
+// while every other test still passed.
+//
+// This is the drift guard that schema.go's documentation promises.
+func TestToolSchemas_ConstraintsMatchTheStruct(t *testing.T) {
+	t.Parallel()
+
+	subjects := toolsUnderTest()
+
+	for name, constraints := range constraintsUnderTest() {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			properties := propertiesOf(t, subjects[name].tool)
+
+			for property := range constraints {
+				assert.Contains(t, properties, property,
+					"tool %q constrains %q, which its parameters struct does not declare", name, property)
+			}
+		})
+	}
+}
+
+// Every constraint must reach the advertised schema. TestToolSchemas_Enumerations
+// pins the values callers depend on most, but only for the keys it lists; this
+// asserts that no constraint of either kind is dropped — the defaults for
+// sort-by, sort-order and limit included.
+func TestToolSchemas_ConstraintsReachTheWire(t *testing.T) {
+	t.Parallel()
+
+	subjects := toolsUnderTest()
+
+	for name, constraints := range constraintsUnderTest() {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			properties := propertiesOf(t, subjects[name].tool)
+
+			for propertyName, constraint := range constraints {
+				property, ok := properties[propertyName].(map[string]any)
+				require.True(t, ok, "tool %q has no property %q", name, propertyName)
+
+				if len(constraint.Enum) > 0 {
+					advertised, hasEnum := property["enum"].([]any)
+					require.True(t, hasEnum, "tool %q parameter %q advertises no enum", name, propertyName)
+					assert.Len(t, advertised, len(constraint.Enum),
+						"tool %q parameter %q advertises a different number of permitted values", name, propertyName)
+				}
+
+				if constraint.Default != nil {
+					// Presence only: this test reads its expectation from the
+					// constraint, so it cannot judge the value. The values are
+					// pinned independently in TestToolSchemas_DefaultsSurviveInference.
+					assert.Contains(t, property, "default",
+						"tool %q parameter %q advertises no default, but one is constrained", name, propertyName)
+				}
+			}
+		})
+	}
+}
+
+// The advertised defaults, written out rather than read back from the
+// constraint maps.
+//
+// TestToolSchemas_ConstraintsReachTheWire can only prove a default is present:
+// it takes its expectation from the same map it is checking, so changing the
+// constraint changes both sides and a wrong value passes. These are the values
+// callers actually receive, so they are stated here independently.
+func TestToolSchemas_DefaultsSurviveInference(t *testing.T) {
+	t.Parallel()
+
+	expected := map[string]map[string]any{
+		toolSearchEntities: {
+			"sort-by":    "_createdAt",
+			"sort-order": "desc",
+			"limit":      float64(10),
+		},
+	}
+
+	subjects := toolsUnderTest()
+
+	for name, fields := range expected {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			properties := propertiesOf(t, subjects[name].tool)
+
+			for field, want := range fields {
+				property, ok := properties[field].(map[string]any)
+				require.True(t, ok, "tool %q has no property %q", name, field)
+
+				assert.Equal(t, want, property["default"],
+					"tool %q parameter %q advertises the wrong default", name, field)
+			}
 		})
 	}
 }
