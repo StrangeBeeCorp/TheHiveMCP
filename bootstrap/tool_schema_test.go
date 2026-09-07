@@ -159,7 +159,7 @@ func TestToolSchemas_EnumerationsSurviveInference(t *testing.T) {
 			paramEntityType: {entityCase, entityAlert, entityTask, entityObs, "procedure", "case-template", "page"},
 		},
 		toolSearchEntities: {
-			paramEntityType: {entityAlert, entityCase, entityTask, entityObs, "procedure", "pattern", "case-template", "page"},
+			paramEntityType: {entityAlert, entityCase, entityTask, entityObs, "procedure", "pattern", "case-template", "page", "job", "action"},
 			"sort-order":    {"asc", "desc"},
 		},
 		toolExecuteAutomation: {
@@ -318,7 +318,9 @@ func TestToolSchemas_DefaultsSurviveInference(t *testing.T) {
 
 	expected := map[string]map[string]any{
 		toolSearchEntities: {
-			"sort-by":    "_createdAt",
+			// sort-by is absent on purpose: its applied default is
+			// per-entity-type, so advertising one value would be wrong for job
+			// and action. TestSearchEntitiesSortByAdvertisesNoDefault pins that.
 			"sort-order": "desc",
 			"limit":      float64(10),
 		},
@@ -341,4 +343,73 @@ func TestToolSchemas_DefaultsSurviveInference(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The advertised entity-type enum must match exactly what the handler accepts.
+//
+// These were two hand-maintained lists — the enum in search.EntitiesParamConstraints
+// and the slice ValidateParams checks — and adding an entity type to one without
+// the other fails in whichever direction the drift went: a type accepted by the
+// handler but absent from the enum is invisible to clients, and a type in the
+// enum the handler rejects is advertised as supported and errors on use. Both
+// now read from search.ValidEntityTypes; this asserts the wire schema agrees
+// with the code path that enforces it, whatever they are built from.
+func TestSearchEntityTypes_AdvertisedEnumMatchesValidation(t *testing.T) {
+	t.Parallel()
+
+	searchTool := search.NewSearchTool()
+	properties := propertiesOf(t, searchTool.Definition())
+
+	property, ok := properties[paramEntityType].(map[string]any)
+	require.True(t, ok, "search-entities has no %q property", paramEntityType)
+
+	raw, ok := property["enum"].([]any)
+	require.True(t, ok, "search-entities parameter %q advertises no enum", paramEntityType)
+
+	advertised := make([]string, 0, len(raw))
+
+	for _, value := range raw {
+		str, isString := value.(string)
+		require.True(t, isString, "enum value %v is not a string", value)
+
+		advertised = append(advertised, str)
+	}
+
+	assert.ElementsMatch(t, search.ValidEntityTypes, advertised,
+		"the advertised entity-type enum and the types ValidateParams accepts have drifted")
+
+	// Every advertised value must survive validation, and validation must apply
+	// a sort default for it — a type reachable from the schema but missing a
+	// default sorts on a column TheHive may not have.
+	for _, entityType := range advertised {
+		params := search.EntitiesParams{EntityType: entityType}
+
+		err := searchTool.ValidateParams(&params)
+		require.NoError(t, err, "advertised entity-type %q is rejected by ValidateParams", entityType)
+		assert.NotEmpty(t, params.SortBy, "advertised entity-type %q gets no default sort field", entityType)
+	}
+}
+
+// sort-by must advertise no default.
+//
+// The applied default depends on the entity type (types.DefaultSortField gives
+// startDate for job and action, _createdAt otherwise), so a single advertised
+// value would be a false claim for two of the ten types. It is also actively
+// harmful: a client that materializes schema defaults would send _createdAt
+// explicitly, and ValidateParams only applies the per-type default when the
+// caller omits the field. The rule is documented in the parameter description.
+func TestSearchEntitiesSortByAdvertisesNoDefault(t *testing.T) {
+	t.Parallel()
+
+	properties := propertiesOf(t, search.NewSearchTool().Definition())
+
+	property, ok := properties["sort-by"].(map[string]any)
+	require.True(t, ok, "search-entities has no sort-by property")
+
+	assert.NotContains(t, property, "default",
+		"sort-by advertises a default, but the applied default is per-entity-type")
+
+	description, _ := property["description"].(string)
+	assert.Contains(t, description, "startDate",
+		"sort-by advertises no default, so its description must state the per-type rule")
 }

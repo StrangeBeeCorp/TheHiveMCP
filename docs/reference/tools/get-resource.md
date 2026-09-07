@@ -83,7 +83,31 @@ get-resource(uri="hive://metadata/automation/analyzers")
 - **Get alert update schema**: `get-resource(uri="hive://schema/alert/update")`
 - **Get case documentation**: `get-resource(uri="hive://docs/entities/case")`
 - **Get available analyzers**: `get-resource(uri="hive://metadata/automation/analyzers")`
+- **Get analyzers for one observable type**: `get-resource(uri="hive://metadata/automation/analyzers?dataType=hash")`
 - **Get available responders**: `get-resource(uri="hive://metadata/automation/responders?entityType=case&entityId=~123456")`
+
+### Automation catalogs
+
+Both automation catalogs return a page: `kind`, `total` (how many the caller may use), `returned`, `offset`, `truncated`, `blockedByPolicy`, and the `workers`
+themselves. Check `truncated` before concluding a tool is unavailable, and `blockedByPolicy` before concluding the deployment has none: an empty catalog is
+usually the permissions allow-list at work, not a missing Cortex. The shipped read-only default blocks every analyzer, so `total: 0` with a non-zero
+`blockedByPolicy` means "your configuration hides these", not "they do not exist".
+
+Unknown query parameters are rejected rather than ignored, so a misspelling (`?datatype=hash`) or a parameter borrowed from the other catalog
+(`?entityType=observable` on the analyzers resource) fails loudly instead of returning the whole unfiltered catalog as if it were a filtered answer.
+
+| Parameter    | Applies to            | Description                                                                                           |
+| ------------ | --------------------- | ----------------------------------------------------------------------------------------------------- |
+| `dataType`   | analyzers             | Only analyzers accepting that observable type (`hash`, `ip`, `domain`, `url`, …). Resolved by Cortex. |
+| `entityType` | responders            | Required. Entity kind the responder acts on (`case`, `alert`, `task`, `observable`).                  |
+| `entityId`   | responders            | Required. Identifier of that entity.                                                                  |
+| `offset`     | analyzers, responders | Index of the first entry to return. Defaults to `0`.                                                  |
+| `limit`      | analyzers, responders | Page size. Defaults to `50`, capped at `500`.                                                         |
+
+`dataType` is the cheap way to answer "what can I run on this observable?" — Cortex filters server-side instead of the catalog being fetched and sifted locally.
+
+Responders are listed per entity because that path is the one applying TLP and PAP limits: a responder missing from it is not permitted on that entity, even if
+it exists in Cortex.
 
 ## Schema Organisation
 
@@ -93,7 +117,10 @@ Entity schemas are organized into three variants:
 - **Create schemas** (`hive://schema/{entity}/create`): Required and optional fields for creating new entities
 - **Update schemas** (`hive://schema/{entity}/update`): Partial fields available for updating existing entities
 
-Available entities: `alert`, `case`, `task`, `observable`, `procedure`, `pattern`, `case-template`, `page`
+Available entities: `alert`, `case`, `task`, `observable`, `procedure`, `pattern`, `case-template`, `page`, `job`, `action`
+
+`job` (Cortex analyzer runs) and `action` (Cortex responder runs) are output-only — they are produced by [`execute-automation`](execute-automation.md), not
+created directly, so they have no `/create` or `/update` variant.
 
 Example:
 

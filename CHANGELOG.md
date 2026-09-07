@@ -8,19 +8,35 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Automation history is searchable.** `search-entities` accepts two new entity types: `job` (Cortex analyzer runs) and `action` (Cortex responder runs), with
+  the same filter DSL, sorting, paging and permission scoping as every other entity. Filter on `analyzerName`, `status`, `startDate`, `cortexId` and more, and
+  pass `extra-data: ["report"]` to include an analyzer report. New `hive://schema/job` and `hive://schema/action` resources document the filterable fields.
+  These types require TheHive's Cortex connector to be enabled.
+- **Cortex runs as related data.** `additional-queries` now expands observables with `jobs` and `actions`, and cases, alerts and tasks with `actions` — the
+  direct way to answer "what enrichment already ran on this observable?" without re-running an analyzer.
+- **Analyzer discovery by observable type.** `hive://metadata/automation/analyzers` accepts a `dataType` query parameter (for example `?dataType=hash`), which
+  Cortex resolves server-side, instead of the caller fetching the whole catalog and sifting it.
+- **Paging on the automation catalogs.** Both analyzer and responder catalogs accept `offset` and `limit`, and report `total`, `returned`, `offset` and
+  `truncated` so a clipped list is no longer indistinguishable from a complete one.
+- **`blockedByPolicy` on the automation catalogs.** An empty catalog now says whether the permissions allow-list emptied it. The shipped read-only default
+  blocks every analyzer, so an out-of-the-box catalog was previously indistinguishable from "Cortex is not connected" or "this deployment has no analyzers".
+- **Unknown query parameters on the automation catalogs are rejected**, instead of being ignored. A misspelling (`?datatype=hash`) or a parameter borrowed from
+  the sibling catalog (`?entityType=observable` on the analyzers resource) used to return the whole unfiltered catalog and read as a filtered answer.
+
 ### Changed
 
 - **MCP SDK upgraded to `mark3labs/mcp-go` v1.0.0**, which implements MCP revision `2026-07-28`. No client-visible protocol change: the HTTP transport
   deliberately continues to serve the handshake-based revisions only, so clients negotiate exactly as before. Serving `2026-07-28` is a separate, later change.
   See [ADR-0003](docs/explanation/adr/0003-track-mcp-2026-07-28-on-mark3labs-mcp-go.md).
-
-### Fixed
-
-- **Tool input schemas are advertised again.** The mcp-go v1.0.0 upgrade moved schema inference to `github.com/google/jsonschema-go`, which rejects the
-  `jsonschema:"enum=...,required=true"` struct-tag syntax the parameter structs used. Inference failed silently — `mcp.WithInputSchema` writes the error to
-  stderr and returns without setting a schema — so `manage-entities`, `search-entities` and `execute-automation` each advertised **zero parameters** while
-  continuing to work when called correctly. Enumerations and defaults now live in explicit constraints applied on top of inference, and the advertised schemas
-  are asserted against their parameter structs so this cannot regress unnoticed.
+- **Automation catalog responses are now an object, not a bare array.** `hive://metadata/automation/analyzers` and `hive://metadata/automation/responders`
+  return `{kind, total, returned, offset, truncated, blockedByPolicy, workers}`; the previous array is now the `workers` field.
+- **Analyzer reports are no longer returned unasked on job searches.** TheHive attaches a partial report to every job row and `exclude_fields` does not suppress
+  it, so a chronological page of ten jobs carried ~76 KB of embedded observables — untrusted third-party content nobody requested. `search-entities` now drops
+  it unless `extra-data` includes `report`, which cut that same query to ~1.7 KB.
+- **The automation catalogs validate their arguments before calling Cortex.** A bad `offset` or `limit` is a deterministic input error, so it no longer costs a
+  full catalog fetch — nor surfaces as a connection or authentication error when both are wrong at once.
 
 ### Removed
 
@@ -40,6 +56,26 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Removed rather than ported because MCP `2026-07-28` drops server-initiated requests, and its replacement (MRTR) would require rebuilding the layer — including
   a signed `requestState`, since the token round-trips through the client — for a feature with almost no client adoption. Reconsidering it is tracked in
   [#170](https://github.com/StrangeBee/TheHiveMCP/issues/170).
+
+### Fixed
+
+- **Tool input schemas are advertised again.** The mcp-go v1.0.0 upgrade moved schema inference to `github.com/google/jsonschema-go`, which rejects the
+  `jsonschema:"enum=...,required=true"` struct-tag syntax the parameter structs used. Inference failed silently — `mcp.WithInputSchema` writes the error to
+  stderr and returns without setting a schema — so `manage-entities`, `search-entities` and `execute-automation` each advertised **zero parameters** while
+  continuing to work when called correctly. Enumerations and defaults now live in explicit constraints applied on top of inference, and the advertised schemas
+  are asserted against their parameter structs so this cannot regress unnoticed.
+- **`search-entities` advertises exactly the entity types it accepts.** The advertised enum and the list the handler validates against were two hand-maintained
+  slices; both now derive from one, and a test asserts the wire schema agrees with the code path that enforces it. A type accepted by the handler but missing
+  from the enum is invisible to clients, which is indistinguishable from unsupported.
+- **A requested analyzer report is marked untrusted.** `extra-data: ["report"]` on a job search returned the Cortex report as a plain object, so the
+  untrusted-data boundary allowlist — which classifies TheHive's own field names at every nesting depth — emitted attacker-controlled values sitting under
+  trusted-looking report keys (`status`, `objectId`, `hashes`) with no boundary tags. The report is now typed `utils.UntrustedSubtree`, as `execute-automation`
+  already typed its own (DL-6703).
+- **Numeric catalog parameters are validated consistently.** `?limit=1.9` passed as a JSON number was truncated to `1` while the string `"1.9"` was rejected,
+  and a non-finite or out-of-range float produced an implementation-defined value. Both forms are now parsed identically.
+- **Analyzers could go missing from the catalog.** `hive://metadata/automation/analyzers` fetched a hard-coded first 100 analyzers and applied the permission
+  allow-list afterwards, so allowed analyzers positioned beyond that window were silently dropped — a restrictive allow-list could return an empty catalog on a
+  Cortex install with more than 100 analyzers. The full catalog is now fetched and permission-filtered before any paging is applied.
 
 ## [1.0.0] - 2026-07-15
 

@@ -46,4 +46,8 @@ const (
 	// names for the similarity expansions.
 	querySimilarCases  = "similarCases"
 	querySimilarAlerts = "similarAlerts"
+
+	// queryActions is the additional-query name for the Cortex responder runs of
+	// an entity. Every entity type Cortex can act on supports it.
+	queryActions = "actions"
 )

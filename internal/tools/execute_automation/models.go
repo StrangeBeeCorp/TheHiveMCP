@@ -34,8 +34,14 @@ Check the execution status and retrieve results of jobs or actions.
 
 GETTING INFORMATION:
 - List available analyzers: get-resource hive://metadata/automation/analyzers
+- List analyzers for one observable type: get-resource hive://metadata/automation/analyzers?dataType=hash
 - List available responders: get-resource hive://metadata/automation/responders?entityType=case&entityId=~123
 - Read analyzer/responder documentation: get-resource hive://docs/automation/analyzers or hive://docs/automation/responders
+
+BEFORE RUNNING AN ANALYZER:
+Check what already ran instead of paying for the same lookup twice — analyzer runs are searchable.
+- Runs of one observable: search-entities entity-type="observable", filters={"_id": "~123456"}, additional-queries=["jobs"]
+- Runs of one analyzer: search-entities entity-type="job", filters={"_eq": {"_field": "analyzerName", "_value": "VirusTotal_GetReport_3_1"}}
 
 EXAMPLES:
 - Run analyzer: operation="run-analyzer", analyzer-id="VirusTotal_3_0", observable-id="~123456"
