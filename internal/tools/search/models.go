@@ -34,6 +34,12 @@ Cortex runs are searchable like any other entity: "job" holds analyzer runs, "ac
 - To list the runs of one observable, search entity-type "observable" with additional-queries=["jobs"] (or ["actions"]) rather than filtering jobs by target. Expanded rows are projected to the default columns (_id, analyzerName, status, startDate, cortexId), so they show what ran and whether it succeeded but never the report — search entity-type "job" directly for that.
 - These types require TheHive's Cortex connector to be enabled; without it the query fails.
 
+## Paging and truncation
+Results are a window over the match, never necessarily the whole of it. "count" is the number of rows on THIS page, not the size of the result set — never report it as a total.
+- "hasMore": true means the match continues past this page. Call again with offset set to the returned "nextOffset", every other parameter unchanged, to get the next page.
+- "hasMore": false means this page reaches the end of the match, so offset + count IS the total.
+- Need only the size of a match, not the rows? Use count=true — one call, exact, and unaffected by limit and offset.
+
 ## Examples
 - Critical alerts still in New status: {"_and": [{"_eq": {"_field": "severity", "_value": 4}}, {"_eq": {"_field": "status", "_value": "New"}}]}
 - High+ severity cases since a date, enriched with tasks and observables: filters={"_and": [{"_gte": {"_field": "severity", "_value": 3}}, {"_gte": {"_field": "_createdAt", "_value": "2024-07-01T00:00:00"}}]}, additional-queries=["tasks", "observables"]
@@ -53,6 +59,12 @@ const (
 	SortOrderDesc = "desc"
 
 	DefaultSearchLimit = 10
+
+	// MaxSearchOffset caps how deep a caller may page. Elasticsearch refuses a
+	// from+size window past index.max_result_window (10000 by default) with an
+	// opaque server-side error, so the same bound is enforced here where it can
+	// say what to do instead: narrow the filter rather than page further.
+	MaxSearchOffset = 10000
 )
 
 // EntitiesParams holds the input parameters of the search tool.
@@ -61,7 +73,8 @@ type EntitiesParams struct {
 	Filters           map[string]any `json:"filters,omitempty"            jsonschema_description:"TheHive filter: a JSON object with a single root operator, built from the query DSL described in this tool's description. Omit (or use {\"_any\": {}}) to match all entities. Consult hive://schema/<entity-type> for valid field names and hive://schema/filter for the full operator grammar."`
 	SortBy            string         `json:"sort-by,omitempty"            jsonschema_description:"Column to sort the results by. Defaults to _createdAt, except 'job' and 'action' searches, which default to startDate — when the Cortex run actually happened."`
 	SortOrder         string         `json:"sort-order,omitempty"         jsonschema_description:"Sort order ('asc' or 'desc'). Default is 'desc'."`
-	Limit             int            `json:"limit,omitempty"              jsonschema_description:"Number of results to return. Default is 10. Not applicable if count=true."`
+	Limit             int            `json:"limit,omitempty"              jsonschema_description:"Number of results to return per page. Default is 10, maximum 1000. Not applicable if count=true."`
+	Offset            int            `json:"offset,omitempty"             jsonschema_description:"Index of the first result to return, for paging through a result set. Default is 0. When a response has \"hasMore\": true it was truncated at the limit; call again with offset set to the \"nextOffset\" from that response to get the following page, keeping every other parameter identical. Maximum 10000 — beyond that, narrow the filter instead of paging. Not applicable if count=true."`
 	ExtraColumns      []string       `json:"extra-columns,omitempty"      jsonschema_description:"List of columns to keep in the output. Defaults are entity-specific: alerts include severity/status, cases include status/severity, tasks include assignee, etc. Query the [entity]-schema from server resources for available columns."`
 	ExtraData         []string       `json:"extra-data,omitempty"         jsonschema_description:"List of additional data fields to include in the output. Query the [entity]-schema from server resources for available extra data fields."`
 	AdditionalQueries []string       `json:"additional-queries,omitempty" jsonschema_description:"Additional queries to perform on the results to enrich them with related data. Supported queries depend on the entity type: cases support 'tasks', 'observables', 'comments', 'pages', 'attachments', 'procedures', 'similarCases' (other cases that share observables with the case — the classic 'similar cases' correlation), and 'similarAlerts' (alerts that share observables with the case); alerts support 'observables', 'comments', 'pages', 'attachments', 'procedures', 'similarCases' (cases that share observables with the alert), and 'similarAlerts' (other alerts that share observables with the alert); tasks support 'task-logs'; observables support 'jobs' (Cortex analyzer runs) and 'actions' (Cortex responder runs); cases, alerts and tasks also support 'actions'. Prefer the native 'similarCases'/'similarAlerts' queries over fetching observables and comparing them client-side — they run server-side on TheHive's similarity engine and are far more efficient for correlation and similarity questions. Refer to the entity schema from server resources for the full list of supported additional queries."`
@@ -72,6 +85,9 @@ type EntitiesParams struct {
 type EntitiesResult struct {
 	Count      int              `json:"count"`
 	CountOnly  bool             `json:"countOnly"`
+	Offset     int              `json:"offset"`
+	HasMore    bool             `json:"hasMore"`
+	NextOffset int              `json:"nextOffset,omitempty"`
 	EntityType string           `json:"entityType"`
 	Results    []map[string]any `json:"results,omitempty"`
 	RawFilters map[string]any   `json:"rawFilters"`
@@ -79,7 +95,11 @@ type EntitiesResult struct {
 
 // NewSearchEntitiesResult builds an EntitiesResult from raw query results,
 // deriving the count from the special count entry when params.Count is set.
-func NewSearchEntitiesResult(results []map[string]any, params EntitiesParams, filters map[string]any) (EntitiesResult, error) {
+//
+// hasMore comes from the caller because only the handler can see it: detecting
+// truncation needs the untrimmed row slice, and the rows reaching here have
+// already been trimmed to the page and enriched.
+func NewSearchEntitiesResult(results []map[string]any, params EntitiesParams, filters map[string]any, hasMore bool) (EntitiesResult, error) {
 	var countValue int
 
 	if params.Count {
@@ -97,9 +117,23 @@ func NewSearchEntitiesResult(results []map[string]any, params EntitiesParams, fi
 		countValue = len(results)
 	}
 
+	// count=true aggregates the whole match server-side: there is no window, so
+	// echoing the caller's offset would describe a page that was never read.
+	offset, nextOffset := params.Offset, 0
+
+	switch {
+	case params.Count:
+		offset = 0
+	case hasMore:
+		nextOffset = params.Offset + params.Limit
+	}
+
 	return EntitiesResult{
 		Count:      countValue,
 		CountOnly:  params.Count,
+		Offset:     offset,
+		HasMore:    hasMore,
+		NextOffset: nextOffset,
 		EntityType: params.EntityType,
 		Results:    results,
 		RawFilters: filters,

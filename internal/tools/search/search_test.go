@@ -774,3 +774,87 @@ func TestSearchPages(t *testing.T) {
 	// DL-6006: "category" is a user-defined label, so it is wrapped.
 	require.Equal(t, "[UNTRUSTED_DATA]Default[/UNTRUSTED_DATA]", page["category"])
 }
+
+// Paging is the whole point of hasMore: a page that comes back exactly full is
+// indistinguishable from the end of a match unless the response says so. This
+// walks a known 5-alert set two rows at a time and checks both that the flag
+// flips on the last page and that following nextOffset actually reaches every
+// row exactly once — an off-by-one in the window would re-serve or skip rows
+// while still looking like a well-formed page.
+func TestSearchPagesThroughResultsWithHasMore(t *testing.T) {
+	testutils.Parallel(t)
+
+	hiveClient := testutils.SetupTestWithCleanup(t)
+
+	const (
+		total   = 5
+		perPage = 2
+	)
+
+	// The shared instance carries alerts from other tests, so the filter is
+	// scoped to a tag only this test creates.
+	pagingTag := "paging-" + t.Name()
+
+	for i := 1; i <= total; i++ {
+		createTestAlert(t, hiveClient, fmt.Sprintf("%s alert %d", t.Name(), i), 2, []string{pagingTag})
+	}
+
+	mcpClient := newSearchClient(t)
+
+	page := func(offset int) map[string]any {
+		return searchStructured(t, mcpClient, map[string]any{
+			pEntityType: types.EntityTypeAlert,
+			pFilters: map[string]any{
+				tEq: map[string]any{tField: tTags, tValue: pagingTag},
+			},
+			pExtraColumns: []string{tID, tTitle},
+			pSortBy:       tCreatedAt,
+			pSortOrder:    "asc",
+			pLimit:        perPage,
+			pOffset:       offset,
+		})
+	}
+
+	seen := map[string]bool{}
+	offset := 0
+
+	for pageNumber := 1; ; pageNumber++ {
+		require.LessOrEqual(t, pageNumber, total, "paging did not terminate")
+
+		data := page(offset)
+		require.InDelta(t, float64(offset), data[rOffset], 0, "the response echoes the window it read")
+
+		rows, ok := data["results"].([]any)
+		require.True(t, ok)
+
+		for _, row := range rows {
+			alert, isObject := row.(map[string]any)
+			require.True(t, isObject)
+
+			id, isString := alert[tID].(string)
+			require.True(t, isString)
+			require.False(t, seen[id], "row %s served on more than one page", id)
+			seen[id] = true
+		}
+
+		hasMore, ok := data[rHasMore].(bool)
+		require.True(t, ok, "every search result must state whether it was truncated")
+
+		if !hasMore {
+			require.Len(t, rows, total%perPage, "the last page holds the remainder")
+			require.NotContains(t, data, rNextOffset, "a complete result advertises no next page")
+
+			break
+		}
+
+		require.Len(t, rows, perPage, "a truncated page is full by definition")
+		require.InDelta(t, float64(offset+perPage), data[rNextOffset], 0)
+
+		nextOffset, isNumber := data[rNextOffset].(float64)
+		require.True(t, isNumber)
+
+		offset = int(nextOffset)
+	}
+
+	require.Len(t, seen, total, "following nextOffset must reach every matching row")
+}

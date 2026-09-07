@@ -61,7 +61,13 @@ func (t *Tool) Handle(ctx context.Context, req mcp.CallToolRequest, params Entit
 			Schema(params.EntityType, "")
 	}
 
+	var hasMore bool
+
 	if !params.Count {
+		// Trim first: the probe row is not part of the page, so expanding it
+		// would spend round-trips enriching a row nobody receives.
+		results, hasMore = trimProbeRow(results, params.Limit)
+
 		dropUnrequestedJobReport(params, results)
 
 		results, err = utils.ExpandEntitiesWithQueries(ctx, params.EntityType, results, params.AdditionalQueries, permFilters)
@@ -70,7 +76,22 @@ func (t *Tool) Handle(ctx context.Context, req mcp.CallToolRequest, params Entit
 		}
 	}
 
-	return NewSearchEntitiesResult(results, params, rawFilters)
+	return NewSearchEntitiesResult(results, params, rawFilters, hasMore)
+}
+
+// trimProbeRow cuts the extra row buildPagingOperation asks for back off the
+// page, reporting whether it was there.
+//
+// Its presence is the whole truncation signal: TheHive returns rows, not a
+// total, so a page that comes back exactly full is indistinguishable from a
+// result set that happens to end there. Asking for one row more than the caller
+// wants settles it in a single round-trip.
+func trimProbeRow(results []map[string]any, limit int) ([]map[string]any, bool) {
+	if len(results) <= limit {
+		return results, false
+	}
+
+	return results[:limit], true
 }
 
 const (
@@ -147,7 +168,7 @@ func (t *Tool) buildHiveQuery(params EntitiesParams, rawFilters map[string]any) 
 		query = append(query, thehive.InputQueryGenericOperationAsInputQueryNamedOperation(countOp))
 	} else {
 		sortOp := t.buildSortOperation(params.SortBy, params.SortOrder)
-		pageOp := t.buildPagingOperation(params.Limit, params.ExtraData)
+		pageOp := t.buildPagingOperation(params.Offset, params.Limit, params.ExtraData)
 		query = append(query,
 			thehive.InputQuerySortOperationAsInputQueryNamedOperation(sortOp),
 			thehive.InputQueryPagingOperationAsInputQueryNamedOperation(pageOp),
@@ -195,8 +216,14 @@ func (t *Tool) buildSortOperation(sortBy, sortOrder string) *thehive.InputQueryS
 	return sortOp
 }
 
-func (t *Tool) buildPagingOperation(limit int, extraData []string) *thehive.InputQueryPagingOperation {
-	query := thehive.NewInputQueryPagingOperation(0, int32(limit), "page") // #nosec G115 -- limit is validated before reaching here
+// buildPagingOperation windows the query at [offset, offset+limit+1).
+//
+// TheHive's paging bounds are absolute, so offset moves both. The window is one
+// row wider than the caller asked for on purpose — trimProbeRow reads that row
+// as the has-more signal and drops it before anything else sees the results.
+func (t *Tool) buildPagingOperation(offset, limit int, extraData []string) *thehive.InputQueryPagingOperation {
+	// #nosec G115 -- offset and limit are both bounded by ValidateParams
+	query := thehive.NewInputQueryPagingOperation(int32(offset), int32(offset+limit+1), "page")
 	query.SetExtraData(extraData)
 
 	return query

@@ -72,5 +72,13 @@ func (t *Tool) ValidateParams(params *EntitiesParams) error {
 		return tools.NewToolError("limit cannot exceed 1000 entities")
 	}
 
+	if params.Offset < 0 {
+		return tools.NewToolError("offset must be a non-negative integer")
+	}
+
+	if params.Offset > MaxSearchOffset {
+		return tools.NewToolErrorf("offset cannot exceed %d. Narrow the filter instead of paging further", MaxSearchOffset)
+	}
+
 	return nil
 }

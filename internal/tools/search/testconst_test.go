@@ -34,4 +34,12 @@ const (
 	pFilters           = "filters"
 	pExtraColumns      = "extra-columns"
 	pAdditionalQueries = "additional-queries"
+	pLimit             = "limit"
+	pOffset            = "offset"
+	pSortBy            = "sort-by"
+	pSortOrder         = "sort-order"
+
+	rHasMore    = "hasMore"
+	rNextOffset = "nextOffset"
+	rOffset     = "offset"
 )
