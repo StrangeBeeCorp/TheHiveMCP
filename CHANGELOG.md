@@ -30,12 +30,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **MCP SDK upgraded to `mark3labs/mcp-go` v1.0.0**, which implements MCP revision `2026-07-28`. No client-visible protocol change: the HTTP transport
   deliberately continues to serve the handshake-based revisions only, so clients negotiate exactly as before. Serving `2026-07-28` is a separate, later change.
   See [ADR-0003](docs/explanation/adr/0003-track-mcp-2026-07-28-on-mark3labs-mcp-go.md).
-
 - **Automation catalog responses are now an object, not a bare array.** `hive://metadata/automation/analyzers` and `hive://metadata/automation/responders`
   return `{kind, total, returned, offset, truncated, blockedByPolicy, workers}`; the previous array is now the `workers` field.
 - **Analyzer reports are no longer returned unasked on job searches.** TheHive attaches a partial report to every job row and `exclude_fields` does not suppress
   it, so a chronological page of ten jobs carried ~76 KB of embedded observables — untrusted third-party content nobody requested. `search-entities` now drops
   it unless `extra-data` includes `report`, which cut that same query to ~1.7 KB.
+- **The automation catalogs validate their arguments before calling Cortex.** A bad `offset` or `limit` is a deterministic input error, so it no longer costs a
+  full catalog fetch — nor surfaces as a connection or authentication error when both are wrong at once.
 
 ### Removed
 
@@ -63,7 +64,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   stderr and returns without setting a schema — so `manage-entities`, `search-entities` and `execute-automation` each advertised **zero parameters** while
   continuing to work when called correctly. Enumerations and defaults now live in explicit constraints applied on top of inference, and the advertised schemas
   are asserted against their parameter structs so this cannot regress unnoticed.
-
+- **`search-entities` advertises exactly the entity types it accepts.** The advertised enum and the list the handler validates against were two hand-maintained
+  slices; both now derive from one, and a test asserts the wire schema agrees with the code path that enforces it. A type accepted by the handler but missing
+  from the enum is invisible to clients, which is indistinguishable from unsupported.
 - **Analyzers could go missing from the catalog.** `hive://metadata/automation/analyzers` fetched a hard-coded first 100 analyzers and applied the permission
   allow-list afterwards, so allowed analyzers positioned beyond that window were silently dropped — a restrictive allow-list could return an empty catalog on a
   Cortex install with more than 100 analyzers. The full catalog is now fetched and permission-filtered before any paging is applied.

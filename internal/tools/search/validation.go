@@ -3,6 +3,7 @@ package search
 import (
 	"context"
 	"slices"
+	"strings"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
@@ -53,16 +54,8 @@ func (t *Tool) ValidateParams(params *EntitiesParams) error {
 		params.AdditionalQueries = []string{}
 	}
 
-	validEntityTypes := []string{types.EntityTypeAlert, types.EntityTypeCase, types.EntityTypeTask, types.EntityTypeObservable, types.EntityTypeProcedure, types.EntityTypePattern, types.EntityTypeCaseTemplate, types.EntityTypePage, types.EntityTypeJob, types.EntityTypeAction}
-
-	var isValidEntityType bool
-
-	if slices.Contains(validEntityTypes, params.EntityType) {
-		isValidEntityType = true
-	}
-
-	if !isValidEntityType {
-		return tools.NewToolErrorf("invalid entity-type '%s'. Must be one of: 'alert', 'case', 'task', 'observable', 'procedure', 'pattern', 'case-template', 'page', 'job', 'action'", params.EntityType)
+	if !slices.Contains(ValidEntityTypes, params.EntityType) {
+		return tools.NewToolErrorf("invalid entity-type '%s'. Must be one of: '%s'", params.EntityType, strings.Join(ValidEntityTypes, "', '"))
 	}
 
 	// Filters are optional (empty = match-all) and validated by TheHive at query time, not here.

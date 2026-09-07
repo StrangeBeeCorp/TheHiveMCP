@@ -218,6 +218,11 @@ var defaultSortFields = map[string]string{
 	EntityTypeAction: fieldStartDate,
 }
 
+// GeneralDefaultSortField is the column search results are sorted on for every
+// entity type without an entry in defaultSortFields. It is what the advertised
+// sort-by default declares, a JSON Schema default being a single value.
+const GeneralDefaultSortField = fieldCreatedAt
+
 // DefaultSortField returns the column search results are sorted on when the
 // caller does not pick one.
 func DefaultSortField(entityType string) string {
@@ -225,7 +230,7 @@ func DefaultSortField(entityType string) string {
 		return field
 	}
 
-	return fieldCreatedAt
+	return GeneralDefaultSortField
 }
 
 // DateFormat is the timestamp layout used for TheHive date fields.

@@ -159,7 +159,7 @@ func TestToolSchemas_EnumerationsSurviveInference(t *testing.T) {
 			paramEntityType: {entityCase, entityAlert, entityTask, entityObs, "procedure", "case-template", "page"},
 		},
 		toolSearchEntities: {
-			paramEntityType: {entityAlert, entityCase, entityTask, entityObs, "procedure", "pattern", "case-template", "page"},
+			paramEntityType: {entityAlert, entityCase, entityTask, entityObs, "procedure", "pattern", "case-template", "page", "job", "action"},
 			"sort-order":    {"asc", "desc"},
 		},
 		toolExecuteAutomation: {
@@ -340,5 +340,50 @@ func TestToolSchemas_DefaultsSurviveInference(t *testing.T) {
 					"tool %q parameter %q advertises the wrong default", name, field)
 			}
 		})
+	}
+}
+
+// The advertised entity-type enum must match exactly what the handler accepts.
+//
+// These were two hand-maintained lists — the enum in search.EntitiesParamConstraints
+// and the slice ValidateParams checks — and adding an entity type to one without
+// the other fails in whichever direction the drift went: a type accepted by the
+// handler but absent from the enum is invisible to clients, and a type in the
+// enum the handler rejects is advertised as supported and errors on use. Both
+// now read from search.ValidEntityTypes; this asserts the wire schema agrees
+// with the code path that enforces it, whatever they are built from.
+func TestSearchEntityTypes_AdvertisedEnumMatchesValidation(t *testing.T) {
+	t.Parallel()
+
+	searchTool := search.NewSearchTool()
+	properties := propertiesOf(t, searchTool.Definition())
+
+	property, ok := properties[paramEntityType].(map[string]any)
+	require.True(t, ok, "search-entities has no %q property", paramEntityType)
+
+	raw, ok := property["enum"].([]any)
+	require.True(t, ok, "search-entities parameter %q advertises no enum", paramEntityType)
+
+	advertised := make([]string, 0, len(raw))
+
+	for _, value := range raw {
+		str, isString := value.(string)
+		require.True(t, isString, "enum value %v is not a string", value)
+
+		advertised = append(advertised, str)
+	}
+
+	assert.ElementsMatch(t, search.ValidEntityTypes, advertised,
+		"the advertised entity-type enum and the types ValidateParams accepts have drifted")
+
+	// Every advertised value must survive validation, and validation must apply
+	// a sort default for it — a type reachable from the schema but missing a
+	// default sorts on a column TheHive may not have.
+	for _, entityType := range advertised {
+		params := search.EntitiesParams{EntityType: entityType}
+
+		err := searchTool.ValidateParams(&params)
+		require.NoError(t, err, "advertised entity-type %q is rejected by ValidateParams", entityType)
+		assert.NotEmpty(t, params.SortBy, "advertised entity-type %q gets no default sort field", entityType)
 	}
 }

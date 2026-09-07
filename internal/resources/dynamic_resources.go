@@ -46,9 +46,11 @@ const (
 	errListAnalyzers = "failed to find analyzers: %w. Check that Cortex integration is enabled and you have permissions to list analyzers. API response: %v"
 
 	// Query parameter names accepted by the automation catalogs.
-	argDataType = "dataType"
-	argOffset   = "offset"
-	argLimit    = "limit"
+	argDataType   = "dataType"
+	argOffset     = "offset"
+	argLimit      = "limit"
+	argEntityType = "entityType"
+	argEntityID   = "entityId"
 
 	// defaultWorkerPageLimit bounds one catalog page so a large Cortex install
 	// does not flood the caller's context. Raise it per call with ?limit=.
@@ -330,12 +332,11 @@ func listAnalyzers(ctx context.Context, hiveClient *thehive.APIClient, dataType 
 // window is applied. Filtering after a fixed fetch window used to hide every
 // allowed analyzer whose position fell outside it.
 func GetAvailableAnalyzers(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-	hiveClient, err := utils.GetHiveClientFromContext(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get TheHive client from context: %w. Check authentication and connection settings", err)
-	}
-
-	err = rejectUnknownArguments(req, argDataType, argOffset, argLimit)
+	// Every argument is resolved before the client is touched, so a caller that
+	// passed a bad one is told exactly that rather than getting a connection or
+	// authentication error to chase — and never pays for the range=all fetch.
+	// GetAvailableResponders validates in the same order.
+	err := rejectUnknownArguments(req, argDataType, argOffset, argLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -343,6 +344,16 @@ func GetAvailableAnalyzers(ctx context.Context, req mcp.ReadResourceRequest) ([]
 	dataType, err := dataTypeArgument(req)
 	if err != nil {
 		return nil, err
+	}
+
+	offset, limit, err := paginationArguments(req)
+	if err != nil {
+		return nil, err
+	}
+
+	hiveClient, err := utils.GetHiveClientFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get TheHive client from context: %w. Check authentication and connection settings", err)
 	}
 
 	analyzers, err := listAnalyzers(ctx, hiveClient, dataType)
@@ -361,11 +372,6 @@ func GetAvailableAnalyzers(ctx context.Context, req mcp.ReadResourceRequest) ([]
 				allowed = append(allowed, analyzer)
 			}
 		}
-	}
-
-	offset, limit, err := paginationArguments(req)
-	if err != nil {
-		return nil, err
 	}
 
 	page := newWorkerPage("analyzers", allowed, len(analyzers)-len(allowed), offset, limit)
@@ -387,17 +393,17 @@ func GetAvailableAnalyzers(ctx context.Context, req mcp.ReadResourceRequest) ([]
 // GetAvailableResponders returns the Cortex responders for the entity named by the
 // request's entityType and entityId parameters as a JSON resource.
 func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-	err := rejectUnknownArguments(req, "entityType", "entityId", argOffset, argLimit)
+	err := rejectUnknownArguments(req, argEntityType, argEntityID, argOffset, argLimit)
 	if err != nil {
 		return nil, err
 	}
 
-	entityType, ok := req.Params.Arguments["entityType"].(string)
+	entityType, ok := req.Params.Arguments[argEntityType].(string)
 	if !ok {
 		return nil, errors.New("entityType query parameter is required and must be a string. Example: hive://metadata/automation/responders?entityType=case&entityId=~123456")
 	}
 
-	entityID, ok := req.Params.Arguments["entityId"].(string)
+	entityID, ok := req.Params.Arguments[argEntityID].(string)
 	if !ok {
 		return nil, errors.New("entityId query parameter is required and must be a string. Example: hive://metadata/automation/responders?entityType=case&entityId=~123456")
 	}
@@ -409,6 +415,13 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 	// Both values are interpolated into the Cortex endpoint path; reject
 	// anything but a well-formed entity reference before any call.
 	err = validateResponderParams(entityType, entityID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Resolved before the fetch: a bad offset/limit is a deterministic input
+	// error and should not cost a Cortex round-trip to report.
+	offset, limit, err := paginationArguments(req)
 	if err != nil {
 		return nil, err
 	}
@@ -434,11 +447,6 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 				allowed = append(allowed, responder)
 			}
 		}
-	}
-
-	offset, limit, err := paginationArguments(req)
-	if err != nil {
-		return nil, err
 	}
 
 	respondersJSON, err := json.MarshalIndent(newWorkerPage("responders", allowed, len(responders)-len(allowed), offset, limit), "", "  ")

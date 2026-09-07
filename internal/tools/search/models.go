@@ -59,7 +59,7 @@ const (
 type EntitiesParams struct {
 	EntityType        string         `json:"entity-type"                  jsonschema_description:"Type of entity to search for."`
 	Filters           map[string]any `json:"filters,omitempty"            jsonschema_description:"TheHive filter: a JSON object with a single root operator, built from the query DSL described in this tool's description. Omit (or use {\"_any\": {}}) to match all entities. Consult hive://schema/<entity-type> for valid field names and hive://schema/filter for the full operator grammar."`
-	SortBy            string         `json:"sort-by,omitempty"            jsonschema_description:"Column to sort the results by. Leave empty to let the query determine sorting."`
+	SortBy            string         `json:"sort-by,omitempty"            jsonschema_description:"Column to sort the results by. Defaults to _createdAt, except 'job' and 'action' searches, which default to startDate — when the Cortex run actually happened."`
 	SortOrder         string         `json:"sort-order,omitempty"         jsonschema_description:"Sort order ('asc' or 'desc'). Default is 'desc'."`
 	Limit             int            `json:"limit,omitempty"              jsonschema_description:"Number of results to return. Default is 10. Not applicable if count=true."`
 	ExtraColumns      []string       `json:"extra-columns,omitempty"      jsonschema_description:"List of columns to keep in the output. Defaults are entity-specific: alerts include severity/status, cases include status/severity, tasks include assignee, etc. Query the [entity]-schema from server resources for available columns."`

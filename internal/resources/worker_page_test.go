@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"context"
 	"testing"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
@@ -8,6 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// notANumber is an offset/limit value that must fail to parse.
+const notANumber = "many"
 
 func workers(count int) []thehive.OutputWorker {
 	list := make([]thehive.OutputWorker, 0, count)
@@ -156,7 +160,7 @@ func TestPaginationArgumentsRejectsInvalidValues(t *testing.T) {
 	t.Parallel()
 
 	testCases := map[string]map[string]any{
-		"non numeric limit": {argLimit: "many"},
+		"non numeric limit": {argLimit: notANumber},
 		"negative offset":   {argOffset: "-1"},
 		"zero limit":        {argLimit: "0"},
 	}
@@ -176,4 +180,43 @@ func TestStringArgumentMissingIsEmpty(t *testing.T) {
 
 	assert.Empty(t, stringArgument(requestWithArguments(nil), argDataType))
 	assert.Equal(t, "hash", stringArgument(requestWithArguments(map[string]any{argDataType: "hash"}), argDataType))
+}
+
+// An invalid offset/limit must be rejected without contacting Cortex. Both
+// catalog handlers fetch the whole catalog (range=all for analyzers), so
+// validating the window after the fetch charged a deterministic input error a
+// full round-trip. No TheHive client is placed in the context here: reaching
+// the fetch would fail with a client error instead of the argument error, so
+// the assertion on the message is what pins the ordering.
+func TestCatalogsRejectBadPagingBeforeFetching(t *testing.T) {
+	t.Parallel()
+
+	testCases := map[string]map[string]any{
+		"analyzers non numeric limit": {argLimit: notANumber},
+		"analyzers negative offset":   {argOffset: "-1"},
+	}
+
+	for name, arguments := range testCases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := GetAvailableAnalyzers(context.Background(), requestWithArguments(arguments))
+			require.Error(t, err)
+			assert.NotContains(t, err.Error(), "TheHive client",
+				"paging was validated after the fetch: the request reached the client")
+		})
+	}
+
+	t.Run("responders bad limit", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := GetAvailableResponders(context.Background(), requestWithArguments(map[string]any{
+			argEntityType: "case",
+			argEntityID:   "~123456",
+			argLimit:      notANumber,
+		}))
+		require.Error(t, err)
+		assert.NotContains(t, err.Error(), "TheHive client",
+			"paging was validated after the fetch: the request reached the client")
+	})
 }
