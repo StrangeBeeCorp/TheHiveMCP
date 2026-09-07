@@ -49,5 +49,6 @@ func (t *ExecuteAutomationTool) Definition() mcp.Tool {
 		mcp.WithDescription(ExecuteAutomationToolDescription),
 		tools.WithInputSchemaConstraints[ExecuteAutomationParams](ExecuteAutomationParamConstraints),
 		mcp.WithOutputSchema[ExecuteAutomationResult](),
+		mcp.WithToolAnnotation(tools.ExternallyActingToolAnnotation()),
 	)
 }

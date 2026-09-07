@@ -4,6 +4,8 @@ Search for entities in TheHive by providing a structured filter built from TheHi
 
 ## Overview
 
+Read-only: this tool never modifies TheHive. See [Tool annotations](annotations.md).
+
 The `search-entities` tool searches TheHive entities (alerts, cases, tasks, observables, procedures, patterns, case templates, pages, and the Cortex analyzer
 and responder run history). You build the filter yourself and pass it in the `filters` parameter. There is **no** natural-language translation step and no
 internal LLM: the filter you provide is applied directly to TheHive, so searches are precise and deterministic.

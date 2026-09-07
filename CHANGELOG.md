@@ -10,6 +10,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **All four tools declare their MCP annotations** (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), so clients can tell a search from a
+  deletion when deciding what to prompt for or auto-approve. `search-entities` and `get-resource` are read-only; `manage-entities` is mutating and destructive
+  (`delete` and `merge` are irreversible); `execute-automation` is additionally open-world, being the only tool whose effects escape TheHive into third-party
+  services. See [Tool annotations](docs/reference/tools/annotations.md).
 - **Automation history is searchable.** `search-entities` accepts two new entity types: `job` (Cortex analyzer runs) and `action` (Cortex responder runs), with
   the same filter DSL, sorting, paging and permission scoping as every other entity. Filter on `analyzerName`, `status`, `startDate`, `cortexId` and more, and
   pass `extra-data: ["report"]` to include an analyzer report. New `hive://schema/job` and `hive://schema/action` resources document the filterable fields.
@@ -27,6 +31,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Corrected the annotations the tools were already advertising.** This was not a blank being filled: `mcp.NewTool` populates the annotations itself and the
+  field carries no `omitempty`, so every tool shipped mcp-go's pessimistic defaults — `readOnlyHint: false, destructiveHint: true, openWorldHint: true`. A
+  client was therefore told that `search-entities` and `get-resource` may perform destructive updates, which could cost them a confirmation prompt on a plain
+  search or exclusion from an auto-approve list.
 - **MCP SDK upgraded to `mark3labs/mcp-go` v1.0.0**, which implements MCP revision `2026-07-28`. No client-visible protocol change: the HTTP transport
   deliberately continues to serve the handshake-based revisions only, so clients negotiate exactly as before. Serving `2026-07-28` is a separate, later change.
   See [ADR-0003](docs/explanation/adr/0003-track-mcp-2026-07-28-on-mark3labs-mcp-go.md).

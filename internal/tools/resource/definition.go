@@ -39,5 +39,6 @@ func (t *Tool) Definition() mcp.Tool {
 		mcp.WithDescription(GetResourceToolDescription),
 		mcp.WithInputSchema[GetResourceParams](),
 		mcp.WithOutputSchema[GetResourceResult](),
+		mcp.WithToolAnnotation(tools.ReadOnlyToolAnnotation()),
 	)
 }
