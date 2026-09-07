@@ -16,9 +16,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
-- **Elicitation-based write confirmation has been removed.** ⚠️ **Behaviour change for clients that support elicitation.** Create, update and delete operations
-  no longer trigger a confirmation prompt; they execute directly. In practice this affects GitHub Copilot, effectively the only client that implemented the
-  prompt — most clients, Claude Desktop included, never displayed one and already executed these operations unconfirmed.
+- **Elicitation-based write confirmation has been removed.** ⚠️ **Behaviour change for clients that support elicitation.** **Every modifying operation** now
+  executes directly, with no confirmation prompt — the confirmation gated on the HTTP verb rather than the tool, so the affected set is all seven
+  `manage-entities` operations (`create`, `update`, `delete`, `comment`, `promote`, `merge`, `apply-template`) plus the two `execute-automation` writes
+  (`run-analyzer`, `run-responder`). In practice this affects GitHub Copilot, effectively the only client that implemented the prompt — most clients, Claude
+  Desktop included, never displayed one and already executed these operations unconfirmed.
 
   This also **supersedes the "Destructive operations fail closed" behaviour** introduced in 1.0.0: with no prompt advertised, there is no prompt that can fail
   to complete, so nothing fails closed on that basis. The `elicitation` server capability is no longer advertised.
