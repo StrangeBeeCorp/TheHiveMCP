@@ -1,6 +1,7 @@
 package search
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -113,7 +114,7 @@ func TestNewSearchEntitiesResult_Pagination(t *testing.T) {
 		countParams := params
 		countParams.Count = true
 
-		result, err := NewSearchEntitiesResult([]map[string]any{{"_count": float64(4711)}}, countParams, map[string]any{}, false)
+		result, err := NewSearchEntitiesResult([]map[string]any{{fieldCount: float64(4711)}}, countParams, map[string]any{}, false)
 		require.NoError(t, err)
 
 		assert.Equal(t, 4711, result.Count)
@@ -121,6 +122,23 @@ func TestNewSearchEntitiesResult_Pagination(t *testing.T) {
 		assert.Zero(t, result.Offset)
 		assert.False(t, result.HasMore)
 		assert.Zero(t, result.NextOffset)
+	})
+
+	// The handler leaves hasMore false on the count path, so this guards the
+	// contract rather than a live bug: a count-only result describes no window,
+	// and must not advertise one even if a future call site says otherwise.
+	t.Run("count-only ignores a stray hasMore", func(t *testing.T) {
+		t.Parallel()
+
+		countParams := params
+		countParams.Count = true
+
+		result, err := NewSearchEntitiesResult([]map[string]any{{fieldCount: float64(4711)}}, countParams, map[string]any{}, true)
+		require.NoError(t, err)
+
+		assert.False(t, result.HasMore, "a count-only result has no window to continue")
+		assert.Zero(t, result.NextOffset)
+		assert.Zero(t, result.Offset)
 	})
 }
 
@@ -144,14 +162,46 @@ func TestValidateParams_Offset(t *testing.T) {
 		assert.Error(t, tool.ValidateParams(&params))
 	})
 
-	// Past index.max_result_window Elasticsearch fails the query itself, so the
-	// bound is enforced here where the error can say what to do instead.
-	t.Run("rejects paging past the result window", func(t *testing.T) {
+	// The index bounds the window, not the offset: an offset comfortably under
+	// MaxSearchWindow still reads past it once the limit and the truncation
+	// probe are added. Bounding the offset alone let offset=10000 limit=10
+	// through to an opaque server-side failure, and let a large limit blow the
+	// window far below that.
+	t.Run("rejects a window past the result limit", func(t *testing.T) {
 		t.Parallel()
 
-		params := EntitiesParams{EntityType: types.EntityTypeAlert, Offset: MaxSearchOffset + 1}
-		err := tool.ValidateParams(&params)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "Narrow the filter")
+		tests := []struct {
+			name          string
+			offset, limit int
+			wantRejected  bool
+		}{
+			{"largest window that fits", MaxSearchWindow - 11, 10, false},
+			{"one row too far", MaxSearchWindow - 10, 10, true},
+			{"offset alone under the bound, window over it", MaxSearchWindow, 10, true},
+			{"large limit blows the window well below the cap", MaxSearchWindow - 1000, 1000, true},
+			{"a near-maxint offset cannot overflow past the check", math.MaxInt, 10, true},
+		}
+
+		for _, testCase := range tests {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				params := EntitiesParams{
+					EntityType: types.EntityTypeAlert,
+					Offset:     testCase.offset,
+					Limit:      testCase.limit,
+				}
+
+				err := tool.ValidateParams(&params)
+				if !testCase.wantRejected {
+					require.NoError(t, err)
+
+					return
+				}
+
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "maximum result window")
+			})
+		}
 	})
 }

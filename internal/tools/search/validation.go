@@ -76,8 +76,15 @@ func (t *Tool) ValidateParams(params *EntitiesParams) error {
 		return tools.NewToolError("offset must be a non-negative integer")
 	}
 
-	if params.Offset > MaxSearchOffset {
-		return tools.NewToolErrorf("offset cannot exceed %d. Narrow the filter instead of paging further", MaxSearchOffset)
+	// The index bounds the WINDOW (first row + rows read), not the offset alone,
+	// and the truncation probe makes the window one row wider than the limit.
+	// Written as a subtraction rather than Offset+Limit+1 > MaxSearchWindow so a
+	// caller sending a near-maxint offset cannot overflow past the check; Limit
+	// is already bounded above, so the right-hand side cannot go negative.
+	if params.Offset > MaxSearchWindow-params.Limit-1 {
+		return tools.NewToolErrorf(
+			"offset %d with limit %d reads past the maximum result window of %d rows. Narrow the filter instead of paging further, or use count=true for the size of the match",
+			params.Offset, params.Limit, MaxSearchWindow)
 	}
 
 	return nil

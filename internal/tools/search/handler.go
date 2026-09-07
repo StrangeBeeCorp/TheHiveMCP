@@ -243,7 +243,7 @@ func (t *Tool) executeQuery(ctx context.Context, hiveQuery thehive.InputQuery, e
 	// Count queries return a bare number, not an array.
 	if countValue, ok := results.(float64); ok {
 		countResult := map[string]any{
-			"_count": countValue,
+			fieldCount: countValue,
 		}
 
 		return []map[string]any{countResult}, nil

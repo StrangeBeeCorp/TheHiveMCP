@@ -60,11 +60,16 @@ const (
 
 	DefaultSearchLimit = 10
 
-	// MaxSearchOffset caps how deep a caller may page. Elasticsearch refuses a
-	// from+size window past index.max_result_window (10000 by default) with an
-	// opaque server-side error, so the same bound is enforced here where it can
-	// say what to do instead: narrow the filter rather than page further.
-	MaxSearchOffset = 10000
+	// MaxSearchWindow caps how deep a caller may page. TheHive's index refuses a
+	// window past max_result_window (10000 rows by default) with an opaque
+	// server-side error, so the same bound is enforced here where it can say what
+	// to do instead: narrow the filter rather than page further.
+	//
+	// The bound is on the WINDOW, not the offset — first row plus rows read — so
+	// validation checks offset+limit, not offset alone. Bounding only the offset
+	// would still let offset=10000 with limit=10 through to a server-side
+	// failure, and would let a large limit blow the window far below that.
+	MaxSearchWindow = 10000
 )
 
 // EntitiesParams holds the input parameters of the search tool.
@@ -74,7 +79,7 @@ type EntitiesParams struct {
 	SortBy            string         `json:"sort-by,omitempty"            jsonschema_description:"Column to sort the results by. Defaults to _createdAt, except 'job' and 'action' searches, which default to startDate — when the Cortex run actually happened."`
 	SortOrder         string         `json:"sort-order,omitempty"         jsonschema_description:"Sort order ('asc' or 'desc'). Default is 'desc'."`
 	Limit             int            `json:"limit,omitempty"              jsonschema_description:"Number of results to return per page. Default is 10, maximum 1000. Not applicable if count=true."`
-	Offset            int            `json:"offset,omitempty"             jsonschema_description:"Index of the first result to return, for paging through a result set. Default is 0. When a response has \"hasMore\": true it was truncated at the limit; call again with offset set to the \"nextOffset\" from that response to get the following page, keeping every other parameter identical. Maximum 10000 — beyond that, narrow the filter instead of paging. Not applicable if count=true."`
+	Offset            int            `json:"offset,omitempty"             jsonschema_description:"Index of the first result to return, for paging through a result set. Default is 0. When a response has \"hasMore\": true it was truncated at the limit; call again with offset set to the \"nextOffset\" from that response to get the following page, keeping every other parameter identical. offset + limit must stay under 10000, the maximum result window — beyond that, narrow the filter or use count=true instead of paging. Not applicable if count=true."`
 	ExtraColumns      []string       `json:"extra-columns,omitempty"      jsonschema_description:"List of columns to keep in the output. Defaults are entity-specific: alerts include severity/status, cases include status/severity, tasks include assignee, etc. Query the [entity]-schema from server resources for available columns."`
 	ExtraData         []string       `json:"extra-data,omitempty"         jsonschema_description:"List of additional data fields to include in the output. Query the [entity]-schema from server resources for available extra data fields."`
 	AdditionalQueries []string       `json:"additional-queries,omitempty" jsonschema_description:"Additional queries to perform on the results to enrich them with related data. Supported queries depend on the entity type: cases support 'tasks', 'observables', 'comments', 'pages', 'attachments', 'procedures', 'similarCases' (other cases that share observables with the case — the classic 'similar cases' correlation), and 'similarAlerts' (alerts that share observables with the case); alerts support 'observables', 'comments', 'pages', 'attachments', 'procedures', 'similarCases' (cases that share observables with the alert), and 'similarAlerts' (other alerts that share observables with the alert); tasks support 'task-logs'; observables support 'jobs' (Cortex analyzer runs) and 'actions' (Cortex responder runs); cases, alerts and tasks also support 'actions'. Prefer the native 'similarCases'/'similarAlerts' queries over fetching observables and comparing them client-side — they run server-side on TheHive's similarity engine and are far more efficient for correlation and similarity questions. Refer to the entity schema from server resources for the full list of supported additional queries."`
@@ -107,7 +112,7 @@ func NewSearchEntitiesResult(results []map[string]any, params EntitiesParams, fi
 			return EntitiesResult{}, tools.NewToolError("no results returned for count query").Hint("Ensure the query returns at least one result with a count field when count=true").Schema(params.EntityType, "")
 		}
 
-		floatCountValue, ok := results[0]["_count"].(float64)
+		floatCountValue, ok := results[0][fieldCount].(float64)
 		if !ok {
 			return EntitiesResult{}, tools.NewToolError("failed to parse count from results").Hint("Ensure the query returns a count field when count=true").Schema(params.EntityType, "")
 		}
@@ -119,11 +124,16 @@ func NewSearchEntitiesResult(results []map[string]any, params EntitiesParams, fi
 
 	// count=true aggregates the whole match server-side: there is no window, so
 	// echoing the caller's offset would describe a page that was never read.
+	//
+	// hasMore is forced rather than trusted here. The handler already leaves it
+	// false on the count path, but the invariant is stated in this function's
+	// contract, so it is enforced in the same place instead of resting on a
+	// caller that could later drift.
 	offset, nextOffset := params.Offset, 0
 
 	switch {
 	case params.Count:
-		offset = 0
+		offset, hasMore = 0, false
 	case hasMore:
 		nextOffset = params.Offset + params.Limit
 	}
