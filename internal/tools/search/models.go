@@ -60,6 +60,9 @@ const (
 
 	DefaultSearchLimit = 10
 
+	// MaxSearchLimit caps the rows one page may ask for.
+	MaxSearchLimit = 1000
+
 	// MaxSearchWindow caps how deep a caller may page. TheHive's index refuses a
 	// window past max_result_window (10000 rows by default) with an opaque
 	// server-side error, so the same bound is enforced here where it can say what

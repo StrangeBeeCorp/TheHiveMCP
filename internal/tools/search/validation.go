@@ -26,6 +26,24 @@ func (t *Tool) ValidatePermissions(ctx context.Context, _ EntitiesParams) error 
 
 // ValidateParams applies defaults and validates the search parameters in place.
 func (t *Tool) ValidateParams(params *EntitiesParams) error {
+	applyEntitiesDefaults(params)
+
+	if !slices.Contains(ValidEntityTypes, params.EntityType) {
+		return tools.NewToolErrorf("invalid entity-type '%s'. Must be one of: '%s'", params.EntityType, strings.Join(ValidEntityTypes, "', '"))
+	}
+
+	// Filters are optional (empty = match-all) and validated by TheHive at query time, not here.
+
+	if params.SortOrder != SortOrderAsc && params.SortOrder != SortOrderDesc {
+		return tools.NewToolErrorf("invalid sort-order '%s'. Must be 'asc' or 'desc'", params.SortOrder)
+	}
+
+	return validatePagingWindow(params)
+}
+
+// applyEntitiesDefaults fills in every parameter the caller left unset, so the
+// validation below and the handler both see a fully-populated request.
+func applyEntitiesDefaults(params *EntitiesParams) {
 	if params.SortBy == "" {
 		params.SortBy = types.DefaultSortField(params.EntityType)
 	}
@@ -53,23 +71,18 @@ func (t *Tool) ValidateParams(params *EntitiesParams) error {
 	if params.AdditionalQueries == nil {
 		params.AdditionalQueries = []string{}
 	}
+}
 
-	if !slices.Contains(ValidEntityTypes, params.EntityType) {
-		return tools.NewToolErrorf("invalid entity-type '%s'. Must be one of: '%s'", params.EntityType, strings.Join(ValidEntityTypes, "', '"))
-	}
-
-	// Filters are optional (empty = match-all) and validated by TheHive at query time, not here.
-
-	if params.SortOrder != SortOrderAsc && params.SortOrder != SortOrderDesc {
-		return tools.NewToolErrorf("invalid sort-order '%s'. Must be 'asc' or 'desc'", params.SortOrder)
-	}
-
+// validatePagingWindow bounds the slice of the result set a search may read.
+//
+// Defaults are already applied, so Limit is at least 1 here.
+func validatePagingWindow(params *EntitiesParams) error {
 	if params.Limit < 0 {
 		return tools.NewToolError("limit must be a non-negative integer")
 	}
 
-	if params.Limit > 1000 {
-		return tools.NewToolError("limit cannot exceed 1000 entities")
+	if params.Limit > MaxSearchLimit {
+		return tools.NewToolErrorf("limit cannot exceed %d entities", MaxSearchLimit)
 	}
 
 	if params.Offset < 0 {
