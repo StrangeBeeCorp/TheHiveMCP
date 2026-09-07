@@ -472,6 +472,23 @@ func findOrganisationID(resp any, orgName string) (string, bool) {
 
 // tryEnsureTestOrganisation makes one lookup-or-create attempt. retry is true
 // for transient startup errors (5xx / transport failure), false for 4xx.
+// organisationAlreadyExists reports whether a failed CreateOrganisation means
+// the organisation is simply already there.
+//
+// The status alone is not enough: TheHive 5.6 answers 409, while 5.5 answers
+// 400 with {"type":"CreateError","message":"Organisation already exists"}. The
+// integration matrix runs both, so matching only on 409 makes the 5.5 leg fail
+// whenever the preceding listOrganisation misses a row that does exist — which
+// it can, since Elasticsearch refreshes its index asynchronously. Matching the
+// message keeps genuine 400s (a malformed name, say) fatal.
+func organisationAlreadyExists(status int, body string) bool {
+	if status == http.StatusConflict {
+		return true
+	}
+
+	return status == http.StatusBadRequest && strings.Contains(strings.ToLower(body), "already exists")
+}
+
 func tryEnsureTestOrganisation(ctx context.Context, client *thehive.APIClient, orgName string) (id string, retry bool, err error) {
 	genericOp := thehive.NewInputQueryGenericOperation("listOrganisation")
 	query := thehive.NewInputQuery()
@@ -498,26 +515,27 @@ func tryEnsureTestOrganisation(ctx context.Context, client *thehive.APIClient, o
 		return createResp.GetUnderscoreId(), false, nil
 	}
 
-	if httpResp != nil && httpResp.StatusCode == http.StatusConflict {
-		// Already exists / created concurrently — good enough for test setup.
-		return orgName, false, nil
-	}
-
 	status := 0
 	if httpResp != nil {
 		status = httpResp.StatusCode
 	}
 
+	body := ""
+
+	var apiErr *thehive.GenericOpenAPIError
+	if errors.As(createErr, &apiErr) {
+		body = string(apiErr.Body())
+	}
+
+	if organisationAlreadyExists(status, body) {
+		// Created concurrently, or the listOrganisation above ran against a
+		// stale Elasticsearch index — good enough for test setup.
+		return orgName, false, nil
+	}
+
 	transient := httpResp == nil || status >= 500
 
 	if createErr != nil {
-		body := ""
-
-		var apiErr *thehive.GenericOpenAPIError
-		if errors.As(createErr, &apiErr) {
-			body = string(apiErr.Body())
-		}
-
 		return "", transient, fmt.Errorf("create organisation %q (status %d, body %s): %w", orgName, status, body, createErr)
 	}
 
