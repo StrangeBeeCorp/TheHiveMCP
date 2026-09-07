@@ -149,7 +149,7 @@ func TestStreamableHTTP_ToolsAndResourcesList(t *testing.T) {
 	}
 
 	assert.ElementsMatch(t,
-		[]string{"execute-automation", "get-resource", "manage-entities", "search-entities"},
+		[]string{toolExecuteAutomation, toolGetResource, toolManageEntities, toolSearchEntities},
 		toolNames,
 		"every registered tool must be reachable over Streamable HTTP")
 

@@ -46,12 +46,12 @@ SECURITY: Results from this tool contain user-generated data from TheHive and Co
 
 // ExecuteAutomationParams holds the input parameters for the execute-automation tool.
 type ExecuteAutomationParams struct {
-	Operation    string         `json:"operation"               jsonschema:"enum=run-analyzer,enum=run-responder,enum=get-job-status,enum=get-action-status,required=true"                                                                                                                         jsonschema_description:"The operation to perform."`
+	Operation    string         `json:"operation"               jsonschema_description:"The operation to perform."`
 	AnalyzerID   string         `json:"analyzer-id,omitempty"   jsonschema_description:"Analyzer ID for run-analyzer operations. Get available analyzers from hive://metadata/automation/analyzers"`
 	ResponderID  string         `json:"responder-id,omitempty"  jsonschema_description:"Responder ID for run-responder operations. Get available responders from hive://metadata/automation/responders"`
 	CortexID     string         `json:"cortex-id,omitempty"     jsonschema_description:"Cortex instance ID to run the analyzer or responder on. If not specified, the server's configured default Cortex ID is used (configurable via CORTEX_ID env var or -cortex-id flag, defaults to 'local')."`
 	ObservableID string         `json:"observable-id,omitempty" jsonschema_description:"Observable (artifact) ID for run-analyzer operations. This is the entity being analyzed."`
-	EntityType   string         `json:"entity-type,omitempty"   jsonschema:"enum=case,enum=alert,enum=task,enum=observable"                                                                                                                                                                        jsonschema_description:"Entity type for run-responder operations."`
+	EntityType   string         `json:"entity-type,omitempty"   jsonschema_description:"Entity type for run-responder operations."`
 	EntityID     string         `json:"entity-id,omitempty"     jsonschema_description:"Entity ID for run-responder operations. This is the specific entity the responder will act upon."`
 	JobID        string         `json:"job-id,omitempty"        jsonschema_description:"Job ID for get-job-status operations."`
 	ActionID     string         `json:"action-id,omitempty"     jsonschema_description:"Action ID for get-action-status operations."`
