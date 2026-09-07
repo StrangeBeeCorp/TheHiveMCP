@@ -57,6 +57,11 @@ func newFakeTheHive(t *testing.T) *fakeTheHive {
 	return fake
 }
 
+// url is the base URL callers should configure as the TheHive endpoint.
+func (f *fakeTheHive) url() string {
+	return f.server.URL
+}
+
 func (f *fakeTheHive) lastAuthorization() string {
 	f.mu.Lock()
 	defer f.mu.Unlock()

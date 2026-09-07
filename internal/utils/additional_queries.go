@@ -1,6 +1,6 @@
 // Package utils provides shared helpers for the MCP server: TheHive query
-// building, entity-scope permission checks, filter normalization, result
-// date/untrusted-data processing, and the elicitation HTTP transport.
+// building, entity-scope permission checks, filter normalization, and result
+// date/untrusted-data processing.
 package utils
 
 import (

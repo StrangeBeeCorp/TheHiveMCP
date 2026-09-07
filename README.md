@@ -435,38 +435,6 @@ See [docs/reference/permissions.md](docs/reference/permissions.md) for detailed 
 
 </details>
 
-## 🚀 Advanced features
-
-<details>
-<summary><strong>🛡️ MCP Elicitation</strong></summary>
-
-### 🛡️ MCP Elicitation (User Confirmation)
-
-TheHiveMCP uses **MCP Elicitation** to request user confirmation before executing potentially dangerous operations (create, update, delete entities).
-
-**How it works:**
-
-1. **Supported clients**: Show confirmation dialog before executing modifications
-2. **Unsupported clients**: Operations proceed automatically (logged with warnings)
-3. **Security layer**: Prevents accidental data modification
-
-**Current MCP client support:**
-
-- ✅ **GitHub Copilot**: Full elicitation support with confirmation dialogs
-- ❌ **Most other MCP clients**: No elicitation support (including Claude Desktop)
-- ⚠️ **Security note**: Use restrictive permissions with clients that don't support elicitation
-
-**Example elicitation prompt:**
-
-```text
-Confirm POST request to TheHive API?
-
-Operation: Create Alert
-Entity: {"title": "Security Incident", "severity": 3, ...}
-```
-
-</details>
-
 ## 🛠️ MCP Tools
 
 - **search-entities**: Search for entities with a structured filter built from TheHive's query DSL (for example,

@@ -68,7 +68,7 @@ func TestExecuteAutomationScopeRunResponderDeniedOutOfScope(t *testing.T) {
 	testutils.Parallel(t)
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, permsPath)
 
 	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope responder target", 3)
 	inScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "In scope responder target", 2)
@@ -107,7 +107,7 @@ func TestExecuteAutomationScopeRunAnalyzerDeniedOutOfScope(t *testing.T) {
 	testutils.Parallel(t)
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, permsPath)
 
 	// Scope is decided on the observable's own TLP: the parent case is in scope (TLP 2)
 	// but the TLP-3 observable is not.
@@ -162,7 +162,7 @@ func TestExecuteAutomationScopeGetJobStatusDeniedOutOfScope(t *testing.T) {
 	testutils.Parallel(t)
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, permsPath)
 	authContext := testutils.GetAuthContext(t)
 
 	parentCase := testutils.CreateCaseWithTLP(t, hiveClient, "Case for job status scope test", 2)
@@ -193,7 +193,7 @@ func TestExecuteAutomationScopeGetActionStatusDeniedOutOfScope(t *testing.T) {
 	testutils.Parallel(t)
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, nil, testutils.DummyElicitationAccept, permsPath)
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, permsPath)
 
 	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope action status target", 3)
 
@@ -218,7 +218,7 @@ func TestExecuteAutomationScopeGetActionStatusDeniedOutOfScope(t *testing.T) {
 func TestExecuteAutomationScopeNoFiltersBackwardCompatible(t *testing.T) {
 	testutils.Parallel(t)
 	hiveClient := testutils.SetupTestWithCleanup(t)
-	mcpClient := testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+	mcpClient := testutils.GetMCPTestClient(t)
 
 	highTLPCase := testutils.CreateCaseWithTLP(t, hiveClient, "High TLP case without filters", 3)
 

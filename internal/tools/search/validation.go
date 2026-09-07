@@ -30,11 +30,11 @@ func (t *Tool) ValidateParams(params *EntitiesParams) error {
 	}
 
 	if params.SortOrder == "" {
-		params.SortOrder = "desc"
+		params.SortOrder = SortOrderDesc
 	}
 
 	if params.Limit == 0 {
-		params.Limit = 10
+		params.Limit = DefaultSearchLimit
 	}
 
 	if len(params.ExtraColumns) == 0 {
@@ -67,7 +67,7 @@ func (t *Tool) ValidateParams(params *EntitiesParams) error {
 
 	// Filters are optional (empty = match-all) and validated by TheHive at query time, not here.
 
-	if params.SortOrder != "asc" && params.SortOrder != "desc" {
+	if params.SortOrder != SortOrderAsc && params.SortOrder != SortOrderDesc {
 		return tools.NewToolErrorf("invalid sort-order '%s'. Must be 'asc' or 'desc'", params.SortOrder)
 	}
 

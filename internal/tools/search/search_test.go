@@ -1,30 +1,17 @@
 package search_test
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
-
-// Fails the test if invoked: asserts search-entities never uses the sampling/LLM path.
-func unusedSamplingHandler(t *testing.T) func(context.Context, mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
-	t.Helper()
-
-	return func(context.Context, mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
-		t.Error("search-entities must not call the sampling/LLM path")
-		return nil, errors.New("unexpected sampling call")
-	}
-}
 
 func createTestAlert(t *testing.T, hiveClient *thehive.APIClient, title string, severity int32, tags []string) map[string]any {
 	t.Helper()
@@ -378,7 +365,7 @@ func TestSearchWithAnalystPermissions(t *testing.T) {
 	createdAlert3, _, err := hiveClient.AlertAPI.CreateAlert(authContext).InputCreateAlert(*alert3).Execute()
 	require.NoError(t, err)
 
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, unusedSamplingHandler(t), testutils.DummyElicitationAccept, testutils.PermissionsFixture(t, "analyst.yaml"))
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, testutils.PermissionsFixture(t, "analyst.yaml"))
 
 	alertsData := searchRows(t, mcpClient, map[string]any{
 		pEntityType: types.EntityTypeAlert,
@@ -414,7 +401,7 @@ func TestSearchWithReadOnlyPermissions(t *testing.T) {
 	createdAlert, _, err := hiveClient.AlertAPI.CreateAlert(authContext).InputCreateAlert(*alert).Execute()
 	require.NoError(t, err)
 
-	mcpClient := testutils.GetMCPTestClientWithPermissions(t, unusedSamplingHandler(t), testutils.DummyElicitationAccept, "")
+	mcpClient := testutils.GetMCPTestClientWithPermissions(t, "")
 
 	result := callSearch(t, mcpClient, map[string]any{
 		pEntityType: types.EntityTypeAlert,

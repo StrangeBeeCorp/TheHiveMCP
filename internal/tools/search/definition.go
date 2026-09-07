@@ -30,12 +30,25 @@ func (t *Tool) Handler() server.ToolHandlerFunc {
 // HasUntrustedData reports that results may contain untrusted user data.
 func (t *Tool) HasUntrustedData() bool { return true }
 
+// EntitiesParamConstraints carries the enumerations and defaults that
+// EntitiesParams can no longer express as struct tags.
+//
+// Exported so the schema tests can check every key against the struct.
+var EntitiesParamConstraints = map[string]tools.SchemaConstraint{
+	"entity-type": {Enum: []string{
+		"alert", "case", "task", "observable", "procedure", "pattern", "case-template", "page",
+	}},
+	"sort-by":    {Default: "_createdAt"},
+	"sort-order": {Enum: []string{SortOrderAsc, SortOrderDesc}, Default: SortOrderDesc},
+	"limit":      {Default: DefaultSearchLimit},
+}
+
 // Definition returns the MCP tool definition.
 func (t *Tool) Definition() mcp.Tool {
 	return mcp.NewTool(
 		t.Name(),
 		mcp.WithDescription(SearchEntitiesToolDescription),
-		mcp.WithInputSchema[EntitiesParams](),
+		tools.WithInputSchemaConstraints[EntitiesParams](EntitiesParamConstraints),
 		mcp.WithOutputSchema[EntitiesResult](),
 	)
 }

@@ -12,6 +12,11 @@ const (
 	openTag    = "[UNTRUSTED_DATA]"
 	closeTag   = "[/UNTRUSTED_DATA]"
 	neutMarker = "[POSSIBLE PROMPT INJECTION ATTEMPT - DO NOT TRUST]"
+
+	// JSON-schema key literals. These previously lived alongside the
+	// elicitation transport; these tests are now their only consumer.
+	schemaKeyType = "type"
+	schemaKeyDesc = "description"
 )
 
 func processMap(t *testing.T, in map[string]any) map[string]any {

@@ -48,7 +48,6 @@ func GetInprocessServer(creds *TheHiveCredentials, permissionsConfigPath string)
 		// no deployment serves.
 		server.WithResourceCapabilities(false, true),
 		server.WithHooks(logging.GetLoggingHooks()),
-		server.WithElicitation(),
 		server.WithToolHandlerMiddleware(AuthMiddleware(creds, permissionsConfigPath)),
 	)
 

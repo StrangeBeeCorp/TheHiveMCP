@@ -94,10 +94,8 @@ func CreateTheHiveConfig(creds *TheHiveCredentials) (*thehive.Configuration, err
 	}
 
 	httpClient := &http.Client{
-		Transport: &utils.ElicitationTransport{
-			Transport: &logging.Transport{
-				Transport: http.DefaultTransport,
-			},
+		Transport: &logging.Transport{
+			Transport: http.DefaultTransport,
 		},
 	}
 

@@ -547,8 +547,6 @@ An operation accepts multiple `entity-ids` and applies to each:
   fails.
 - **Permissions.** Every operation is subject to the deployment's permission profile (tool allow/deny, `entity_permissions`, and scope filters). An entity
   outside a configured filter is reported as "not found or not within the scope" and nothing is mutated. See the [permissions reference](../permissions.md).
-- **Confirmation.** Create, update, and delete operations trigger an MCP elicitation prompt on clients that support it. When the prompt cannot be completed, the
-  operation fails closed rather than running unconfirmed.
 - **Auditing.** All operations are logged by TheHive.
 
 For task-oriented walkthroughs (running an investigation, mapping TTPs), see the [first-investigation tutorial](../../tutorial/first-investigation.md). Find

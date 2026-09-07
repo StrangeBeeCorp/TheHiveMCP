@@ -1,7 +1,6 @@
 package testutils
 
 import (
-	"context"
 	"sync"
 	"testing"
 
@@ -24,72 +23,11 @@ func initTestLogger(options *types.TheHiveMcpDefaultOptions) {
 	})
 }
 
-type functionBasedSamplingHandler struct {
-	createMessageFunc func(context.Context, mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error)
-}
-
-func (h *functionBasedSamplingHandler) CreateMessage(ctx context.Context, request mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
-	return h.createMessageFunc(ctx, request)
-}
-
-type functionBasedElicitationHandler struct {
-	elicitFunc func(context.Context, mcp.ElicitationRequest) (*mcp.ElicitationResult, error)
-}
-
-func (h *functionBasedElicitationHandler) Elicit(ctx context.Context, request mcp.ElicitationRequest) (*mcp.ElicitationResult, error) {
-	return h.elicitFunc(ctx, request)
-}
-
-// SamplingHandlerCreateMessageFromStringResponse returns a sampling handler that
-// always replies with the given response text.
-func SamplingHandlerCreateMessageFromStringResponse(response string) func(ctx context.Context, request mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
-	return func(_ context.Context, _ mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
-		samplingMessage := mcp.SamplingMessage{
-			Role: mcp.RoleAssistant,
-			Content: mcp.TextContent{
-				Type: "text",
-				Text: response,
-			},
-		}
-
-		return &mcp.CreateMessageResult{
-			SamplingMessage: samplingMessage,
-			Model:           "test-model",
-			StopReason:      "endTurn",
-		}, nil
-	}
-}
-
-// DummyElicitationAccept is an elicitation handler that always accepts with a
-// fixed mock payload, for tests that only need elicitation to succeed.
-func DummyElicitationAccept(_ context.Context, _ mcp.ElicitationRequest) (*mcp.ElicitationResult, error) {
-	return &mcp.ElicitationResult{
-		ElicitationResponse: mcp.ElicitationResponse{
-			Action: mcp.ElicitationResponseActionAccept,
-			Content: map[string]any{
-				"confirmed": true,
-				"details":   "Mock data provided by client",
-			},
-		},
-	}, nil
-}
-
-// DummySamplingHandlerCreateMessage is a sampling handler that replies with a
-// fixed dummy response, for tests that only need sampling to succeed.
-func DummySamplingHandlerCreateMessage(ctx context.Context, request mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
-	return SamplingHandlerCreateMessageFromStringResponse("This is a dummy response")(ctx, request)
-}
-
-// GetMCPTestClient creates an in-process MCP test client with admin permissions
-// and the given sampling and elicitation handlers.
-func GetMCPTestClient(
-	t *testing.T,
-	samplingHandlerCreateMessage func(ctx context.Context, request mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error),
-	elicitationHandlerElicit func(ctx context.Context, request mcp.ElicitationRequest) (*mcp.ElicitationResult, error),
-) *client.Client {
+// GetMCPTestClient creates an in-process MCP test client with admin permissions.
+func GetMCPTestClient(t *testing.T) *client.Client {
 	t.Helper()
 
-	return GetMCPTestClientWithPermissions(t, samplingHandlerCreateMessage, elicitationHandlerElicit, string(types.PermissionConfigAdmin))
+	return GetMCPTestClientWithPermissions(t, string(types.PermissionConfigAdmin))
 }
 
 // GetMCPTestClientWithPermissions creates a test client. permissionsConfigPath:
@@ -99,8 +37,6 @@ func GetMCPTestClient(
 // - "" — default read-only
 func GetMCPTestClientWithPermissions(
 	t *testing.T,
-	samplingHandlerCreateMessage func(ctx context.Context, request mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error),
-	elicitationHandlerElicit func(ctx context.Context, request mcp.ElicitationRequest) (*mcp.ElicitationResult, error),
 	permissionsConfigPath string,
 ) *client.Client {
 	t.Helper()
@@ -124,15 +60,7 @@ func GetMCPTestClientWithPermissions(
 	mcpServer := bootstrap.GetInprocessServer(creds, permissionsConfigPath)
 	bootstrap.RegisterToolsToMCPServer(mcpServer)
 
-	serverSamplingHandler := &functionBasedSamplingHandler{createMessageFunc: samplingHandlerCreateMessage}
-	serverElicitationHandler := &functionBasedElicitationHandler{elicitFunc: elicitationHandlerElicit}
-
-	inProcessTransport := transport.NewInProcessTransportWithOptions(mcpServer,
-		transport.WithSamplingHandler(serverSamplingHandler),
-		transport.WithElicitationHandler(serverElicitationHandler),
-	)
-
-	client := client.NewClient(inProcessTransport)
+	client := client.NewClient(transport.NewInProcessTransport(mcpServer))
 
 	err = client.Start(t.Context())
 	if err != nil {
@@ -148,10 +76,7 @@ func GetMCPTestClientWithPermissions(
 					Name:    "MCP Test Client",
 					Version: "1.0.0",
 				},
-				Capabilities: mcp.ClientCapabilities{
-					Sampling:    &struct{}{},
-					Elicitation: &struct{}{},
-				},
+				Capabilities: mcp.ClientCapabilities{},
 			},
 		},
 	)

@@ -34,7 +34,7 @@ func newResourceClient(t *testing.T) *client.Client {
 	t.Helper()
 	testutils.SetupTestWithCleanup(t)
 
-	return testutils.GetMCPTestClient(t, nil, testutils.DummyElicitationAccept)
+	return testutils.GetMCPTestClient(t)
 }
 
 // getResourceStructured calls get-resource with the given URI (empty for the
