@@ -10,6 +10,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **All four tools declare their MCP annotations** (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), so clients can tell a search from a
+  deletion when deciding what to prompt for or auto-approve. `search-entities` and `get-resource` are read-only; `manage-entities` is mutating and destructive
+  (`delete` and `merge` are irreversible); `execute-automation` is additionally open-world, being the only tool whose effects escape TheHive into third-party
+  services. See [Tool annotations](docs/reference/tools/annotations.md).
 - **`search-entities` reports truncation and pages.** Every result now carries `offset`, `hasMore` and, when there is more to read, `nextOffset`; a new `offset`
   parameter (0 by default; `offset + limit` must stay under the 10000-row maximum result window) reads the next window. A full page used to be indistinguishable
   from the end of a result set, so a search capped at the default limit of 10 read as "these are all of them" — `count` has always been the number of rows on
@@ -32,6 +36,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Corrected the annotations the tools were already advertising.** This was not a blank being filled: `mcp.NewTool` populates the annotations itself and the
+  field carries no `omitempty`, so every tool shipped mcp-go's pessimistic defaults — `readOnlyHint: false, destructiveHint: true, openWorldHint: true`. A
+  client was therefore told that `search-entities` and `get-resource` may perform destructive updates, which could cost them a confirmation prompt on a plain
+  search or exclusion from an auto-approve list.
 - **MCP SDK upgraded to `mark3labs/mcp-go` v1.0.0**, which implements MCP revision `2026-07-28`. No client-visible protocol change: the HTTP transport
   deliberately continues to serve the handshake-based revisions only, so clients negotiate exactly as before. Serving `2026-07-28` is a separate, later change.
   See [ADR-0003](docs/explanation/adr/0003-track-mcp-2026-07-28-on-mark3labs-mcp-go.md).
