@@ -32,6 +32,7 @@ Information-oriented, neutral description of the tools and their contracts. Look
 - **[manage-entities](reference/tools/manage-entities.md)** — create, update, delete, comment, promote, merge, and apply templates.
 - **[execute-automation](reference/tools/execute-automation.md)** — run Cortex analyzers and responders and check their status.
 - **[get-resource](reference/tools/get-resource.md)** — browse schemas, metadata, and docs through the `hive://` resource system.
+- **[Tool annotations](reference/tools/annotations.md)** — the `readOnlyHint`/`destructiveHint`/`idempotentHint`/`openWorldHint` each tool advertises, and why.
 - **[Permissions](reference/permissions.md)** — the permission profile format, tool filters, and the untrusted-data boundary.
 - **[Configuration parameters](../README.md#configuration)** — environment variables, flags, and HTTP headers (in the main README).
 

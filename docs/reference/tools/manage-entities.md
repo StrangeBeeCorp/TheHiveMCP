@@ -4,6 +4,8 @@ Perform CRUD and workflow operations on TheHive entities (alerts, cases, tasks, 
 
 ## Overview
 
+Mutating and destructive: `delete` and `merge` are irreversible. See [Tool annotations](annotations.md).
+
 The `manage-entities` tool provides comprehensive Create, Read, Update, Delete, Comment, Promote, and Merge operations for all TheHive entity types. It allows
 you to manipulate entities programmatically while respecting TheHive's data integrity and relationship constraints.
 

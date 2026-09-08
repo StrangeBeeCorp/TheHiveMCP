@@ -4,6 +4,8 @@ Execute Cortex analyzers and responders, or retrieve their execution status.
 
 ## Overview
 
+Mutating, destructive and open-world: responders act on third-party services. See [Tool annotations](annotations.md).
+
 The `execute-automation` tool provides integration with Cortex for running automated analysis and response actions. It allows you to execute analyzers to enrich
 observables with threat intelligence and run responders to perform automated actions on entities.
 

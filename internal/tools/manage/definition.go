@@ -54,5 +54,6 @@ func (t *Tool) Definition() mcp.Tool {
 		mcp.WithDescription(ManageToolDescription),
 		tools.WithInputSchemaConstraints[EntityParams](EntityParamConstraints),
 		mcp.WithOutputSchema[EntityResult](),
+		mcp.WithToolAnnotation(tools.MutatingToolAnnotation()),
 	)
 }

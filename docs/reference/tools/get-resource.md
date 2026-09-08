@@ -4,6 +4,8 @@ Access TheHive resources for documentation, schemas, and metadata.
 
 ## Overview
 
+Read-only: this tool never modifies TheHive. See [Tool annotations](annotations.md).
+
 The `get-resource` tool is the entry point for exploring TheHive's capabilities. It provides hierarchical access to documentation, schemas, and metadata through
 a URI-based resource system.
 
