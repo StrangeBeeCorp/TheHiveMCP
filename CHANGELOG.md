@@ -14,6 +14,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   deletion when deciding what to prompt for or auto-approve. `search-entities` and `get-resource` are read-only; `manage-entities` is mutating and destructive
   (`delete` and `merge` are irreversible); `execute-automation` is additionally open-world, being the only tool whose effects escape TheHive into third-party
   services. See [Tool annotations](docs/reference/tools/annotations.md).
+- **`search-entities` reports truncation and pages.** Every result now carries `offset`, `hasMore` and, when there is more to read, `nextOffset`; a new `offset`
+  parameter (0 by default; `offset + limit` must stay under the 10000-row maximum result window) reads the next window. A full page used to be indistinguishable
+  from the end of a result set, so a search capped at the default limit of 10 read as "these are all of them" — `count` has always been the number of rows on
+  the page, never the size of the match. Detecting this costs no extra call: the query asks TheHive for one row beyond the limit and drops it. `count=true` is
+  unaffected, having no window to page.
 - **Automation history is searchable.** `search-entities` accepts two new entity types: `job` (Cortex analyzer runs) and `action` (Cortex responder runs), with
   the same filter DSL, sorting, paging and permission scoping as every other entity. Filter on `analyzerName`, `status`, `startDate`, `cortexId` and more, and
   pass `extra-data: ["report"]` to include an analyzer report. New `hive://schema/job` and `hive://schema/action` resources document the filterable fields.

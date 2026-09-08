@@ -67,6 +67,7 @@ var EntitiesParamConstraints = map[string]tools.SchemaConstraint{
 	// lives in the sort-by description instead, which is what a model reads.
 	"sort-order": {Enum: []string{SortOrderAsc, SortOrderDesc}, Default: SortOrderDesc},
 	"limit":      {Default: DefaultSearchLimit},
+	"offset":     {Default: 0},
 }
 
 // Definition returns the MCP tool definition.

@@ -24,7 +24,8 @@ To build a filter you need to know the available fields and the operator grammar
 | `filters`            | object  | No       | TheHive filter object built from the query DSL (a single root operator). Omit it (or use `{"_any": {}}`) to match all entities within the limit.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `sort-by`            | string  | No       | Column to sort results by (default: `_createdAt`; `startDate` for `job` and `action`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `sort-order`         | string  | No       | Sort order `asc` or `desc` (default: `desc`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `limit`              | number  | No       | Number of results to return (default: 10)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `limit`              | number  | No       | Number of results to return per page (default: 10, maximum: 1000)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `offset`             | number  | No       | Index of the first result to return, for paging (default: 0; `offset + limit` must stay under 10000). See [Paging](#paging-through-a-large-result-set).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `extra-columns`      | array   | No       | Columns to keep in output. Entity-specific defaults: alerts `['_id', 'title', '_createdAt', 'severity', 'status']`, cases `['_id', 'title', '_createdAt', 'status', 'severity']`, tasks `['_id', 'title', 'status', '_createdAt', 'assignee']`, observables `['_id', 'dataType', '_createdAt']`, procedures `['_id', 'patternId', 'patternName', 'description', 'occurDate']`, patterns `['_id', 'patternId', 'name', 'tactics', 'platforms']`, case-templates `['_id', 'name', 'displayName', '_createdAt']`, pages `['_id', 'title', 'category', '_createdAt']`, jobs `['_id', 'analyzerName', 'status', 'startDate', 'cortexId']`, actions `['_id', 'responderName', 'status', 'startDate', 'objectType', 'objectId']` |
 | `extra-data`         | array   | No       | Additional data fields to include in output (see `Extra Data` in the API docs)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `additional-queries` | array   | No       | Additional queries to enrich results with related data (see `Queries available` in the API docs)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -199,10 +200,67 @@ Response:
 {
   "count": 42,
   "countOnly": true,
+  "offset": 0,
+  "hasMore": false,
   "entityType": "case",
   "rawFilters": {...}
 }
 ```
+
+A count-only query aggregates the whole match server-side, so there is no window: `offset` is always `0` and `hasMore` always `false`, whatever `limit` and
+`offset` were passed.
+
+### Paging through a large result set
+
+Results are a window over the match, never necessarily the whole of it. `count` is the number of rows on **this page**, not the size of the result set.
+
+Every response carries `hasMore`. When it is `true` the match continues past this page, and `nextOffset` holds the `offset` to pass to the next call — every
+other parameter unchanged. When it is `false` this page reaches the end, so `offset + count` is the total, and `nextOffset` is absent.
+
+```json
+{
+  "entity-type": "alert",
+  "filters": { "_eq": { "_field": "status", "_value": "New" } },
+  "limit": 50
+}
+```
+
+Response:
+
+```json
+{
+  "count": 50,
+  "countOnly": false,
+  "offset": 0,
+  "hasMore": true,
+  "nextOffset": 50,
+  "entityType": "alert",
+  "results": [...],
+  "rawFilters": {...}
+}
+```
+
+Read the next page by echoing `nextOffset` back as `offset`:
+
+```json
+{
+  "entity-type": "alert",
+  "filters": { "_eq": { "_field": "status", "_value": "New" } },
+  "limit": 50,
+  "offset": 50
+}
+```
+
+Detecting truncation costs nothing extra: the server asks TheHive for one row beyond `limit` and drops it before returning the page.
+
+Two caveats:
+
+- **Set `sort-by` and `sort-order` explicitly when paging.** Pages are separate queries; rows created or updated between them can shift the ordering and cause a
+  row to be served twice or skipped.
+- **`offset + limit` must stay under 10000.** The bound is on the result _window_ — the first row plus the rows read — not on `offset` alone, so a large `limit`
+  reaches it sooner: `offset: 9500, limit: 1000` is refused even though the offset is well under 10000. Beyond the window TheHive's index refuses the query
+  outright, so the server rejects it up front with a message saying so. Narrow the filter — or use `count: true` if all you need is the size of the match, which
+  is exact and unaffected by `limit` and `offset`.
 
 ### Custom columns
 
