@@ -27,10 +27,12 @@ import (
 // happened in v1.1.0, where three tools advertised a wrapper struct while
 // emitting the flattened union.
 //
-// So validate here, at the one chokepoint every integration tool call passes
-// through, against real TheHive payloads rather than constructed ones. This
-// complements TestToolSchemas_OutputMatchesAdvertisedSchema, which covers every
-// variant but only with synthetic values.
+// So validate against real TheHive payloads rather than constructed ones.
+// GetInprocessServer enables mcp-go's own output validation, which catches
+// every call however a test issues it; this helper adds a clearer diagnostic on
+// the calls that come through it. Together they complement
+// TestToolSchemas_OutputMatchesAdvertisedSchema, which covers every variant but
+// only with synthetic values.
 var (
 	compiledOutputSchemasOnce sync.Once
 	compiledOutputSchemas     map[string]*jsonschema.Schema
@@ -116,7 +118,7 @@ func compileOutputSchema(definition mcp.Tool) (*jsonschema.Schema, error) {
 func RequireConformsToOutputSchema(t *testing.T, toolName string, result *mcp.CallToolResult) {
 	t.Helper()
 
-	if result == nil || result.IsError || result.StructuredContent == nil {
+	if result == nil || result.IsError {
 		return
 	}
 
@@ -127,6 +129,13 @@ func RequireConformsToOutputSchema(t *testing.T, toolName string, result *mcp.Ca
 	if !ok {
 		return
 	}
+
+	// A declared output schema makes structuredContent mandatory on success, so
+	// a missing payload is a violation rather than an exemption. mcp-go's own
+	// validator skips nil for backwards compatibility with hand-written
+	// schemas; here it would hide a handler that returned nothing.
+	require.NotNil(t, result.StructuredContent,
+		"%s declares an output schema, so a successful result must carry structured content", toolName)
 
 	// Round-trip so validation sees the JSON the client sees, not Go values.
 	encoded, err := json.Marshal(result.StructuredContent)

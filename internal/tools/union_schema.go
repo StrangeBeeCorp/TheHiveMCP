@@ -59,8 +59,17 @@ func outputSchemaOption[T any](union bool) mcp.ToolOption {
 
 		raw, err := rewriteOutputSchema[T](tool.OutputSchema, union)
 		if err != nil {
-			slog.Error("Failed to build output schema; the tool would advertise a shape it never sends",
+			// Returning here would leave mcp.WithOutputSchema's wrapper schema
+			// installed — the exact contract that rejects every successful
+			// flattened result, after the handler has already committed its
+			// write. Advertising no output schema is strictly better than
+			// advertising one we know the payload violates, and a tool option
+			// cannot propagate an error to refuse registration outright.
+			slog.Error("Failed to build output schema; advertising none rather than one the payload violates",
 				"tool", tool.Name, "error", err)
+
+			tool.OutputSchema = mcp.ToolOutputSchema{}
+			tool.RawOutputSchema = nil
 
 			return
 		}
