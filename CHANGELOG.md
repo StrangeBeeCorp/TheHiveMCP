@@ -24,7 +24,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   get-…-status to check for updates", sending an agent to re-poll an answer that cannot change. Terminal states (`Success`, `Failure`, `Deleted`, `Cancelled`)
   now say so.
 - **A bad filter field is no longer reported as a permissions problem.** A 400 from an unknown attribute returned "Check that you have permissions to view
-  cases". The message now names both possibilities and points at TheHive's response, which lists the valid attributes.
+  cases". The message now names both possibilities. It deliberately does not promise that the attached response identifies the offending attribute: TheHive does
+  return that list, but thehive4go consumes the body while building its own error, so by the time we see it the useful part is usually gone. Raised upstream.
 - **The severity scale is documented as configurable.** The `search-entities` description called 1–4 a fixed scale while the entity schemas correctly describe
   the range and labels as configurable per organisation. The description now agrees with the schemas and points at `severityLabel`.
 - **`run-responder` documents that it needs the responder's id.** `run-analyzer` accepts a worker name, but a name passed to `run-responder` creates the action

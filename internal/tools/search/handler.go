@@ -244,7 +244,7 @@ func (t *Tool) executeQuery(ctx context.Context, hiveQuery thehive.InputQuery, e
 
 	results, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(ctx).InputQuery(hiveQuery).Execute()
 	if err != nil {
-		return nil, fmt.Errorf("failed to search %ss: %w. The filter may reference a field or operator this entity does not have, or you may lack permission to view %ss; TheHive's response below usually names the offending attribute. API response: %s", entityType, err, entityType, utils.DescribeHTTPResponse(resp))
+		return nil, fmt.Errorf("failed to search %ss: %w. The filter may reference a field or operator this entity does not have, or you may lack permission to view %ss. API response: %s", entityType, err, entityType, utils.DescribeHTTPResponse(resp))
 	}
 
 	// Count queries return a bare number, not an array.
