@@ -49,6 +49,19 @@ func GetInprocessServer(creds *TheHiveCredentials, permissionsConfigPath string)
 		server.WithResourceCapabilities(false, true),
 		server.WithHooks(logging.GetLoggingHooks()),
 		server.WithToolHandlerMiddleware(AuthMiddleware(creds, permissionsConfigPath)),
+		// Deliberately stricter than GetMCPServer, and the one intended
+		// divergence from it: this validates each result against the tool's own
+		// declared output schema and turns a violation into an error result, so
+		// the integration suite fails on a non-conforming payload instead of
+		// accepting it the way mcp-go's client does.
+		//
+		// It belongs here rather than in a test helper because this is the real
+		// chokepoint — tests call tools both through testutils.CallTool and
+		// directly on the client, and only the server sees every call.
+		//
+		// Not enabled in production: a deployment that starts violating its own
+		// schema should degrade, not have every call replaced by an error.
+		server.WithOutputSchemaValidation(),
 	)
 
 	return mcpServer
