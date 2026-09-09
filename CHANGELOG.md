@@ -8,6 +8,29 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Entity schemas say which fields can actually be filtered on.** Fields that TheHive describes now carry `filterable` in `hive://schema/<entity>`: `exact`
+  (full filter DSL and sorting), `fulltext` (substring matches work, exact equality generally does not), or `no` (returned but not indexed). The key is
+  deliberately **absent** where TheHive has no opinion — a field it does not describe, an unrecognised index type, a failed describe call, or an entity with no
+  describe endpoint — so do not assume it is always present. A short `filterableLegend` travels with the annotation, including that meaning of absence.
+
+  TheHive indexes only some attributes of an entity, and a filter on an unindexed one is **accepted and returns zero rows** — no error, nothing to distinguish
+  it from a genuine empty result. On `pattern` that is 12 of 23 attributes, including the ones most worth filtering (`platforms`, `dataSources`, `detection`),
+  so the most useful queries against the MITRE catalogue silently returned nothing. Other entities are affected more mildly: `action` (`objectId`,
+  `objectType`), `alert` (`computed.handlingDuration*`, `importDate`), `case`, `task`, `attachment`, `job`.
+
+  The values come from TheHive itself — `/api/v1/describe/<entity>` reports an `indexType` per attribute, which we simply never read. They are fetched once per
+  entity type per deployment and cached, and every failure path (unreachable TheHive, an entity with no describe endpoint such as `case-template`, an
+  unrecognised index type) leaves the schema exactly as it was rather than guessing.
+
+  ⚠️ **Requires TheHive 5.6+.** On 5.5 the schemas are served exactly as before, with no `filterable` key. TheHive 5.5 does answer `describe`, but omits the
+  `cardinality` field that thehive4go's generated model requires (it sends `values`/`labels` instead), so the SDK cannot decode the response and the annotation
+  falls open. Tracked in #181; it needs an SDK fix, not a change here.
+
+  Rejecting such a filter outright belongs in TheHive, which already returns a 400 with the valid attribute list for an _unknown_ field; that inconsistency has
+  been raised with them separately.
+
 ### Fixed
 
 - **Every successful `get-resource`, `manage-entities` and `execute-automation` call violated its own advertised output schema.** ⚠️ **This made writes report

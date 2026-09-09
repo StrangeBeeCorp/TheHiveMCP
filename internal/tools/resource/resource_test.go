@@ -1,11 +1,15 @@
 package resource_test
 
 import (
+	"fmt"
+	"reflect"
 	"testing"
 
+	"github.com/mark3labs/mcp-go/client"
 	"github.com/stretchr/testify/require"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 func TestGetResourceCatalog(t *testing.T) {
@@ -192,4 +196,104 @@ func TestGetResourceResourcesFieldBehavior(t *testing.T) {
 	subcategoriesList, ok := subcategories.([]any)
 	require.True(t, ok)
 	require.NotEmpty(t, subcategoriesList, "Should contain automation, entities, organisation subcategories")
+}
+
+// The whole point of the annotation is to be right about a live deployment, so
+// it can only be verified against one: Pattern has 12 of 23 attributes at
+// indexType none, and filtering on any of them returns zero rows instead of an
+// error. Without the annotation a caller reads the schema, sees the field, and
+// has no way to know.
+//
+// The expectations are read from the same describe endpoint the annotation is
+// built from, rather than hard-coded, because indexType is a property of the
+// deployment: hard-coding 5.6's answers made this fail on the 5.5 CI leg.
+func TestGetResourcePatternSchemaMatchesDescribe(t *testing.T) {
+	testutils.Parallel(t)
+
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	authContext := testutils.GetAuthContext(t)
+
+	description, _, err := hiveClient.DescribeAPI.DescribeAModel(authContext, types.EntityTypePattern).Execute()
+	if err != nil {
+		// thehive4go cannot decode TheHive 5.5's describe: the generated model
+		// requires `cardinality`, which 5.5 omits (it sends `values`/`labels`
+		// instead). The annotation fails open there, so there is nothing to
+		// assert — skip loudly rather than pretend this version is covered.
+		t.Skipf("describe is undecodable on this TheHive, so no annotation is produced: %v", err)
+	}
+
+	wantModes := map[string]string{}
+
+	for _, attribute := range description.Attributes {
+		instance := attribute.GetActualInstance()
+		if instance == nil {
+			continue
+		}
+
+		name, indexType := describedAttribute(t, instance)
+
+		switch indexType {
+		case "standard", "fulltext":
+			wantModes[name] = "exact"
+		case "fulltextOnly":
+			wantModes[name] = "fulltext"
+		case "none":
+			wantModes[name] = "no"
+		}
+	}
+
+	require.NotEmpty(t, wantModes, "describe must report index types to compare against")
+
+	structuredData := getResourceStructured(t, mcpClientForPattern(t), "hive://schema/pattern")
+
+	data, ok := structuredData[fieldData].(map[string]any)
+	require.True(t, ok)
+
+	properties, ok := data["properties"].(map[string]any)
+	require.True(t, ok)
+
+	checked := 0
+
+	for name, wantMode := range wantModes {
+		property, isObject := properties[name].(map[string]any)
+		if !isObject {
+			continue // describe covers attributes the output schema does not list
+		}
+
+		require.Equal(t, wantMode, property["filterable"],
+			"%s: the schema must report what describe says about it", name)
+
+		checked++
+	}
+
+	require.NotZero(t, checked, "at least one described attribute must appear in the schema")
+
+	// The unindexed fields that motivate this must be among them, whatever the
+	// version: if TheHive stops describing them the annotation loses its point.
+	for _, field := range []string{"platforms", "dataSources", "detection"} {
+		require.Contains(t, wantModes, field, "describe should still report %s", field)
+		require.Equal(t, "no", wantModes[field], "%s is expected to be unindexed", field)
+	}
+
+	require.Contains(t, data, "filterableLegend", "the annotation must explain its own key")
+}
+
+// describedAttribute reads the name and index type off one describe attribute,
+// mirroring what the annotation does.
+func describedAttribute(t *testing.T, instance any) (name, indexType string) {
+	t.Helper()
+
+	value := reflect.ValueOf(instance)
+	if value.Kind() == reflect.Pointer {
+		value = value.Elem()
+	}
+
+	return value.FieldByName("Name").String(), fmt.Sprintf("%v", value.FieldByName("IndexType").Interface())
+}
+
+// mcpClientForPattern is newResourceClient, named for what this test needs.
+func mcpClientForPattern(t *testing.T) *client.Client {
+	t.Helper()
+
+	return newResourceClient(t)
 }
