@@ -556,3 +556,12 @@ func processDatesSlice(val reflect.Value, mode wrapMode) ([]any, error) {
 func isDateField(fieldName string) bool {
 	return slices.Contains(dateFields, fieldName)
 }
+
+// IsDateField reports whether a field name carries an epoch timestamp that
+// ProcessDatesRecursive rewrites into a formatted string.
+//
+// Exported so a tool's advertised output schema can be derived from the same
+// list that drives the rewrite: the Go field is an integer, the value on the
+// wire is a string, and a schema inferred from the struct alone would declare
+// the type the client never receives.
+func IsDateField(fieldName string) bool { return isDateField(fieldName) }

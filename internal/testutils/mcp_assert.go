@@ -22,6 +22,13 @@ func CallTool(t *testing.T, c *client.Client, name string, args map[string]any) 
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
+	// Checks the payload against the schema its tool advertises, for the calls
+	// that come through this helper. Tests also call the client directly (e.g.
+	// execute_automation/scope_test.go), which is why GetInprocessServer also
+	// enables mcp-go's own output validation — that is the chokepoint, and this
+	// is the clearer diagnostic. See mcp_schema.go.
+	RequireConformsToOutputSchema(t, name, result)
+
 	return result
 }
 
