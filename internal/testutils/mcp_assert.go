@@ -22,6 +22,10 @@ func CallTool(t *testing.T, c *client.Client, name string, args map[string]any) 
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
+	// Every integration tool call passes through here, so this is where real
+	// payloads meet the schema their tool advertises. See mcp_schema.go.
+	RequireConformsToOutputSchema(t, name, result)
+
 	return result
 }
 
