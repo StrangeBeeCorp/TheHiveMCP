@@ -10,6 +10,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Every successful `get-resource`, `manage-entities` and `execute-automation` call violated its own advertised output schema.** ⚠️ **This made writes report
+  failure while applying.** The three tools return union results that `Unwrap()` flattens to the active variant, hoisting its fields to the top level, while
+  `mcp.WithOutputSchema` advertised the _wrapper_ struct — so the declared schema permitted only `resource`/`category`-style wrapper keys and none of the keys
+  actually sent. mcp-go v0.43.1 generated those schemas with `AllowAdditionalProperties: true`, which tolerated the extra keys; v1.1.0's upgrade to mcp-go
+  v1.0.0 infers with `github.com/google/jsonschema-go`, which emits `additionalProperties: false` and turned the tolerated mismatch into a violation on every
+  success path. Because a client may reject a non-conforming result only _after_ the handler has run, mutations and analyzer dispatches committed and were then
+  reported as failures — indistinguishable from a rejection, so a retry duplicated the write. The tools now advertise `anyOf` over their variant schemas,
+  describing what they actually emit. Error paths were never affected, and `search-entities` was never affected.
+- **Date fields were advertised as integers but sent as strings.** `ProcessDatesRecursive` rewrites epoch fields (`_createdAt`, `_updatedAt`, `startDate`, …)
+  into formatted strings on the way out, while a schema inferred from the Go struct declared `integer`. Any result carrying a TheHive entity therefore violated
+  its schema independently of the union bug. Date-named properties are now typed `["null", "string"]` at every depth, derived from the same field list that
+  drives the rewrite.
+- **Output schemas are now asserted against real results.** `TestToolSchemas_OutputMatchesAdvertisedSchema` validates a populated result for every union variant
+  of all four tools against the schema that tool advertises. Both bugs above passed every existing unit and integration test, because tests assert on the
+  payload the code builds and never validate it against the advertised schema — the same blind spot that let the v1.1.0 input-schema regression through, on the
+  output side.
 - **Observable searches return the IOC.** The default columns for `observable` were `_id`, `dataType` and `_createdAt` — a type and a timestamp, but not the
   indicator. `data` is now a default, so the most common SOC query stops returning rows a caller cannot act on, whether searched directly or expanded through
   `additional-queries`.

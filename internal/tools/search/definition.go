@@ -76,7 +76,7 @@ func (t *Tool) Definition() mcp.Tool {
 		t.Name(),
 		mcp.WithDescription(SearchEntitiesToolDescription),
 		tools.WithInputSchemaConstraints[EntitiesParams](EntitiesParamConstraints),
-		mcp.WithOutputSchema[EntitiesResult](),
+		tools.WithResultOutputSchema[EntitiesResult](),
 		mcp.WithToolAnnotation(tools.ReadOnlyToolAnnotation()),
 	)
 }
