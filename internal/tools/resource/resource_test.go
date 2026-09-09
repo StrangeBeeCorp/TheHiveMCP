@@ -193,3 +193,43 @@ func TestGetResourceResourcesFieldBehavior(t *testing.T) {
 	require.True(t, ok)
 	require.NotEmpty(t, subcategoriesList, "Should contain automation, entities, organisation subcategories")
 }
+
+// The whole point of the annotation is to be right about a live deployment, so
+// it can only be verified against one: Pattern has 12 of 23 attributes at
+// indexType none, and filtering on any of them returns zero rows instead of an
+// error. Without the annotation a caller reads the schema, sees the field, and
+// has no way to know.
+func TestGetResourcePatternSchemaMarksUnfilterableFields(t *testing.T) {
+	testutils.Parallel(t)
+	mcpClient := newResourceClient(t)
+
+	structuredData := getResourceStructured(t, mcpClient, "hive://schema/pattern")
+
+	data, ok := structuredData[fieldData].(map[string]any)
+	require.True(t, ok)
+
+	properties, ok := data["properties"].(map[string]any)
+	require.True(t, ok)
+
+	// indexType none in /api/v1/describe/pattern.
+	for _, field := range []string{"platforms", "dataSources", "detection", "capecId"} {
+		property, isObject := properties[field].(map[string]any)
+		require.True(t, isObject, "pattern schema must describe %s", field)
+		require.Equal(t, "no", property["filterable"],
+			"%s is not indexed by TheHive, so the schema must not present it as filterable", field)
+	}
+
+	// indexType standard: filtering on these works.
+	for _, field := range []string{"patternId", "name", "tactics"} {
+		property, isObject := properties[field].(map[string]any)
+		require.True(t, isObject, "pattern schema must describe %s", field)
+		require.Equal(t, "exact", property["filterable"], "%s is indexed and filterable", field)
+	}
+
+	// description is fulltextOnly: filterable, but not with exact equality.
+	description, isObject := properties["description"].(map[string]any)
+	require.True(t, isObject)
+	require.Equal(t, "fulltext", description["filterable"])
+
+	require.Contains(t, data, "filterableLegend", "the annotation must explain its own key")
+}

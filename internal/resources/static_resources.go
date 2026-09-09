@@ -191,9 +191,7 @@ func registerAutomationSchemaResources(registry *ResourceRegistry) {
 		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 
-	registry.Register(jobSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-		return GetJobSchemaHandler()
-	})
+	registry.Register(jobSchema, withFilterable(types.EntityTypeJob, GetJobSchemaHandler))
 
 	actionSchema := mcp.NewResource(
 		"hive://schema/action",
@@ -202,9 +200,7 @@ func registerAutomationSchemaResources(registry *ResourceRegistry) {
 		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 
-	registry.Register(actionSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-		return GetActionSchemaHandler()
-	})
+	registry.Register(actionSchema, withFilterable(types.EntityTypeAction, GetActionSchemaHandler))
 }
 
 // GetJobSchemaHandler returns the Cortex analyzer job output schema.
@@ -469,9 +465,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		mcp.WithResourceDescription("Output fields, types, and constraints for alerts returned from TheHive API"),
 		mcp.WithMIMEType(mimeApplicationJSON),
 	)
-	registry.Register(alertSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-		return GetAlertSchemaHandler()
-	})
+	registry.Register(alertSchema, withFilterable(types.EntityTypeAlert, GetAlertSchemaHandler))
 
 	alertCreateSchema := mcp.NewResource(
 		"hive://schema/alert/create",
@@ -499,9 +493,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		mcp.WithResourceDescription("Output fields, types, and constraints for cases returned from TheHive API"),
 		mcp.WithMIMEType(mimeApplicationJSON),
 	)
-	registry.Register(caseSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-		return GetCaseSchemaHandler()
-	})
+	registry.Register(caseSchema, withFilterable(types.EntityTypeCase, GetCaseSchemaHandler))
 
 	caseCreateSchema := mcp.NewResource(
 		"hive://schema/case/create",
@@ -529,9 +521,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		mcp.WithResourceDescription("Output fields, types, and constraints for tasks returned from TheHive API"),
 		mcp.WithMIMEType(mimeApplicationJSON),
 	)
-	registry.Register(taskSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-		return GetTaskSchemaHandler()
-	})
+	registry.Register(taskSchema, withFilterable(types.EntityTypeTask, GetTaskSchemaHandler))
 
 	taskCreateSchema := mcp.NewResource(
 		"hive://schema/task/create",
@@ -559,9 +549,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		mcp.WithResourceDescription("Output fields, types, and constraints for observables returned from TheHive API"),
 		mcp.WithMIMEType(mimeApplicationJSON),
 	)
-	registry.Register(observableSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-		return GetObservableSchemaHandler()
-	})
+	registry.Register(observableSchema, withFilterable(types.EntityTypeObservable, GetObservableSchemaHandler))
 
 	observableCreateSchema := mcp.NewResource(
 		"hive://schema/observable/create",
@@ -590,9 +578,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 
-	registry.Register(procedureSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-		return GetProcedureSchemaHandler()
-	})
+	registry.Register(procedureSchema, withFilterable(types.EntityTypeProcedure, GetProcedureSchemaHandler))
 
 	procedureCreateSchema := mcp.NewResource(
 		"hive://schema/procedure/create",
@@ -622,9 +608,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		mcp.WithMIMEType(mimeApplicationJSON),
 	)
 
-	registry.Register(patternSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-		return GetPatternSchemaHandler()
-	})
+	registry.Register(patternSchema, withFilterable(types.EntityTypePattern, GetPatternSchemaHandler))
 
 	registerAutomationSchemaResources(registry)
 
@@ -634,9 +618,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		mcp.WithResourceDescription("Output fields, types, and constraints for case templates"),
 		mcp.WithMIMEType(mimeApplicationJSON),
 	)
-	registry.Register(caseTemplateSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-		return GetCaseTemplateSchemaHandler()
-	})
+	registry.Register(caseTemplateSchema, withFilterable(types.EntityTypeCaseTemplate, GetCaseTemplateSchemaHandler))
 
 	caseTemplateCreateSchema := mcp.NewResource(
 		uriCaseTemplateSchema+suffixCreate,
@@ -664,9 +646,7 @@ func RegisterSchemaResources(registry *ResourceRegistry) {
 		mcp.WithResourceDescription("Output fields, types, and constraints for pages returned from TheHive API"),
 		mcp.WithMIMEType(mimeApplicationJSON),
 	)
-	registry.Register(pageSchema, func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-		return GetPageSchemaHandler()
-	})
+	registry.Register(pageSchema, withFilterable(types.EntityTypePage, GetPageSchemaHandler))
 
 	pageCreateSchema := mcp.NewResource(
 		"hive://schema/page/create",
