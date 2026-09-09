@@ -222,8 +222,15 @@ func (t *Tool) buildSortOperation(sortBy, sortOrder string) *thehive.InputQueryS
 // row wider than the caller asked for on purpose — trimProbeRow reads that row
 // as the has-more signal and drops it before anything else sees the results.
 func (t *Tool) buildPagingOperation(offset, limit int, extraData []string) *thehive.InputQueryPagingOperation {
+	// One row past the page is the truncation probe: if it comes back, there is
+	// a next page. Clamp it to the result window rather than letting it push
+	// past — TheHive rejects the whole query for exceeding max_result_window,
+	// which would make the last readable row unreachable for the sake of a
+	// hasMore flag that can only be false there anyway.
+	end := min(offset+limit+1, MaxSearchWindow)
+
 	// #nosec G115 -- offset and limit are both bounded by ValidateParams
-	query := thehive.NewInputQueryPagingOperation(int32(offset), int32(offset+limit+1), "page")
+	query := thehive.NewInputQueryPagingOperation(int32(offset), int32(end), "page")
 	query.SetExtraData(extraData)
 
 	return query
@@ -237,7 +244,7 @@ func (t *Tool) executeQuery(ctx context.Context, hiveQuery thehive.InputQuery, e
 
 	results, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(ctx).InputQuery(hiveQuery).Execute()
 	if err != nil {
-		return nil, fmt.Errorf("failed to search %ss: %w. Check that you have permissions to view %ss. API response: %v", entityType, err, entityType, resp)
+		return nil, fmt.Errorf("failed to search %ss: %w. The filter may reference a field or operator this entity does not have, or you may lack permission to view %ss. API response: %s", entityType, err, entityType, utils.DescribeHTTPResponse(resp))
 	}
 
 	// Count queries return a bare number, not an array.

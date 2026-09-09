@@ -56,13 +56,16 @@ func applyEntitiesDefaults(params *EntitiesParams) {
 		params.Limit = DefaultSearchLimit
 	}
 
-	if len(params.ExtraColumns) == 0 {
-		if defaultFields, exists := types.DefaultFields[params.EntityType]; exists {
-			params.ExtraColumns = defaultFields
-		} else {
-			params.ExtraColumns = []string{fieldID, fieldTitle, "url"} // fallback
-		}
+	// extra-columns adds to the defaults rather than replacing them, so the
+	// parameter behaves the way its name reads. Replacing meant that asking for
+	// one more field silently dropped title, severity and status — a caller
+	// requesting extra data got less of it, with nothing to say so.
+	defaultFields, exists := types.DefaultFields[params.EntityType]
+	if !exists {
+		defaultFields = []string{fieldID, fieldTitle, "url"} // fallback
 	}
+
+	params.ExtraColumns = unionColumns(defaultFields, params.ExtraColumns)
 
 	if params.ExtraData == nil {
 		params.ExtraData = []string{}
@@ -89,16 +92,47 @@ func validatePagingWindow(params *EntitiesParams) error {
 		return tools.NewToolError("offset must be a non-negative integer")
 	}
 
-	// The index bounds the WINDOW (first row + rows read), not the offset alone,
-	// and the truncation probe makes the window one row wider than the limit.
-	// Written as a subtraction rather than Offset+Limit+1 > MaxSearchWindow so a
+	// A count reads no window: TheHive returns a bare number, and the handler
+	// skips paging entirely. Bounding it here rejected count=true&offset=9995
+	// with a message telling the caller to use count=true.
+	if params.Count {
+		return nil
+	}
+
+	// The index bounds the WINDOW (first row + rows read), not the offset alone.
+	// The truncation probe would make that window one row wider than the limit,
+	// but buildPagingOperation clamps it to MaxSearchWindow instead of pushing
+	// past it, so the bound here is the page itself: a page ending exactly on
+	// the last readable row is legal, and only loses the ability to report
+	// hasMore — there is nothing further to report.
+	//
+	// Written as a subtraction rather than Offset+Limit > MaxSearchWindow so a
 	// caller sending a near-maxint offset cannot overflow past the check; Limit
 	// is already bounded above, so the right-hand side cannot go negative.
-	if params.Offset > MaxSearchWindow-params.Limit-1 {
+	if params.Offset > MaxSearchWindow-params.Limit {
 		return tools.NewToolErrorf(
 			"offset %d with limit %d reads past the maximum result window of %d rows. Narrow the filter instead of paging further, or use count=true for the size of the match",
 			params.Offset, params.Limit, MaxSearchWindow)
 	}
 
 	return nil
+}
+
+// unionColumns appends the caller's columns to the defaults, preserving order
+// and dropping duplicates so a column named twice is projected once.
+func unionColumns(defaults, extra []string) []string {
+	seen := make(map[string]struct{}, len(defaults)+len(extra))
+	columns := make([]string, 0, len(defaults)+len(extra))
+
+	for _, column := range slices.Concat(defaults, extra) {
+		if _, duplicate := seen[column]; duplicate {
+			continue
+		}
+
+		seen[column] = struct{}{}
+
+		columns = append(columns, column)
+	}
+
+	return columns
 }

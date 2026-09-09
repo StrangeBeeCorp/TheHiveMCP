@@ -43,7 +43,7 @@ const (
 	cortexRangeAll = "all"
 
 	// errListAnalyzers is shared by both catalog fetch paths.
-	errListAnalyzers = "failed to find analyzers: %w. Check that Cortex integration is enabled and you have permissions to list analyzers. API response: %v"
+	errListAnalyzers = "failed to find analyzers: %w. Check that Cortex integration is enabled and you have permissions to list analyzers. API response: %s"
 
 	// Query parameter names accepted by the automation catalogs.
 	argDataType   = "dataType"
@@ -253,7 +253,7 @@ func GetAvailableUsers(ctx context.Context, _ mcp.ReadResourceRequest) ([]mcp.Re
 
 	results, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(ctx).InputQuery(hiveQuery).Execute()
 	if err != nil {
-		return nil, fmt.Errorf("failed to find users: %w. Check that you have permissions to list users. API response: %v", err, resp)
+		return nil, fmt.Errorf("failed to find users: %w. Check that you have permissions to list users. API response: %s", err, utils.DescribeHTTPResponse(resp))
 	}
 
 	usersJSON, err := parseUsers(results)
@@ -286,7 +286,7 @@ func GetAvailableCaseTemplates(ctx context.Context, _ mcp.ReadResourceRequest) (
 
 	caseTemplates, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(ctx).InputQuery(hiveQuery).Execute()
 	if err != nil {
-		return nil, fmt.Errorf("failed to find case templates: %w. Check that you have permissions to list case templates. API response: %v", err, resp)
+		return nil, fmt.Errorf("failed to find case templates: %w. Check that you have permissions to list case templates. API response: %s", err, utils.DescribeHTTPResponse(resp))
 	}
 
 	caseTemplatesJSON, err := json.MarshalIndent(caseTemplates, "", "  ")
@@ -316,7 +316,7 @@ func listAnalyzers(ctx context.Context, hiveClient *thehive.APIClient, dataType 
 	if dataType != "" {
 		analyzers, resp, err := hiveClient.CortexAPI.ListAnalyzersByType(ctx, dataType).Execute()
 		if err != nil {
-			return nil, fmt.Errorf(errListAnalyzers, err, resp)
+			return nil, fmt.Errorf(errListAnalyzers, err, utils.DescribeHTTPResponse(resp))
 		}
 
 		return analyzers, nil
@@ -324,7 +324,7 @@ func listAnalyzers(ctx context.Context, hiveClient *thehive.APIClient, dataType 
 
 	analyzers, resp, err := hiveClient.CortexAPI.ListAnalyzers(ctx).Range_(cortexRangeAll).Execute()
 	if err != nil {
-		return nil, fmt.Errorf(errListAnalyzers, err, resp)
+		return nil, fmt.Errorf(errListAnalyzers, err, utils.DescribeHTTPResponse(resp))
 	}
 
 	return analyzers, nil
@@ -443,7 +443,7 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 
 	responders, resp, err := hiveClient.CortexAPI.ListResponders(ctx, entityType, entityID).Execute()
 	if err != nil {
-		return nil, fmt.Errorf("failed to find responders for %s %s: %w. Check that Cortex integration is enabled and you have permissions to list responders. API response: %v", entityType, entityID, err, resp)
+		return nil, fmt.Errorf("failed to find responders for %s %s: %w. Check that Cortex integration is enabled and you have permissions to list responders. API response: %s", entityType, entityID, err, utils.DescribeHTTPResponse(resp))
 	}
 
 	allowed := responders
@@ -515,7 +515,7 @@ func GetCurrentUser(ctx context.Context, _ mcp.ReadResourceRequest) ([]mcp.Resou
 
 	currentUser, resp, err := hiveClient.UserAPI.GetCurrentUserInfo(ctx).Execute()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get current user information: %w. Check authentication status. API response: %v", err, resp)
+		return nil, fmt.Errorf("failed to get current user information: %w. Check authentication status. API response: %s", err, utils.DescribeHTTPResponse(resp))
 	}
 
 	currentUserJSON, err := json.MarshalIndent(currentUser, "", "  ")

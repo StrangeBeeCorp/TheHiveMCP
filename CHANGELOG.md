@@ -31,6 +31,58 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Rejecting such a filter outright belongs in TheHive, which already returns a 400 with the valid attribute list for an _unknown_ field; that inconsistency has
   been raised with them separately.
 
+### Fixed
+
+- **Every successful `get-resource`, `manage-entities` and `execute-automation` call violated its own advertised output schema.** ⚠️ **This made writes report
+  failure while applying.** The three tools return union results that `Unwrap()` flattens to the active variant, hoisting its fields to the top level, while
+  `mcp.WithOutputSchema` advertised the _wrapper_ struct — so the declared schema permitted only `resource`/`category`-style wrapper keys and none of the keys
+  actually sent. mcp-go v0.43.1 generated those schemas with `AllowAdditionalProperties: true`, which tolerated the extra keys; v1.1.0's upgrade to mcp-go
+  v1.0.0 infers with `github.com/google/jsonschema-go`, which emits `additionalProperties: false` and turned the tolerated mismatch into a violation on every
+  success path. Because a client may reject a non-conforming result only _after_ the handler has run, mutations and analyzer dispatches committed and were then
+  reported as failures — indistinguishable from a rejection, so a retry duplicated the write. The tools now advertise `anyOf` over their variant schemas,
+  describing what they actually emit. Error paths were never affected, and `search-entities` was never affected.
+- **Date fields were advertised as integers but sent as strings.** `ProcessDatesRecursive` rewrites epoch fields (`_createdAt`, `_updatedAt`, `startDate`, …)
+  into formatted strings on the way out, while a schema inferred from the Go struct declared `integer`. Any result carrying a TheHive entity therefore violated
+  its schema independently of the union bug. Date-named properties are now typed `["null", "string"]` at every depth, derived from the same field list that
+  drives the rewrite.
+- **Output schemas are now asserted against real results.** `TestToolSchemas_OutputMatchesAdvertisedSchema` validates a populated result for every union variant
+  of all four tools against the schema that tool advertises. Both bugs above passed every existing unit and integration test, because tests assert on the
+  payload the code builds and never validate it against the advertised schema — the same blind spot that let the v1.1.0 input-schema regression through, on the
+  output side.
+- **Observable searches return the IOC.** The default columns for `observable` were `_id`, `dataType` and `_createdAt` — a type and a timestamp, but not the
+  indicator. `data` is now a default, so the most common SOC query stops returning rows a caller cannot act on, whether searched directly or expanded through
+  `additional-queries`.
+- **Dates are ISO 8601 with an offset.** Timestamps rendered as `02-01-2006T15:04:05`: day-first, so `09-10-2026` read as either 9 October or 10 September
+  depending on the reader, and offset-free while being formatted in the _server's_ local zone — so a value came back silently shifted with nothing to say so.
+  They are now RFC 3339 in UTC (`2023-11-14T22:13:20Z`).
+- **`extra-columns` extends the defaults instead of replacing them.** ⚠️ **Behaviour change.** Asking for one more column used to drop `title`, `severity` and
+  `status`, so a caller requesting extra data received less of it with nothing to say so. The parameter now behaves the way its name reads: the entity defaults
+  are always returned, the requested columns are added to them, and a column named twice is projected once. A caller that previously listed every column it
+  wanted still gets them; it now also gets the defaults it used to suppress, so responses for those callers grow.
+- **A finished analyzer or responder run no longer invites polling.** `get-job-status` on a `Success` and `get-action-status` on a `Failure` both said "Use
+  get-…-status to check for updates", sending an agent to re-poll an answer that cannot change. Terminal states (`Success`, `Failure`, `Deleted`, `Cancelled`)
+  now say so.
+- **A bad filter field is no longer reported as a permissions problem.** A 400 from an unknown attribute returned "Check that you have permissions to view
+  cases". The message now names both possibilities. It deliberately does not promise that the attached response identifies the offending attribute: TheHive does
+  return that list, but thehive4go consumes the body while building its own error, so by the time we see it the useful part is usually gone. Raised upstream.
+- **The severity scale is documented as configurable.** The `search-entities` description called 1–4 a fixed scale while the entity schemas correctly describe
+  the range and labels as configurable per organisation. The description now agrees with the schemas and points at `severityLabel`.
+- **`run-responder` documents that it needs the responder's id.** `run-analyzer` accepts a worker name, but a name passed to `run-responder` creates the action
+  and then fails inside Cortex with "worker not found". The parameter description now says which identifier to pass and where to get it. Resolving the name
+  server-side, so both operations behave alike, is left as a follow-up: it needs a live Cortex to verify.
+
+- **API errors no longer dump the raw HTTP response.** Fourteen call sites formatted `*http.Response` with `%v`, so a failure returned pointer addresses, the
+  transport's headers and the server's identity and version (`Server: nginx/…`) instead of anything diagnostic — and after the 404 handling was added, that dump
+  reached the `hints` of `manage-entities` results too. Errors now carry the status line and whatever the body still holds, via a single
+  `utils.DescribeHTTPResponse` helper, capped at 2 KB. Note the underlying `json: unknown field "errors"` comes from thehive4go failing to decode TheHive's
+  structured field-validation errors into its own error model; that is upstream and unchanged, but it is now reported as a cause instead of being buried in a
+  struct dump.
+- **The last row of the result window is reachable.** `offset=9990&limit=10` was rejected for "reading past the maximum result window" when the page itself ends
+  exactly on the last readable row. The truncation probe asks for one row beyond the page, and that extra row — not the page — crossed the boundary. The probe
+  is now clamped to the window, so a page ending on row 9999 is served and simply reports `hasMore: false`, which is the only answer it could have had.
+- **`count=true` no longer fails the paging-window check.** A count reads no window, so `count=true&offset=9995` was rejected with a message advising the caller
+  to use `count=true` — which is what they had done.
+
 ## [1.1.0] - 2026-09-08
 
 ### Added
@@ -54,8 +106,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Cortex resolves server-side, instead of the caller fetching the whole catalog and sifting it.
 - **Paging on the automation catalogs.** Both analyzer and responder catalogs accept `offset` and `limit`, and report `total`, `returned`, `offset` and
   `truncated` so a clipped list is no longer indistinguishable from a complete one.
-- **`blockedByPolicy` on the automation catalogs.** An empty catalog now says whether the permissions allow-list emptied it. The shipped read-only default
-  blocks every analyzer, so an out-of-the-box catalog was previously indistinguishable from "Cortex is not connected" or "this deployment has no analyzers".
+- **`blockedByPolicy` on the automation catalogs.** An empty catalog now reports **how many** workers the permissions allow-list removed — a count, not a flag,
+  so `0` means the allow-list removed nothing. The shipped read-only default blocks every analyzer, so an out-of-the-box catalog was previously
+  indistinguishable from "Cortex is not connected" or "this deployment has no analyzers".
 - **Unknown query parameters on the automation catalogs are rejected**, instead of being ignored. A misspelling (`?datatype=hash`) or a parameter borrowed from
   the sibling catalog (`?entityType=observable` on the analyzers resource) used to return the whole unfiltered catalog and read as a filtered answer.
 
