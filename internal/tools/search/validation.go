@@ -56,18 +56,16 @@ func applyEntitiesDefaults(params *EntitiesParams) {
 		params.Limit = DefaultSearchLimit
 	}
 
-	// Set, extra-columns REPLACES the defaults — it is a projection, not an
-	// addition, which is what lets a caller trim a wide entity down to the few
-	// fields it needs. TestExtraColumnsLimitColumns pins that. The name reads
-	// additive and has misled at least one caller, so the parameter description
-	// spells the replacement out.
-	if len(params.ExtraColumns) == 0 {
-		if defaultFields, exists := types.DefaultFields[params.EntityType]; exists {
-			params.ExtraColumns = defaultFields
-		} else {
-			params.ExtraColumns = []string{fieldID, fieldTitle, "url"} // fallback
-		}
+	// extra-columns adds to the defaults rather than replacing them, so the
+	// parameter behaves the way its name reads. Replacing meant that asking for
+	// one more field silently dropped title, severity and status — a caller
+	// requesting extra data got less of it, with nothing to say so.
+	defaultFields, exists := types.DefaultFields[params.EntityType]
+	if !exists {
+		defaultFields = []string{fieldID, fieldTitle, "url"} // fallback
 	}
+
+	params.ExtraColumns = unionColumns(defaultFields, params.ExtraColumns)
 
 	if params.ExtraData == nil {
 		params.ExtraData = []string{}
@@ -118,4 +116,23 @@ func validatePagingWindow(params *EntitiesParams) error {
 	}
 
 	return nil
+}
+
+// unionColumns appends the caller's columns to the defaults, preserving order
+// and dropping duplicates so a column named twice is projected once.
+func unionColumns(defaults, extra []string) []string {
+	seen := make(map[string]struct{}, len(defaults)+len(extra))
+	columns := make([]string, 0, len(defaults)+len(extra))
+
+	for _, column := range slices.Concat(defaults, extra) {
+		if _, duplicate := seen[column]; duplicate {
+			continue
+		}
+
+		seen[column] = struct{}{}
+
+		columns = append(columns, column)
+	}
+
+	return columns
 }

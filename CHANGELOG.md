@@ -16,10 +16,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Dates are ISO 8601 with an offset.** Timestamps rendered as `02-01-2006T15:04:05`: day-first, so `09-10-2026` read as either 9 October or 10 September
   depending on the reader, and offset-free while being formatted in the _server's_ local zone — so a value came back silently shifted with nothing to say so.
   They are now RFC 3339 in UTC (`2023-11-14T22:13:20Z`).
-- **`extra-columns` documents that it replaces the defaults.** Asking for one more column drops `title`, `severity` and `status`, so requesting extra data
-  returns less of it. That projection behaviour is deliberate — it is what lets a caller trim a wide entity down — but the parameter name reads additive and
-  misled a reviewer, so the description now states the replacement outright. Renaming it (to `columns`) would be the real fix and is not done here: it is a
-  breaking wire change.
+- **`extra-columns` extends the defaults instead of replacing them.** ⚠️ **Behaviour change.** Asking for one more column used to drop `title`, `severity` and
+  `status`, so a caller requesting extra data received less of it with nothing to say so. The parameter now behaves the way its name reads: the entity defaults
+  are always returned, the requested columns are added to them, and a column named twice is projected once. A caller that previously listed every column it
+  wanted still gets them; it now also gets the defaults it used to suppress, so responses for those callers grow.
 - **A finished analyzer or responder run no longer invites polling.** `get-job-status` on a `Success` and `get-action-status` on a `Failure` both said "Use
   get-…-status to check for updates", sending an agent to re-poll an answer that cannot change. Terminal states (`Success`, `Failure`, `Deleted`, `Cancelled`)
   now say so.

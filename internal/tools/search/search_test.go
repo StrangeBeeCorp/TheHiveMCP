@@ -297,33 +297,33 @@ func TestSearchTasksWithLimit(t *testing.T) {
 	require.Len(t, tasksData, 3, "Should return exactly 3 tasks as per limit")
 }
 
-func TestExtraColumnsLimitColumns(t *testing.T) {
+// extra-columns adds to the entity defaults. It used to replace them, so asking
+// for one more column silently dropped severity, status and _createdAt — the
+// caller requesting extra data received less of it.
+func TestExtraColumnsExtendDefaults(t *testing.T) {
 	testutils.Parallel(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 
-	createTestAlert(t, hiveClient, "Test alert for column override", 2, []string{"test"})
+	createTestAlert(t, hiveClient, "Test alert for column extension", 2, []string{"test"})
 
 	mcpClient := newSearchClient(t)
 
 	alertsData := searchRows(t, mcpClient, map[string]any{
 		pEntityType:   types.EntityTypeAlert,
-		pExtraColumns: []string{tID, tTitle},
+		pExtraColumns: []string{tTags},
 	})
 	require.GreaterOrEqual(t, len(alertsData), 1)
 
 	alertData, ok := alertsData[0].(map[string]any)
 	require.True(t, ok)
 
-	require.Contains(t, alertData, tID)
-	require.Contains(t, alertData, tTitle)
+	require.Contains(t, alertData, tTags, "the requested column must be projected")
 
-	// Filtered out despite being requested in extra-columns: not in kept_columns.
-	require.NotContains(t, alertData, tSeverity, "severity should not be present as it's not in kept_columns")
-	require.NotContains(t, alertData, tTags, "tags should not be present as it's not in kept_columns")
-	require.NotContains(t, alertData, tCreatedAt, "_createdAt should not be present as it's not in kept_columns")
-
-	require.Len(t, alertData, 2, "Should only have 2 columns as specified in kept_columns")
+	// The alert defaults survive alongside it.
+	for _, column := range types.DefaultFields[types.EntityTypeAlert] {
+		require.Contains(t, alertData, column, "requesting a column must not drop the default %s", column)
+	}
 }
 
 func TestSearchWithAnalystPermissions(t *testing.T) {

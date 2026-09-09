@@ -27,29 +27,54 @@ func TestDefaultColumns_ObservablesCarryTheirValue(t *testing.T) {
 	assert.Contains(t, params.ExtraColumns, "dataType")
 }
 
-// extra-columns is a projection, not an addition: it replaces the defaults.
-// The name says otherwise and has misled a caller, so pin the real contract
-// here next to the description that warns about it.
-func TestExtraColumns_ReplaceTheDefaults(t *testing.T) {
+// extra-columns adds to the defaults, so asking for one more column cannot cost
+// you title, severity or status.
+func TestExtraColumns_ExtendTheDefaults(t *testing.T) {
 	t.Parallel()
 
 	tool := &Tool{}
-	params := EntitiesParams{EntityType: types.EntityTypeAlert, ExtraColumns: []string{fieldTags}}
 
-	require.NoError(t, tool.ValidateParams(&params))
+	t.Run("defaults survive alongside the requested column", func(t *testing.T) {
+		t.Parallel()
 
-	assert.Equal(t, []string{fieldTags}, params.ExtraColumns,
-		"a requested column set is returned verbatim; defaults apply only when none is given")
+		params := EntitiesParams{EntityType: types.EntityTypeAlert, ExtraColumns: []string{fieldTags}}
+		require.NoError(t, tool.ValidateParams(&params))
+
+		for _, column := range types.DefaultFields[types.EntityTypeAlert] {
+			assert.Contains(t, params.ExtraColumns, column, "requesting a column must not drop a default")
+		}
+
+		assert.Contains(t, params.ExtraColumns, fieldTags)
+	})
+
+	t.Run("a column named twice is projected once", func(t *testing.T) {
+		t.Parallel()
+
+		params := EntitiesParams{EntityType: types.EntityTypeAlert, ExtraColumns: []string{fieldTitle, fieldTags, fieldTags}}
+		require.NoError(t, tool.ValidateParams(&params))
+
+		assert.Equal(t, 1, countOccurrences(params.ExtraColumns, fieldTitle))
+		assert.Equal(t, 1, countOccurrences(params.ExtraColumns, fieldTags))
+	})
+
+	t.Run("omitted keeps exactly the defaults", func(t *testing.T) {
+		t.Parallel()
+
+		params := EntitiesParams{EntityType: types.EntityTypeAlert}
+		require.NoError(t, tool.ValidateParams(&params))
+
+		assert.Equal(t, types.DefaultFields[types.EntityTypeAlert], params.ExtraColumns)
+	})
 }
 
-// Omitting it keeps the entity defaults.
-func TestExtraColumns_OmittedKeepsDefaults(t *testing.T) {
-	t.Parallel()
+func countOccurrences(values []string, want string) int {
+	found := 0
 
-	tool := &Tool{}
-	params := EntitiesParams{EntityType: types.EntityTypeAlert}
+	for _, value := range values {
+		if value == want {
+			found++
+		}
+	}
 
-	require.NoError(t, tool.ValidateParams(&params))
-
-	assert.Equal(t, types.DefaultFields[types.EntityTypeAlert], params.ExtraColumns)
+	return found
 }
