@@ -56,6 +56,11 @@ func applyEntitiesDefaults(params *EntitiesParams) {
 		params.Limit = DefaultSearchLimit
 	}
 
+	// Set, extra-columns REPLACES the defaults — it is a projection, not an
+	// addition, which is what lets a caller trim a wide entity down to the few
+	// fields it needs. TestExtraColumnsLimitColumns pins that. The name reads
+	// additive and has misled at least one caller, so the parameter description
+	// spells the replacement out.
 	if len(params.ExtraColumns) == 0 {
 		if defaultFields, exists := types.DefaultFields[params.EntityType]; exists {
 			params.ExtraColumns = defaultFields

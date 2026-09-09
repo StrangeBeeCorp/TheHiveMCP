@@ -10,6 +10,27 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Observable searches return the IOC.** The default columns for `observable` were `_id`, `dataType` and `_createdAt` — a type and a timestamp, but not the
+  indicator. `data` is now a default, so the most common SOC query stops returning rows a caller cannot act on, whether searched directly or expanded through
+  `additional-queries`.
+- **Dates are ISO 8601 with an offset.** Timestamps rendered as `02-01-2006T15:04:05`: day-first, so `09-10-2026` read as either 9 October or 10 September
+  depending on the reader, and offset-free while being formatted in the _server's_ local zone — so a value came back silently shifted with nothing to say so.
+  They are now RFC 3339 in UTC (`2023-11-14T22:13:20Z`).
+- **`extra-columns` documents that it replaces the defaults.** Asking for one more column drops `title`, `severity` and `status`, so requesting extra data
+  returns less of it. That projection behaviour is deliberate — it is what lets a caller trim a wide entity down — but the parameter name reads additive and
+  misled a reviewer, so the description now states the replacement outright. Renaming it (to `columns`) would be the real fix and is not done here: it is a
+  breaking wire change.
+- **A finished analyzer or responder run no longer invites polling.** `get-job-status` on a `Success` and `get-action-status` on a `Failure` both said "Use
+  get-…-status to check for updates", sending an agent to re-poll an answer that cannot change. Terminal states (`Success`, `Failure`, `Deleted`, `Cancelled`)
+  now say so.
+- **A bad filter field is no longer reported as a permissions problem.** A 400 from an unknown attribute returned "Check that you have permissions to view
+  cases". The message now names both possibilities and points at TheHive's response, which lists the valid attributes.
+- **The severity scale is documented as configurable.** The `search-entities` description called 1–4 a fixed scale while the entity schemas correctly describe
+  the range and labels as configurable per organisation. The description now agrees with the schemas and points at `severityLabel`.
+- **`run-responder` documents that it needs the responder's id.** `run-analyzer` accepts a worker name, but a name passed to `run-responder` creates the action
+  and then fails inside Cortex with "worker not found". The parameter description now says which identifier to pass and where to get it. Resolving the name
+  server-side, so both operations behave alike, is left as a follow-up: it needs a live Cortex to verify.
+
 - **API errors no longer dump the raw HTTP response.** Fourteen call sites formatted `*http.Response` with `%v`, so a failure returned pointer addresses, the
   transport's headers and the server's identity and version (`Server: nginx/…`) instead of anything diagnostic — and after the 404 handling was added, that dump
   reached the `hints` of `manage-entities` results too. Errors now carry the status line and whatever the body still holds, via a single

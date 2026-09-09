@@ -194,10 +194,13 @@ type OutputEntity interface {
 
 // DefaultFields maps each entity type to the default set of fields returned for it.
 var DefaultFields = map[string][]string{
-	EntityTypeAlert:        {fieldID, fieldTitle, fieldCreatedAt, fieldSeverity, fieldStatus},
-	EntityTypeCase:         {fieldID, fieldTitle, fieldCreatedAt, fieldStatus, fieldSeverity},
-	EntityTypeTask:         {fieldID, fieldTitle, fieldStatus, fieldCreatedAt, "assignee"},
-	EntityTypeObservable:   {fieldID, "dataType", fieldCreatedAt},
+	EntityTypeAlert: {fieldID, fieldTitle, fieldCreatedAt, fieldSeverity, fieldStatus},
+	EntityTypeCase:  {fieldID, fieldTitle, fieldCreatedAt, fieldStatus, fieldSeverity},
+	EntityTypeTask:  {fieldID, fieldTitle, fieldStatus, fieldCreatedAt, "assignee"},
+	// data is the IOC itself (the address, hash, domain). Without it an
+	// observable row identifies a type and a timestamp but not the indicator,
+	// which is the one thing every observable query is asking for.
+	EntityTypeObservable:   {fieldID, "dataType", "data", fieldCreatedAt},
 	EntityTypeComment:      {fieldID, "message", fieldCreatedAt, "_createdBy"},
 	EntityTypePage:         {fieldID, fieldTitle, fieldCreatedAt},
 	EntityTypeAttachment:   {fieldID, "fileName", "size", fieldCreatedAt},
