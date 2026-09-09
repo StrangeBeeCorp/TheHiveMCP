@@ -3,6 +3,7 @@ package utils
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/stretchr/testify/require"
@@ -500,4 +501,30 @@ func TestWrap_DisabledLeavesValuesUntouched(t *testing.T) {
 	require.True(t, ok, "expected map result, got %T", out)
 	require.Equal(t, "hello", m[fieldTitle])
 	require.Equal(t, "x.pdf", m["fileName"])
+}
+
+// A timestamp a model cannot read unambiguously is worse than a raw epoch: the
+// previous "02-01-2006T15:04:05" layout was day-first, so 09-10-2026 meant
+// either 9 October or 10 September depending on the reader, and it carried no
+// offset while rendering in the server's local zone — so the value silently
+// shifted with wherever the server happened to run.
+func TestTimestampToString_IsRFC3339InUTC(t *testing.T) {
+	t.Parallel()
+
+	// 2023-11-14T22:13:20Z
+	const epochMillis int64 = 1700000000000
+
+	got := timestampToString(epochMillis)
+
+	require.Equal(t, "2023-11-14T22:13:20Z", got)
+
+	parsed, err := time.Parse(time.RFC3339, got)
+	require.NoError(t, err, "every emitted date must parse as RFC 3339")
+	require.Equal(t, time.UTC, parsed.Location(), "dates carry an explicit zone, never the server's")
+}
+
+func TestTimestampToString_ZeroIsEmpty(t *testing.T) {
+	t.Parallel()
+
+	require.Empty(t, timestampToString(0))
 }

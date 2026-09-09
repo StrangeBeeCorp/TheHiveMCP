@@ -23,7 +23,7 @@ Analyzers enrich observables by querying external services (threat intel, reputa
 
 RESPONDER EXECUTION:
 Responders perform active responses on entities (block IP, send email, create ticket, etc.).
-- Requires: responder-id, entity-type, entity-id
+- Requires: responder-id (the responder's **id** from hive://metadata/automation/responders, NOT its name — TheHive accepts a name and creates the action, then Cortex fails it with \"worker not found\"), entity-type, entity-id
 - Optional: cortex-id (auto-routed if not specified), parameters (JSON object with responder-specific configuration)
 - Returns: OutputAction with action ID for status tracking
 
@@ -173,6 +173,22 @@ type AnalyzerJobStatusResult struct {
 	Message      utils.TrustedString    `json:"message"`
 }
 
+// terminalWorkerStatuses are the Cortex run states that never change again.
+var terminalWorkerStatuses = map[string]struct{}{
+	"Success": {}, "Failure": {}, "Deleted": {}, "Cancelled": {},
+}
+
+// workerStatusMessage describes a run and tells the caller to poll only when
+// polling can still change the answer. Inviting a re-check on a Failure sends
+// an agent into a loop against a result that is already final.
+func workerStatusMessage(kind, status, pollTool string) utils.TrustedString {
+	if _, terminal := terminalWorkerStatuses[status]; terminal {
+		return utils.Trustedf("%s status: %s. This is a final state.", kind, status)
+	}
+
+	return utils.Trustedf("%s status: %s. Use %s to check for updates.", kind, status, pollTool)
+}
+
 // NewAnalyzerJobStatusResult builds an AnalyzerJobStatusResult from a job, including its report when available.
 func NewAnalyzerJobStatusResult(job *thehive.OutputJob) *AnalyzerJobStatusResult {
 	result := &AnalyzerJobStatusResult{
@@ -181,7 +197,7 @@ func NewAnalyzerJobStatusResult(job *thehive.OutputJob) *AnalyzerJobStatusResult
 		AnalyzerID:   job.GetAnalyzerId(),
 		AnalyzerName: job.GetAnalyzerName(),
 		Status:       job.GetStatus(),
-		Message:      utils.Trustedf("Job status: %s. Use get-job-status to check for updates.", job.GetStatus()),
+		Message:      workerStatusMessage("Job", job.GetStatus(), OperationGetJobStatus),
 	}
 
 	if job.HasReport() {
@@ -218,7 +234,7 @@ func NewResponderActionStatusResult(action *thehive.OutputAction) *ResponderActi
 		EntityID:      action.GetObjectId(),
 		Status:        action.GetStatus(),
 		Result:        action.GetReport(),
-		Message:       utils.Trustedf("Action status: %s. Use get-action-status to check for updates.", action.GetStatus()),
+		Message:       workerStatusMessage("Action", action.GetStatus(), OperationGetActionStatus),
 	}
 }
 
