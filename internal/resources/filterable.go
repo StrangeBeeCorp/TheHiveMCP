@@ -10,6 +10,7 @@ import (
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 )
 
@@ -42,20 +43,53 @@ const (
 // An index type we do not recognise is deliberately absent: saying nothing
 // beats guessing, since the whole point is to stop advertising filters that do
 // not work.
+// The values come from the SDK's AnyIndexType and BasicIndexType enums, which
+// between them define exactly standard, none, fulltext and fulltextOnly.
+//
+// fulltext maps to exact rather than fulltext: the "Only" in its sibling is
+// what distinguishes a field indexed for full text *alone* from one indexed
+// both ways, and in practice it is what `title` carries on alert, case and
+// task — the most routinely filtered field there is. Inferred from the naming
+// and from that usage, not from a controlled test: creating data to prove it
+// needs an organisation-scoped account.
 var indexTypeToFilterMode = map[string]string{
-	"standard":     filterModeExact,
-	"basic":        filterModeExact,
-	"fulltextOnly": filterModeFulltext,
-	"none":         filterModeNone,
+	string(thehive.ANYINDEXTYPE_STANDARD):      filterModeExact,
+	string(thehive.ANYINDEXTYPE_FULLTEXT):      filterModeExact,
+	string(thehive.ANYINDEXTYPE_FULLTEXT_ONLY): filterModeFulltext,
+	string(thehive.ANYINDEXTYPE_NONE):          filterModeNone,
+	// BasicIndexType declares only standard and none, whose values are the same
+	// strings, so it needs no entries of its own —
+	// TestIndexTypeToFilterMode_CoversEveryDeclaredIndexType asserts that.
 }
 
-// describeCache memoises the filter modes per entity type.
+// describeCache memoises the filter modes per entity type, per deployment.
 //
-// indexType is a property of the schema, not of the caller or the
-// organisation, so one entry per entity serves every request. Entities whose
-// describe call fails cache nothing, so a transient failure is retried rather
-// than remembered as "no opinion" for the life of the process.
-var describeCache sync.Map // entityType string -> map[string]string
+// The key includes the target URL and organisation, not just the entity type:
+// in HTTP mode every request may name its own TheHive (types.HiveURLCtxKey /
+// HiveOrgCtxKey), and indexType can differ between the server versions we
+// support. Keyed on the entity alone, the first request to answer would hand
+// its own schema shape to every other instance for the life of the process.
+//
+// Entities whose describe call fails cache nothing, so a transient failure is
+// retried rather than remembered as "no opinion".
+var describeCache sync.Map // describeCacheKey -> map[string]string
+
+// describeCacheKey identifies one entity's description on one deployment.
+type describeCacheKey struct {
+	url          string
+	organisation string
+	entityType   string
+}
+
+// cacheKeyFor builds the cache key from the request's target. Both values are
+// empty in stdio mode, where a process serves exactly one deployment, so the
+// key degrades to the entity type on its own.
+func cacheKeyFor(ctx context.Context, entityType string) describeCacheKey {
+	url, _ := ctx.Value(types.HiveURLCtxKey).(string)
+	organisation, _ := ctx.Value(types.HiveOrgCtxKey).(string)
+
+	return describeCacheKey{url: url, organisation: organisation, entityType: entityType}
+}
 
 // withFilterable wraps a static schema handler so the served schema also says,
 // per field, whether it can be filtered on.
@@ -84,6 +118,12 @@ func withFilterable(
 // unexpectedly — all return the schema untouched. A schema without the
 // annotation is the status quo; a schema that cannot be served at all would
 // take the entity's documentation down with it.
+//
+// TheHive 5.5 takes that path wholesale: it answers describe, but omits the
+// `cardinality` field thehive4go's generated model requires, so the SDK cannot
+// decode the response and no field is annotated. The annotation therefore
+// needs 5.6+, and fixing it means fixing the SDK rather than this file. See
+// issue #181.
 func annotateFilterable(ctx context.Context, entityType string, contents []mcp.ResourceContents) []mcp.ResourceContents {
 	modes, err := filterModes(ctx, entityType)
 	if err != nil || len(modes) == 0 {
@@ -135,28 +175,7 @@ func mergeFilterModes(schemaJSON []byte, modes map[string]string) ([]byte, error
 		return nil, err //nolint:wrapcheck // caller logs and falls back to the unannotated schema
 	}
 
-	properties, ok := schema["properties"].(map[string]any)
-	if !ok {
-		return schemaJSON, nil
-	}
-
-	annotated := 0
-
-	for name, raw := range properties {
-		property, isObject := raw.(map[string]any)
-		if !isObject {
-			continue
-		}
-
-		mode, known := modes[name]
-		if !known {
-			continue
-		}
-
-		property[filterableKey] = mode
-		annotated++
-	}
-
+	annotated := annotateProperties(schema, "", modes)
 	if annotated == 0 {
 		return schemaJSON, nil
 	}
@@ -171,9 +190,69 @@ func mergeFilterModes(schemaJSON []byte, modes map[string]string) ([]byte, error
 	return json.Marshal(schema) //nolint:wrapcheck // caller logs and falls back to the unannotated schema
 }
 
+// annotateProperties walks a schema, marking every property TheHive describes,
+// and returns how many it marked.
+//
+// It recurses because the two namings do not line up: describe reports
+// `importDate` flat while OutputAlert nests it under `extraData`, and reports
+// `computed.handlingDuration` dotted. So each property is looked up by its
+// dotted path first, then by its bare name.
+//
+// Matching a bare name at depth accepts a small risk: a nested field sharing a
+// top-level attribute's name would inherit its mode. That is worth it — the
+// annotation is advisory metadata, and the alternative is missing the
+// unindexed fields that motivated this, which are precisely the nested ones.
+func annotateProperties(node map[string]any, prefix string, modes map[string]string) int {
+	properties, ok := node["properties"].(map[string]any)
+	if !ok {
+		return annotateItems(node, prefix, modes)
+	}
+
+	annotated := 0
+
+	for name, raw := range properties {
+		property, isObject := raw.(map[string]any)
+		if !isObject {
+			continue
+		}
+
+		path := name
+		if prefix != "" {
+			path = prefix + "." + name
+		}
+
+		mode, known := modes[path]
+		if !known {
+			mode, known = modes[name]
+		}
+
+		if known {
+			property[filterableKey] = mode
+			annotated++
+		}
+
+		annotated += annotateProperties(property, path, modes)
+	}
+
+	return annotated
+}
+
+// annotateItems descends into an array's element schema, which carries the
+// properties of the objects the array holds.
+func annotateItems(node map[string]any, prefix string, modes map[string]string) int {
+	items, ok := node["items"].(map[string]any)
+	if !ok {
+		return 0
+	}
+
+	return annotateProperties(items, prefix, modes)
+}
+
 // filterModes returns the filter mode of each described attribute of an entity.
 func filterModes(ctx context.Context, entityType string) (map[string]string, error) {
-	if cached, hit := describeCache.Load(entityType); hit {
+	cacheKey := cacheKeyFor(ctx, entityType)
+
+	if cached, hit := describeCache.Load(cacheKey); hit {
 		modes, ok := cached.(map[string]string)
 		if ok {
 			return modes, nil
@@ -210,7 +289,7 @@ func filterModes(ctx context.Context, entityType string) (map[string]string, err
 		modes[name] = mode
 	}
 
-	describeCache.Store(entityType, modes)
+	describeCache.Store(cacheKey, modes)
 
 	return modes, nil
 }
