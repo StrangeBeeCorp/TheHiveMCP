@@ -26,6 +26,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   of all four tools against the schema that tool advertises. Both bugs above passed every existing unit and integration test, because tests assert on the
   payload the code builds and never validate it against the advertised schema — the same blind spot that let the v1.1.0 input-schema regression through, on the
   output side.
+- **API errors no longer dump the raw HTTP response.** Fourteen call sites formatted `*http.Response` with `%v`, so a failure returned pointer addresses, the
+  transport's headers and the server's identity and version (`Server: nginx/…`) instead of anything diagnostic — and after the 404 handling was added, that dump
+  reached the `hints` of `manage-entities` results too. Errors now carry the status line and whatever the body still holds, via a single
+  `utils.DescribeHTTPResponse` helper, capped at 2 KB. Note the underlying `json: unknown field "errors"` comes from thehive4go failing to decode TheHive's
+  structured field-validation errors into its own error model; that is upstream and unchanged, but it is now reported as a cause instead of being buried in a
+  struct dump.
+- **The last row of the result window is reachable.** `offset=9990&limit=10` was rejected for "reading past the maximum result window" when the page itself ends
+  exactly on the last readable row. The truncation probe asks for one row beyond the page, and that extra row — not the page — crossed the boundary. The probe
+  is now clamped to the window, so a page ending on row 9999 is served and simply reports `hasMore: false`, which is the only answer it could have had.
+- **`count=true` no longer fails the paging-window check.** A count reads no window, so `count=true&offset=9995` was rejected with a message advising the caller
+  to use `count=true` — which is what they had done.
 
 ## [1.1.0] - 2026-09-08
 
@@ -50,8 +61,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Cortex resolves server-side, instead of the caller fetching the whole catalog and sifting it.
 - **Paging on the automation catalogs.** Both analyzer and responder catalogs accept `offset` and `limit`, and report `total`, `returned`, `offset` and
   `truncated` so a clipped list is no longer indistinguishable from a complete one.
-- **`blockedByPolicy` on the automation catalogs.** An empty catalog now says whether the permissions allow-list emptied it. The shipped read-only default
-  blocks every analyzer, so an out-of-the-box catalog was previously indistinguishable from "Cortex is not connected" or "this deployment has no analyzers".
+- **`blockedByPolicy` on the automation catalogs.** An empty catalog now reports **how many** workers the permissions allow-list removed — a count, not a flag,
+  so `0` means the allow-list removed nothing. The shipped read-only default blocks every analyzer, so an out-of-the-box catalog was previously
+  indistinguishable from "Cortex is not connected" or "this deployment has no analyzers".
 - **Unknown query parameters on the automation catalogs are rejected**, instead of being ignored. A misspelling (`?datatype=hash`) or a parameter borrowed from
   the sibling catalog (`?entityType=observable` on the analyzers resource) used to return the whole unfiltered catalog and read as a filtered answer.
 

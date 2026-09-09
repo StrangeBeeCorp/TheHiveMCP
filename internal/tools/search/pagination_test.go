@@ -74,6 +74,19 @@ func TestBuildPagingOperation_WindowsTheProbeRow(t *testing.T) {
 		assert.Equal(t, int32(20), page.From)
 		assert.Equal(t, int32(31), page.To)
 	})
+
+	// TheHive rejects the whole query for exceeding max_result_window, so the
+	// probe row is dropped at the boundary rather than pushing past it. Without
+	// the clamp the final page is unservable and its rows unreachable, for the
+	// sake of a hasMore that can only be false there.
+	t.Run("probe row is clamped to the result window", func(t *testing.T) {
+		t.Parallel()
+
+		page := tool.buildPagingOperation(MaxSearchWindow-10, 10, nil)
+
+		assert.Equal(t, int32(MaxSearchWindow-10), page.From)
+		assert.Equal(t, int32(MaxSearchWindow), page.To, "the window caps the probe, and hasMore is false there")
+	})
 }
 
 // nextOffset has to land the caller on the row after the page, so that
@@ -162,11 +175,25 @@ func TestValidateParams_Offset(t *testing.T) {
 		assert.Error(t, tool.ValidateParams(&params))
 	})
 
-	// The index bounds the window, not the offset: an offset comfortably under
-	// MaxSearchWindow still reads past it once the limit and the truncation
-	// probe are added. Bounding the offset alone let offset=10000 limit=10
-	// through to an opaque server-side failure, and let a large limit blow the
-	// window far below that.
+	// A count reads no window at all, so bounding it rejected count=true with a
+	// far offset and told the caller to use count=true — the thing they had done.
+	t.Run("count-only is exempt from the window bound", func(t *testing.T) {
+		t.Parallel()
+
+		params := EntitiesParams{
+			EntityType: types.EntityTypeAlert,
+			Count:      true,
+			Offset:     MaxSearchWindow - 5,
+			Limit:      10,
+		}
+
+		require.NoError(t, tool.ValidateParams(&params))
+	})
+
+	// The bound covers the window, not the offset: bounding the offset alone let
+	// offset=10000 limit=10 through to an opaque server-side failure, and let a
+	// large limit blow the window far below that. The page may end exactly on
+	// the last readable row — only a page reaching beyond it is refused.
 	t.Run("rejects a window past the result limit", func(t *testing.T) {
 		t.Parallel()
 
@@ -175,10 +202,15 @@ func TestValidateParams_Offset(t *testing.T) {
 			offset, limit int
 			wantRejected  bool
 		}{
-			{"largest window that fits", MaxSearchWindow - 11, 10, false},
-			{"one row too far", MaxSearchWindow - 10, 10, true},
+			{"a page comfortably inside the window", MaxSearchWindow - 11, 10, false},
+			// The probe row would sit one past the window here, so it is clamped
+			// away rather than the page being refused: the last readable row stays
+			// reachable, and hasMore can only be false there anyway.
+			{"page ending exactly on the last readable row", MaxSearchWindow - 10, 10, false},
+			{"large limit filling the window exactly", MaxSearchWindow - 1000, 1000, false},
+			{"one row too far", MaxSearchWindow - 9, 10, true},
 			{"offset alone under the bound, window over it", MaxSearchWindow, 10, true},
-			{"large limit blows the window well below the cap", MaxSearchWindow - 1000, 1000, true},
+			{"large limit blows the window past the cap", MaxSearchWindow - 999, 1000, true},
 			{"a near-maxint offset cannot overflow past the check", math.MaxInt, 10, true},
 		}
 

@@ -55,7 +55,7 @@ func (t *Tool) updateEntity(ctx context.Context, client *thehive.APIClient, enti
 		defer closeResponse(resp)
 
 		return updateResult(entityID, err, "failed to update alert",
-			fmt.Sprintf("Check that the alert %s exists and you have permissions. API response: %v", entityID, resp))
+			fmt.Sprintf("Check that the alert %s exists and you have permissions. API response: %s", entityID, utils.DescribeHTTPResponse(resp)))
 
 	case types.EntityTypeCase:
 		var input thehive.InputUpdateCase
@@ -67,7 +67,7 @@ func (t *Tool) updateEntity(ctx context.Context, client *thehive.APIClient, enti
 		defer closeResponse(resp)
 
 		return updateResult(entityID, err, "failed to update case",
-			fmt.Sprintf("Check that the case %s exists and you have permissions. API response: %v", entityID, resp))
+			fmt.Sprintf("Check that the case %s exists and you have permissions. API response: %s", entityID, utils.DescribeHTTPResponse(resp)))
 
 	case types.EntityTypeTask:
 		var input thehive.InputUpdateTask
@@ -79,7 +79,7 @@ func (t *Tool) updateEntity(ctx context.Context, client *thehive.APIClient, enti
 		defer closeResponse(resp)
 
 		return updateResult(entityID, err, "failed to update task",
-			fmt.Sprintf("Check that the task %s exists and you have permissions. API response: %v", entityID, resp))
+			fmt.Sprintf("Check that the task %s exists and you have permissions. API response: %s", entityID, utils.DescribeHTTPResponse(resp)))
 
 	case types.EntityTypeObservable:
 		var input thehive.InputUpdateObservable
@@ -91,7 +91,7 @@ func (t *Tool) updateEntity(ctx context.Context, client *thehive.APIClient, enti
 		defer closeResponse(resp)
 
 		return updateResult(entityID, err, "failed to update observable",
-			fmt.Sprintf("Check that the observable %s exists and you have permissions. API response: %v", entityID, resp))
+			fmt.Sprintf("Check that the observable %s exists and you have permissions. API response: %s", entityID, utils.DescribeHTTPResponse(resp)))
 
 	case types.EntityTypeProcedure:
 		var input thehive.InputUpdateProcedure
@@ -103,7 +103,7 @@ func (t *Tool) updateEntity(ctx context.Context, client *thehive.APIClient, enti
 		defer closeResponse(resp)
 
 		return updateResult(entityID, err, "failed to update procedure",
-			fmt.Sprintf("Check that the procedure %s exists and you have permissions. API response: %v", entityID, resp))
+			fmt.Sprintf("Check that the procedure %s exists and you have permissions. API response: %s", entityID, utils.DescribeHTTPResponse(resp)))
 
 	case types.EntityTypeCaseTemplate:
 		var input thehive.InputUpdateCaseTemplate
@@ -115,7 +115,7 @@ func (t *Tool) updateEntity(ctx context.Context, client *thehive.APIClient, enti
 		defer closeResponse(resp)
 
 		return updateResult(entityID, err, "failed to update case template",
-			fmt.Sprintf("Check that the case template %s exists and you have permissions. API response: %v", entityID, resp))
+			fmt.Sprintf("Check that the case template %s exists and you have permissions. API response: %s", entityID, utils.DescribeHTTPResponse(resp)))
 
 	case types.EntityTypePage:
 		return t.updatePage(ctx, client, entityID, targetID, jsonData)

@@ -89,12 +89,24 @@ func validatePagingWindow(params *EntitiesParams) error {
 		return tools.NewToolError("offset must be a non-negative integer")
 	}
 
-	// The index bounds the WINDOW (first row + rows read), not the offset alone,
-	// and the truncation probe makes the window one row wider than the limit.
-	// Written as a subtraction rather than Offset+Limit+1 > MaxSearchWindow so a
+	// A count reads no window: TheHive returns a bare number, and the handler
+	// skips paging entirely. Bounding it here rejected count=true&offset=9995
+	// with a message telling the caller to use count=true.
+	if params.Count {
+		return nil
+	}
+
+	// The index bounds the WINDOW (first row + rows read), not the offset alone.
+	// The truncation probe would make that window one row wider than the limit,
+	// but buildPagingOperation clamps it to MaxSearchWindow instead of pushing
+	// past it, so the bound here is the page itself: a page ending exactly on
+	// the last readable row is legal, and only loses the ability to report
+	// hasMore — there is nothing further to report.
+	//
+	// Written as a subtraction rather than Offset+Limit > MaxSearchWindow so a
 	// caller sending a near-maxint offset cannot overflow past the check; Limit
 	// is already bounded above, so the right-hand side cannot go negative.
-	if params.Offset > MaxSearchWindow-params.Limit-1 {
+	if params.Offset > MaxSearchWindow-params.Limit {
 		return tools.NewToolErrorf(
 			"offset %d with limit %d reads past the maximum result window of %d rows. Narrow the filter instead of paging further, or use count=true for the size of the match",
 			params.Offset, params.Limit, MaxSearchWindow)

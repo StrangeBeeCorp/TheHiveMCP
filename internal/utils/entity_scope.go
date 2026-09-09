@@ -305,7 +305,7 @@ func executeScopeQuery(ctx context.Context, operations []thehive.InputQueryNamed
 	}
 
 	if err != nil {
-		return false, fmt.Errorf("scope query failed: %w. API response: %v", err, resp)
+		return false, fmt.Errorf("scope query failed: %w. API response: %s", err, DescribeHTTPResponse(resp))
 	}
 
 	resultsSlice, ok := results.([]any)
@@ -333,7 +333,7 @@ func executeScopeQueryIDs(ctx context.Context, operations []thehive.InputQueryNa
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("scope query failed: %w. API response: %v", err, resp)
+		return nil, fmt.Errorf("scope query failed: %w. API response: %s", err, DescribeHTTPResponse(resp))
 	}
 
 	resultsSlice, ok := results.([]any)
