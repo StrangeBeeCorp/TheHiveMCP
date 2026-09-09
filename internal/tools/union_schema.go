@@ -136,7 +136,13 @@ func liftVariants[T any](document map[string]any) (map[string]any, error) {
 		variants = append(variants, variant)
 	}
 
-	lifted := map[string]any{"anyOf": variants}
+	// type:object alongside anyOf, not anyOf alone. structuredContent is always
+	// an object, and the MCP schema for a tool types outputSchema as an object
+	// schema — the TypeScript SDK pins `type` to the literal "object", so a
+	// bare anyOf fails to parse and takes the whole tools/list response with
+	// it, leaving a client showing no tools at all rather than one bad tool.
+	// The keyword is also true: every variant is an object.
+	lifted := map[string]any{"type": "object", "anyOf": variants}
 
 	// $defs live at the document root, so a lifted branch carrying a $ref would
 	// dangle without them.
