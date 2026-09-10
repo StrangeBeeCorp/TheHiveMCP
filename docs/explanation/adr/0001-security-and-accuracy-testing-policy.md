@@ -56,9 +56,18 @@ cross-provider variance that would otherwise rule out open-weight models and mak
 - It is **held constant** across runs. A judge change re-baselines every score, so it is recorded with the results and triggers a re-run.
 - It must follow detailed rubrics reliably.
 
-**Chosen judge: a pinned `z-ai/glm-5.2`.** It sits in the frontier tier for intelligence and instruction-following—level with the strongest hosted models—at
+**Chosen judge: a pinned `z-ai/glm-5.3`.** It sits in the frontier tier for intelligence and instruction-following—level with the strongest hosted models—at
 roughly a third of their cost. It also appears in the candidate matrix. Models are generally unaware of their own identity, so a judge grading its own family
 isn't a meaningful bias concern. Evidence published from runs that predate this ADR records the judge used in its `results.csv`.
+
+**Judge history.** Runs up to and including v1.0.0 were judged by a pinned `z-ai/glm-5.2`. The judge moved to `z-ai/glm-5.3` for v1.1.0, and scores from v1.1.0
+onward are therefore on a **new baseline**: per the rule above, a judge change re-baselines every score, so figures are not directly comparable across that
+boundary. Each version's `results.csv` records the judge that produced it, which is what makes the discontinuity legible rather than silent.
+
+The move was not, initially, a decision. The eval fleet was refreshed for cost and availability (`TheHiveMCPEval` commits `992b158`, then `9a95b07`, which
+describes itself as finishing "the fleet swap the rebase left half-done"); `glm-5.2` stopped being served by the proxy and the judge followed the fleet, with
+this ADR never consulted. That is exactly the silent re-baselining the pinning rule exists to prevent. Adopting `glm-5.3` here makes the change deliberate and
+recorded after the fact. The lesson for next time: the judge deployment is policy, not fleet plumbing, and retiring it needs a decision against this ADR.
 
 ### What TheHiveMCP doesn't test
 
@@ -79,12 +88,17 @@ The initial test matrix deliberately spans four segments: frontier hosted models
 for on-premise or budget deployments. This reflects the real range of how users deploy TheHiveMCP. The recommended list is whichever candidates pass. This
 matrix is the starting point, not the outcome.
 
-| Segment                                | Models                                                                           |
-| -------------------------------------- | -------------------------------------------------------------------------------- |
-| Frontier / SOTA (common in production) | `anthropic/claude-sonnet-4.6`, `openai/gpt-5.5`, `google/gemini-3.5-flash`       |
-| Strong open-weight alternatives        | `deepseek/deepseek-v4-pro`, `z-ai/glm-5.2`, `moonshotai/kimi-k2.6`               |
-| European-sovereign (Mistral)           | `mistralai/mistral-medium-3.5`                                                   |
-| Small (on-premise or budget)           | `google/gemini-3.1-flash-lite`, `qwen/qwen3.5-9b`, `mistralai/ministral-8b-2512` |
+| Segment                                | Models                                                                                                          |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Frontier / SOTA (common in production) | `anthropic/claude-sonnet-5`, `openai/gpt-5.6-sol`, `meta/muse-spark-1.3-contributor`, `google/gemini-3.8-flash` |
+| Strong open-weight alternatives        | `z-ai/glm-5.3-flash`, `qwen/qwen3.6-27b`, `qwen/qwen3.6-35b-a3b`                                                |
+| European-sovereign (Mistral)           | `mistralai/mistral-medium-3.5`, `mistralai/mistral-small-2603`                                                  |
+| Small (on-premise or budget)           | `google/gemini-3.5-flash-lite`, `qwen/qwen3.5-9b`, `google/gemma-4-26b-a4b-it`                                  |
+
+The live roster is `configs/providers.yaml` in `TheHiveMCPEval`, whose segment headings are these axes; this table follows it rather than the reverse. The set
+above is what v1.1.0 was evaluated against. v1.0.0 and earlier used a different one — `claude-sonnet-4.6`, `gpt-5.5`, `gemini-3.5-flash`, `deepseek-v4-pro`,
+`glm-5.2`, `kimi-k2.6`, `gemini-3.1-flash-lite`, `ministral-8b-2512` — retired for cost and availability, so per-model comparison across that boundary is only
+possible for the rows that survived (`mistral-medium-3.5`, `qwen3.5-9b`).
 
 This set is a **starting proposal, not a fixed benchmark.** It will change as models are released and in response to customer demand. The goal is to keep it
 broadly comparable over time, but comparability is a best-effort aim, not the main objective. Changes follow the recommended-model policy above.
