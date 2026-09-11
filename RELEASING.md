@@ -40,7 +40,8 @@ Before cutting a release (pushing a `vX.Y.Z` tag):
   - [ ] None — no-behavior-change release; results carried forward from version: `______`
 - [ ] A `docs/evaluation/vX.Y.Z/` folder exists for this version (`results.csv` + `summary.md` + `report.html`), or the carried-forward version is stated.
 - [ ] `results.csv` includes the per-suite / per-category breakdown (not just the accuracy/security totals).
-- [ ] The judge was the pinned `z-ai/glm-5.2` (temperature 0) and is recorded in `results.csv`.
+- [ ] The judge was the pinned `z-ai/glm-5.3` (temperature 0) and is recorded in `results.csv`. It judged v1.1.0 onward; v1.0.0 and earlier used `z-ai/glm-5.2`,
+      so scores do not compare across that boundary (see ADR-0001).
 - [ ] **Release notes curated** — user-facing / breaking / security sections filled; breaking changes include upgrade guidance.
 - [ ] README and docs updated for any new or changed tools.
 - [ ] Version/tag matches the artifacts being published.

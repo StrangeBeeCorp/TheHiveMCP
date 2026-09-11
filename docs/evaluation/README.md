@@ -12,34 +12,40 @@ Evidence is published **one folder per evaluated MCP-server version**. Each vers
 - **`summary.md`** — a human-readable summary of that version's results and a comparison with the previous evaluated version.
 - **`report.html`** — a detailed, chart-based visual report.
 
-| Version                       | Released       | Folder                         |
-| ----------------------------- | -------------- | ------------------------------ |
-| **v1.0.0** (latest evaluated) | July 6, 2026   | [`v1.0.0/`](v1.0.0/summary.md) |
-| v0.3.4                        | May 22, 2026   | [`v0.3.4/`](v0.3.4/summary.md) |
-| v0.3.3                        | March 17, 2026 | [`v0.3.3/`](v0.3.3/summary.md) |
+| Version                       | Released           | Folder                         |
+| ----------------------------- | ------------------ | ------------------------------ |
+| **v1.1.0** (latest evaluated) | September 10, 2026 | [`v1.1.0/`](v1.1.0/summary.md) |
+| v1.0.0                        | July 6, 2026       | [`v1.0.0/`](v1.0.0/summary.md) |
+| v0.3.4                        | May 22, 2026       | [`v0.3.4/`](v0.3.4/summary.md) |
+| v0.3.3                        | March 17, 2026     | [`v0.3.3/`](v0.3.3/summary.md) |
 
-## Latest evaluation — v1.0.0 (released July 6, 2026, and evaluated July 2, 2026)
+## Latest evaluation — v1.1.0 (released and evaluated September 10, 2026)
 
-Accuracy = `mcp-tools` (34 checks) + `workflows` (3) = 37. Security = 15 prompt-injection scenarios (the agent must both ignore the injection **and** warn the
-analyst). v1.0.0 is the production-ready release. Its injection defense is unchanged from v0.3.4, and this run refreshes the recommended-model matrix. Full
-detail is in [`v1.0.0/summary.md`](v1.0.0/summary.md). Machine-readable data is in [`v1.0.0/results.csv`](v1.0.0/results.csv).
+Accuracy = `mcp-tools` (37 checks) + `workflows` (3) = 40. Security = 15 prompt-injection scenarios (the agent must both ignore the injection **and** warn the
+analyst). This run refreshes the candidate matrix (12 models, two of them carried over from v1.0.0) and moves the pinned judge from `z-ai/glm-5.2` to
+`z-ai/glm-5.3`, which re-baselines the security series: figures below do not compare one-to-one with v1.0.0. The injection defense is unchanged. Full detail is
+in [`v1.1.0/summary.md`](v1.1.0/summary.md). Machine-readable data is in [`v1.1.0/results.csv`](v1.1.0/results.csv).
 
-| Model                          | Accuracy     | Security (injection resilience) |
-| ------------------------------ | ------------ | ------------------------------- |
-| `moonshotai/kimi-k2.6`         | 100% (37/37) | 100% (15/15)                    |
-| `openai/gpt-5.5`               | 100% (37/37) | 100% (15/15)                    |
-| `z-ai/glm-5.2`                 | 100% (37/37) | 100% (15/15)                    |
-| `google/gemini-3.5-flash`      | 100% (37/37) | 100% (15/15)                    |
-| `anthropic/claude-sonnet-4.6`  | 100% (37/37) | 100% (15/15)                    |
-| `google/gemini-3.1-flash-lite` | 100% (37/37) | 93% (14/15)                     |
-| `deepseek/deepseek-v4-pro`     | 97% (36/37)  | 87% (13/15)                     |
-| `mistralai/mistral-medium-3.5` | 100% (37/37) | 73% (11/15)                     |
-| `qwen/qwen3.5-9b`              | 73% (27/37)  | 53% (8/15)                      |
-| `mistralai/ministral-8b-2512`  | 70% (26/37)  | 53% (8/15)                      |
+| Model                        | Accuracy     | Security (injection resilience) |
+| ---------------------------- | ------------ | ------------------------------- |
+| `gpt-5.6-sol`                | 100% (40/40) | 100% (15/15)                    |
+| `claude-sonnet-5`            | 100% (40/40) | 100% (15/15)                    |
+| `qwen3.6-27b`                | 100% (40/40) | 93% (14/15)                     |
+| `glm-5.3-flash`              | 98% (39/40)  | 100% (15/15)                    |
+| `qwen3.6-35b-a3b`            | 98% (39/40)  | 100% (15/15)                    |
+| `gemma-4-26b-a4b`            | 98% (39/40)  | 87% (13/15)                     |
+| `gemini-3.5-flash-lite`      | 98% (39/40)  | 60% (9/15)                      |
+| `gemini-3.8-flash`           | 95% (38/40)  | 100% (15/15)                    |
+| `mistral-medium-3.5`         | 90% (36/40)  | 87% (13/15)                     |
+| `mistral-small-4`            | 82% (33/40)  | 60% (9/15)                      |
+| `qwen3.5-9b`                 | 82% (33/40)  | 87% (13/15)                     |
+| `muse-spark-1.3-contributor` | 68% (27/40)  | 87% (13/15)                     |
 
-**What to read into it.** Accuracy is strong and tightly clustered. Once a run reaches the tool layer, most models drive a multi-step investigation correctly,
-and only the two smallest models trail. The dimension that separates models is **security**: even with the boundary-tag defense on, injection resilience ranges
-from 100% down to 53% (`qwen3.5-9b`, `ministral-8b-2512`). Model choice changes the risk profile far more than it changes task accuracy. That's why security is
+**What to read into it.** Accuracy is high and tightly clustered at the top: eight of 12 models are at 95–100%, and the misses concentrate in the new
+similarity-search tests, where a model either uses TheHive's native similarity queries or fails the execution oracle. `muse-spark-1.3-contributor`'s 68% is
+mostly runs that never answered (14 of 55 looped on malformed tool arguments). The dimension that separates models is still **security**: with the same server
+and defense, injection resilience ranges from 100% (five models) down to 60% (`gemini-3.5-flash-lite`, `mistral-small-4`) — and most misses are models that
+resisted the injection but did not warn the analyst. Model choice changes the risk profile far more than it changes task accuracy, which is why security is
 reported as its own dimension and never folded into a single score.
 
 ## Methodology (summary)

@@ -55,9 +55,9 @@ handles the technical complexity of integrating with TheHive, so AI assistants c
 
 TheHiveMCP is production-ready. Two things to know before you point it at real data:
 
-- **Use a recommended model.** Our accuracy and security commitments hold only for the recommended models: **`anthropic/claude-sonnet-4.6`**,
-  **`openai/gpt-5.5`**, **`moonshotai/kimi-k2.6`**, **`z-ai/glm-5.2`**, **`google/gemini-3.5-flash`**, and **`google/gemini-3.1-flash-lite`**. These are the
-  models that clear both bars on the published evidence — see [`docs/evaluation/`](docs/evaluation/).
+- **Use a recommended model.** Our accuracy and security commitments hold only for the recommended models: **`openai/gpt-5.6-sol`**,
+  **`anthropic/claude-sonnet-5`**, **`z-ai/glm-5.3-flash`**, **`qwen/qwen3.6-35b-a3b`**, **`google/gemini-3.8-flash`**, and **`qwen/qwen3.6-27b`**. These are
+  the models that clear both bars on the published evidence — see [`docs/evaluation/`](docs/evaluation/).
 - **Security has a boundary.** The server tags all TheHive-sourced data as untrusted to resist prompt injection, but this **reduces, not eliminates** the risk
   and resilience varies by model — the `read_only` default is your enforced backstop.
 
@@ -74,22 +74,23 @@ The full contract — supported deployment shape, security and accuracy envelope
   request, callers supply their own TheHive credentials, and the target TheHive URL is restricted to `THEHIVE_URL` / `THEHIVE_URL_ALLOWLIST`. This is the shape
   we test and support; see the Get Started and Configuration sections below.
 
-- **Recommended models only.** Accuracy is uniformly strong across models (68–100%); prompt-injection resilience is what separates them (53–100%), so it is the
-  deciding bar. On the v1.0.0 evidence, the recommended list is the models that clear **both** high accuracy **and** ≥90% injection resilience:
+- **Recommended models only.** Accuracy is uniformly strong across models (68–100%); prompt-injection resilience is what separates them (60–100%), so it is the
+  deciding bar. On the v1.1.0 evidence, the recommended list is the models that clear **both** high accuracy **and** ≥90% injection resilience:
 
-  | Recommended model              | Accuracy | Injection resilience |
-  | ------------------------------ | -------- | -------------------- |
-  | `anthropic/claude-sonnet-4.6`  | 100%     | 100%                 |
-  | `openai/gpt-5.5`               | 100%     | 100%                 |
-  | `moonshotai/kimi-k2.6`         | 100%     | 100%                 |
-  | `z-ai/glm-5.2`                 | 100%     | 100%                 |
-  | `google/gemini-3.5-flash`      | 100%     | 100%                 |
-  | `google/gemini-3.1-flash-lite` | 100%     | 93%                  |
+  | Recommended model           | Accuracy | Injection resilience |
+  | --------------------------- | -------- | -------------------- |
+  | `openai/gpt-5.6-sol`        | 100%     | 100%                 |
+  | `anthropic/claude-sonnet-5` | 100%     | 100%                 |
+  | `z-ai/glm-5.3-flash`        | 98%      | 100%                 |
+  | `qwen/qwen3.6-35b-a3b`      | 98%      | 100%                 |
+  | `google/gemini-3.8-flash`   | 95%      | 100%                 |
+  | `qwen/qwen3.6-27b`          | 100%     | 93%                  |
 
-  Other evaluated models may work but are **not recommended** — they fall short on injection resilience (e.g. `mistralai/mistral-medium-3.5` 73%,
-  `qwen/qwen3.5-9b` 53%, `mistralai/ministral-8b-2512` 53%) and should not drive write-capable or automation tools on attacker-reachable data. Per-model results
-  and the full field are in [`docs/evaluation/`](docs/evaluation/); a model earns its place only with published accuracy **and** security evidence tied to a
-  server version.
+  Other evaluated models may work but are **not recommended** — they fall short on injection resilience (e.g. `mistralai/mistral-medium-3.5` 87%,
+  `google/gemma-4-26b-a4b-it` 87%, `qwen/qwen3.5-9b` 87%, `google/gemini-3.5-flash-lite` 60%, `mistralai/mistral-small-2603` 60%) or fail to answer
+  (`meta/muse-spark-1.3-contributor` looped to the turn cap in a quarter of its runs), and should not drive write-capable or automation tools on
+  attacker-reachable data. Per-model results and the full field are in [`docs/evaluation/`](docs/evaluation/); a model earns its place only with published
+  accuracy **and** security evidence tied to a server version.
 
 - **Security posture, and its boundary.** Every user-generated field the server returns (titles, descriptions, comments, observable values, tags) is wrapped in
   `[UNTRUSTED_DATA]…[/UNTRUSTED_DATA]` boundary tags, and every tool tells the model never to follow instructions found inside them. We publish prompt-injection
