@@ -64,10 +64,10 @@ isn't a meaningful bias concern. Evidence published from runs that predate this 
 onward are therefore on a **new baseline**: per the rule above, a judge change re-baselines every score, so figures are not directly comparable across that
 boundary. Each version's `results.csv` records the judge that produced it, which is what makes the discontinuity legible rather than silent.
 
-The move was not, initially, a decision. The eval fleet was refreshed for cost and availability (`TheHiveMCPEval` commits `992b158`, then `9a95b07`, which
-describes itself as finishing "the fleet swap the rebase left half-done"); `glm-5.2` stopped being served by the proxy and the judge followed the fleet, with
-this ADR never consulted. That is exactly the silent re-baselining the pinning rule exists to prevent. Adopting `glm-5.3` here makes the change deliberate and
-recorded after the fact. The lesson for next time: the judge deployment is policy, not fleet plumbing, and retiring it needs a decision against this ADR.
+The move was not, initially, a decision. The internal evaluation suite refreshed its model fleet for cost and availability, `glm-5.2` stopped being served, and
+the judge followed the fleet with this ADR never consulted. That is exactly the silent re-baselining the pinning rule exists to prevent. Adopting `glm-5.3` here
+makes the change deliberate and recorded after the fact. The lesson for next time: the judge deployment is policy, not fleet plumbing, and retiring it needs a
+decision against this ADR.
 
 ### What TheHiveMCP doesn't test
 
@@ -95,10 +95,10 @@ matrix is the starting point, not the outcome.
 | European-sovereign (Mistral)           | `mistralai/mistral-medium-3.5`, `mistralai/mistral-small-2603`                                                  |
 | Small (on-premise or budget)           | `google/gemini-3.5-flash-lite`, `qwen/qwen3.5-9b`, `google/gemma-4-26b-a4b-it`                                  |
 
-The live roster is `configs/providers.yaml` in `TheHiveMCPEval`, whose segment headings are these axes; this table follows it rather than the reverse. The set
-above is what v1.1.0 was evaluated against. v1.0.0 and earlier used a different one — `claude-sonnet-4.6`, `gpt-5.5`, `gemini-3.5-flash`, `deepseek-v4-pro`,
-`glm-5.2`, `kimi-k2.6`, `gemini-3.1-flash-lite`, `ministral-8b-2512` — retired for cost and availability, so per-model comparison across that boundary is only
-possible for the rows that survived (`mistral-medium-3.5`, `qwen3.5-9b`).
+The live roster lives in the internal evaluation suite, whose segment headings are these axes; this table follows it rather than the reverse. The set above is
+what v1.1.0 was evaluated against. v1.0.0 and earlier used a different one — `claude-sonnet-4.6`, `gpt-5.5`, `gemini-3.5-flash`, `deepseek-v4-pro`, `glm-5.2`,
+`kimi-k2.6`, `gemini-3.1-flash-lite`, `ministral-8b-2512` — retired for cost and availability, so per-model comparison across that boundary is only possible for
+the rows that survived (`mistral-medium-3.5`, `qwen3.5-9b`).
 
 This set is a **starting proposal, not a fixed benchmark.** It will change as models are released and in response to customer demand. The goal is to keep it
 broadly comparable over time, but comparability is a best-effort aim, not the main objective. Changes follow the recommended-model policy above.
