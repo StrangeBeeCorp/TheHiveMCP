@@ -12,6 +12,9 @@ import (
 // fieldTags is used across these cases as a representative non-default column.
 const fieldTags = "tags"
 
+// fieldPlatforms is the pattern's opt-in platform list.
+const fieldPlatforms = "platforms"
+
 // An observable row without its value identifies a type and a timestamp but not
 // the indicator, which is the whole point of the query. It is also the most
 // common SOC search, and the omission is silent: the caller gets rows back and
@@ -77,4 +80,28 @@ func countOccurrences(values []string, want string) int {
 	}
 
 	return found
+}
+
+// A pattern's default row answers "which technique is this?" — its id, name and
+// tactics. platforms is a four-to-six element list on most techniques, so
+// carrying it by default triples the width of a catalog page for a detail few
+// queries ask about. It stays reachable through extra-columns.
+func TestDefaultColumns_PatternsOmitPlatforms(t *testing.T) {
+	t.Parallel()
+
+	tool := &Tool{}
+	params := EntitiesParams{EntityType: types.EntityTypePattern}
+	require.NoError(t, tool.ValidateParams(&params))
+
+	assert.NotContains(t, params.ExtraColumns, fieldPlatforms,
+		"platforms must be opt-in, not a default pattern column")
+
+	for _, column := range []string{fieldID, "patternId", fieldName, "tactics"} {
+		assert.Contains(t, params.ExtraColumns, column, "a pattern row must still identify its technique")
+	}
+
+	optedIn := EntitiesParams{EntityType: types.EntityTypePattern, ExtraColumns: []string{fieldPlatforms}}
+	require.NoError(t, tool.ValidateParams(&optedIn))
+	assert.Contains(t, optedIn.ExtraColumns, fieldPlatforms,
+		"extra-columns=[platforms] must bring the list back")
 }

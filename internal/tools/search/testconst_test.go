@@ -9,6 +9,7 @@ const (
 	tValues    = "_values"
 	tID        = "_id"
 	tTitle     = "title"
+	tName      = "name"
 	tSeverity  = "severity"
 	tStatus    = "status"
 	tTags      = "tags"

@@ -6,3 +6,5 @@ Patterns are read-only — they are managed by administrators, not analysts.
 # Usage
 Before creating a procedure, search for the relevant pattern to obtain its patternId and confirm which tactics are valid for it.
 Filter patterns by name, platform, or tactic to narrow results from the full catalog.
+A pattern row returns its _id, patternId, name and tactics; platforms and the other catalog attributes (description, url, dataSources, detection) are opt-in through extra-columns.
+Pattern rows are administrator-managed reference data, so they are returned without untrusted-data boundary tags.

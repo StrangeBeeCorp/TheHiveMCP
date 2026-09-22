@@ -720,18 +720,18 @@ func TestSearchCaseTemplates(t *testing.T) {
 		pEntityType: types.EntityTypeCaseTemplate,
 		pFilters: map[string]any{
 			tLike: map[string]any{
-				tField: "name",
+				tField: tName,
 				tValue: "Phishing*",
 			},
 		},
-		pExtraColumns: []string{tID, "name", "displayName"},
+		pExtraColumns: []string{tID, tName, "displayName"},
 	})
 	require.Len(t, templatesData, 1)
 
 	template, ok := templatesData[0].(map[string]any)
 	require.True(t, ok)
 	// DL-6006: "name" is free text, so it is wrapped (the agent uses tID).
-	require.Equal(t, "[UNTRUSTED_DATA]Phishing-Search-Test[/UNTRUSTED_DATA]", template["name"])
+	require.Equal(t, "[UNTRUSTED_DATA]Phishing-Search-Test[/UNTRUSTED_DATA]", template[tName])
 }
 
 func TestSearchPages(t *testing.T) {
@@ -857,4 +857,49 @@ func TestSearchPagesThroughResultsWithHasMore(t *testing.T) {
 	}
 
 	require.Len(t, seen, total, "following nextOffset must reach every matching row")
+}
+
+// TestSearchPatternsCarryNoUntrustedFence pins the trust classification of the
+// MITRE ATT&CK catalog end to end: it is admin-imported reference data, so a
+// pattern row must reach the model with no boundary tags at all — not on the
+// technique name, not on its platform list.
+func TestSearchPatternsCarryNoUntrustedFence(t *testing.T) {
+	testutils.Parallel(t)
+
+	testutils.SetupTestWithCleanup(t)
+
+	mcpClient := newSearchClient(t)
+
+	patterns := searchRows(t, mcpClient, map[string]any{
+		pEntityType: types.EntityTypePattern,
+		pFilters: map[string]any{
+			tIn: map[string]any{
+				tField:  "patternId",
+				tValues: []string{testutils.TestMITREPatternID},
+			},
+		},
+		pExtraColumns: []string{"description", "url", "platforms"},
+	})
+	require.Len(t, patterns, 1)
+
+	pattern, ok := patterns[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, testutils.TestMITREPatternID, pattern["patternId"])
+
+	for _, field := range []string{tName, "description", "url"} {
+		value, isString := pattern[field].(string)
+		require.True(t, isString, "pattern field %q should be a string, got %T", field, pattern[field])
+		require.NotContains(t, value, "UNTRUSTED_DATA",
+			"catalog field %q must not be fenced: %q", field, value)
+	}
+
+	platforms, ok := pattern["platforms"].([]any)
+	require.True(t, ok, "pattern should expose a platforms list, got %T", pattern["platforms"])
+
+	for _, platform := range platforms {
+		value, isString := platform.(string)
+		require.True(t, isString, "platform should be a string, got %T", platform)
+		require.NotContains(t, value, "UNTRUSTED_DATA",
+			"catalog platform must not be fenced: %q", value)
+	}
 }

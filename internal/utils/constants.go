@@ -35,6 +35,9 @@ const (
 	// fieldHashes is the attachment digests field; fieldTactics the pattern tactics field.
 	fieldHashes  = "hashes"
 	fieldTactics = "tactics"
+	// fieldPatternID is the MITRE technique identifier (e.g. "T1561") carried by
+	// a pattern and by every procedure citing it.
+	fieldPatternID = "patternId"
 	// fieldObservableCount is a similarity match-context meta field.
 	fieldObservableCount = "observableCount"
 

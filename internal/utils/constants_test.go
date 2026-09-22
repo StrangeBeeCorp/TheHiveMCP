@@ -25,6 +25,10 @@ const (
 	fieldMessage = "message"
 	fieldSummary = "summary"
 
+	// fieldName is the generic display-name key: free user text on most
+	// entities, but the technique name on a MITRE pattern.
+	fieldName = "name"
+
 	valueInitialAccess = "initial-access"
 
 	valueNew = "New"

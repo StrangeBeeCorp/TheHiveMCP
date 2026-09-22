@@ -200,13 +200,16 @@ var DefaultFields = map[string][]string{
 	// data is the IOC itself (the address, hash, domain). Without it an
 	// observable row identifies a type and a timestamp but not the indicator,
 	// which is the one thing every observable query is asking for.
-	EntityTypeObservable:   {fieldID, "dataType", "data", fieldCreatedAt},
-	EntityTypeComment:      {fieldID, "message", fieldCreatedAt, "_createdBy"},
-	EntityTypePage:         {fieldID, fieldTitle, fieldCreatedAt},
-	EntityTypeAttachment:   {fieldID, "fileName", "size", fieldCreatedAt},
-	EntityTypeTaskLog:      {fieldID, "message", fieldCreatedAt, "_createdBy"},
-	EntityTypeProcedure:    {fieldID, "patternId", "patternName", "description", "occurDate"},
-	EntityTypePattern:      {fieldID, "patternId", "name", "tactics", "platforms"},
+	EntityTypeObservable: {fieldID, "dataType", "data", fieldCreatedAt},
+	EntityTypeComment:    {fieldID, "message", fieldCreatedAt, "_createdBy"},
+	EntityTypePage:       {fieldID, fieldTitle, fieldCreatedAt},
+	EntityTypeAttachment: {fieldID, "fileName", "size", fieldCreatedAt},
+	EntityTypeTaskLog:    {fieldID, "message", fieldCreatedAt, "_createdBy"},
+	EntityTypeProcedure:  {fieldID, "patternId", "patternName", "description", "occurDate"},
+	// platforms is deliberately absent: it is a four-to-six element list on most
+	// techniques, so it widens every catalog page for a detail few queries ask
+	// about. extra-columns=["platforms"] brings it back.
+	EntityTypePattern:      {fieldID, "patternId", "name", "tactics"},
 	EntityTypeCaseTemplate: {fieldID, "name", "displayName", "description", fieldSeverity, "tags"},
 	EntityTypeJob:          {fieldID, "analyzerName", fieldStatus, fieldStartDate, "cortexId"},
 	EntityTypeAction:       {fieldID, "responderName", fieldStatus, fieldStartDate, "objectType", "objectId"},

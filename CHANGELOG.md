@@ -6,6 +6,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > **Note:** All `0.x` releases (v0.3.4 and earlier) were **beta / pre-release** versions. **v1.0.0 is the first production-ready release** — see its notes
 > below.
 
+## [Unreleased]
+
+### Changed
+
+- **The MITRE ATT&CK catalog is no longer fenced as untrusted data.** A `search-entities` query on `entity-type: pattern` used to return its technique name and
+  platform list wrapped in `[UNTRUSTED_DATA]` tags, although a pattern is reference data imported by an administrator, not case material — the trust boundary
+  already treats the catalog as trusted, which is why `patternId`, `tactic` and `tactics` were exempt. The fence classifies by field _name_, and a pattern's
+  fields are called `name`, `description`, `url` and `platforms`, which mean free user text on every other entity, so they could not simply join the allowlist;
+  patterns are now exempted as a whole entity instead. A procedure is not exempt: only its catalog references (`patternId`, the newly trusted `patternName`,
+  `tactic`) pass unfenced, while its analyst-written `description` stays wrapped. Boundary markers found inside a catalog value are still neutralized.
+- **`platforms` is no longer a default `pattern` column.** A pattern row now returns `_id`, `patternId`, `name` and `tactics`; the platform list is four to six
+  entries on most techniques and widened every catalog page for a detail few queries ask about. `extra-columns: ["platforms"]` brings it back.
+
 ## [1.1.0] - 2026-09-10
 
 ### Added
