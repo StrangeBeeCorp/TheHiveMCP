@@ -546,11 +546,24 @@ break against any of them fails the PR. The image is a single source of truth: s
 
 **Quality and security:**
 
-- `make fmt` - Format code using Docker
+- `make fmt` - Format code using Docker (`scripts/fmt.sh`: gofmt, golangci fmt, shfmt, markdownlint, prettier)
+- `make fmt-check` - Fail if anything is unformatted, without rewriting it (the CI gate)
 - `make security` - Run all security checks (vulncheck, sast, lint)
 - `make sast` - Static application security testing
-- `make lint` - Linting checks (config schema verify + golangci-lint run)
+- `make lint` - Full read-only lint gate over every tracked file (`scripts/lint.sh`: golangci-lint, `go test -short`, shellcheck/shfmt, markdownlint, lychee,
+  yamllint, hadolint, checkmake, actionlint)
+- `make lint-changed` / `make lint-fix` / `make lint-fix-changed` - the same gate scoped to changed files, and its auto-fixing counterparts
 - `make vulncheck` - Vulnerability scanning
+
+**Git hooks (recommended, one-time):**
+
+```sh
+make dev-setup    # git config core.hooksPath .githooks
+```
+
+This points git at the tracked hooks in `.githooks/`, which delegate to the same `scripts/lint.sh`: `pre-commit` runs `--staged` (exactly what the commit will
+carry) and `pre-push` runs `--all` (the full gate). Both are read-only — neither rewrites a file under you — and both are bypassable with `--no-verify` by
+design: they are a fast local signal, while the authoritative gate stays CI.
 
 **Docker operations:**
 

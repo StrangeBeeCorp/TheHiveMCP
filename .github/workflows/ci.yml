@@ -50,7 +50,7 @@ jobs:
         run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools "$GO_CACHE_DIR"/golangci
 
       - name: Format check
-        run: make fmt
+        run: make fmt-check
 
       - name: Run linter
         run: make lint

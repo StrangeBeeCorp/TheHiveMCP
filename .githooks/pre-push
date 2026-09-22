@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# The full gate before the code leaves the machine: --all catches cross-file
+# findings a per-commit scope cannot see. Read-only (--check is the default).
+# Bypassable with `git push --no-verify` by design — the real gate is CI.
+exec "$(git rev-parse --show-toplevel)/scripts/lint.sh" --all

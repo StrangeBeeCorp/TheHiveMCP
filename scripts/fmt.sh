@@ -38,7 +38,10 @@
 #USAGE bin "fmt.sh"
 #USAGE about "Single source of truth for repo formatting (all formatters run from pinned Docker images; no linters/tests)."
 #USAGE flag "--all"     help="Format every tracked file (git ls-files) — the full pass. Default scope."
-#USAGE flag "--changed" help="Format only this turn's changed files (unstaged + staged + new untracked + committed-this-turn)."
+#USAGE flag "--changed" help="Format the changed files: unstaged + staged + new untracked, plus those of COMMIT when given." {
+#USAGE     arg "[COMMIT]" help="A commit-ish whose changed files join the working-tree ones. Omit to format the working tree alone."
+#USAGE }
+#USAGE flag "--staged"  help="Format only the staged files — exactly what the next commit will carry."
 #USAGE flag "--check"   help="Report files that would be reformatted without modifying them; exit 1 if any. Default is to rewrite."
 #USAGE flag "--fix"     help="Rewrite files in place (gofmt, golangci fmt, shfmt, markdownlint --fix, prettier), then report what changed. Default."
 #USAGE flag "--porcelain" help="With --fix, print one NUL-terminated changed-file path to stdout instead of the human summary. For programmatic callers (lint.sh)."
@@ -66,13 +69,23 @@ PRETTIER_VERSION="3.9.5"
 # --check. Scope default is --all, matching lint.sh.
 # PORCELAIN=1 emits NUL-terminated "<path>" records on stdout (for lint.sh) and
 # suppresses the human summary — machine-readable and path-safe.
-SCOPE="all" # all | changed
-FIX=1       # 1 = --fix (rewrite), 0 = --check (report only)
-PORCELAIN=0 # 1 = porcelain output (see note above)
+SCOPE="all"       # all | changed | staged (mutually exclusive, last one wins)
+CHANGED_COMMIT="" # optional commit-ish whose files join the --changed scope
+FIX=1             # 1 = --fix (rewrite), 0 = --check (report only)
+PORCELAIN=0       # 1 = porcelain output (see note above)
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --all) SCOPE="all" ;;
-    --changed) SCOPE="changed" ;;
+    --changed)
+      SCOPE="changed"
+      # COMMIT is OPTIONAL: only swallow the next token when it is a real
+      # value, so `--changed --fix` still parses --fix as a flag.
+      if [[ $# -gt 1 ]] && [[ -n "${2:-}" ]] && [[ "${2:-}" != -* ]]; then
+        CHANGED_COMMIT="$2"
+        shift
+      fi
+      ;;
+    --staged) SCOPE="staged" ;;
     --check) FIX=0 ;;
     --fix) FIX=1 ;;
     --porcelain) PORCELAIN=1 ;;
@@ -114,7 +127,9 @@ classify() {
     [[ -f "$f" ]] || continue
     case "$f" in
       *.go) go_files+=("$f") ;;
-      *.sh) sh_files+=("$f") ;;
+      # Git hooks carry git-imposed names with no .sh extension, but they are
+      # bash all the same — shellcheck/shfmt must see them too.
+      *.sh | .githooks/*) sh_files+=("$f") ;;
       *.md | *.mdx) md_format_exempt "$f" || md_files+=("$f") ;;
       *) ;;
     esac
@@ -122,37 +137,32 @@ classify() {
   return 0
 }
 
-# Same as lint.sh: union in files touched by commits made during this turn, which
-# would otherwise escape --changed once committed. See lint.sh for the full
-# rationale (.claude/last-prompt-ts, BASE..HEAD bound).
-committed_this_turn() {
-  local ts_file="$REPO_ROOT/.claude/last-prompt-ts" prompt_ts base_ref base range candidate mb
-  [[ -r "$ts_file" ]] || return 0
-  prompt_ts=$(cat "$ts_file" 2>/dev/null)
-  case "$prompt_ts" in
-    '' | *[!0-9]*) return 0 ;;
-    *) ;;
-  esac
-  base_ref=$(git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null)
-  for candidate in "$base_ref" origin/main main; do
-    [[ -n "$candidate" ]] || continue
-    if mb=$(git merge-base "$candidate" HEAD 2>/dev/null); then
-      base="$mb"
-      break
-    fi
-  done
-  range="${base:+$base..}HEAD"
-  git log --no-merges --since="@$prompt_ts" --name-only --pretty=format: "$range" 2>/dev/null || true
+# Same as lint.sh: work already committed would otherwise escape --changed once
+# committed (git diff then reports nothing). The caller NAMES the commit-ish
+# instead of a timestamp state file being consulted. See lint.sh for the full
+# rationale.
+commit_files() {
+  [[ -n "$CHANGED_COMMIT" ]] || return 0
+  git show --name-only --pretty=format: "$CHANGED_COMMIT" 2>/dev/null || true
 }
 
-if [[ "$SCOPE" = all ]]; then
+# Validate COMMIT in the MAIN shell: commit_files runs inside a process
+# substitution, where an `exit` would kill only that subshell.
+if [[ -n "$CHANGED_COMMIT" ]] && ! git rev-parse --verify --quiet "${CHANGED_COMMIT}^{commit}" >/dev/null 2>&1; then
+  echo "fmt.sh: --changed: '$CHANGED_COMMIT' is not a commit" >&2
+  exit 64
+fi
+
+if [[ "$SCOPE" = staged ]]; then
+  classify < <(git diff --cached --name-only | sort -u)
+elif [[ "$SCOPE" = all ]]; then
   classify < <(git ls-files)
 else
   classify < <({
     git diff --name-only
     git diff --cached --name-only
     git ls-files --others --exclude-standard
-    committed_this_turn
+    commit_files
   } | sort -u)
 fi
 

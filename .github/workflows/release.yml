@@ -124,15 +124,15 @@ jobs:
           (echo "${{ github.ref }}" | grep -E 'heads') && VERSION=SNAPSHOT-$(date "+%Y%m%d%H%M%S")
           (echo "${{ github.ref }}" | grep -E 'tags')  && VERSION=${GITHUB_REF#refs/tags/}
           echo ${{ github.ref }}
-          echo $VERSION
-          echo $GITHUB_REF
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "$VERSION"
+          echo "$GITHUB_REF"
+          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Building version: ${VERSION}"
 
       - name: Prepare image metadata
         id: meta
         run: |
-          echo "IMAGE_BASE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/thehivemcp/thehivemcp" >> $GITHUB_OUTPUT
+          echo "IMAGE_BASE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/thehivemcp/thehivemcp" >> "$GITHUB_OUTPUT"
 
       - name: Build and push Docker images
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
