@@ -863,6 +863,11 @@ func TestSearchPagesThroughResultsWithHasMore(t *testing.T) {
 // MITRE ATT&CK catalog end to end: it is admin-imported reference data, so a
 // pattern row must reach the model with no boundary tags at all — not on the
 // technique name, not on its platform list.
+//
+// A patternId is not unique: TheHive 5.6 imports its own ATT&CK catalog in the
+// background after startup (as system@thehive.local), next to the one the
+// harness imports, so T1059 comes back once or twice depending on how far that
+// import has got. Every row is checked rather than assuming a single match.
 func TestSearchPatternsCarryNoUntrustedFence(t *testing.T) {
 	testutils.Parallel(t)
 
@@ -880,26 +885,36 @@ func TestSearchPatternsCarryNoUntrustedFence(t *testing.T) {
 		},
 		pExtraColumns: []string{"description", "url", "platforms"},
 	})
-	require.Len(t, patterns, 1)
+	require.NotEmpty(t, patterns, "the harness imports %s, so the filter must match it", testutils.TestMITREPatternID)
 
-	pattern, ok := patterns[0].(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, testutils.TestMITREPatternID, pattern["patternId"])
+	for _, row := range patterns {
+		pattern, ok := row.(map[string]any)
+		require.True(t, ok, "pattern row should be an object, got %T", row)
+		require.Equal(t, testutils.TestMITREPatternID, pattern["patternId"])
+
+		requirePatternUnfenced(t, pattern)
+	}
+}
+
+// requirePatternUnfenced asserts no catalog field of one pattern row carries
+// boundary tags.
+func requirePatternUnfenced(t *testing.T, pattern map[string]any) {
+	t.Helper()
 
 	for _, field := range []string{tName, "description", "url"} {
 		value, isString := pattern[field].(string)
-		require.True(t, isString, "pattern field %q should be a string, got %T", field, pattern[field])
+		require.True(t, isString, "pattern %v field %q should be a string, got %T", pattern[tID], field, pattern[field])
 		require.NotContains(t, value, "UNTRUSTED_DATA",
-			"catalog field %q must not be fenced: %q", field, value)
+			"pattern %v catalog field %q must not be fenced: %q", pattern[tID], field, value)
 	}
 
 	platforms, ok := pattern["platforms"].([]any)
-	require.True(t, ok, "pattern should expose a platforms list, got %T", pattern["platforms"])
+	require.True(t, ok, "pattern %v should expose a platforms list, got %T", pattern[tID], pattern["platforms"])
 
 	for _, platform := range platforms {
 		value, isString := platform.(string)
-		require.True(t, isString, "platform should be a string, got %T", platform)
+		require.True(t, isString, "pattern %v platform should be a string, got %T", pattern[tID], platform)
 		require.NotContains(t, value, "UNTRUSTED_DATA",
-			"catalog platform must not be fenced: %q", value)
+			"pattern %v catalog platform must not be fenced: %q", pattern[tID], value)
 	}
 }
