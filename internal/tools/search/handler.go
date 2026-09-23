@@ -174,6 +174,10 @@ var catalogEntityTypes = map[string]struct{}{
 // teaches a model to ignore the tag on the rows that are genuinely hostile
 // (DL-6703). Marking happens here because the entity type is only known
 // per-request, while the fence is a static per-tool setting.
+//
+// _id is left as a plain string: it is already trusted by name, and the
+// additional-queries expansion reads it back with a .(string) assertion that a
+// TrustedString would fail.
 func markCatalogRowsTrusted(entityType string, results []map[string]any) {
 	if _, isCatalog := catalogEntityTypes[entityType]; !isCatalog {
 		return
@@ -181,6 +185,10 @@ func markCatalogRowsTrusted(entityType string, results []map[string]any) {
 
 	for _, row := range results {
 		for key, value := range row {
+			if key == fieldID {
+				continue
+			}
+
 			row[key] = utils.MarkTrustedSubtree(value)
 		}
 	}

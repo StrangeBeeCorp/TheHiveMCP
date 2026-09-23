@@ -12,8 +12,16 @@ import (
 // fieldTags is used across these cases as a representative non-default column.
 const fieldTags = "tags"
 
-// fieldPlatforms is the pattern's opt-in platform list.
-const fieldPlatforms = "platforms"
+// Pattern fields, a sample platform and filter DSL keys shared by the catalog
+// and filter-validation tests.
+const (
+	fieldPatternID = "patternId"
+	platformLinux  = "Linux"
+	opEq           = "_eq"
+	keyField       = "_field"
+	keyValue       = "_value"
+	keyValues      = "_values"
+)
 
 // An observable row without its value identifies a type and a timestamp but not
 // the indicator, which is the whole point of the query. It is also the most
@@ -96,7 +104,7 @@ func TestDefaultColumns_PatternsOmitPlatforms(t *testing.T) {
 	assert.NotContains(t, params.ExtraColumns, fieldPlatforms,
 		"platforms must be opt-in, not a default pattern column")
 
-	for _, column := range []string{fieldID, "patternId", fieldName, "tactics"} {
+	for _, column := range []string{fieldID, fieldPatternID, fieldName, "tactics"} {
 		assert.Contains(t, params.ExtraColumns, column, "a pattern row must still identify its technique")
 	}
 

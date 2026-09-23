@@ -96,6 +96,38 @@ func NormalizeFilterKeys(filterMap map[string]any) map[string]any {
 	return filterMap
 }
 
+// ReferencedFilterFields returns every field name a filter tests, at any depth:
+// the `_field` of a comparison and the bare name `_contains` takes. Keys are
+// matched after normalizeFilterKey, so a malformed `"_field"` key still counts
+// — it is repaired before the filter reaches TheHive.
+func ReferencedFilterFields(filterMap map[string]any) []string {
+	fields := []string{}
+
+	for key, value := range filterMap {
+		switch normalizeFilterKey(key) {
+		case keyField, opContains:
+			if field, ok := value.(string); ok {
+				fields = append(fields, field)
+			}
+
+			continue
+		}
+
+		switch v := value.(type) {
+		case map[string]any:
+			fields = append(fields, ReferencedFilterFields(v)...)
+		case []any:
+			for _, item := range v {
+				if itemMap, ok := item.(map[string]any); ok {
+					fields = append(fields, ReferencedFilterFields(itemMap)...)
+				}
+			}
+		}
+	}
+
+	return fields
+}
+
 // deepCopyFilter returns a deep copy of a filter map so in-place transforms
 // (NormalizeFilterKeys, TranslateDatesToTimestamps) never reach through shared
 // nested maps/slices into the caller's original filters. Only the map/slice

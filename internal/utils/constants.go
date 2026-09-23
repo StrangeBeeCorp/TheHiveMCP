@@ -17,6 +17,8 @@ const (
 	opIn      = "_in"
 	keyField  = "_field"
 	keyValues = "_values"
+	// opContains is the presence test, which names its field directly.
+	opContains = "_contains"
 
 	// scopeBatchChunkSize caps how many ids ride in a single scopedEntityIDsBatch
 	// _in{_id} query. A large batch is split into ceil(N/chunk) list queries whose

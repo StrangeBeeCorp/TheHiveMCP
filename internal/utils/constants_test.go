@@ -44,4 +44,5 @@ const (
 	pathQuery       = "/api/v1/query"
 	filterPhishing  = "*Phishing*"
 	quotedFieldName = `"_field"`
+	quotedOpEq      = `"_eq"`
 )

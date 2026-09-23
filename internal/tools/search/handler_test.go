@@ -171,11 +171,11 @@ func TestKeptJobReportIsMarkedUntrusted(t *testing.T) {
 // default projection.
 func patternRow() []map[string]any {
 	return []map[string]any{{
-		fieldID:     "~278712",
-		"patternId": "T1561",
-		fieldName:   "Disk Wipe",
-		"tactics":   []any{"impact"},
-		"platforms": []any{"Linux", "macOS", "Windows", "Network Devices"},
+		fieldID:        "~278712",
+		fieldPatternID: "T1561",
+		fieldName:      "Disk Wipe",
+		"tactics":      []any{"impact"},
+		"platforms":    []any{platformLinux, "macOS", "Windows", "Network Devices"},
 	}}
 }
 
@@ -197,6 +197,20 @@ func TestMarkCatalogRowsTrusted_PatternRowsCarryNoBoundaryTags(t *testing.T) {
 		"the technique name must survive marking verbatim")
 	assert.Contains(t, string(rendered), `"Network Devices"`,
 		"every platform must survive marking verbatim")
+}
+
+// _id must keep its plain string type: the additional-queries expansion reads it
+// back with entity["_id"].(string), which a TrustedString fails, so a marked id
+// would surface as "entity at index 0 missing _id field" the day a catalog
+// entity gains an additional query.
+func TestMarkCatalogRowsTrusted_KeepsIDAPlainString(t *testing.T) {
+	t.Parallel()
+
+	results := patternRow()
+	markCatalogRowsTrusted(types.EntityTypePattern, results)
+
+	assert.Equal(t, "~278712", results[0][fieldID],
+		"pattern _id must stay a Go string for the expansion's type assertion")
 }
 
 func TestMarkCatalogRowsTrusted_LeavesNonCatalogEntitiesFenced(t *testing.T) {

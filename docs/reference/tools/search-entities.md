@@ -141,8 +141,10 @@ Search the MITRE ATT&CK technique catalog loaded in TheHive with filters on:
 - Pattern ID (e.g. `T1059`, `T1059.001`)
 - Name and description
 - Tactics (e.g. `execution`, `persistence`)
-- Platforms (e.g. `Windows`, `Linux`)
 - `revoked` status
+
+Platforms (e.g. `Windows`, `Linux`) are **not** filterable: TheHive does not index them, so such a filter would silently match nothing and the tool rejects it.
+Request them as a column instead with `extra-columns: ["platforms"]`.
 
 **Tip**: Search patterns first to find valid `patternId` values before creating procedures.
 

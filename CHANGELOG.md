@@ -18,6 +18,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `tactic`) pass unfenced, while its analyst-written `description` stays wrapped. Boundary markers found inside a catalog value are still neutralized.
 - **`platforms` is no longer a default `pattern` column.** A pattern row now returns `_id`, `patternId`, `name` and `tactics`; the platform list is four to six
   entries on most techniques and widened every catalog page for a detail few queries ask about. `extra-columns: ["platforms"]` brings it back.
+- **A `pattern` filter on `platforms` is now rejected.** TheHive does not index the field, so it accepted such a filter and returned zero rows with no error,
+  which a model reported as "no technique targets that platform". The search now fails fast with an error pointing at `extra-columns: ["platforms"]`, and the
+  pattern fact sheet no longer lists platform among the filterable fields.
 
 ## [1.1.0] - 2026-09-10
 
