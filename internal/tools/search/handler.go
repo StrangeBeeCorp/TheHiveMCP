@@ -70,6 +70,11 @@ func (t *Tool) Handle(ctx context.Context, req mcp.CallToolRequest, params Entit
 
 		dropUnrequestedJobReport(params, results)
 
+		// Before expansion, so only the catalog entity's own columns are
+		// exempted: an expansion bolts related entities onto the row, and those
+		// are ordinary case material that must stay fenced.
+		markCatalogRowsTrusted(params.EntityType, results)
+
 		results, err = utils.ExpandEntitiesWithQueries(ctx, params.EntityType, results, params.AdditionalQueries, permFilters)
 		if err != nil {
 			return EntitiesResult{}, tools.NewToolError("failed to perform additional queries").Cause(err)
@@ -145,6 +150,46 @@ func dropUnrequestedJobReport(params EntitiesParams, results []map[string]any) {
 
 		if len(extraData) == 0 {
 			delete(row, fieldExtraData)
+		}
+	}
+}
+
+// catalogEntityTypes lists the entity types whose every row is admin-tier
+// reference data rather than case material: the MITRE ATT&CK catalog, imported
+// by an administrator and only readable through search.
+//
+// A procedure is deliberately NOT here. It cites the catalog (patternId,
+// patternName, tactic — all trusted by name) but carries an analyst-written
+// description, which stays fenced.
+var catalogEntityTypes = map[string]struct{}{
+	types.EntityTypePattern: {},
+}
+
+// markCatalogRowsTrusted exempts catalog rows from the [UNTRUSTED_DATA] fence.
+//
+// The fence classifies by field NAME and a pattern's fields are called "name",
+// "description", "url" and "platforms" — names that mean free user text on
+// every other entity, so they cannot join the allowlist. Tagging a technique
+// name the model itself asked for by id is pure noise, and noise is what
+// teaches a model to ignore the tag on the rows that are genuinely hostile
+// (DL-6703). Marking happens here because the entity type is only known
+// per-request, while the fence is a static per-tool setting.
+//
+// _id is left as a plain string: it is already trusted by name, and the
+// additional-queries expansion reads it back with a .(string) assertion that a
+// TrustedString would fail.
+func markCatalogRowsTrusted(entityType string, results []map[string]any) {
+	if _, isCatalog := catalogEntityTypes[entityType]; !isCatalog {
+		return
+	}
+
+	for _, row := range results {
+		for key, value := range row {
+			if key == fieldID {
+				continue
+			}
+
+			row[key] = utils.MarkTrustedSubtree(value)
 		}
 	}
 }

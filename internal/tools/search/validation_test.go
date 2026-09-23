@@ -69,3 +69,61 @@ func TestValidateParamsRejectsUnknownEntityType(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid entity-type 'analyzer'")
 }
+
+// platforms is not indexed on Pattern: TheHive accepts a filter on it and
+// returns zero rows, which a model reports as "no technique targets Linux".
+func TestValidateParamsRejectsPatternPlatformFilter(t *testing.T) {
+	t.Parallel()
+
+	tool := &Tool{}
+
+	filters := map[string]map[string]any{
+		opEq:              {opEq: map[string]any{keyField: fieldPlatforms, keyValue: platformLinux}},
+		"_contains":       {"_contains": fieldPlatforms},
+		"nested in _and":  {"_and": []any{map[string]any{"_in": map[string]any{keyField: fieldPlatforms, keyValues: []any{platformLinux}}}}},
+		"over-quoted key": {opEq: map[string]any{`"_field"`: fieldPlatforms, keyValue: platformLinux}},
+	}
+
+	for name, filter := range filters {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tool.ValidateParams(&EntitiesParams{EntityType: types.EntityTypePattern, Filters: filter})
+
+			require.Error(t, err, "pattern filter %v tests platforms and must be rejected", filter)
+			assert.Contains(t, err.Error(), "extra-columns", "the error must point at the way to read platforms")
+		})
+	}
+}
+
+// The ban is per entity and per field: platforms stays readable, name stays
+// filterable, and no other entity is affected.
+func TestValidateParamsAcceptsFiltersOnIndexedFields(t *testing.T) {
+	t.Parallel()
+
+	tool := &Tool{}
+
+	accepted := map[string]*EntitiesParams{
+		"pattern by name": {
+			EntityType: types.EntityTypePattern,
+			Filters:    map[string]any{"_like": map[string]any{keyField: "name", keyValue: "*Disk*"}},
+		},
+		"pattern platforms as a column": {
+			EntityType:   types.EntityTypePattern,
+			ExtraColumns: []string{fieldPlatforms},
+			Filters:      map[string]any{opEq: map[string]any{keyField: fieldPatternID, keyValue: "T1561"}},
+		},
+		"platforms on another entity": {
+			EntityType: types.EntityTypeCase,
+			Filters:    map[string]any{opEq: map[string]any{keyField: fieldPlatforms, keyValue: platformLinux}},
+		},
+	}
+
+	for name, params := range accepted {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			require.NoError(t, tool.ValidateParams(params))
+		})
+	}
+}

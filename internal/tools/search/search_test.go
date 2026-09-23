@@ -720,18 +720,18 @@ func TestSearchCaseTemplates(t *testing.T) {
 		pEntityType: types.EntityTypeCaseTemplate,
 		pFilters: map[string]any{
 			tLike: map[string]any{
-				tField: "name",
+				tField: tName,
 				tValue: "Phishing*",
 			},
 		},
-		pExtraColumns: []string{tID, "name", "displayName"},
+		pExtraColumns: []string{tID, tName, "displayName"},
 	})
 	require.Len(t, templatesData, 1)
 
 	template, ok := templatesData[0].(map[string]any)
 	require.True(t, ok)
 	// DL-6006: "name" is free text, so it is wrapped (the agent uses tID).
-	require.Equal(t, "[UNTRUSTED_DATA]Phishing-Search-Test[/UNTRUSTED_DATA]", template["name"])
+	require.Equal(t, "[UNTRUSTED_DATA]Phishing-Search-Test[/UNTRUSTED_DATA]", template[tName])
 }
 
 func TestSearchPages(t *testing.T) {
@@ -857,4 +857,64 @@ func TestSearchPagesThroughResultsWithHasMore(t *testing.T) {
 	}
 
 	require.Len(t, seen, total, "following nextOffset must reach every matching row")
+}
+
+// TestSearchPatternsCarryNoUntrustedFence pins the trust classification of the
+// MITRE ATT&CK catalog end to end: it is admin-imported reference data, so a
+// pattern row must reach the model with no boundary tags at all — not on the
+// technique name, not on its platform list.
+//
+// A patternId is not unique: TheHive 5.6 imports its own ATT&CK catalog in the
+// background after startup (as system@thehive.local), next to the one the
+// harness imports, so T1059 comes back once or twice depending on how far that
+// import has got. Every row is checked rather than assuming a single match.
+func TestSearchPatternsCarryNoUntrustedFence(t *testing.T) {
+	testutils.Parallel(t)
+
+	testutils.SetupTestWithCleanup(t)
+
+	mcpClient := newSearchClient(t)
+
+	patterns := searchRows(t, mcpClient, map[string]any{
+		pEntityType: types.EntityTypePattern,
+		pFilters: map[string]any{
+			tIn: map[string]any{
+				tField:  "patternId",
+				tValues: []string{testutils.TestMITREPatternID},
+			},
+		},
+		pExtraColumns: []string{"description", "url", "platforms"},
+	})
+	require.NotEmpty(t, patterns, "the harness imports %s, so the filter must match it", testutils.TestMITREPatternID)
+
+	for _, row := range patterns {
+		pattern, ok := row.(map[string]any)
+		require.True(t, ok, "pattern row should be an object, got %T", row)
+		require.Equal(t, testutils.TestMITREPatternID, pattern["patternId"])
+
+		requirePatternUnfenced(t, pattern)
+	}
+}
+
+// requirePatternUnfenced asserts no catalog field of one pattern row carries
+// boundary tags.
+func requirePatternUnfenced(t *testing.T, pattern map[string]any) {
+	t.Helper()
+
+	for _, field := range []string{tName, "description", "url"} {
+		value, isString := pattern[field].(string)
+		require.True(t, isString, "pattern %v field %q should be a string, got %T", pattern[tID], field, pattern[field])
+		require.NotContains(t, value, "UNTRUSTED_DATA",
+			"pattern %v catalog field %q must not be fenced: %q", pattern[tID], field, value)
+	}
+
+	platforms, ok := pattern["platforms"].([]any)
+	require.True(t, ok, "pattern %v should expose a platforms list, got %T", pattern[tID], pattern["platforms"])
+
+	for _, platform := range platforms {
+		value, isString := platform.(string)
+		require.True(t, isString, "pattern %v platform should be a string, got %T", pattern[tID], platform)
+		require.NotContains(t, value, "UNTRUSTED_DATA",
+			"pattern %v catalog platform must not be fenced: %q", pattern[tID], value)
+	}
 }

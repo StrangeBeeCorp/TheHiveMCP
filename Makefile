@@ -117,6 +117,13 @@ fmt: ## Auto-format the whole repo (Go, shell, markdown) before committing ##@ m
 	@echo $(BGreen)-------------$(Color_Off)
 	./scripts/fmt.sh --all --fix
 
+.PHONY: fmt-check
+fmt-check: ## Fail (exit 1) if any file is unformatted, without rewriting it — the CI gate ##@ make fmt-check
+	@echo $(BGreen)-------------------$(Color_Off)
+	@echo $(BGreen)--- Format check --$(Color_Off)
+	@echo $(BGreen)-------------------$(Color_Off)
+	./scripts/fmt.sh --all --check
+
 .PHONY: fmt-changed
 fmt-changed: ## Fast format loop while iterating: only git-changed files ##@ make fmt-changed
 	@echo $(BGreen)-------------$(Color_Off)
@@ -450,6 +457,15 @@ install-dev-deps: ## No-op: tooling runs on-demand via Docker (kept for habit) #
 	@echo $(BGreen)----------------------------------------$(Color_Off)
 	@echo "Dependencies are now installed on-demand via Docker containers"
 	@echo "No local Go installation required"
+
+.PHONY: dev-setup
+dev-setup: ## Point git at the tracked .githooks (pre-commit/pre-push lint gate) ##@ make dev-setup
+	@echo $(BGreen)---------------------$(Color_Off)
+	@echo $(BGreen)-- Dev environment --$(Color_Off)
+	@echo $(BGreen)---------------------$(Color_Off)
+	git config core.hooksPath .githooks
+	@echo "git hooks enabled: pre-commit -> lint.sh --staged, pre-push -> lint.sh --all"
+	@echo "Bypass either with --no-verify; the authoritative gate stays CI."
 
 # Dynamic build target for any platform in RELEASE_TARGETS
 build-%: pre

@@ -28,16 +28,17 @@
 #   • `make lint-changed`     → --changed --check      (working-tree files only)
 #   • `make lint-fix`         → --all --fix            (whole repo, auto-fix)
 #   • `make lint-fix-changed` → --changed --fix        (working-tree, auto-fix)
-#   • a Stop hook             → --changed --fix --hook  (auto-fix + JSON below)
+#   • a Stop hook             → --changed HEAD --fix --hook (auto-fix + JSON)
+#   • .githooks/pre-commit    → --staged                  (what the commit carries)
+#   • .githooks/pre-push      → --all                     (full gate before push)
 #
 # In --hook mode the script speaks the Stop-hook JSON contract on exit 0:
 #   - No blocking issue (clean stop) → {systemMessage (for the user)} ONLY. The
 #     Stop event is respected: systemMessage is display-only and does not
 #     continue the turn. additionalContext is NOT emitted here — a Stop hook's
 #     additionalContext would continue the turn, which is exactly the bug we
-#     avoid. Any stale-chunk re-read ranges are instead persisted to
-#     .claude/lint-pending-rereads for the companion UserPromptSubmit hook to
-#     inject on the next prompt (when the user resumes the session).
+#     avoid. Any stale-chunk re-read ranges ride that systemMessage INLINE —
+#     the script keeps no state file and owns no companion hook.
 #   - At least one blocking issue → {decision:"block", reason} folding the
 #     failures, the auto-fixed list, and the stale-chunk ranges together, so the
 #     agent keeps going and sees everything it must fix and re-read. A block
@@ -57,11 +58,14 @@
 #USAGE bin "lint.sh"
 #USAGE about "Single source of truth for repo lint/format checks (all tools run from pinned Docker images)."
 #USAGE flag "--all"         help="Check every tracked file (git ls-files) — the full gate. Default scope."
-#USAGE flag "--changed"     help="Check only this turn's changed files (unstaged + staged + new untracked + committed-this-turn)."
+#USAGE flag "--changed"     help="Check the changed files: unstaged + staged + new untracked, plus those of COMMIT when given." {
+#USAGE     arg "[COMMIT]"   help="A commit-ish whose changed files join the working-tree ones. Omit to lint the working tree alone."
+#USAGE }
+#USAGE flag "--staged"      help="Check only the staged files — exactly what the next commit will carry. For a pre-commit hook."
 #USAGE flag "--check"       help="Report problems without modifying files. Default."
-#USAGE flag "--fix"         help="Auto-fix cosmetics (ruff format, shfmt) and ruff's SAFE lint fixes in place, then report loudly."
-#USAGE flag "--hook"        help="Emit the Stop-hook JSON contract (exit 0): a clean stop returns {systemMessage} only (the Stop event is respected — no additionalContext, which would continue the turn), persisting any re-read line ranges to .claude/lint-pending-rereads for the UserPromptSubmit hook to inject next prompt; a blocking issue returns {decision:\"block\", reason} folding failures, auto-fixed files, and those ranges together."
-#USAGE flag "--only-custom" help="Run only the checks the sb-thehive-mcp plugin Stop hook doesn't. Example: mypy and compose-overlay validation."
+#USAGE flag "--fix"         help="Apply gofmt, golangci-lint's formatters and SAFE fixes, and ruff's SAFE lint fixes in place, then report loudly."
+#USAGE flag "--hook"        help="Emit the Stop-hook JSON contract (exit 0): a clean stop returns {systemMessage} only (the Stop event is respected — no additionalContext, which would continue the turn), carrying any re-read line ranges inline; a blocking issue returns {decision:\"block\", reason} folding failures, auto-fixed files, and those ranges together."
+#USAGE flag "--only-custom" help="Run only the checks the sb-thehive-mcp plugin Stop hook doesn't: actionlint over the GitHub Actions workflows."
 set -uo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -82,6 +86,7 @@ LYCHEE_IMAGE="lycheeverse/lychee:0.24.2"
 # of truth. lint.sh only runs read-only checks now, so no PRETTIER_IMAGE here.
 YAMLLINT_IMAGE="cytopia/yamllint@sha256:3e9eb827ab2b12a5ea5f49d4257bb3aca94bba9f1ba427c8bc7f2456385a5204"
 HADOLINT_IMAGE="hadolint/hadolint:v2.14.0"
+ACTIONLINT_IMAGE="rhysd/actionlint:1.7.7"
 # checkmake is pinned in scripts/lint-makefile.sh (the single source of truth for
 # the Makefile check, shared with `make lint-makefile`); not duplicated here.
 YL_RULES='{extends: relaxed, rules: {line-length: disable, document-start: disable, comments: disable, comments-indentation: disable, empty-lines: disable, trailing-spaces: disable}}'
@@ -90,14 +95,24 @@ YL_RULES='{extends: relaxed, rules: {line-length: disable, document-start: disab
 # Hand-parsed (no host `usage` at runtime). The flags, their help, and the
 # defaults documented in the #USAGE block above mirror the plugin's
 # lint.usage.kdl — the contract. Change the plugin .kdl first, then this.
-SCOPE="all" # all | changed
-FIX=0       # 0 = --check, 1 = --fix
-HOOK=0      # 0 = text output, 1 = Stop-hook JSON contract
+SCOPE="all"       # all | changed | staged (mutually exclusive, last one wins)
+CHANGED_COMMIT="" # optional commit-ish whose files join the --changed scope
+FIX=0             # 0 = --check, 1 = --fix
+HOOK=0            # 0 = text output, 1 = Stop-hook JSON contract
 ONLY_CUSTOM=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --all) SCOPE="all" ;;
-    --changed) SCOPE="changed" ;;
+    --changed)
+      SCOPE="changed"
+      # COMMIT is OPTIONAL: only swallow the next token when it is a real
+      # value, so `--changed --fix` still parses --fix as a flag.
+      if [[ $# -gt 1 ]] && [[ -n "${2:-}" ]] && [[ "${2:-}" != -* ]]; then
+        CHANGED_COMMIT="$2"
+        shift
+      fi
+      ;;
+    --staged) SCOPE="staged" ;;
     --check) FIX=0 ;;
     --fix) FIX=1 ;;
     --hook) HOOK=1 ;;
@@ -121,6 +136,7 @@ go_files=()
 sh_files=()
 md_files=()
 yaml_files=()
+wf_files=() # GitHub Actions workflows — a SUBSET of yaml_files, for actionlint
 dockerfiles=()
 mk_files=()
 
@@ -144,10 +160,16 @@ classify() {
     [[ -f "$f" ]] || continue
     case "$f" in
       *.go) go_files+=("$f") ;;
-      *.sh) sh_files+=("$f") ;;
+      # Git hooks carry git-imposed names with no .sh extension, but they are
+      # bash all the same — shellcheck/shfmt must see them too.
+      *.sh | .githooks/*) sh_files+=("$f") ;;
       *.md | *.mdx) md_format_exempt "$f" || md_files+=("$f") ;;
       *.yaml | *.yml) yaml_files+=("$f") ;;
       *.mk) mk_files+=("$f") ;;
+      *) ;;
+    esac
+    case "$f" in
+      .github/workflows/*.yml | .github/workflows/*.yaml) wf_files+=("$f") ;;
       *) ;;
     esac
     case "$(basename "$f")" in
@@ -159,34 +181,29 @@ classify() {
   return 0
 }
 
-# Files touched by commits made *during this turn* would otherwise escape the
-# --changed scope: once committed, `git diff HEAD` and untracked detection
-# report nothing. The plugin's UserPromptSubmit hook stamps the turn start in
-# .claude/last-prompt-ts; reuse it (we own no UserPromptSubmit hook) to union in
-# files touched by commits made at/after that second. The walk is bounded to
-# this branch's own commits (BASE..HEAD) so a date filter alone can't sweep in
-# base commits others authored. BASE = merge-base(HEAD, upstream|origin/main).
-committed_this_turn() {
-  local ts_file="$REPO_ROOT/.claude/last-prompt-ts" prompt_ts base_ref base range candidate mb
-  [[ -r "$ts_file" ]] || return 0
-  prompt_ts=$(cat "$ts_file" 2>/dev/null)
-  case "$prompt_ts" in
-    '' | *[!0-9]*) return 0 ;;
-    *) ;;
-  esac
-  base_ref=$(git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null)
-  for candidate in "$base_ref" origin/main main; do
-    [[ -n "$candidate" ]] || continue
-    if mb=$(git merge-base "$candidate" HEAD 2>/dev/null); then
-      base="$mb"
-      break
-    fi
-  done
-  range="${base:+$base..}HEAD"
-  git log --no-merges --since="@$prompt_ts" --name-only --pretty=format: "$range" 2>/dev/null || true
+# Work already committed mid-turn would otherwise escape --changed: once
+# committed, `git diff` and untracked detection report nothing. Rather than
+# infer which commits belong to "this turn" from a timestamp (which needed a
+# shared state file), the caller NAMES the commit-ish — `--changed HEAD` from
+# the Stop hook — so the scope is reproducible from a plain terminal too.
+commit_files() {
+  [[ -n "$CHANGED_COMMIT" ]] || return 0
+  git show --name-only --pretty=format: "$CHANGED_COMMIT" 2>/dev/null || true
 }
 
-if [[ "$SCOPE" = all ]]; then
+# Validate COMMIT HERE, in the main shell: commit_files runs inside a process
+# substitution, where an `exit` would kill only that subshell and let the run
+# continue on a silently empty file list.
+if [[ -n "$CHANGED_COMMIT" ]] && ! git rev-parse --verify --quiet "${CHANGED_COMMIT}^{commit}" >/dev/null 2>&1; then
+  echo "lint.sh: --changed: '$CHANGED_COMMIT' is not a commit" >&2
+  exit 64
+fi
+
+if [[ "$SCOPE" = staged ]]; then
+  # The index alone — exactly what the next commit will carry. Used by the
+  # pre-commit hook, so unrelated work-in-progress can never fail a commit.
+  classify < <(git diff --cached --name-only | sort -u)
+elif [[ "$SCOPE" = all ]]; then
   # Tracked (--cached) PLUS untracked-but-not-gitignored (--others
   # --exclude-standard), so a new file that isn't committed yet still faces the
   # full gate. Ignored files stay excluded. --cached is explicit here: with
@@ -198,7 +215,7 @@ else
     git diff --name-only
     git diff --cached --name-only
     git ls-files --others --exclude-standard
-    committed_this_turn
+    commit_files
   } | sort -u)
 fi
 
@@ -274,6 +291,11 @@ FMT_SCRIPT="$REPO_ROOT/scripts/fmt.sh"
 run_fmt() {
   [[ "$FIX" -eq 1 ]] || return 0
   local f
+  # Propagate the exact same scope, COMMIT included, so the formatting pass and
+  # the checkers below see one identical file set.
+  local -a fmt_args=("--$SCOPE")
+  [[ "$SCOPE" = changed ]] && [[ -n "$CHANGED_COMMIT" ]] && fmt_args+=("$CHANGED_COMMIT")
+  fmt_args+=(--fix --porcelain)
   # fmt.sh --porcelain emits the files it rewrote as NUL-terminated records on
   # stdout (machine-readable, path-safe — no scraping the human "Formatted:"
   # block). Diagnostics go to stderr, which we let through. It never fails in
@@ -281,7 +303,7 @@ run_fmt() {
   # mutates fixed_files in THIS shell.
   while IFS= read -r -d '' f; do
     [[ -n "$f" ]] && record_fixed "$f"
-  done < <("$FMT_SCRIPT" "--$SCOPE" --fix --porcelain 2>/dev/null || true)
+  done < <("$FMT_SCRIPT" "${fmt_args[@]}" 2>/dev/null || true)
   return 0
 }
 
@@ -518,12 +540,30 @@ $out
 
 # ── REPO-SPECIFIC CUSTOM CHECKS ───────────────────────────────────────────────
 # --only-custom exists so a repo's OWN local Stop hook can add checks the plugin
-# lacks WITHOUT re-running the plugin's tools. This repo has NO such checks — the
-# plugin Stop hook already covers every file type it contains (Go, shell,
-# markdown, YAML, Dockerfiles, Makefile) — so check_custom is intentionally
-# empty and --only-custom is a no-op. Add repo-only checks here if that changes.
+# lacks WITHOUT re-running the plugin's tools. The canonical one — named by the
+# contract — is actionlint over the GitHub Actions workflows: yamllint only sees
+# YAML *syntax*, while actionlint understands the workflow *schema* (a bad
+# `runs-on`, a `needs:` pointing at a job that doesn't exist, a broken ${{ }}
+# expression) and runs shellcheck over every `run:` block. Further repo-specific
+# checks go here; each appends to `failures` on a blocking failure.
 check_custom() {
-  # no checks beyond the plugin's; --only-custom does nothing (correct).
+  check_actionlint
+  return 0
+}
+
+check_actionlint() {
+  [[ ${#wf_files[@]} -gt 0 ]] || return 0
+  prepull "$ACTIONLINT_IMAGE"
+  local out
+  # actionlint resolves a workflow's repo context from its path, so mount the
+  # repo and pass the paths as-is rather than piping single files in.
+  if ! out=$(docker run --rm -v "$REPO_ROOT":/repo -w /repo "$ACTIONLINT_IMAGE" \
+    -no-color "${wf_files[@]}" 2>&1); then
+    failures+="=== actionlint ===
+$out
+
+"
+  fi
   return 0
 }
 
@@ -578,11 +618,11 @@ fixed="$(fixed_block 'Auto-fixed' "$fixed_files")$(fixed_block 'Auto-fixed (lint
 # For each file a fixer actually rewrote, diff its pre-fix snapshot against the
 # current on-disk content and emit the NEW-file line ranges of each hunk — the
 # lines the agent must re-read (its in-context copy is now stale). Collected into
-# `ranges` and surfaced through the --hook JSON below: on a clean stop they are
-# persisted to .claude/lint-pending-rereads for the UserPromptSubmit hook to
-# inject next prompt (Stop must not emit additionalContext — it would continue
-# the turn); on a blocking failure they are folded into the block `reason`
-# inline (a block already keeps the turn running). Guarded on SNAPSHOT_DIR so it only runs in
+# `ranges` and surfaced INLINE through the --hook JSON below: appended to the
+# systemMessage on a clean stop (Stop must not emit additionalContext — it would
+# continue the turn), folded into the block `reason` on a blocking failure (a
+# block already keeps the turn running). No state file either way.
+# Guarded on SNAPSHOT_DIR so it only runs in
 # `--fix --hook`. Multiple non-adjacent hunks in one file → a comma-joined list.
 ranges=""
 if [[ -n "$SNAPSHOT_DIR" ]] && { [[ -n "$fixed_files" ]] || [[ -n "$lint_fixed_files" ]]; }; then
@@ -614,13 +654,9 @@ if [[ "$HOOK" -eq 1 ]]; then
   if [[ -z "$failures" ]]; then
     # Clean stop: RESPECT the Stop event. systemMessage is display-only (does not
     # continue the turn); additionalContext WOULD continue it, so we must not emit
-    # it here. Persist any stale-chunk ranges for the UserPromptSubmit hook to
-    # inject on the next prompt.
-    if [[ -n "$ranges_block" ]]; then
-      mkdir -p "$REPO_ROOT/.claude"
-      printf '%s\n' "${ranges_block#$'\n'}" >"$REPO_ROOT/.claude/lint-pending-rereads"
-    fi
-    jq -cn --arg msg "✓ Static analysis passed ($(summary))$fixed" '{systemMessage: $msg}'
+    # it here. The stale-chunk ranges ride this same message INLINE — the script
+    # keeps no state file and owns no companion UserPromptSubmit hook.
+    jq -cn --arg msg "✓ Static analysis passed ($(summary))$fixed$ranges_block" '{systemMessage: $msg}'
     exit 0
   fi
   # At least one blocking issue: prevent the stop and hand the agent everything

@@ -32,7 +32,12 @@ func (t *Tool) ValidateParams(params *EntitiesParams) error {
 		return tools.NewToolErrorf("invalid entity-type '%s'. Must be one of: '%s'", params.EntityType, strings.Join(ValidEntityTypes, "', '"))
 	}
 
-	// Filters are optional (empty = match-all) and validated by TheHive at query time, not here.
+	// Filters are optional (empty = match-all) and validated by TheHive at query
+	// time, except for the fields TheHive accepts but silently cannot match.
+	err := rejectUnfilterableFields(params.EntityType, params.Filters)
+	if err != nil {
+		return err
+	}
 
 	if params.SortOrder != SortOrderAsc && params.SortOrder != SortOrderDesc {
 		return tools.NewToolErrorf("invalid sort-order '%s'. Must be 'asc' or 'desc'", params.SortOrder)
@@ -74,6 +79,31 @@ func applyEntitiesDefaults(params *EntitiesParams) {
 	if params.AdditionalQueries == nil {
 		params.AdditionalQueries = []string{}
 	}
+}
+
+// unfilterableFields lists, per entity type, the fields a filter must not test.
+//
+// TheHive does not index them, so a filter on one is accepted and returns zero
+// rows with no error — and a model reads that empty page as "nothing matches".
+// Rejecting it up front turns a silent wrong answer into an actionable error.
+var unfilterableFields = map[string][]string{
+	types.EntityTypePattern: {fieldPlatforms},
+}
+
+// rejectUnfilterableFields errors when the filter tests a field listed in
+// unfilterableFields for the entity type.
+func rejectUnfilterableFields(entityType string, filters map[string]any) error {
+	banned := unfilterableFields[entityType]
+
+	for _, field := range utils.ReferencedFilterFields(filters) {
+		if slices.Contains(banned, field) {
+			return tools.NewToolErrorf(
+				"cannot filter %s on '%s': TheHive does not index it, so the filter would silently match nothing. Filter on an indexed field instead, and request the value with extra-columns: [\"%s\"]",
+				entityType, field, field)
+		}
+	}
+
+	return nil
 }
 
 // validatePagingWindow bounds the slice of the result set a search may read.

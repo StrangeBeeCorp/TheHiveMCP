@@ -17,6 +17,8 @@ const (
 	opIn      = "_in"
 	keyField  = "_field"
 	keyValues = "_values"
+	// opContains is the presence test, which names its field directly.
+	opContains = "_contains"
 
 	// scopeBatchChunkSize caps how many ids ride in a single scopedEntityIDsBatch
 	// _in{_id} query. A large batch is split into ceil(N/chunk) list queries whose
@@ -35,6 +37,9 @@ const (
 	// fieldHashes is the attachment digests field; fieldTactics the pattern tactics field.
 	fieldHashes  = "hashes"
 	fieldTactics = "tactics"
+	// fieldPatternID is the MITRE technique identifier (e.g. "T1561") carried by
+	// a pattern and by every procedure citing it.
+	fieldPatternID = "patternId"
 	// fieldObservableCount is a similarity match-context meta field.
 	fieldObservableCount = "observableCount"
 
