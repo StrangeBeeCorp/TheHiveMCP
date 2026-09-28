@@ -180,6 +180,15 @@ func (t *Tool) createObservable(ctx context.Context, client *thehive.APIClient, 
 		result = caseResult
 	}
 
+	// TheHive answers 2xx with an EMPTY list when the input carries no value (a
+	// `value` key instead of `data`, or no `data` at all). Reporting that as a
+	// success told the model an observable existed that never did.
+	if len(result) == 0 {
+		return EntityResult{}, tools.NewToolError("TheHive created no observable").
+			Hint("Set the value in entity-data.data (not `value`), or attach a file for dataType 'file'").
+			Schema("observable", "create")
+	}
+
 	return EntityResult{
 		CreateObservableResult: NewCreateObservableResult(result),
 	}, nil

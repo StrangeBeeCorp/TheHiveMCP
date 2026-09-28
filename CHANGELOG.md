@@ -8,6 +8,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Creating an observable that TheHive did not create is now an error.** An observable sent without `data` (a common slip is `value`) made TheHive answer 2xx
+  with an empty list, and `manage-entities` reported "Observable created successfully" with an empty `result`. A model then believed the observable existed and
+  built on it; one measured run spent its whole turn budget re-creating it. The tool now fails with a hint to set `entity-data.data`.
+
 ### Changed
 
 - **The MITRE ATT&CK catalog is no longer fenced as untrusted data.** A `search-entities` query on `entity-type: pattern` used to return its technique name and
