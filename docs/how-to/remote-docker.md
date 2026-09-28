@@ -30,6 +30,7 @@ Create `.env` file:
 THEHIVE_URL=https://your-thehive.com
 THEHIVE_API_KEY=your-api-key
 THEHIVE_ORGANISATION=your-org  # Optional, defaults to user's own organisation
+# THEHIVE_REQUEST_TIMEOUT=2m  # Optional, maximum wait for TheHive to answer one request
 
 # HTTP transport security (optional, defaults are the safe choice)
 # THEHIVE_URL_ALLOWLIST=https://thehive-eu.example.com,https://thehive-us.example.com

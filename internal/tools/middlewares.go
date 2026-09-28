@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -51,7 +52,7 @@ func NewDateAwareHandler[TParams, TResult any](handler func(ctx context.Context,
 
 		result, err := handler(ctx, req, params)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return mcp.NewToolResultError(describeHandlerError(err)), nil
 		}
 
 		processedResult, err := utils.ProcessDatesRecursive(result, wrapUntrusted)
@@ -63,4 +64,16 @@ func NewDateAwareHandler[TParams, TResult any](handler func(ctx context.Context,
 
 		return toolResult, nil
 	}
+}
+
+// describeHandlerError renders a handler error for the MCP client. A TheHive
+// timeout that a handler returned without a ToolError still gets the timeout
+// message and recovery hints.
+func describeHandlerError(err error) string {
+	var toolErr *ToolError
+	if _, isTimeout := utils.AsTheHiveTimeout(err); isTimeout && !errors.As(err, &toolErr) {
+		return NewToolError("TheHive request failed").Cause(err).Error()
+	}
+
+	return err.Error()
 }

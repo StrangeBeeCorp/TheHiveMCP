@@ -8,6 +8,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A TheHive that stops answering no longer hangs the tool call.** The connection to TheHive had no timeout, so a TheHive that accepted the connection and
+  never answered held the call until the MCP client gave up — about four minutes in Claude Desktop — with no error, which read as a crashed server. Every
+  request to TheHive is now bounded (2 minutes by default, set with `THEHIVE_REQUEST_TIMEOUT` or `--thehive-request-timeout`), and a request that runs out of
+  time fails with an error saying so. Its hints warn that an abandoned create, update or delete may still have been applied, so the entity should be read back
+  before retrying.
+
 ### Changed
 
 - **The MITRE ATT&CK catalog is no longer fenced as untrusted data.** A `search-entities` query on `entity-type: pattern` used to return its technique name and
