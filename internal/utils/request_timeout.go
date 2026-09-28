@@ -78,28 +78,29 @@ func (t *TimeoutTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	parent := req.Context()
 	ctx, cancel := context.WithTimeout(parent, t.Timeout)
 
+	// classify turns err into a *TheHiveTimeoutError when our own deadline
+	// caused it. A caller that cancelled or set a shorter deadline is not our
+	// timeout.
+	classify := func(err error) error {
+		if !errors.Is(ctx.Err(), context.DeadlineExceeded) || parent.Err() != nil {
+			return err
+		}
+
+		return &TheHiveTimeoutError{Method: req.Method, Path: req.URL.Path, Timeout: t.Timeout, Err: err}
+	}
+
 	resp, err := next.RoundTrip(req.WithContext(ctx))
 	if err != nil {
-		err = t.classify(ctx, parent, req, err)
+		err = classify(err)
 
 		cancel()
 
 		return nil, err
 	}
 
-	resp.Body = &timeoutBody{ReadCloser: resp.Body, transport: t, req: req, ctx: ctx, parent: parent, cancel: cancel}
+	resp.Body = &timeoutBody{ReadCloser: resp.Body, classify: classify, cancel: cancel}
 
 	return resp, nil
-}
-
-// classify turns err into a *TheHiveTimeoutError when our own deadline caused
-// it. A caller that cancelled or set a shorter deadline is not our timeout.
-func (t *TimeoutTransport) classify(ctx, parent context.Context, req *http.Request, err error) error {
-	if !errors.Is(ctx.Err(), context.DeadlineExceeded) || parent.Err() != nil {
-		return err
-	}
-
-	return &TheHiveTimeoutError{Method: req.Method, Path: req.URL.Path, Timeout: t.Timeout, Err: err}
 }
 
 // timeoutBody keeps the deadline alive while the body is read, and releases it
@@ -107,17 +108,14 @@ func (t *TimeoutTransport) classify(ctx, parent context.Context, req *http.Reque
 type timeoutBody struct {
 	io.ReadCloser
 
-	transport *TimeoutTransport
-	req       *http.Request
-	ctx       context.Context //nolint:containedctx // the deadline must outlive RoundTrip until the body is read
-	parent    context.Context //nolint:containedctx // needed to tell our deadline from the caller's cancellation
-	cancel    context.CancelFunc
+	classify func(error) error
+	cancel   context.CancelFunc
 }
 
 func (b *timeoutBody) Read(p []byte) (int, error) {
 	n, err := b.ReadCloser.Read(p)
 	if err != nil && !errors.Is(err, io.EOF) {
-		return n, b.transport.classify(b.ctx, b.parent, b.req, err)
+		return n, b.classify(err)
 	}
 
 	return n, err //nolint:wrapcheck // io.EOF must reach the reader unwrapped

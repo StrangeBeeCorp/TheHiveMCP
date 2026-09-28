@@ -100,6 +100,8 @@ func TestTimeoutTransport_CallerCancellationIsNotATimeout(t *testing.T) {
 	defer server.Close()
 
 	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
 	client := &http.Client{Transport: &TimeoutTransport{Timeout: time.Minute}}
 
 	go func() {
