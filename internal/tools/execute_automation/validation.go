@@ -40,6 +40,15 @@ func (t *ExecuteAutomationTool) ValidatePermissions(ctx context.Context, params 
 		return t.validateTargetScope(ctx, perms, params.EntityType, params.EntityID)
 	case OperationGetJobStatus:
 		return t.validateJobScope(ctx, perms, params.JobID)
+	case OperationWaitForJobs:
+		for _, jobID := range params.JobIDs {
+			err := t.validateJobScope(ctx, perms, jobID)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
 	default:
 		return tools.NewToolErrorf("unsupported operation: %s", params.Operation)
 	}
@@ -104,6 +113,8 @@ func (t *ExecuteAutomationTool) ValidateParams(params *ExecuteAutomationParams) 
 		return validateGetJobStatusParams(params)
 	case OperationGetActionStatus:
 		return validateGetActionStatusParams(params)
+	case OperationWaitForJobs:
+		return validateWaitForJobsParams(params)
 	default:
 		return tools.NewToolErrorf("unsupported operation: %s", params.Operation)
 	}
@@ -156,6 +167,52 @@ func validateGetActionStatusParams(params *ExecuteAutomationParams) error {
 
 	if params.EntityID == "" {
 		return tools.NewToolErrorf("entity-id is required for get-action-status operations. This is the ID of the entity the action is running against").Hint("Provide the entity ID the action is running against")
+	}
+
+	return nil
+}
+
+// Bounds of a wait-for-jobs call. The ceiling keeps one blocking call inside a
+// client's tool-call timeout; a caller with slower jobs calls again.
+const (
+	DefaultWaitSeconds = 60
+	MaxWaitSeconds     = 120
+	MaxWaitJobs        = 20
+)
+
+func validateWaitForJobsParams(params *ExecuteAutomationParams) error {
+	if len(params.JobIDs) == 0 {
+		return tools.NewToolErrorf("job-ids is required for wait-for-jobs operations. Provide the job IDs returned by run-analyzer")
+	}
+
+	seen := make(map[string]struct{}, len(params.JobIDs))
+	unique := params.JobIDs[:0]
+
+	for _, id := range params.JobIDs {
+		if id == "" {
+			return tools.NewToolErrorf("job-ids must not contain an empty ID")
+		}
+
+		if _, dup := seen[id]; !dup {
+			seen[id] = struct{}{}
+			unique = append(unique, id)
+		}
+	}
+
+	params.JobIDs = unique
+
+	if len(params.JobIDs) > MaxWaitJobs {
+		return tools.NewToolErrorf("wait-for-jobs accepts at most %d job IDs, got %d", MaxWaitJobs, len(params.JobIDs)).
+			Hint("Split the wait into several calls")
+	}
+
+	switch {
+	case params.TimeoutSecs < 0:
+		return tools.NewToolErrorf("timeout-seconds must be positive, got %d", params.TimeoutSecs)
+	case params.TimeoutSecs == 0:
+		params.TimeoutSecs = DefaultWaitSeconds
+	case params.TimeoutSecs > MaxWaitSeconds:
+		params.TimeoutSecs = MaxWaitSeconds
 	}
 
 	return nil

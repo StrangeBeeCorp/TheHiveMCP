@@ -107,9 +107,9 @@ query; those IDs always arrive as the internal `_id`. See [ADR-0002](../explanat
   referenced entity is scope-checked. An entity outside the filter is reported as "not found or not within the scope" and nothing is mutated. IDs may be given
   as the internal `_id` or as a bare case/alert number.
 - `execute-automation`: the filter applies to the **entity the automation acts on**, not to the analyzer or responder. Before running, the target is
-  scope-checked — the observable for `run-analyzer`, the entity (case/alert/task/observable) for `run-responder` and `get-action-status`. For `get-job-status`,
-  the job's target observable is resolved server-side (`getJob → observable`) and scope-checked before the report is returned. (Analyzers and responders
-  themselves are gated separately by the allow/block lists below, not by these filters.)
+  scope-checked — the observable for `run-analyzer`, the entity (case/alert/task/observable) for `run-responder` and `get-action-status`. For `get-job-status`
+  and each job of `wait-for-jobs`, the job's target observable is resolved server-side (`getJob → observable`) and scope-checked before the report is returned.
+  (Analyzers and responders themselves are gated separately by the allow/block lists below, not by these filters.)
 
 A filter that **is not configured** for a tool means "no restriction" — that tool behaves exactly as before (backward compatible). Only configured filters
 constrain reach.

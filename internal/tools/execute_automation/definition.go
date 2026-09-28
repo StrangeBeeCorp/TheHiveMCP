@@ -37,7 +37,7 @@ func (t *ExecuteAutomationTool) HasUntrustedData() bool { return true }
 // Exported so the schema tests can check every key against the struct.
 var ExecuteAutomationParamConstraints = map[string]tools.SchemaConstraint{
 	"operation": {Enum: []string{
-		OperationRunAnalyzer, OperationRunResponder, OperationGetJobStatus, OperationGetActionStatus,
+		OperationRunAnalyzer, OperationRunResponder, OperationGetJobStatus, OperationGetActionStatus, OperationWaitForJobs,
 	}},
 	"entity-type": {Enum: []string{"case", "alert", "task", "observable"}},
 }

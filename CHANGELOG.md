@@ -8,6 +8,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`execute-automation` can wait for analyzer jobs: operation `wait-for-jobs`.** It takes the `job-ids` a client started and blocks until every one is final or
+  `timeout-seconds` passes (default 60, at most 120), then returns each job with its report, plus `pendingJobIds` for any still running. Real analyzers take
+  minutes, and the only way to learn they had finished was to call `get-job-status` again — one model turn, and one resend of the whole conversation, per poll.
+  Each job is scope-checked like `get-job-status`, and its report stays fenced as untrusted data.
+
 ### Changed
 
 - **The MITRE ATT&CK catalog is no longer fenced as untrusted data.** A `search-entities` query on `entity-type: pattern` used to return its technique name and
