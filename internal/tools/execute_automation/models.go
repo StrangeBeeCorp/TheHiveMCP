@@ -226,10 +226,12 @@ type WaitForJobsResult struct {
 	Message   utils.TrustedString  `json:"message"`
 }
 
-// JobError is a job whose latest attempt failed.
+// JobError is a job whose latest attempt failed. A retryable one may still
+// succeed, and is also listed in pendingJobIds.
 type JobError struct {
-	JobID string `json:"jobId"`
-	Error string `json:"error"`
+	JobID     string `json:"jobId"`
+	Error     string `json:"error"`
+	Retryable bool   `json:"retryable"`
 }
 
 // verdictReportKeys are the parts of a Cortex report wait-for-jobs returns: the
@@ -238,8 +240,8 @@ type JobError struct {
 var verdictReportKeys = []string{"success", "summary", "errorMessage"}
 
 // NewWaitForJobsResult builds a WaitForJobsResult from the jobs read at least
-// once, out of total. pending lists the jobs last read as running, failed the
-// ones whose latest attempt failed; the two never overlap.
+// once, out of total. pending lists the jobs worth asking about again, failed
+// the ones whose latest attempt failed; a retryable failure is in both.
 func NewWaitForJobsResult(jobs []*thehive.OutputJob, pending []string, failed []JobError, total, waited int) *WaitForJobsResult {
 	result := &WaitForJobsResult{
 		Operation: OperationWaitForJobs,
@@ -263,11 +265,11 @@ func NewWaitForJobsResult(jobs []*thehive.OutputJob, pending []string, failed []
 
 	message := fmt.Sprintf("%d of %d job(s) finished.", finished, total)
 	if len(pending) > 0 {
-		message += fmt.Sprintf(" %d still running after %ds: call wait-for-jobs again with pendingJobIds.", len(pending), waited)
+		message += fmt.Sprintf(" %d not final after %ds: call wait-for-jobs again with pendingJobIds.", len(pending), waited)
 	}
 
 	if len(failed) > 0 {
-		message += fmt.Sprintf(" %d could not be read: see jobErrors.", len(failed))
+		message += fmt.Sprintf(" %d could not be read: see jobErrors, where a retryable one is also in pendingJobIds.", len(failed))
 	}
 
 	result.Message = utils.TrustedString(message + " Reports carry the verdict only: get-job-status returns a job's full report.")

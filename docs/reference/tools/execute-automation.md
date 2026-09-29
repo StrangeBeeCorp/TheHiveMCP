@@ -123,14 +123,16 @@ Responders perform active responses on entities (block IP, send email, create ti
 
 Analyzers can take minutes. Rather than polling `get-job-status` once per turn, a client passes every job it started and blocks until all are final or
 `timeout-seconds` passes. The result carries each job with its status and verdict (the report's `success`, `summary` and `errorMessage`), `pendingJobIds` for
-the ones still running, and `waitedSeconds`; a caller with slower jobs calls again with the pending IDs, and gets a job's full report from `get-job-status`.
+every job worth asking about again, and `waitedSeconds`; a caller with slower jobs calls again with the pending IDs, and gets a job's full report from
+`get-job-status`.
 
 The wait defaults to 45 seconds, under the 60-second tool-call timeout of the MCP TypeScript SDK, and is capped at 120; only raise it when your client allows a
 longer call. The timeout bounds every call to TheHive too, so a stalled TheHive cannot hold the call past it.
 
 Each job has its own outcome. A job TheHive fails to return, one outside the permitted scope, or one TheHive did not answer in time is listed in `jobErrors`
-with the reason, and the other jobs keep their verdicts. A transient failure is retried on the next poll; a refusal, such as an unknown job ID, is not asked
-again. The call fails only when not one job could be read.
+with the reason, and the other jobs keep their verdicts. A transient failure is retried on the next poll and, if it is still failing when the wait ends, is
+marked `retryable` and kept in `pendingJobIds`; a refusal, such as an unknown job ID or one outside the scope, is not asked again. The call fails only when not
+one job could be read.
 
 ```json
 {

@@ -311,13 +311,14 @@ func (w *jobWait) settled() bool {
 	return true
 }
 
-// pending lists the jobs last read as running, in the caller's order. A job
-// whose latest read failed is in failures instead, so the two never overlap.
+// pending lists every job worth asking about again, in the caller's order:
+// those last read as running, and those whose latest attempt failed in a way a
+// later one may not, which failures also lists.
 func (w *jobWait) pending() []string {
 	var pending []string
 
 	for _, jobID := range w.order {
-		if _, failed := w.errors[jobID]; !failed && !w.final(jobID) {
+		if !w.final(jobID) {
 			pending = append(pending, jobID)
 		}
 	}
@@ -344,7 +345,7 @@ func (w *jobWait) failures() []JobError {
 
 	for _, jobID := range w.order {
 		if msg, failed := w.errors[jobID]; failed {
-			failures = append(failures, JobError{JobID: jobID, Error: msg})
+			failures = append(failures, JobError{JobID: jobID, Error: msg, Retryable: !w.gone[jobID]})
 		}
 	}
 

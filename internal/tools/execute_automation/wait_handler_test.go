@@ -77,7 +77,28 @@ func TestWaitForJobsKeepsTheOtherReportsWhenOneReadFails(t *testing.T) {
 	assert.Empty(t, wait.Pending, "a job TheHive refuses is not waited for until the timeout")
 	require.Len(t, wait.Failed, 1)
 	assert.Equal(t, "~3", wait.Failed[0].JobID)
-	assert.Contains(t, string(wait.Message), "2 of 3 job(s) finished. 1 could not be read: see jobErrors.")
+	assert.False(t, wait.Failed[0].Retryable, "a 404 will not change")
+	assert.Contains(t, string(wait.Message), "2 of 3 job(s) finished. 1 could not be read: see jobErrors")
+}
+
+// Regression: a job whose last read before the deadline failed transiently was
+// dropped from pendingJobIds, so a model following "call again with
+// pendingJobIds" never asked for it again and lost its verdict.
+func TestWaitForJobsKeepsARetryableFailurePending(t *testing.T) {
+	t.Parallel()
+
+	result, err := waitForJobs(t, map[string][]fakecortex.Reply{
+		"~1": {fakecortex.Status(statusSuccess)},
+		"~2": {fakecortex.Status(statusInProgress), fakecortex.Unavailable()},
+	}, []string{"~1", "~2"}, 1)
+	require.NoError(t, err)
+
+	wait := result.WaitForJobsResult
+	require.NotNil(t, wait)
+	assert.Equal(t, []string{"~2"}, wait.Pending)
+	require.Len(t, wait.Failed, 1)
+	assert.Equal(t, "~2", wait.Failed[0].JobID)
+	assert.True(t, wait.Failed[0].Retryable)
 }
 
 // Regression: the reads had no deadline, so a stalled TheHive held the call
