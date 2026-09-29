@@ -26,8 +26,10 @@ const (
 	maxRequestBodyBytes = 4 << 20 // a tool call is JSON well under this; no tool takes file content inline
 )
 
-// newHTTPServer builds the http.Server StartHTTPServer listens with, routing
-// the endpoint path to the MCP handler the way mcp-go's Start would.
+// newHTTPServer builds the http.Server StartHTTPServer listens with. It routes
+// the endpoint path to the MCP handler as mcp-go's Start does, which it replaces;
+// Start also mounts OAuth protected-resource metadata, which this server does
+// not configure.
 func newHTTPServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOptions) (*http.Server, *server.StreamableHTTPServer) {
 	httpServer := &http.Server{
 		ReadHeaderTimeout: readHeaderTimeout,
@@ -38,10 +40,25 @@ func newHTTPServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOptions)
 	mcpHandler := server.NewStreamableHTTPServer(s,
 		append(StreamableHTTPOptions(options), server.WithStreamableHTTPServer(httpServer))...)
 
-	// Normalized as server.WithEndpointPath does, so both agree on the path.
+	// Normalized as server.WithEndpointPath does, and as the healthcheck probe does.
 	mux := http.NewServeMux()
 	mux.Handle("/"+strings.Trim(options.MCPServerEndpointPath, "/"), mcpHandler)
-	httpServer.Handler = http.MaxBytesHandler(mux, maxRequestBodyBytes)
+	httpServer.Handler = refuseDeclaredOversize(http.MaxBytesHandler(mux, maxRequestBodyBytes))
 
 	return httpServer, mcpHandler
+}
+
+// refuseDeclaredOversize answers 413 to a body declared larger than the cap,
+// before any of it is read. MaxBytesHandler still stops a chunked one, which
+// declares no length: mcp-go then answers a JSON-RPC parse error.
+func refuseDeclaredOversize(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.ContentLength > maxRequestBodyBytes {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }

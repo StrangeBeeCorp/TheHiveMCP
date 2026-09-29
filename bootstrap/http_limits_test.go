@@ -3,7 +3,6 @@ package bootstrap
 import (
 	"bufio"
 	"context"
-	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -78,7 +77,7 @@ func TestHTTPServerRefusesAnOversizedBody(t *testing.T) {
 	}
 
 	require.Equal(t, http.StatusOK, initialize(1), "control: the same request under the cap is served")
-	assert.GreaterOrEqual(t, initialize(maxRequestBodyBytes), http.StatusBadRequest)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, initialize(maxRequestBodyBytes), "refused before any of the body is read")
 }
 
 // The router must agree with mcp-go on the path, which it normalizes.
@@ -93,11 +92,14 @@ func TestHTTPServerRoutesTheNormalizedEndpointPath(t *testing.T) {
 }
 
 // A client that sends its headers and then stops sending its body is answered
-// and let go instead of holding the connection.
+// and let go instead of holding the connection. The server's own settings are
+// kept, with ReadTimeout shortened so the test does not wait 30 s.
 func TestHTTPServerLetsGoOfAStalledBody(t *testing.T) {
 	t.Parallel()
 
-	ts := httptest.NewUnstartedServer(testHTTPServer(t, "/mcp").Handler)
+	srv := testHTTPServer(t, "/mcp")
+	ts := httptest.NewUnstartedServer(srv.Handler)
+	ts.Config.ReadHeaderTimeout = srv.ReadHeaderTimeout
 	ts.Config.ReadTimeout = testReadTimeout
 	ts.Start()
 	t.Cleanup(ts.Close)
@@ -106,18 +108,20 @@ func TestHTTPServerLetsGoOfAStalledBody(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
 
-	_, err = io.WriteString(conn, "POST /mcp HTTP/1.1\r\nHost: test\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{\"json")
+	// Host: localhost, or mcp-go's DNS-rebinding guard answers 403 before
+	// reading the body at all.
+	_, err = io.WriteString(conn, "POST /mcp HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\n"+
+		"Accept: application/json, text/event-stream\r\nContent-Length: 100\r\n\r\n{\"json")
 	require.NoError(t, err)
 
 	require.NoError(t, conn.SetReadDeadline(time.Now().Add(5*time.Second)))
 
 	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
-	if err == nil {
-		_ = resp.Body.Close()
-	}
+	require.NoError(t, err, "the server must answer instead of waiting for the rest of the body")
 
-	var netErr net.Error
-	assert.False(t, errors.As(err, &netErr) && netErr.Timeout(), "the server must not wait for the rest of the body")
+	defer func() { _ = resp.Body.Close() }()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "the body read fails, and mcp-go says so")
 }
 
 // What readTimeout relies on: net/http lifts the read deadline once the body is
@@ -135,6 +139,7 @@ func TestReadTimeoutSparesAHandlerThatOutlivesIt(t *testing.T) {
 
 		w.WriteHeader(http.StatusOK)
 	}))
+	ts.Config.ReadHeaderTimeout = readHeaderTimeout // else it falls back to the short ReadTimeout
 	ts.Config.ReadTimeout = testReadTimeout
 	ts.Start()
 	t.Cleanup(ts.Close)
