@@ -8,6 +8,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- **The HTTP server no longer waits indefinitely on a slow or huge request.** It served with no timeouts and read a request body of any size in full before
+  checking credentials, so a client that could reach the port could hold connections open or exhaust the server's memory without authenticating. Headers must
+  now arrive within 10 s and a whole request within 30 s, and a body is capped at 4 MiB. Long tool calls and SSE streams are unaffected: these limits stop
+  applying once the request has been read.
+
 ### Changed
 
 - **The MITRE ATT&CK catalog is no longer fenced as untrusted data.** A `search-entities` query on `entity-type: pattern` used to return its technique name and

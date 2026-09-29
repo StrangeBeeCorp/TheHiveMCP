@@ -225,7 +225,7 @@ func StartHTTPServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOption
 		return fmt.Errorf("invalid TheHive URL allowlist configuration: %w", err)
 	}
 
-	httpServer := server.NewStreamableHTTPServer(s, StreamableHTTPOptions(options)...)
+	_, httpServer := newHTTPServer(s, options)
 
 	slog.Info("Starting HTTP server",
 		"bind_addr", options.BindAddr,
