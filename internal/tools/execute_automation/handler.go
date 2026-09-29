@@ -73,7 +73,7 @@ func (t *ExecuteAutomationTool) handleRunResponder(ctx context.Context, params E
 			Hint(hintCheckAuth)
 	}
 
-	inputAction := thehive.NewInputAction(params.ResponderID, params.EntityType, params.EntityID)
+	inputAction := thehive.NewInputAction(params.ResponderID, responderObjectType(params.EntityType), params.EntityID)
 	if params.CortexID != "" {
 		inputAction.SetCortexId(params.CortexID)
 	}

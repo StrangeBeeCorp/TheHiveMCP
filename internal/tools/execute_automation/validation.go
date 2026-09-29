@@ -97,7 +97,7 @@ func validateResponder(ctx context.Context, perms *permissions.Config, responder
 		return tools.NewToolError(errGetHiveClient).Cause(err).Hint(hintCheckAuth)
 	}
 
-	responders, resp, err := hiveClient.CortexAPI.ListResponders(ctx, entityType, entityID).Execute()
+	responders, resp, err := hiveClient.CortexAPI.ListResponders(ctx, responderObjectType(entityType), entityID).Execute()
 	if err != nil {
 		return tools.NewToolError("failed to look up the responder to check it against your permissions configuration").
 			Cause(err).API(resp)
@@ -233,7 +233,7 @@ func validateRunResponderParams(params *ExecuteAutomationParams) error {
 		return tools.NewToolErrorf("entity-id is required for run-responder operations. This is the ID of the entity the responder will act on")
 	}
 
-	return validateAutomationTarget(params.EntityType, params.EntityID)
+	return validateAutomationTarget(params)
 }
 
 func validateGetJobStatusParams(params *ExecuteAutomationParams) error {
@@ -257,11 +257,30 @@ func validateGetActionStatusParams(params *ExecuteAutomationParams) error {
 		return tools.NewToolErrorf("entity-id is required for get-action-status operations. This is the ID of the entity the action is running against").Hint("Provide the entity ID the action is running against")
 	}
 
-	return validateAutomationTarget(params.EntityType, params.EntityID)
+	return validateAutomationTarget(params)
 }
 
-// automationEntityTypes are the entities a responder can act on.
+// automationEntityTypes are the entities a responder can act on, as the schema
+// advertises them.
 var automationEntityTypes = []string{types.EntityTypeCase, types.EntityTypeAlert, types.EntityTypeTask, types.EntityTypeObservable}
+
+// theHiveEntityTypes maps TheHive's own spellings, which a model may have seen
+// in TheHive's answers, to the advertised ones.
+var theHiveEntityTypes = map[string]string{"case_task": types.EntityTypeTask, "case_artifact": types.EntityTypeObservable}
+
+// responderObjectType is the entity type TheHive's responder catalog and action
+// creation endpoints take. They resolve case_task and case_artifact but not
+// task or observable, which reached no entity; get-action-status, whose
+// endpoint lowercases and takes task and observable, uses the advertised name.
+func responderObjectType(entityType string) string {
+	for theHiveName, name := range theHiveEntityTypes {
+		if name == entityType {
+			return theHiveName
+		}
+	}
+
+	return entityType
+}
 
 // automationEntityIDPattern accepts a TheHive entity ID ("~" + digits) or the
 // bare digits a model often sends (DL-5764). It admits no separator, dot or
@@ -269,17 +288,25 @@ var automationEntityTypes = []string{types.EntityTypeCase, types.EntityTypeAlert
 // endpoint path, the kind RandoriSec 5.3 found open to traversal.
 var automationEntityIDPattern = regexp.MustCompile(`^~?[0-9]+$`)
 
-// validateAutomationTarget rejects an entity type or ID that could escape the
-// path of the Cortex endpoint it is interpolated into. The schema advertises
-// the same enum, but nothing enforces a schema at runtime.
-func validateAutomationTarget(entityType, entityID string) error {
+// validateAutomationTarget normalizes the entity type to an advertised name,
+// accepting any case and TheHive's own spellings, and rejects a type or ID that
+// could escape the path of the Cortex endpoint it is interpolated into. The
+// schema advertises the enum, but nothing enforces a schema at runtime.
+func validateAutomationTarget(params *ExecuteAutomationParams) error {
+	entityType := strings.ToLower(params.EntityType)
+	if name, isTheHiveName := theHiveEntityTypes[entityType]; isTheHiveName {
+		entityType = name
+	}
+
 	if !slices.Contains(automationEntityTypes, entityType) {
-		return tools.NewToolErrorf("invalid entity-type %q", entityType).
+		return tools.NewToolErrorf("invalid entity-type %q", params.EntityType).
 			Hintf("Must be one of: %s", strings.Join(automationEntityTypes, ", "))
 	}
 
-	if !automationEntityIDPattern.MatchString(entityID) {
-		return tools.NewToolErrorf("invalid entity-id %q: must be a TheHive entity ID such as ~123456", entityID)
+	params.EntityType = entityType
+
+	if !automationEntityIDPattern.MatchString(params.EntityID) {
+		return tools.NewToolErrorf("invalid entity-id %q: must be a TheHive entity ID such as ~123456", params.EntityID)
 	}
 
 	return nil

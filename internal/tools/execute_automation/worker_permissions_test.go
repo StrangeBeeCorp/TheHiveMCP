@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/permissions"
@@ -186,6 +188,35 @@ func TestAutomationTargetMustBeATheHiveEntity(t *testing.T) {
 		require.ErrorContains(t, valid(types.EntityTypeCase, "~1 "), "invalid entity-id", operation)
 		require.ErrorContains(t, valid("case/../../user", "~1"), "invalid entity-type", operation)
 	}
+
+	for given, want := range map[string]string{"Task": types.EntityTypeTask, "case_task": types.EntityTypeTask, "case_artifact": types.EntityTypeObservable} {
+		params := execute_automation.ExecuteAutomationParams{
+			Operation: execute_automation.OperationRunResponder, ResponderID: responderMailer.Id, EntityType: given, EntityID: "~1",
+		}
+		require.NoError(t, tool.ValidateParams(&params), given)
+		assert.Equal(t, want, params.EntityType, "%s is normalized to the advertised name", given)
+	}
+}
+
+// Regression: TheHive's responder endpoints resolve case_task and
+// case_artifact, not the task and observable the tool advertises, so both the
+// catalog lookup and the run on a task answered 404.
+func TestRunResponderOnATaskReachesIt(t *testing.T) {
+	t.Parallel()
+
+	cortex := &testutils.FakeCortex{Responders: []thehive.OutputWorker{responderMailer}}
+	ctx := workerContext(t, workersByNameYAML, cortex)
+	tool := execute_automation.NewExecuteAutomationTool()
+
+	params := execute_automation.ExecuteAutomationParams{
+		Operation: execute_automation.OperationRunResponder, ResponderID: responderMailer.Id, EntityType: types.EntityTypeTask, EntityID: "~7",
+	}
+	require.NoError(t, tool.ValidateParams(&params))
+	require.NoError(t, tool.ValidatePermissions(ctx, params), "the catalog lookup must reach the task")
+
+	_, err := tool.Handle(ctx, mcp.CallToolRequest{}, params)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"case_task"}, cortex.ActionObjectTypes())
 }
 
 // Rules that name no worker give every worker the same answer, so the catalog
