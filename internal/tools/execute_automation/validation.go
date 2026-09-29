@@ -41,18 +41,17 @@ func (t *ExecuteAutomationTool) ValidatePermissions(ctx context.Context, params 
 	case OperationGetJobStatus:
 		return t.validateJobScope(ctx, perms, params.JobID)
 	case OperationWaitForJobs:
-		for _, jobID := range params.JobIDs {
-			err := t.validateJobScope(ctx, perms, jobID)
-			if err != nil {
-				return err
-			}
-		}
-
+		// Scope-checked per job while waiting, under the wait's deadline, so a
+		// job outside the permitted scope does not cost the others their reports.
 		return nil
 	default:
 		return tools.NewToolErrorf("unsupported operation: %s", params.Operation)
 	}
 }
+
+// errJobOutOfScope answers a job that does not exist and one outside the
+// permitted scope alike, so the answer does not reveal which.
+const errJobOutOfScope = "job %s was not found or its target is not within the scope permitted by your permissions configuration"
 
 // validateJobScope denies job status reads when the job's target observable
 // (resolved server-side) is excluded by the tool's filters (DL-6004).
@@ -69,7 +68,7 @@ func (t *ExecuteAutomationTool) validateJobScope(ctx context.Context, perms *per
 	}
 
 	if !inScope {
-		return tools.NewToolErrorf("job %s was not found or its target is not within the scope permitted by your permissions configuration", jobID).
+		return tools.NewToolErrorf(errJobOutOfScope, jobID).
 			Hint("The configured permission filters restrict which entities this tool can reach")
 	}
 
@@ -175,7 +174,7 @@ func validateGetActionStatusParams(params *ExecuteAutomationParams) error {
 // Bounds of a wait-for-jobs call. The ceiling keeps one blocking call inside a
 // client's tool-call timeout; a caller with slower jobs calls again.
 const (
-	DefaultWaitSeconds = 60
+	DefaultWaitSeconds = 45 // under the 60 s tool-call timeout of the MCP TypeScript SDK
 	MaxWaitSeconds     = 120
 	MaxWaitJobs        = 20
 )

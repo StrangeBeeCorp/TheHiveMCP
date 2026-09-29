@@ -142,6 +142,11 @@ func (t *ExecuteAutomationTool) handleWaitForJobs(ctx context.Context, params Ex
 			Hint(hintCheckAuth)
 	}
 
+	perms, err := utils.GetPermissionsFromContext(ctx)
+	if err != nil {
+		return ExecuteAutomationResult{}, tools.NewToolError("failed to get permissions").Cause(err)
+	}
+
 	interval := t.pollInterval
 	if interval <= 0 {
 		interval = waitPollInterval
@@ -149,12 +154,13 @@ func (t *ExecuteAutomationTool) handleWaitForJobs(ctx context.Context, params Ex
 
 	start := time.Now()
 
-	// The deadline bounds every read as well, so a stalled TheHive cannot hold
-	// the call past the timeout that keeps it inside the client's own.
+	// The deadline bounds every scope check and read as well, so a stalled
+	// TheHive cannot hold the call past the timeout that keeps it inside the
+	// client's own.
 	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(params.TimeoutSecs)*time.Second)
 	defer cancel()
 
-	wait := newJobWait(params.JobIDs)
+	wait := newJobWait(params.JobIDs, perms.GetToolFilters(t.Name()))
 
 	for {
 		wait.poll(waitCtx, hiveClient)
@@ -164,28 +170,22 @@ func (t *ExecuteAutomationTool) handleWaitForJobs(ctx context.Context, params Ex
 		}
 	}
 
-	if len(wait.jobs) == 0 && len(wait.errors) > 0 {
-		first := wait.errors[wait.order[0]]
-		for _, jobID := range wait.order {
-			if msg, failed := wait.errors[jobID]; failed {
-				first = msg
+	wait.markUnanswered(params.TimeoutSecs)
 
-				break
-			}
-		}
-
+	if len(wait.jobs) == 0 {
 		return ExecuteAutomationResult{}, tools.NewToolErrorf("failed to get the status of any of the %d jobs", len(wait.order)).
-			Cause(errors.New(first)).
-			Hint("Check that every job ID was returned by run-analyzer")
+			Cause(errors.New(wait.errors[wait.order[0]])).
+			Hint("Check that every job ID was returned by run-analyzer, and that TheHive is reachable")
 	}
 
 	waited := int(time.Since(start).Seconds())
 	pending := wait.pending()
+	failed := wait.failures()
 
-	slog.Info("Waited for jobs", "jobs", len(wait.order), "pending", len(pending), "failed", len(wait.errors), "seconds", waited)
+	slog.Info("Waited for jobs", "jobs", len(wait.order), "pending", len(pending), "failed", len(failed), "seconds", waited)
 
 	return ExecuteAutomationResult{
-		WaitForJobsResult: NewWaitForJobsResult(wait.read(), pending, wait.failures(), waited),
+		WaitForJobsResult: NewWaitForJobsResult(wait.read(), pending, failed, len(wait.order), waited),
 	}, nil
 }
 
@@ -202,30 +202,43 @@ func sleep(ctx context.Context, d time.Duration) bool {
 	}
 }
 
-// jobWait is the state of one wait-for-jobs call. A failed read is recorded
-// against its job rather than ending the wait, so one bad job ID or one
-// transient error does not throw away the reports of the others.
+// jobWait is the state of one wait-for-jobs call. Every job has its own
+// outcome, so one bad job ID, one job outside the permitted scope or one
+// transient error does not cost the other jobs their reports.
 type jobWait struct {
-	order  []string
-	jobs   map[string]*thehive.OutputJob // the latest successful read
-	errors map[string]string             // the latest failed read, cleared by a later success
-	gone   map[string]bool               // refused by TheHive with a 4xx: asking again will not help
+	order   []string
+	filters map[string]any                // the tool's permission filters; empty means every job is in scope
+	scoped  map[string]bool               // jobs whose target passed the scope check
+	jobs    map[string]*thehive.OutputJob // the latest successful read
+	errors  map[string]string             // the latest failure, cleared by a later success
+	gone    map[string]bool               // refused for good (out of scope, or a 4xx): not asked again
 }
 
-func newJobWait(jobIDs []string) *jobWait {
+func newJobWait(jobIDs []string, filters map[string]any) *jobWait {
 	return &jobWait{
-		order:  jobIDs,
-		jobs:   make(map[string]*thehive.OutputJob, len(jobIDs)),
-		errors: map[string]string{},
-		gone:   map[string]bool{},
+		order:   jobIDs,
+		filters: filters,
+		scoped:  map[string]bool{},
+		jobs:    make(map[string]*thehive.OutputJob, len(jobIDs)),
+		errors:  map[string]string{},
+		gone:    map[string]bool{},
 	}
 }
 
-// poll re-reads every job whose state can still change. It stops as soon as
-// ctx ends: a read cut by the deadline leaves the job as last seen.
+// poll re-reads every job whose state can still change, scope-checking each
+// before its first read, as get-job-status does. It stops as soon as ctx ends:
+// a job cut off by the deadline keeps its last read.
 func (w *jobWait) poll(ctx context.Context, hiveClient *thehive.APIClient) {
 	for _, jobID := range w.order {
 		if w.final(jobID) {
+			continue
+		}
+
+		if !w.scoped[jobID] && !w.checkScope(ctx, jobID) {
+			if ctx.Err() != nil {
+				return
+			}
+
 			continue
 		}
 
@@ -246,6 +259,38 @@ func (w *jobWait) poll(ctx context.Context, hiveClient *thehive.APIClient) {
 	}
 }
 
+// checkScope reports whether the job may be read. A job outside the permitted
+// scope gets the same answer as one that does not exist, so nothing leaks.
+func (w *jobWait) checkScope(ctx context.Context, jobID string) bool {
+	inScope, err := utils.IsJobObservableInScope(ctx, jobID, w.filters)
+
+	switch {
+	case ctx.Err() != nil:
+		return false
+	case err != nil:
+		w.errors[jobID] = "failed to check the job against your permission filters: " + err.Error()
+	case !inScope:
+		w.errors[jobID] = fmt.Sprintf(errJobOutOfScope, jobID)
+		w.gone[jobID] = true
+	default:
+		w.scoped[jobID] = true
+	}
+
+	return w.scoped[jobID]
+}
+
+// markUnanswered records a failure for every job the wait never managed to
+// read, so a TheHive that does not answer is not reported as running jobs.
+func (w *jobWait) markUnanswered(timeoutSecs int) {
+	for _, jobID := range w.order {
+		_, read := w.jobs[jobID]
+		if _, failed := w.errors[jobID]; !read && !failed {
+			w.errors[jobID] = fmt.Sprintf("TheHive did not answer within %ds", timeoutSecs)
+		}
+	}
+}
+
+// final reports whether polling the job again cannot change the answer.
 func (w *jobWait) final(jobID string) bool {
 	if w.gone[jobID] {
 		return true
@@ -257,15 +302,22 @@ func (w *jobWait) final(jobID string) bool {
 }
 
 func (w *jobWait) settled() bool {
-	return len(w.pending()) == 0
+	for _, jobID := range w.order {
+		if !w.final(jobID) {
+			return false
+		}
+	}
+
+	return true
 }
 
-// pending lists the jobs not known to be final, in the caller's order.
+// pending lists the jobs last read as running, in the caller's order. A job
+// whose latest read failed is in failures instead, so the two never overlap.
 func (w *jobWait) pending() []string {
 	var pending []string
 
 	for _, jobID := range w.order {
-		if !w.final(jobID) {
+		if _, failed := w.errors[jobID]; !failed && !w.final(jobID) {
 			pending = append(pending, jobID)
 		}
 	}
@@ -286,7 +338,7 @@ func (w *jobWait) read() []*thehive.OutputJob {
 	return jobs
 }
 
-// failures returns the jobs whose latest read failed, in the caller's order.
+// failures returns the jobs whose latest attempt failed, in the caller's order.
 func (w *jobWait) failures() []JobError {
 	var failures []JobError
 

@@ -10,11 +10,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **`execute-automation` can wait for analyzer jobs: operation `wait-for-jobs`.** It takes the `job-ids` a client started and blocks until every one is final or
-  `timeout-seconds` passes (default 60, at most 120), then returns each job with its report, plus `pendingJobIds` for any still running. Real analyzers take
-  minutes, and the only way to learn they had finished was to call `get-job-status` again — one model turn, and one resend of the whole conversation, per poll.
-  Each job is scope-checked like `get-job-status`, and its report stays fenced as untrusted data. A job TheHive fails to return is listed in `jobErrors` without
-  costing the others their reports, and the timeout bounds each read, so a stalled TheHive cannot hold the call past it.
+- **`execute-automation` can wait for analyzer jobs: operation `wait-for-jobs`.** It takes up to 20 `job-ids` and blocks until every one is final or
+  `timeout-seconds` passes (default 45, at most 120), then returns each job with its verdict (the report's `success`, `summary` and `errorMessage`), plus
+  `pendingJobIds` for any still running; `get-job-status` returns a job's full report. Real analyzers take minutes, and the only way to learn they had finished
+  was to call `get-job-status` again: one model turn, and one resend of the whole conversation, per poll. Each job has its own outcome: one outside the
+  permitted scope, unknown to TheHive, or unanswered in time is listed in `jobErrors` without costing the others their verdicts, and the timeout bounds every
+  call to TheHive. Verdicts stay fenced as untrusted data.
 
 ### Changed
 
