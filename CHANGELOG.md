@@ -31,6 +31,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   which a model reported as "no technique targets that platform". The search now fails fast with an error pointing at `extra-columns: ["platforms"]`, and the
   pattern fact sheet no longer lists platform among the filterable fields.
 
+### Fixed
+
+- **A search no longer rewrites the permission filters.** `search-entities` repaired filter keys and turned dates into timestamps in place, on maps that still
+  belonged to the permission config, so the first search changed the config a session shows in `hive://config/permissions`. Over stdio, where one config serves
+  every tool call of the session, two concurrent searches could write the same map, which stops a Go process. The search now works on a copy, as the scope
+  checks already did.
+
 ## [1.1.0] - 2026-09-10
 
 ### Added
