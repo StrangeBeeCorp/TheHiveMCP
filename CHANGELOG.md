@@ -24,8 +24,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- **`run-responder` on a task or an observable reaches it.** TheHive's responder endpoints know those entities as `case_task` and `case_artifact`, not the
-  `task` and `observable` the tool advertises, so the responder list and the run for a task or an observable answered 404. The tool now translates.
+- **Responders on a task or an observable are reachable.** TheHive's responder endpoints know those entities as `case_task` and `case_artifact`, not the `task`
+  and `observable` the tool and the responder catalog resource advertise, so the catalog and `run-responder` answered 404 for them. Both now translate, and a
+  task log can be named `log` or `case_task_log`.
 
 - **A search no longer rewrites the permission filters.** `search-entities` repaired filter keys and turned dates into timestamps in place, on maps that still
   belonged to the permission config, so the first search changed the config a session shows in `hive://config/permissions`. Over stdio, where one config serves
