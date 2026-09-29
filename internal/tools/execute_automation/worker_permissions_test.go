@@ -111,10 +111,24 @@ func TestRunWorkerMissingFromCatalogIsDenied(t *testing.T) {
 	ctx := workerContext(t, workersByNameYAML, cortex)
 	tool := execute_automation.NewExecuteAutomationTool()
 
-	require.ErrorContains(t, tool.ValidatePermissions(ctx, runAnalyzer("Unknown_1_0")), "was not found")
-	require.ErrorContains(t, tool.ValidatePermissions(ctx, runResponder("Unknown_1_0")), "was not found")
+	require.ErrorContains(t, tool.ValidatePermissions(ctx, runAnalyzer("Unknown_1_0")), "is not among the 1 analyzers TheHive lists")
+	require.ErrorContains(t, tool.ValidatePermissions(ctx, runResponder("Unknown_1_0")), "is not among the 1 responders TheHive lists")
 }
 
+// TheHive answers an empty catalog, not an error, when it cannot reach
+// Cortex: the denial must say so instead of claiming the worker is unknown.
+func TestRunWorkerMissingFromAnEmptyCatalogSaysWhy(t *testing.T) {
+	t.Parallel()
+
+	ctx := workerContext(t, workersByNameYAML, &testutils.FakeCortex{})
+	err := execute_automation.NewExecuteAutomationTool().ValidatePermissions(ctx, runAnalyzer(analyzerVirusTotal.Name))
+
+	require.ErrorContains(t, err, "is not among the 0 analyzers TheHive lists")
+	require.ErrorContains(t, err, "cannot reach Cortex")
+}
+
+// Both refs are ones the rules alone would let through (an analyzer allowed
+// by name, a responder not blocked by ID), so only the lookup denies them.
 func TestRunWorkerIsDeniedWhenTheCatalogCannotBeRead(t *testing.T) {
 	t.Parallel()
 
@@ -122,8 +136,56 @@ func TestRunWorkerIsDeniedWhenTheCatalogCannotBeRead(t *testing.T) {
 	ctx := workerContext(t, workersByNameYAML, cortex)
 	tool := execute_automation.NewExecuteAutomationTool()
 
-	require.Error(t, tool.ValidatePermissions(ctx, runAnalyzer(analyzerVirusTotal.Id)))
-	require.Error(t, tool.ValidatePermissions(ctx, runResponder(responderMailer.Id)))
+	require.ErrorContains(t, tool.ValidatePermissions(ctx, runAnalyzer(analyzerVirusTotal.Name)), "failed to look up the analyzer")
+	require.ErrorContains(t, tool.ValidatePermissions(ctx, runResponder(responderMailer.Id)), "failed to look up the responder")
+}
+
+// A name can designate a worker on each of several Cortex instances; every
+// one of them must be allowed, not only the first match.
+func TestRunWorkerSharingItsNameMustBeAllowedOnEveryInstance(t *testing.T) {
+	t.Parallel()
+
+	otherInstance := responderDeleteCase
+	otherInstance.Id = "e9f8a7"
+
+	cortex := &testutils.FakeCortex{Responders: []thehive.OutputWorker{responderDeleteCase, otherInstance}}
+	ctx := workerContext(t, `version: "1.0"
+permissions:
+  tools:
+    execute-automation:
+      allowed: true
+  responders:
+    mode: "allow_list"
+    allowed: ["`+responderDeleteCase.Id+`"]
+`, cortex)
+	tool := execute_automation.NewExecuteAutomationTool()
+
+	require.NoError(t, tool.ValidatePermissions(ctx, runResponder(responderDeleteCase.Id)))
+	require.ErrorContains(t, tool.ValidatePermissions(ctx, runResponder(responderDeleteCase.Name)), "is not permitted")
+}
+
+// run-responder and get-action-status put the entity type and ID into a Cortex
+// endpoint path, so a value that could leave that path is refused up front.
+func TestAutomationTargetMustBeATheHiveEntity(t *testing.T) {
+	t.Parallel()
+
+	tool := execute_automation.NewExecuteAutomationTool()
+
+	for _, operation := range []string{execute_automation.OperationRunResponder, execute_automation.OperationGetActionStatus} {
+		valid := func(entityType, entityID string) error {
+			params := execute_automation.ExecuteAutomationParams{
+				Operation: operation, ResponderID: responderMailer.Id, ActionID: "~9", EntityType: entityType, EntityID: entityID,
+			}
+
+			return tool.ValidateParams(&params)
+		}
+
+		require.NoError(t, valid(types.EntityTypeCase, "~123456"), operation)
+		require.NoError(t, valid(types.EntityTypeCase, "123456"), "%s: a bare ID stays accepted (DL-5764)", operation)
+		require.ErrorContains(t, valid(types.EntityTypeCase, "~1/../../admin"), "invalid entity-id", operation)
+		require.ErrorContains(t, valid(types.EntityTypeCase, "~1 "), "invalid entity-id", operation)
+		require.ErrorContains(t, valid("case/../../user", "~1"), "invalid entity-type", operation)
+	}
 }
 
 // Rules that name no worker give every worker the same answer, so the catalog

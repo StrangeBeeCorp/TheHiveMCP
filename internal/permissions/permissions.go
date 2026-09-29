@@ -181,40 +181,6 @@ func (c *Config) ResponderRulesNameWorkers() bool {
 	return c != nil && c.Permissions.Responders.namesWorkers()
 }
 
-// GetAllowedAnalyzers returns list of allowed analyzer names
-func (c *Config) GetAllowedAnalyzers(allAnalyzers []string) []string {
-	if c == nil {
-		return []string{}
-	}
-
-	var allowed []string
-
-	for _, analyzer := range allAnalyzers {
-		if c.IsAnalyzerAllowed(analyzer) {
-			allowed = append(allowed, analyzer)
-		}
-	}
-
-	return allowed
-}
-
-// GetAllowedResponders returns list of allowed responder names
-func (c *Config) GetAllowedResponders(allResponders []string) []string {
-	if c == nil {
-		return []string{}
-	}
-
-	var allowed []string
-
-	for _, responder := range allResponders {
-		if c.IsResponderAllowed(responder) {
-			allowed = append(allowed, responder)
-		}
-	}
-
-	return allowed
-}
-
 // allows applies the rules to a worker known by several identifiers: an allow
 // list permits it when any of them is listed, a block list denies it when any
 // of them is blocked. Checking only the identifier a caller sent let a

@@ -208,8 +208,10 @@ Cortex identifies each worker by an opaque ID and by a name such as `DeleteCase_
 its name is listed, whichever identifier the model uses to call it: a responder blocked by name is denied when called by its ID, and an analyzer allowed by name
 may be called by its ID.
 
-When the rules name specific workers, `run-analyzer` and `run-responder` read the analyzer or responder catalog first to learn the worker's other identifier. A
-worker that is not in the catalog is denied. A `"*"` allow list or an empty block list names no worker, so it needs no lookup.
+When the rules name specific workers, `run-analyzer` and `run-responder` read the analyzer or responder catalog first to learn the worker's other identifier:
+one extra call to TheHive per run. A worker that is not in the catalog is denied, and the catalog can miss one: TheHive lists no worker at all when it cannot
+reach Cortex, and lists a worker enabled on several Cortex instances under a single ID, so an ID from another instance is denied. A `"*"` allow list or an empty
+block list names no worker, so it needs no lookup.
 
 ## Example Configurations
 
@@ -403,10 +405,12 @@ Alternatively, users can specify a permissions path when configuring the MCPB in
 
 - Add to `allowed` list or remove from `blocked` list
 
-**"Analyzer/Responder … was not found, so it cannot be checked"**
+**"Analyzer/Responder … is not among the N … TheHive lists"**
 
-- The rules name specific workers, and this one is not in the analyzer catalog or in the responders listed for that entity. Use an ID or a name from
-  `hive://metadata/automation/analyzers` or `hive://metadata/automation/responders?entityType=<type>&entityId=<id>`
+- The rules name specific workers, and this one is not in the analyzer catalog or in the responders listed for that entity. Use an analyzer ID or name from
+  `hive://metadata/automation/analyzers`, or a responder ID from `hive://metadata/automation/responders?entityType=<type>&entityId=<id>`: a responder must be
+  run by its ID.
+- N = 0 means TheHive listed nothing, which it does when it cannot reach Cortex.
 
 **"not found or is not within the scope permitted"**
 

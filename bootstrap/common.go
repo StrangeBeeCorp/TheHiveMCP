@@ -301,9 +301,10 @@ func LoadPermissions(configPath string) (*permissions.Config, error) {
 	return config, nil
 }
 
-// checkPermissionsConfig rejects a bad permissions file at startup. Each request
-// loads the file again, and a failed load there only logs a warning and leaves
-// the tools to deny every call without saying why.
+// checkPermissionsConfig rejects a bad permissions file at startup. Past that
+// point a failed load only logs a warning and leaves the tools to deny every
+// call without saying why: over stdio the file is loaded once per session, and
+// over HTTP on every request, so an edit that breaks it still does that.
 func checkPermissionsConfig(options *types.TheHiveMcpDefaultOptions) error {
 	_, err := LoadPermissions(options.PermissionsConfigPath)
 	if err != nil {

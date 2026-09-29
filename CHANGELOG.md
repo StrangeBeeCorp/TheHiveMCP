@@ -8,20 +8,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Security
-
-- **A responder blocked by name can no longer run by its ID.** Analyzer and responder lists match a worker's ID or its name, and the shipped profiles use names
-  (`blocked: ["DeleteCase_1_0"]`), but `run-analyzer` and `run-responder` only checked the identifier the caller sent. A responder blocked by name therefore ran
-  when called by its ID, which is the identifier the tool description tells the model to use. The catalog also kept listing it. Both paths now check a worker
-  under its ID and its name together. The fix also works the other way: an analyzer allowed by name is no longer refused when called by its ID. When the rules
-  name specific workers, a run first reads the analyzer or responder catalog to learn the worker's other identifier, and a worker missing from the catalog is
-  denied. Rules that name none (`"*"`, an empty block list) need no lookup and behave as before.
-- **A misspelt key in the permissions file now stops the server.** Unknown keys used to be dropped without a word, and what they named fell back to its most
-  permissive default: `entity_permission:` in place of `entity_permissions:` allowed every operation on every entity, and `filter:` in place of `filters:`
-  removed the filters. The file is now parsed strictly and checked at startup, over stdio and over HTTP, and the server refuses to start on an unknown key.
-  Before, a file that failed to load only logged a warning, and every tool call was then denied with no reason given. **A file that contains such a typo no
-  longer starts: fix the key it names.**
-
 ### Changed
 
 - **The MITRE ATT&CK catalog is no longer fenced as untrusted data.** A `search-entities` query on `entity-type: pattern` used to return its technique name and
@@ -42,6 +28,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   belonged to the permission config, so the first search changed the config a session shows in `hive://config/permissions`. Over stdio, where one config serves
   every tool call of the session, two concurrent searches could write the same map, which stops a Go process. The search now works on a copy, as the scope
   checks already did.
+
+### Security
+
+- **A responder blocked by name can no longer run by its ID.** Analyzer and responder lists match a worker's ID or its name, and the shipped profiles use names
+  (`blocked: ["DeleteCase_1_0"]`), but `run-analyzer` and `run-responder` only checked the identifier the caller sent. A responder blocked by name therefore ran
+  when called by its ID, which is the identifier the tool description tells the model to use. The catalog also kept listing it. Both paths now check a worker
+  under its ID and its name together. The fix also works the other way: an analyzer allowed by name is no longer refused when called by its ID. When the rules
+  name specific workers, a run first reads the analyzer or responder catalog to learn the worker's other identifier, and a worker missing from the catalog is
+  denied. Rules that name none (`"*"`, an empty block list) need no lookup and behave as before.
+- **`run-responder` and `get-action-status` refuse a malformed `entity-type` or `entity-id`.** Both values go into the path of a Cortex endpoint, and nothing
+  enforced the schema's enum at runtime. An entity ID must now be a TheHive ID (`~123456`, or its bare digits), as the responder catalog resource already
+  required.
+- **A misspelt key in the permissions file now stops the server.** Unknown keys used to be dropped without a word, and what they named fell back to its most
+  permissive default: `entity_permission:` in place of `entity_permissions:` allowed every operation on every entity, and `filter:` in place of `filters:`
+  removed the filters. The file is now parsed strictly and checked at startup, over stdio and over HTTP, and the server refuses to start on an unknown key,
+  naming it. Before, a file that failed to load only logged a warning, and every tool call was then denied with no reason given; that is still what happens when
+  the file is edited into an invalid state while the HTTP server runs, since it reloads the file per request. **A file that contains such a typo no longer
+  starts: fix the key it names.**
 
 ## [1.1.0] - 2026-09-10
 

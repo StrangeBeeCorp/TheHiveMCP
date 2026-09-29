@@ -3,6 +3,9 @@ package execute_automation
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"slices"
+	"strings"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 
@@ -114,8 +117,8 @@ func errWorkerNotPermitted(kind, ref string) *tools.ToolError {
 }
 
 // checkWorker denies ref unless every catalog worker it designates, by ID or
-// by name, is allowed under both of its identifiers. A ref matching nothing is
-// denied too, since there is nothing to check it against.
+// by name, is allowed by the rules given both its identifiers. A ref matching
+// nothing is denied too, since there is nothing to check it against.
 func checkWorker(kind, ref string, catalog []thehive.OutputWorker, allowed func(identifiers ...string) bool, notFoundHint string) error {
 	found := false
 
@@ -132,8 +135,10 @@ func checkWorker(kind, ref string, catalog []thehive.OutputWorker, allowed func(
 	}
 
 	if !found {
-		return tools.NewToolErrorf("%s %s was not found, so it cannot be checked against your permissions configuration", kind, ref).
-			Hint(notFoundHint)
+		return tools.NewToolErrorf("%s %s is not among the %d %ss TheHive lists, so it cannot be checked against your permissions configuration",
+			kind, ref, len(catalog), strings.ToLower(kind)).
+			Hint(notFoundHint).
+			Hint("TheHive lists none when it cannot reach Cortex, and lists a worker enabled on several Cortex instances under one of its IDs only")
 	}
 
 	return nil
@@ -228,7 +233,7 @@ func validateRunResponderParams(params *ExecuteAutomationParams) error {
 		return tools.NewToolErrorf("entity-id is required for run-responder operations. This is the ID of the entity the responder will act on")
 	}
 
-	return nil
+	return validateAutomationTarget(params.EntityType, params.EntityID)
 }
 
 func validateGetJobStatusParams(params *ExecuteAutomationParams) error {
@@ -250,6 +255,31 @@ func validateGetActionStatusParams(params *ExecuteAutomationParams) error {
 
 	if params.EntityID == "" {
 		return tools.NewToolErrorf("entity-id is required for get-action-status operations. This is the ID of the entity the action is running against").Hint("Provide the entity ID the action is running against")
+	}
+
+	return validateAutomationTarget(params.EntityType, params.EntityID)
+}
+
+// automationEntityTypes are the entities a responder can act on.
+var automationEntityTypes = []string{types.EntityTypeCase, types.EntityTypeAlert, types.EntityTypeTask, types.EntityTypeObservable}
+
+// automationEntityIDPattern accepts a TheHive entity ID ("~" + digits) or the
+// bare digits a model often sends (DL-5764). It admits no separator, dot or
+// whitespace: run-responder and get-action-status put the value in a Cortex
+// endpoint path, the kind RandoriSec 5.3 found open to traversal.
+var automationEntityIDPattern = regexp.MustCompile(`^~?[0-9]+$`)
+
+// validateAutomationTarget rejects an entity type or ID that could escape the
+// path of the Cortex endpoint it is interpolated into. The schema advertises
+// the same enum, but nothing enforces a schema at runtime.
+func validateAutomationTarget(entityType, entityID string) error {
+	if !slices.Contains(automationEntityTypes, entityType) {
+		return tools.NewToolErrorf("invalid entity-type %q", entityType).
+			Hintf("Must be one of: %s", strings.Join(automationEntityTypes, ", "))
+	}
+
+	if !automationEntityIDPattern.MatchString(entityID) {
+		return tools.NewToolErrorf("invalid entity-id %q: must be a TheHive entity ID such as ~123456", entityID)
 	}
 
 	return nil

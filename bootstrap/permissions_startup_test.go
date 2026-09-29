@@ -13,7 +13,7 @@ import (
 // A permissions file the server cannot load must stop it at startup. Past
 // startup, a failed load only logs a warning, and every tool call is then
 // denied with no word on why.
-func TestServersRefuseToStartOnABadPermissionsFile(t *testing.T) {
+func TestCheckPermissionsConfigRefusesABadFile(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "permissions.yaml")
@@ -25,12 +25,13 @@ permissions:
       filter: {}
 `), 0o600))
 
-	options := &types.TheHiveMcpDefaultOptions{
-		BindAddr:              "127.0.0.1:0",
-		TheHiveURL:            "https://thehive.example.com",
-		PermissionsConfigPath: path,
-	}
+	require.ErrorContains(t, checkPermissionsConfig(&types.TheHiveMcpDefaultOptions{PermissionsConfigPath: path}), "invalid permissions configuration")
+	require.NoError(t, checkPermissionsConfig(&types.TheHiveMcpDefaultOptions{}), "the default profile loads")
 
-	require.ErrorContains(t, StartHTTPServer(GetMCPServer(), options), "invalid permissions configuration")
-	require.ErrorContains(t, StartStdioServer(GetMCPServer(), options), "invalid permissions configuration")
+	// The address cannot be bound, so a StartHTTPServer that skipped the check
+	// would fail on the bind instead of serving forever and hanging the test.
+	err := StartHTTPServer(GetMCPServer(), &types.TheHiveMcpDefaultOptions{
+		BindAddr: "256.0.0.1:0", TheHiveURL: testHiveExampleURL, PermissionsConfigPath: path,
+	})
+	require.ErrorContains(t, err, "invalid permissions configuration")
 }
