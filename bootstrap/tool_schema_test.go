@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"encoding/json"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -230,6 +231,83 @@ func TestToolSchemas_RequiredParameters(t *testing.T) {
 			assert.ElementsMatch(t, want, got, "tool %q advertises the wrong required parameters", name)
 		})
 	}
+}
+
+// An input type must not offer null. jsonschema-go infers a slice or a pointer
+// as ["null", T], because a nil one marshals to null — true of what the server
+// emits, meaningless for what a caller sends, since an omitted parameter and a
+// null one decode to the same zero value. Advertised to a model, the union reads
+// as "not quite an array": measured on muse-spark 1.3, search-entities'
+// extra-columns came in as the JSON-encoded STRING '["description", …]' on every
+// one of 59 alerts, and the MCP gateway, which validates arguments against this
+// schema, rejected each call with "is not of type 'null', 'array'".
+func TestToolSchemas_InputTypesAdmitNoNull(t *testing.T) {
+	t.Parallel()
+
+	for name, subject := range toolsUnderTest() {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Empty(t, nullableTypePaths(advertisedSchema(t, subject.tool), "$"),
+				"tool %q advertises input types that admit null", name)
+		})
+	}
+}
+
+// Dropping null must leave the type the struct declares, as a plain keyword: an
+// array parameter reads "array", not "null" or ["array"].
+func TestToolSchemas_ListParametersAdvertiseAPlainArray(t *testing.T) {
+	t.Parallel()
+
+	expected := map[string][]string{
+		toolManageEntities: {"entity-ids"},
+		toolSearchEntities: {"extra-columns", "extra-data", "additional-queries"},
+	}
+
+	subjects := toolsUnderTest()
+
+	for name, parameters := range expected {
+		properties := propertiesOf(t, subjects[name].tool)
+
+		for _, parameter := range parameters {
+			property, ok := properties[parameter].(map[string]any)
+			require.True(t, ok, "tool %q has no property %q", name, parameter)
+			assert.Equal(t, "array", property["type"], "tool %q parameter %q", name, parameter)
+		}
+	}
+}
+
+// nullableTypePaths lists the schema paths whose `type` is an array holding
+// "null", at any depth (properties, items, $defs, …).
+func nullableTypePaths(node any, path string) []string {
+	var found []string
+
+	switch typed := node.(type) {
+	case map[string]any:
+		if types, isUnion := typed["type"].([]any); isUnion && slicesContainsAny(types, "null") {
+			found = append(found, path)
+		}
+
+		for key, child := range typed {
+			found = append(found, nullableTypePaths(child, path+"."+key)...)
+		}
+	case []any:
+		for index, child := range typed {
+			found = append(found, nullableTypePaths(child, path+"["+strconv.Itoa(index)+"]")...)
+		}
+	}
+
+	return found
+}
+
+func slicesContainsAny(values []any, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+
+	return false
 }
 
 // constraintsUnderTest pairs each tool with the constraint map its definition

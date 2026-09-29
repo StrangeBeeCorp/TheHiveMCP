@@ -85,12 +85,56 @@ func applyConstraints(inferred json.RawMessage, constraints map[string]SchemaCon
 		constraint.applyTo(property)
 	}
 
+	dropNullFromTypes(schema)
+
 	raw, err := json.Marshal(schema)
 	if err != nil {
 		return nil, fmt.Errorf("re-encode schema: %w", err)
 	}
 
 	return raw, nil
+}
+
+// dropNullFromTypes narrows every ["null", T] type union to T, at any depth.
+//
+// jsonschema-go infers a slice or a pointer as ["null", T] because a nil one
+// marshals to null. For an input that union says nothing useful — an omitted
+// parameter and a null one decode to the same zero value — and it costs calls:
+// a model reads it as "not quite an array" and sends the array JSON-encoded as a
+// string, which the MCP gateway then rejects against this very schema.
+func dropNullFromTypes(node any) {
+	switch typed := node.(type) {
+	case map[string]any:
+		if types, isUnion := typed["type"].([]any); isUnion {
+			typed["type"] = withoutNull(types)
+		}
+
+		for _, child := range typed {
+			dropNullFromTypes(child)
+		}
+	case []any:
+		for _, child := range typed {
+			dropNullFromTypes(child)
+		}
+	}
+}
+
+// withoutNull drops "null" from a type union, and collapses a union left with a
+// single type to that plain keyword.
+func withoutNull(types []any) any {
+	narrowed := make([]any, 0, len(types))
+
+	for _, name := range types {
+		if name != "null" {
+			narrowed = append(narrowed, name)
+		}
+	}
+
+	if len(narrowed) == 1 {
+		return narrowed[0]
+	}
+
+	return narrowed
 }
 
 // applyTo writes the constraint's keywords onto one decoded schema property.
