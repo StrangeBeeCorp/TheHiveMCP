@@ -189,7 +189,10 @@ func TestAutomationTargetMustBeATheHiveEntity(t *testing.T) {
 		require.ErrorContains(t, valid("case/../../user", "~1"), "invalid entity-type", operation)
 	}
 
-	for given, want := range map[string]string{"Task": types.EntityTypeTask, "case_task": types.EntityTypeTask, "case_artifact": types.EntityTypeObservable} {
+	for given, want := range map[string]string{
+		"Task": types.EntityTypeTask, "case_task": types.EntityTypeTask, "case_artifact": types.EntityTypeObservable,
+		"Log": "log", "case_task_log": "log",
+	} {
 		params := execute_automation.ExecuteAutomationParams{
 			Operation: execute_automation.OperationRunResponder, ResponderID: responderMailer.Id, EntityType: given, EntityID: "~1",
 		}

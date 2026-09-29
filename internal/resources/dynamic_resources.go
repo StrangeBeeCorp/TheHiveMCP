@@ -441,7 +441,7 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 		return nil, fmt.Errorf("failed to get TheHive client from context: %w. Check authentication and connection settings", err)
 	}
 
-	responders, resp, err := hiveClient.CortexAPI.ListResponders(ctx, entityType, entityID).Execute()
+	responders, resp, err := hiveClient.CortexAPI.ListResponders(ctx, utils.ResponderObjectType(entityType), entityID).Execute()
 	if err != nil {
 		return nil, fmt.Errorf("failed to find responders for %s %s: %w. Check that Cortex integration is enabled and you have permissions to list responders. API response: %s", entityType, entityID, err, utils.DescribeHTTPResponse(resp))
 	}

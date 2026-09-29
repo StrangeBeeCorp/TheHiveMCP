@@ -97,7 +97,7 @@ func validateResponder(ctx context.Context, perms *permissions.Config, responder
 		return tools.NewToolError(errGetHiveClient).Cause(err).Hint(hintCheckAuth)
 	}
 
-	responders, resp, err := hiveClient.CortexAPI.ListResponders(ctx, responderObjectType(entityType), entityID).Execute()
+	responders, resp, err := hiveClient.CortexAPI.ListResponders(ctx, utils.ResponderObjectType(entityType), entityID).Execute()
 	if err != nil {
 		return tools.NewToolError("failed to look up the responder to check it against your permissions configuration").
 			Cause(err).API(resp)
@@ -264,22 +264,14 @@ func validateGetActionStatusParams(params *ExecuteAutomationParams) error {
 // advertises them.
 var automationEntityTypes = []string{types.EntityTypeCase, types.EntityTypeAlert, types.EntityTypeTask, types.EntityTypeObservable}
 
+// entityTypeLog is a task log. Responders can act on one, but the schema does
+// not advertise it, as nothing else in the tools does.
+const entityTypeLog = "log"
+
 // theHiveEntityTypes maps TheHive's own spellings, which a model may have seen
-// in TheHive's answers, to the advertised ones.
-var theHiveEntityTypes = map[string]string{"case_task": types.EntityTypeTask, "case_artifact": types.EntityTypeObservable}
-
-// responderObjectType is the entity type TheHive's responder catalog and action
-// creation endpoints take. They resolve case_task and case_artifact but not
-// task or observable, which reached no entity; get-action-status, whose
-// endpoint lowercases and takes task and observable, uses the advertised name.
-func responderObjectType(entityType string) string {
-	for theHiveName, name := range theHiveEntityTypes {
-		if name == entityType {
-			return theHiveName
-		}
-	}
-
-	return entityType
+// in TheHive's answers, to the tools' names.
+var theHiveEntityTypes = map[string]string{
+	"case_task": types.EntityTypeTask, "case_artifact": types.EntityTypeObservable, "case_task_log": entityTypeLog,
 }
 
 // automationEntityIDPattern accepts a TheHive entity ID ("~" + digits) or the
@@ -298,7 +290,7 @@ func validateAutomationTarget(params *ExecuteAutomationParams) error {
 		entityType = name
 	}
 
-	if !slices.Contains(automationEntityTypes, entityType) {
+	if !slices.Contains(automationEntityTypes, entityType) && entityType != entityTypeLog {
 		return tools.NewToolErrorf("invalid entity-type %q", params.EntityType).
 			Hintf("Must be one of: %s", strings.Join(automationEntityTypes, ", "))
 	}
