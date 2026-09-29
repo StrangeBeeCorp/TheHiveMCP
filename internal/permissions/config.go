@@ -1,7 +1,10 @@
 package permissions
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -65,12 +68,18 @@ func LoadAdminForTesting() *Config {
 	}
 }
 
-// ParseYAML parses YAML data into a Config struct
+// ParseYAML parses YAML data into a Config struct. An unknown key is an error:
+// dropping a misspelt key such as entity_permission would grant everything it
+// was written to restrict.
 func ParseYAML(data []byte) (*Config, error) {
 	var config Config
 
-	err := yaml.Unmarshal(data, &config)
-	if err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+
+	// io.EOF is an empty document, which Validate reports as a missing version.
+	err := decoder.Decode(&config)
+	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("failed to unmarshal YAML: %w", err)
 	}
 

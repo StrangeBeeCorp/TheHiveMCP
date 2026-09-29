@@ -301,6 +301,18 @@ func LoadPermissions(configPath string) (*permissions.Config, error) {
 	return config, nil
 }
 
+// checkPermissionsConfig rejects a bad permissions file at startup. Each request
+// loads the file again, and a failed load there only logs a warning and leaves
+// the tools to deny every call without saying why.
+func checkPermissionsConfig(options *types.TheHiveMcpDefaultOptions) error {
+	_, err := LoadPermissions(options.PermissionsConfigPath)
+	if err != nil {
+		return fmt.Errorf("invalid permissions configuration: %w", err)
+	}
+
+	return nil
+}
+
 // AddPermissionsToContext loads permissions and adds them to the context
 func AddPermissionsToContext(ctx context.Context, options *types.TheHiveMcpDefaultOptions) (context.Context, error) {
 	config, err := LoadPermissions(options.PermissionsConfigPath)

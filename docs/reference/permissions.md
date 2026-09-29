@@ -52,6 +52,9 @@ permissions:
     blocked: ["DeleteCase_1_0", "PurgeAlert_1_0"]
 ```
 
+The file is parsed strictly: a key the format does not define, such as a misspelt `entity_permission`, is an error, and the server refuses to start rather than
+drop it and grant what the key was meant to restrict. Keys inside `filters` are TheHive filter syntax and are not checked.
+
 ## Tool Permissions
 
 ### Available tools

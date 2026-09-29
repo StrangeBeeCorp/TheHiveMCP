@@ -16,6 +16,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   under its ID and its name together. The fix also works the other way: an analyzer allowed by name is no longer refused when called by its ID. When the rules
   name specific workers, a run first reads the analyzer or responder catalog to learn the worker's other identifier, and a worker missing from the catalog is
   denied. Rules that name none (`"*"`, an empty block list) need no lookup and behave as before.
+- **A misspelt key in the permissions file now stops the server.** Unknown keys used to be dropped without a word, and what they named fell back to its most
+  permissive default: `entity_permission:` in place of `entity_permissions:` allowed every operation on every entity, and `filter:` in place of `filters:`
+  removed the filters. The file is now parsed strictly and checked at startup, over stdio and over HTTP, and the server refuses to start on an unknown key.
+  Before, a file that failed to load only logged a warning, and every tool call was then denied with no reason given. **A file that contains such a typo no
+  longer starts: fix the key it names.**
 
 ### Changed
 
