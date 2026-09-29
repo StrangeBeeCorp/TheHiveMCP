@@ -29,6 +29,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   which a model reported as "no technique targets that platform". The search now fails fast with an error pointing at `extra-columns: ["platforms"]`, and the
   pattern fact sheet no longer lists platform among the filterable fields.
 
+### Fixed
+
+- **`MCP_SERVER_ENDPOINT` is documented under its real name.** The README and the basic Docker Compose file used `MCP_ENDPOINT_PATH`, which the server never
+  read, so a custom endpoint path set that way was silently ignored. The `--help` text also named variables that do not exist (`HIVEMIND_*`, `MCP_URL`).
+- **The basic Docker Compose file no longer reports the container as unhealthy.** Its healthcheck ran `wget` against `/health`, but the image is distroless,
+  with no `wget`, and the server has no such route. The override is gone, so the image's own probe applies.
+
 ## [1.1.0] - 2026-09-10
 
 ### Added
