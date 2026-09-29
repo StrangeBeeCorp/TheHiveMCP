@@ -59,7 +59,9 @@ func TestHTTPServerRefusesAnOversizedBody(t *testing.T) {
 	ts := httptest.NewServer(testHTTPServer(t, "/mcp").Handler)
 	t.Cleanup(ts.Close)
 
-	initialize := func(padding int) int {
+	// chunked sends the body with no declared length, which only the size cap
+	// on the read itself can stop.
+	initialize := func(padding int, chunked bool) (int, string) {
 		body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},` +
 			`"clientInfo":{"name":"test","version":"1"},"padding":"` + strings.Repeat("x", padding) + `"}}`
 
@@ -68,16 +70,30 @@ func TestHTTPServerRefusesAnOversizedBody(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json, text/event-stream")
 
+		if chunked {
+			req.ContentLength = -1
+		}
+
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
 
 		defer func() { _ = resp.Body.Close() }()
 
-		return resp.StatusCode
+		answer, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		return resp.StatusCode, string(answer)
 	}
 
-	require.Equal(t, http.StatusOK, initialize(1), "control: the same request under the cap is served")
-	assert.Equal(t, http.StatusRequestEntityTooLarge, initialize(maxRequestBodyBytes), "refused before any of the body is read")
+	status, _ := initialize(1, false)
+	require.Equal(t, http.StatusOK, status, "control: the same request under the cap is served")
+
+	status, _ = initialize(maxRequestBodyBytes, false)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, status, "a declared oversize is refused before any of it is read")
+
+	status, answer := initialize(maxRequestBodyBytes, true)
+	assert.Equal(t, http.StatusBadRequest, status, "an undeclared oversize is cut off at the cap")
+	assert.Contains(t, answer, "request body too large")
 }
 
 // The router must agree with mcp-go on the path, which it normalizes.

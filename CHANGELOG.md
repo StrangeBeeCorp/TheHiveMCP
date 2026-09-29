@@ -34,8 +34,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The HTTP server no longer waits indefinitely on a slow or huge request.** It served with no timeouts and read a request body of any size in full before
   checking credentials, so a client that could reach the port could hold a connection with headers or a body sent a byte at a time, or exhaust the server's
   memory with one huge body. Headers must now arrive within 10 s and a whole request within 30 s, and a body is capped at 4 MiB: one that declares more is
-  refused with 413 before any of it is read. Long tool calls and SSE streams are unaffected, since these limits stop applying once the request has been read.
-  They do not cap how many connections or streams a client opens, which the authenticating proxy the deployment docs require must still do.
+  refused with 413 before any of it is read, and a chunked one is cut off at the cap with a JSON-RPC parse error. Long tool calls and SSE streams are
+  unaffected, since these limits stop applying once the request has been read. They do not cap how many connections or streams a client opens, which the
+  authenticating proxy the deployment docs require must still do.
 
 ## [1.1.0] - 2026-09-10
 
