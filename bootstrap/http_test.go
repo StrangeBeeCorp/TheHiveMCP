@@ -240,7 +240,7 @@ func TestGetHTTPAuthContextFunc_AuthorizationHeader(t *testing.T) {
 
 func clientHeaders(hiveURL string) map[string]string {
 	headers := map[string]string{
-		string(types.HeaderKeyTheHiveAPIKey): "client-key",
+		string(types.HeaderKeyTheHiveAPIKey): testClientKey,
 	}
 	if hiveURL != "" {
 		headers[string(types.HeaderKeyTheHiveURL)] = hiveURL
@@ -354,19 +354,33 @@ func TestGetHTTPAuthContextFunc_EnvCredentialFallback(t *testing.T) {
 		assert.Equal(t, "Bearer env-secret-key", hive.lastAuthorization())
 	})
 
+	// Regression: with fallback on, the env key was the default of each key
+	// header, so a key sent only as a Bearer token was overwritten by it.
 	t.Run("client-supplied credentials are used regardless of fallback setting", func(t *testing.T) {
 		t.Parallel()
 
-		hive := newFakeTheHive(t)
-		options := &types.TheHiveMcpDefaultOptions{
-			TheHiveURL:    hive.server.URL,
-			TheHiveAPIKey: testEnvSecretKey,
+		for _, fallback := range []bool{false, true} {
+			for header, value := range map[string]string{
+				string(types.HeaderKeyTheHiveAPIKey): testClientKey,
+				headerAuthorization:                  "Bearer " + testClientKey,
+			} {
+				t.Run(fmt.Sprintf("%s with fallback %t", header, fallback), func(t *testing.T) {
+					t.Parallel()
+
+					hive := newFakeTheHive(t)
+					options := &types.TheHiveMcpDefaultOptions{
+						TheHiveURL:                 hive.server.URL,
+						TheHiveAPIKey:              testEnvSecretKey,
+						AllowEnvCredentialFallback: fallback,
+					}
+
+					ctx := authContextForRequest(options, map[string]string{header: value})
+
+					assertAuthValidated(ctx, t)
+					assert.Equal(t, "Bearer client-key", hive.lastAuthorization())
+				})
+			}
 		}
-
-		ctx := authContextForRequest(options, clientHeaders(""))
-
-		assertAuthValidated(ctx, t)
-		assert.Equal(t, "Bearer client-key", hive.lastAuthorization())
 	})
 }
 
