@@ -2,6 +2,9 @@ package execute_automation
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/StrangeBeeCorp/thehive4go/thehive"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/permissions"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
@@ -23,14 +26,16 @@ func (t *ExecuteAutomationTool) ValidatePermissions(ctx context.Context, params 
 
 	switch params.Operation {
 	case OperationRunAnalyzer:
-		if !perms.IsAnalyzerAllowed(params.AnalyzerID) {
-			return tools.NewToolErrorf("Analyzer %s is not permitted by your permissions configuration", params.AnalyzerID)
+		err = validateAnalyzer(ctx, perms, params.AnalyzerID)
+		if err != nil {
+			return err
 		}
 
 		return t.validateTargetScope(ctx, perms, types.EntityTypeObservable, params.ObservableID)
 	case OperationRunResponder:
-		if !perms.IsResponderAllowed(params.ResponderID) {
-			return tools.NewToolErrorf("Responder %s is not permitted by your permissions configuration", params.ResponderID)
+		err = validateResponder(ctx, perms, params.ResponderID, params.EntityType, params.EntityID)
+		if err != nil {
+			return err
 		}
 
 		return t.validateTargetScope(ctx, perms, params.EntityType, params.EntityID)
@@ -43,6 +48,95 @@ func (t *ExecuteAutomationTool) ValidatePermissions(ctx context.Context, params 
 	default:
 		return tools.NewToolErrorf("unsupported operation: %s", params.Operation)
 	}
+}
+
+// validateAnalyzer denies an analyzer the rules exclude. The caller may name it
+// by ID or by name and the rules may list either, so when the rules single out
+// analyzers the catalog is read to learn the other identifier.
+func validateAnalyzer(ctx context.Context, perms *permissions.Config, analyzerID string) error {
+	if !perms.AnalyzerRulesNameWorkers() {
+		if perms.IsAnalyzerAllowed(analyzerID) {
+			return nil
+		}
+
+		return errWorkerNotPermitted(workerKindAnalyzer, analyzerID)
+	}
+
+	hiveClient, err := utils.GetHiveClientFromContext(ctx)
+	if err != nil {
+		return tools.NewToolError(errGetHiveClient).Cause(err).Hint(hintCheckAuth)
+	}
+
+	// The whole catalog: a windowed fetch could miss the analyzer and deny it.
+	analyzers, resp, err := hiveClient.CortexAPI.ListAnalyzers(ctx).Range_("all").Execute()
+	if err != nil {
+		return tools.NewToolError("failed to look up the analyzer to check it against your permissions configuration").
+			Cause(err).API(resp)
+	}
+
+	return checkWorker(workerKindAnalyzer, analyzerID, analyzers, perms.IsAnalyzerAllowed,
+		"Use an analyzer from get-resource 'hive://metadata/automation/analyzers'")
+}
+
+// validateResponder is validateAnalyzer for responders, which TheHive lists
+// per target entity.
+func validateResponder(ctx context.Context, perms *permissions.Config, responderID, entityType, entityID string) error {
+	if !perms.ResponderRulesNameWorkers() {
+		if perms.IsResponderAllowed(responderID) {
+			return nil
+		}
+
+		return errWorkerNotPermitted(workerKindResponder, responderID)
+	}
+
+	hiveClient, err := utils.GetHiveClientFromContext(ctx)
+	if err != nil {
+		return tools.NewToolError(errGetHiveClient).Cause(err).Hint(hintCheckAuth)
+	}
+
+	responders, resp, err := hiveClient.CortexAPI.ListResponders(ctx, entityType, entityID).Execute()
+	if err != nil {
+		return tools.NewToolError("failed to look up the responder to check it against your permissions configuration").
+			Cause(err).API(resp)
+	}
+
+	return checkWorker(workerKindResponder, responderID, responders, perms.IsResponderAllowed,
+		fmt.Sprintf("Use a responder from get-resource 'hive://metadata/automation/responders?entityType=%s&entityId=%s'", entityType, entityID))
+}
+
+const (
+	workerKindAnalyzer  = "Analyzer"
+	workerKindResponder = "Responder"
+)
+
+func errWorkerNotPermitted(kind, ref string) *tools.ToolError {
+	return tools.NewToolErrorf("%s %s is not permitted by your permissions configuration", kind, ref)
+}
+
+// checkWorker denies ref unless every catalog worker it designates, by ID or
+// by name, is allowed under both of its identifiers. A ref matching nothing is
+// denied too, since there is nothing to check it against.
+func checkWorker(kind, ref string, catalog []thehive.OutputWorker, allowed func(identifiers ...string) bool, notFoundHint string) error {
+	found := false
+
+	for _, worker := range catalog {
+		if worker.GetId() != ref && worker.GetName() != ref {
+			continue
+		}
+
+		found = true
+
+		if !allowed(worker.GetId(), worker.GetName()) {
+			return errWorkerNotPermitted(kind, ref)
+		}
+	}
+
+	if !found {
+		return tools.NewToolErrorf("%s %s was not found, so it cannot be checked against your permissions configuration", kind, ref).
+			Hint(notFoundHint)
+	}
+
+	return nil
 }
 
 // validateJobScope denies job status reads when the job's target observable

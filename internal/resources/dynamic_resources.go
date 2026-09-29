@@ -378,7 +378,7 @@ func GetAvailableAnalyzers(ctx context.Context, req mcp.ReadResourceRequest) ([]
 		allowed = []thehive.OutputWorker{}
 
 		for _, analyzer := range analyzers {
-			if perms.IsAnalyzerAllowed(analyzer.GetId()) || perms.IsAnalyzerAllowed(analyzer.GetName()) {
+			if perms.IsAnalyzerAllowed(analyzer.GetId(), analyzer.GetName()) {
 				allowed = append(allowed, analyzer)
 			}
 		}
@@ -453,7 +453,7 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 		allowed = []thehive.OutputWorker{}
 
 		for _, responder := range responders {
-			if perms.IsResponderAllowed(responder.GetId()) || perms.IsResponderAllowed(responder.GetName()) {
+			if perms.IsResponderAllowed(responder.GetId(), responder.GetName()) {
 				allowed = append(allowed, responder)
 			}
 		}

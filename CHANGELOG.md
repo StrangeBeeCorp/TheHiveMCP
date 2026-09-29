@@ -8,6 +8,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- **A responder blocked by name can no longer run by its ID.** Analyzer and responder lists match a worker's ID or its name, and the shipped profiles use names
+  (`blocked: ["DeleteCase_1_0"]`), but `run-analyzer` and `run-responder` only checked the identifier the caller sent. A responder blocked by name therefore ran
+  when called by its ID, which is the identifier the tool description tells the model to use. The catalog also kept listing it. Both paths now check a worker
+  under its ID and its name together. The fix also works the other way: an analyzer allowed by name is no longer refused when called by its ID. When the rules
+  name specific workers, a run first reads the analyzer or responder catalog to learn the worker's other identifier, and a worker missing from the catalog is
+  denied. Rules that name none (`"*"`, an empty block list) need no lookup and behave as before.
+
 ### Changed
 
 - **The MITRE ATT&CK catalog is no longer fenced as untrusted data.** A `search-entities` query on `entity-type: pattern` used to return its technique name and

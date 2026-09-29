@@ -199,6 +199,15 @@ responders:
   blocked: ["DeleteCase_1_0"]
 ```
 
+### IDs and names
+
+Cortex identifies each worker by an opaque ID and by a name such as `DeleteCase_1_0`, and a list entry may be either. A worker counts as listed when its ID or
+its name is listed, whichever identifier the model uses to call it: a responder blocked by name is denied when called by its ID, and an analyzer allowed by name
+may be called by its ID.
+
+When the rules name specific workers, `run-analyzer` and `run-responder` read the analyzer or responder catalog first to learn the worker's other identifier. A
+worker that is not in the catalog is denied. A `"*"` allow list or an empty block list names no worker, so it needs no lookup.
+
 ## Example Configurations
 
 ### Read-only (default)
@@ -390,6 +399,11 @@ Alternatively, users can specify a permissions path when configuring the MCPB in
 **"Analyzer/Responder is not permitted"**
 
 - Add to `allowed` list or remove from `blocked` list
+
+**"Analyzer/Responder … was not found, so it cannot be checked"**
+
+- The rules name specific workers, and this one is not in the analyzer catalog or in the responders listed for that entity. Use an ID or a name from
+  `hive://metadata/automation/analyzers` or `hive://metadata/automation/responders?entityType=<type>&entityId=<id>`
 
 **"not found or is not within the scope permitted"**
 
