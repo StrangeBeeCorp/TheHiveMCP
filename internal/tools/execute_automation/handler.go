@@ -2,6 +2,8 @@ package execute_automation
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -129,7 +131,7 @@ func (t *ExecuteAutomationTool) handleGetJobStatus(ctx context.Context, params E
 }
 
 // waitPollInterval is how often wait-for-jobs re-reads the jobs still running.
-var waitPollInterval = 2 * time.Second
+const waitPollInterval = 2 * time.Second
 
 // handleWaitForJobs polls TheHive for every job until all are final or the
 // timeout passes, so the model spends one tool call instead of a turn per poll.
@@ -140,69 +142,167 @@ func (t *ExecuteAutomationTool) handleWaitForJobs(ctx context.Context, params Ex
 			Hint(hintCheckAuth)
 	}
 
+	interval := t.pollInterval
+	if interval <= 0 {
+		interval = waitPollInterval
+	}
+
 	start := time.Now()
-	deadline := start.Add(time.Duration(params.TimeoutSecs) * time.Second)
-	jobs := make(map[string]*thehive.OutputJob, len(params.JobIDs))
+
+	// The deadline bounds every read as well, so a stalled TheHive cannot hold
+	// the call past the timeout that keeps it inside the client's own.
+	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(params.TimeoutSecs)*time.Second)
+	defer cancel()
+
+	wait := newJobWait(params.JobIDs)
 
 	for {
-		pending, err := pollJobs(ctx, hiveClient, params.JobIDs, jobs)
-		if err != nil {
-			return ExecuteAutomationResult{}, err
+		wait.poll(waitCtx, hiveClient)
+
+		if wait.settled() || !sleep(waitCtx, interval) {
+			break
+		}
+	}
+
+	if len(wait.jobs) == 0 && len(wait.errors) > 0 {
+		first := wait.errors[wait.order[0]]
+		for _, jobID := range wait.order {
+			if msg, failed := wait.errors[jobID]; failed {
+				first = msg
+
+				break
+			}
 		}
 
-		if len(pending) == 0 || !time.Now().Add(waitPollInterval).Before(deadline) {
-			return waitResult(params.JobIDs, jobs, pending, start), nil
-		}
+		return ExecuteAutomationResult{}, tools.NewToolErrorf("failed to get the status of any of the %d jobs", len(wait.order)).
+			Cause(errors.New(first)).
+			Hint("Check that every job ID was returned by run-analyzer")
+	}
 
-		select {
-		case <-ctx.Done():
-			return waitResult(params.JobIDs, jobs, pending, start), nil
-		case <-time.After(waitPollInterval):
-		}
+	waited := int(time.Since(start).Seconds())
+	pending := wait.pending()
+
+	slog.Info("Waited for jobs", "jobs", len(wait.order), "pending", len(pending), "failed", len(wait.errors), "seconds", waited)
+
+	return ExecuteAutomationResult{
+		WaitForJobsResult: NewWaitForJobsResult(wait.read(), pending, wait.failures(), waited),
+	}, nil
+}
+
+// sleep waits for d, reporting false when ctx ends first.
+func sleep(ctx context.Context, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
 	}
 }
 
-// pollJobs re-reads every job not yet final into jobs and returns the IDs still running.
-func pollJobs(ctx context.Context, hiveClient *thehive.APIClient, jobIDs []string, jobs map[string]*thehive.OutputJob) ([]string, error) {
-	pending := make([]string, 0, len(jobIDs))
+// jobWait is the state of one wait-for-jobs call. A failed read is recorded
+// against its job rather than ending the wait, so one bad job ID or one
+// transient error does not throw away the reports of the others.
+type jobWait struct {
+	order  []string
+	jobs   map[string]*thehive.OutputJob // the latest successful read
+	errors map[string]string             // the latest failed read, cleared by a later success
+	gone   map[string]bool               // refused by TheHive with a 4xx: asking again will not help
+}
 
-	for _, jobID := range jobIDs {
-		if job, seen := jobs[jobID]; seen && isTerminal(job.GetStatus()) {
+func newJobWait(jobIDs []string) *jobWait {
+	return &jobWait{
+		order:  jobIDs,
+		jobs:   make(map[string]*thehive.OutputJob, len(jobIDs)),
+		errors: map[string]string{},
+		gone:   map[string]bool{},
+	}
+}
+
+// poll re-reads every job whose state can still change. It stops as soon as
+// ctx ends: a read cut by the deadline leaves the job as last seen.
+func (w *jobWait) poll(ctx context.Context, hiveClient *thehive.APIClient) {
+	for _, jobID := range w.order {
+		if w.final(jobID) {
 			continue
 		}
 
 		job, resp, err := hiveClient.CortexAPI.GetCortexJob(ctx, jobID).Execute()
-		if err != nil {
-			return nil, tools.NewToolErrorf("failed to get status of job %s", jobID).Cause(err).
-				Hint("Check that every job ID was returned by run-analyzer").API(resp)
+		if ctx.Err() != nil {
+			return
 		}
 
-		jobs[jobID] = job
-		if !isTerminal(job.GetStatus()) {
+		if err != nil {
+			w.errors[jobID] = fmt.Sprintf("%v (%s)", err, utils.DescribeHTTPResponse(resp))
+			w.gone[jobID] = utils.IsClientError(resp)
+
+			continue
+		}
+
+		delete(w.errors, jobID)
+		w.jobs[jobID] = job
+	}
+}
+
+func (w *jobWait) final(jobID string) bool {
+	if w.gone[jobID] {
+		return true
+	}
+
+	job, read := w.jobs[jobID]
+
+	return read && isTerminal(job.GetStatus())
+}
+
+func (w *jobWait) settled() bool {
+	return len(w.pending()) == 0
+}
+
+// pending lists the jobs not known to be final, in the caller's order.
+func (w *jobWait) pending() []string {
+	var pending []string
+
+	for _, jobID := range w.order {
+		if !w.final(jobID) {
 			pending = append(pending, jobID)
 		}
 	}
 
-	return pending, nil
+	return pending
+}
+
+// read returns every job read at least once, in the caller's order.
+func (w *jobWait) read() []*thehive.OutputJob {
+	jobs := make([]*thehive.OutputJob, 0, len(w.jobs))
+
+	for _, jobID := range w.order {
+		if job, read := w.jobs[jobID]; read {
+			jobs = append(jobs, job)
+		}
+	}
+
+	return jobs
+}
+
+// failures returns the jobs whose latest read failed, in the caller's order.
+func (w *jobWait) failures() []JobError {
+	var failures []JobError
+
+	for _, jobID := range w.order {
+		if msg, failed := w.errors[jobID]; failed {
+			failures = append(failures, JobError{JobID: jobID, Error: msg})
+		}
+	}
+
+	return failures
 }
 
 func isTerminal(status string) bool {
 	_, terminal := terminalWorkerStatuses[status]
 
 	return terminal
-}
-
-func waitResult(order []string, jobs map[string]*thehive.OutputJob, pending []string, start time.Time) ExecuteAutomationResult {
-	ordered := make([]*thehive.OutputJob, 0, len(order))
-	for _, jobID := range order {
-		ordered = append(ordered, jobs[jobID])
-	}
-
-	slog.Info("Waited for jobs", "jobs", len(order), "pending", len(pending), "seconds", int(time.Since(start).Seconds()))
-
-	return ExecuteAutomationResult{
-		WaitForJobsResult: NewWaitForJobsResult(ordered, pending, int(time.Since(start).Seconds())),
-	}
 }
 
 func (t *ExecuteAutomationTool) handleGetActionStatus(ctx context.Context, params ExecuteAutomationParams) (ExecuteAutomationResult, error) {

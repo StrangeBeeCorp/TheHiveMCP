@@ -46,9 +46,9 @@ func TestWaitForJobsResultKeepsReportsUntrusted(t *testing.T) {
 	t.Parallel()
 
 	done := &thehive.OutputJob{UnderscoreId: "~1", Status: statusSuccess, Report: map[string]any{"status": "injected"}}
-	running := &thehive.OutputJob{UnderscoreId: "~2", Status: "InProgress"}
+	running := &thehive.OutputJob{UnderscoreId: "~2", Status: statusInProgress}
 
-	processed, err := utils.ProcessDatesRecursive(NewWaitForJobsResult([]*thehive.OutputJob{done, running}, []string{"~2"}, 5), true)
+	processed, err := utils.ProcessDatesRecursive(NewWaitForJobsResult([]*thehive.OutputJob{done, running}, []string{"~2"}, nil, 5), true)
 	require.NoError(t, err)
 
 	m, ok := processed.(map[string]any)

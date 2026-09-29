@@ -123,7 +123,11 @@ Responders perform active responses on entities (block IP, send email, create ti
 
 Analyzers can take minutes. Rather than polling `get-job-status` once per turn, a client passes every job it started and blocks until all are final or
 `timeout-seconds` passes. The result carries each job with its status and report, `pendingJobIds` for the ones still running, and `waitedSeconds`; a caller with
-slower jobs calls again with the pending IDs. The 120-second ceiling keeps one call inside a typical client's tool-call timeout.
+slower jobs calls again with the pending IDs. The 120-second ceiling keeps one call inside a typical client's tool-call timeout, and it bounds each read too, so
+a stalled TheHive cannot hold the call past it.
+
+A job TheHive fails to return is listed in `jobErrors` with the reason, and the other jobs keep their reports. A transient failure is retried on the next poll;
+a refusal such as an unknown job ID is not asked again. The call fails only when not one job could be read.
 
 ```json
 {

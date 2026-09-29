@@ -1,6 +1,8 @@
 package execute_automation
 
 import (
+	"fmt"
+
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
@@ -63,7 +65,7 @@ type ExecuteAutomationParams struct {
 	EntityType   string         `json:"entity-type,omitempty"     jsonschema_description:"Entity type for run-responder operations."`
 	EntityID     string         `json:"entity-id,omitempty"       jsonschema_description:"Entity ID for run-responder operations. This is the specific entity the responder will act upon."`
 	JobID        string         `json:"job-id,omitempty"          jsonschema_description:"Job ID for get-job-status operations."`
-	JobIDs       []string       `json:"job-ids,omitempty"         jsonschema_description:"Job IDs for wait-for-jobs operations: the IDs returned by run-analyzer."`
+	JobIDs       []string       `json:"job-ids,omitempty"         jsonschema_description:"Job IDs for wait-for-jobs operations: the IDs returned by run-analyzer, at most 20."`
 	TimeoutSecs  int            `json:"timeout-seconds,omitempty" jsonschema_description:"Longest wait for wait-for-jobs, in seconds (default 60, max 120)."`
 	ActionID     string         `json:"action-id,omitempty"       jsonschema_description:"Action ID for get-action-status operations."`
 	Parameters   map[string]any `json:"parameters,omitempty"      jsonschema_description:"Optional parameters for analyzer/responder execution. JSON object with automation-specific configuration."`
@@ -118,7 +120,7 @@ func NewAnalyzerJobResult(job *thehive.OutputJob) *AnalyzerJobResult {
 	return &AnalyzerJobResult{
 		Operation: OperationRunAnalyzer,
 		Job:       NewFilteredOutputJob(job),
-		Message:   utils.Trustedf("Analyzer job created successfully. Job ID: %s. Use get-job-status to check progress.", job.GetUnderscoreId()),
+		Message:   utils.Trustedf("Analyzer job created successfully. Job ID: %s. Use wait-for-jobs to wait for its report, or get-job-status to check it once.", job.GetUnderscoreId()),
 	}
 }
 
@@ -219,28 +221,42 @@ type WaitForJobsResult struct {
 	Operation string               `json:"operation"`
 	Jobs      []*FilteredOutputJob `json:"jobs"`
 	Pending   []string             `json:"pendingJobIds,omitempty"`
+	Failed    []JobError           `json:"jobErrors,omitempty"`
 	Waited    int                  `json:"waitedSeconds"`
 	Message   utils.TrustedString  `json:"message"`
 }
 
-// NewWaitForJobsResult builds a WaitForJobsResult; pending lists the jobs still
-// running when the wait ended.
-func NewWaitForJobsResult(jobs []*thehive.OutputJob, pending []string, waited int) *WaitForJobsResult {
+// JobError is a job whose latest read failed.
+type JobError struct {
+	JobID string `json:"jobId"`
+	Error string `json:"error"`
+}
+
+// NewWaitForJobsResult builds a WaitForJobsResult from the jobs read at least
+// once. pending lists the jobs not known to be final when the wait ended, and
+// failed the ones TheHive did not return on their latest read.
+func NewWaitForJobsResult(jobs []*thehive.OutputJob, pending []string, failed []JobError, waited int) *WaitForJobsResult {
 	result := &WaitForJobsResult{
 		Operation: OperationWaitForJobs,
 		Jobs:      make([]*FilteredOutputJob, 0, len(jobs)),
 		Pending:   pending,
+		Failed:    failed,
 		Waited:    waited,
 	}
 	for _, job := range jobs {
 		result.Jobs = append(result.Jobs, NewFilteredOutputJob(job))
 	}
 
-	if len(pending) == 0 {
-		result.Message = utils.Trustedf("All %d jobs reached a final state.", len(jobs))
-	} else {
-		result.Message = utils.Trustedf("%d of %d jobs still running after %ds. Call wait-for-jobs again with the pending job IDs.", len(pending), len(jobs), waited)
+	message := "Every job reached a final state."
+	if len(pending) > 0 {
+		message = fmt.Sprintf("%d job(s) not final after %ds: call wait-for-jobs again with pendingJobIds.", len(pending), waited)
 	}
+
+	if len(failed) > 0 {
+		message += fmt.Sprintf(" TheHive did not return %d job(s) on their latest read: see jobErrors.", len(failed))
+	}
+
+	result.Message = utils.TrustedString(message)
 
 	return result
 }
