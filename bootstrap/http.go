@@ -31,7 +31,7 @@ func parseAuthValidationCacheTTL(ttl string) time.Duration {
 	return duration
 }
 
-// headerAuthorization carries a client's key as a Bearer token.
+// headerAuthorization may carry a client's key; see ExtractBearerToken.
 const headerAuthorization = "Authorization"
 
 // resolveHiveCredsIntoContext extracts TheHive credential/URL headers (falling
@@ -83,8 +83,9 @@ func resolveHiveCredsIntoContext(ctx context.Context, r *http.Request, options *
 		resolved[km.ctxKey] = val
 	}
 
-	// Only when neither key header carries a key. As the default of each
-	// header, the env key overwrote a key the client sent in the other one.
+	// The env key applies only when neither key header carries a key, so it
+	// can never replace one a client sent. X-TheHive-Api-Key, read last, wins
+	// over Authorization.
 	if _, ok := resolved[types.HiveAPIKeyCtxKey]; !ok && envAPIKey != "" {
 		resolved[types.HiveAPIKeyCtxKey] = envAPIKey
 	}

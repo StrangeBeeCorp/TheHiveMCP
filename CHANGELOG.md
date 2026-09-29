@@ -10,10 +10,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Security
 
-- **A client's own TheHive key is no longer replaced by the server's.** With `ALLOW_ENV_CREDENTIAL_FALLBACK=true`, a client that sent its key only as
-  `Authorization: Bearer` had it overwritten by `THEHIVE_API_KEY`, so its calls ran under the service account, with its rights and under its name in TheHive's
-  audit trail. The fallback was the default of each key header, and the `X-TheHive-Api-Key` one filled in when that header was absent. The server's key now
-  stands in only when a request carries no key at all.
+- **A client's own TheHive key is no longer replaced by the server's.** With `ALLOW_ENV_CREDENTIAL_FALLBACK=true`, a key sent in the `Authorization` header was
+  overwritten by `THEHIVE_API_KEY`, so the client's calls ran under the service account: with its rights, and under its name in TheHive's audit trail. The
+  server's key now stands in only when a request carries no key.
+- **An `Authorization` header in another scheme than Bearer is no longer taken for a TheHive key.** The Basic credentials an authenticating proxy passes on were
+  forwarded to TheHive as the key, so the proxy user's password reached TheHive and the call failed. Such a value is now ignored: a request carrying only that
+  gets the env fallback when it is on, and is refused otherwise. When a request sends both headers, `X-TheHive-Api-Key` wins.
 
 ### Changed
 
