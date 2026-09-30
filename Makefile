@@ -374,8 +374,18 @@ endif
 test-integration-down: ## Tear down the stack left up by test-integration ##@ make test-integration-down
 	docker compose -f docker-compose.test.yml down -v
 
+# DOCKER_VERSION_TAG: the image is always tagged thehivemcp:latest, which
+# docker-run uses; it is also tagged $(DOCKER_IMAGE):VERSION when VERSION is
+# given on the command line. The git-describe default is left out, so a plain
+# `make docker-build` adds no tag. $(origin) tells the two apart, and it is
+# enough: VERSION is assigned at the top, which already overrides an
+# environment variable of the same name.
+# DOCKER_IMAGE is the name release.yml publishes under
+# (ghcr.io/<repository owner, lowercased>/thehivemcp/thehivemcp).
+DOCKER_IMAGE := ghcr.io/strangebee/thehivemcp/thehivemcp
+DOCKER_VERSION_TAG = $(if $(filter command line,$(origin VERSION)),-t $(DOCKER_IMAGE):${VERSION})
 .PHONY: docker-build
-docker-build: ## Build the production Docker image (thehivemcp:latest) ##@ make docker-build
+docker-build: ## Build the production Docker image (thehivemcp:latest, plus ghcr.io/strangebee/thehivemcp/thehivemcp:VERSION if given) ##@ make docker-build [VERSION=v1.2.0]
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Building Docker Image --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
@@ -384,7 +394,7 @@ docker-build: ## Build the production Docker image (thehivemcp:latest) ##@ make 
 		--build-arg BUILD_DATE=${BUILD_DATE} \
 		--build-arg GIT_COMMIT=${GIT_COMMIT} \
 		--build-arg VERSION=${VERSION} \
-		-t ${BINARY_NAME}:latest \
+		-t ${BINARY_NAME}:latest $(DOCKER_VERSION_TAG) \
 		-f deployment/Dockerfile .
 
 .PHONY: docker-run
