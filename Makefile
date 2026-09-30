@@ -16,24 +16,21 @@ YQ_IMAGE := mikefarah/yq@sha256:11a1f0b604b13dbbdc662260d8db6f644b22d8553122a25c
 # rule separator) when it directly follows an `ifeq (…)` conditional, a false
 # positive that would otherwise trip the phonydeclared / uniquetargets rules.
 MOUNT_APP := $(CURDIR):/app
-# EXTRA_CA_BUNDLE: host PEM file of extra root CAs, for a workstation behind a
-# TLS-inspecting proxy (e.g. Zscaler). Such a proxy re-signs HTTPS with its own
-# root, which the host trusts but the images below do not, so any tool fetching
-# from the network in a container fails with "x509: certificate signed by unknown
-# authority" (govulncheck's vuln.go.dev database, trivy's checks bundle, a module
-# download). The file is mounted into /etc/ssl/certs, a directory Go-built tools
-# (go, gosec, govulncheck, trivy) scan IN ADDITION to the image's own bundle: the
-# image's roots stay trusted, unlike SSL_CERT_FILE, which would replace them.
+# STRANGEBEE_CA_BUNDLE: the Zscaler root CA bundle StrangeBee-managed Macs ship.
+# Zscaler inspects TLS and re-signs HTTPS with its own root, which the host trusts
+# but the images below do not, so any tool fetching from the network in a
+# container fails with "x509: certificate signed by unknown authority"
+# (govulncheck's vuln.go.dev database, trivy's checks bundle, a module download).
+# The file is mounted into /etc/ssl/certs, a directory Go-built tools (go, gosec,
+# govulncheck, trivy) scan IN ADDITION to the image's own bundle: the image's
+# roots stay trusted, unlike SSL_CERT_FILE, which would replace them.
 #
-# It defaults to the bundle StrangeBee-managed Macs ship, when that file exists,
-# so `make all` works behind Zscaler with no flag; elsewhere (CI, other hosts) the
-# default is empty and no mount is added. Override it with another path, or
-# disable it with `EXTRA_CA_BUNDLE=`. The existence test goes through the shell,
-# not $(wildcard): wildcard splits its argument on spaces, and this path has one
-# ("Application Support"). Quoted in CA_MOUNT for the same reason.
+# The bundle is detected, not configured: when the file exists it is mounted,
+# otherwise (CI, other hosts) no mount is added. The existence test goes through
+# the shell, not $(wildcard): wildcard splits its argument on spaces, and this
+# path has one ("Application Support"). Quoted in CA_MOUNT for the same reason.
 STRANGEBEE_CA_BUNDLE := /Library/Application Support/StrangeBee/Certificates/zscaler-ca-bundle.pem
-EXTRA_CA_BUNDLE ?= $(shell [ -f "$(STRANGEBEE_CA_BUNDLE)" ] && echo "$(STRANGEBEE_CA_BUNDLE)")
-CA_MOUNT := $(if $(EXTRA_CA_BUNDLE),-v "$(EXTRA_CA_BUNDLE)":/etc/ssl/certs/extra-ca-bundle.pem:ro)
+CA_MOUNT := $(if $(shell [ -f "$(STRANGEBEE_CA_BUNDLE)" ] && echo found),-v "$(STRANGEBEE_CA_BUNDLE)":/etc/ssl/certs/extra-ca-bundle.pem:ro)
 # All Go work runs inside the $(GO_IMAGE) container — there is NO host Go install
 # (see install-dev-deps). So every cache is a Docker named volume, never a host
 # path: named volumes are linux-native, populated in-container, and — unlike a

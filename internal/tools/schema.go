@@ -28,7 +28,9 @@ type SchemaConstraint struct {
 // constraints to named properties.
 //
 // The struct stays the single source of truth for property names, types,
-// descriptions and requiredness; this only adds what inference cannot see. A
+// descriptions and requiredness; this only adds what inference cannot see, and
+// drops the null inference puts in a slice or pointer's type (see
+// dropNullFromTypes). A
 // constraint naming a property that does not exist is a bug — it is logged, and
 // TestToolSchemas_ConstraintsMatchTheStruct fails on it.
 //
@@ -58,8 +60,10 @@ func WithInputSchemaConstraints[T any](constraints map[string]SchemaConstraint) 
 	}
 }
 
-// applyConstraints decodes an inferred schema, adds the enum and default
-// keywords for the named properties, and re-encodes it.
+// applyConstraints decodes an inferred schema, drops null from its type unions,
+// adds the enum and default keywords for the named properties, and re-encodes
+// it, in that one decode. The enum and default it adds hold values, which
+// dropNullFromTypes never descends into.
 func applyConstraints(inferred json.RawMessage, constraints map[string]SchemaConstraint, toolName string) (json.RawMessage, error) {
 	var schema map[string]any
 
@@ -67,6 +71,8 @@ func applyConstraints(inferred json.RawMessage, constraints map[string]SchemaCon
 	if err != nil {
 		return nil, fmt.Errorf("decode inferred schema: %w", err)
 	}
+
+	dropNullFromTypes(schema)
 
 	properties, ok := schema["properties"].(map[string]any)
 	if !ok {
@@ -93,40 +99,112 @@ func applyConstraints(inferred json.RawMessage, constraints map[string]SchemaCon
 	return raw, nil
 }
 
+// WithInputSchema infers the input schema from T, as mcp.WithInputSchema does,
+// with every null dropped from its type unions. Tools use it in place of a bare
+// mcp.WithInputSchema, whose ["null", T] unions TestToolSchemas_InputTypesAdmitNoNull
+// rejects.
+func WithInputSchema[T any]() mcp.ToolOption {
+	return func(tool *mcp.Tool) {
+		mcp.WithInputSchema[T]()(tool)
+
+		if len(tool.RawInputSchema) == 0 {
+			slog.Error("Input schema inference produced nothing; the tool would advertise no parameters",
+				"tool", tool.Name)
+
+			return
+		}
+
+		*tool = withNullFreeInputSchema(*tool)
+	}
+}
+
+// WithNullFreeInputSchema drops null from the type unions of the input schema
+// the options before it built, raw or structured. It is for a tool whose schema
+// comes neither from WithInputSchema nor from WithInputSchemaConstraints, which
+// both drop it already, and goes after the option that sets the schema.
+func WithNullFreeInputSchema() mcp.ToolOption {
+	return func(tool *mcp.Tool) {
+		*tool = withNullFreeInputSchema(*tool)
+	}
+}
+
 // withNullFreeInputSchema returns the tool with every type union in its input
-// schema narrowed by dropNullFromTypes.
+// schema narrowed by dropNullFromTypes, whether that schema is raw or the
+// structured InputSchema (mcp.WithString, WithArray, …).
 //
-// Registry.RegisterAll applies it, because registration is the one step every
-// tool goes through: a tool built with a bare mcp.WithInputSchema, or whose
-// schema applyConstraints refused, is narrowed all the same. It decodes a fresh
-// copy of the schema, so the package-level constraint maps a default was taken
-// from are never touched.
+// It runs while the tool is built, never at registration, so Definition()
+// returns exactly the schema a client receives. It works on a fresh decoded
+// copy, so the maps a structured schema may share beyond the tool are never
+// touched. A schema with no null to drop is returned as it is, byte for byte.
 func withNullFreeInputSchema(tool mcp.Tool) mcp.Tool {
-	if len(tool.RawInputSchema) == 0 {
+	if len(tool.RawInputSchema) > 0 {
+		narrowed, changed, err := narrowSchema(tool.RawInputSchema)
+		if err != nil {
+			slog.Error("Failed to narrow input schema; null left in its type unions", "tool", tool.Name, "error", err)
+
+			return tool
+		}
+
+		if changed {
+			tool.RawInputSchema = narrowed
+		}
+
 		return tool
 	}
 
-	var schema any
-
-	err := json.Unmarshal(tool.RawInputSchema, &schema)
+	encoded, err := json.Marshal(tool.InputSchema)
 	if err != nil {
-		slog.Error("Failed to decode input schema; null left in its type unions", "tool", tool.Name, "error", err)
+		slog.Error("Failed to encode input schema; null left in its type unions", "tool", tool.Name, "error", err)
 
 		return tool
 	}
 
-	dropNullFromTypes(schema)
-
-	raw, err := json.Marshal(schema)
+	narrowed, changed, err := narrowSchema(encoded)
 	if err != nil {
-		slog.Error("Failed to re-encode input schema; null left in its type unions", "tool", tool.Name, "error", err)
+		slog.Error("Failed to narrow input schema; null left in its type unions", "tool", tool.Name, "error", err)
 
 		return tool
 	}
 
-	tool.RawInputSchema = raw
+	if !changed {
+		return tool
+	}
+
+	var inputSchema mcp.ToolInputSchema
+
+	err = json.Unmarshal(narrowed, &inputSchema)
+	if err != nil {
+		slog.Error("Failed to decode narrowed input schema; null left in its type unions", "tool", tool.Name, "error", err)
+
+		return tool
+	}
+
+	tool.InputSchema = inputSchema
 
 	return tool
+}
+
+// narrowSchema decodes an encoded schema, drops null from its type unions, and
+// re-encodes it. It reports whether it dropped any; when it did not, the
+// returned schema is not meaningful.
+func narrowSchema(encoded []byte) (json.RawMessage, bool, error) {
+	var schema any
+
+	err := json.Unmarshal(encoded, &schema)
+	if err != nil {
+		return nil, false, fmt.Errorf("decode input schema: %w", err)
+	}
+
+	if !dropNullFromTypes(schema) {
+		return nil, false, nil
+	}
+
+	narrowed, err := json.Marshal(schema)
+	if err != nil {
+		return nil, false, fmt.Errorf("re-encode input schema: %w", err)
+	}
+
+	return narrowed, true, nil
 }
 
 // dropNullFromTypes narrows every ["null", T] type union to T, at any depth.
@@ -140,41 +218,51 @@ func withNullFreeInputSchema(tool mcp.Tool) mcp.Tool {
 // It descends only through the keywords that hold subschemas. default, enum,
 // const and examples hold values, which may well carry a "type" field of their
 // own, and are left as they are.
-func dropNullFromTypes(node any) {
+func dropNullFromTypes(node any) bool {
 	schema, isSchema := node.(map[string]any)
 	if !isSchema {
-		return
+		return false
 	}
 
+	changed := false
+
 	if types, isUnion := schema["type"].([]any); isUnion {
-		schema["type"] = withoutNull(types)
+		narrowed, dropped := withoutNull(types)
+		schema["type"] = narrowed
+		changed = dropped
 	}
 
 	for _, keyword := range namedSubschemaKeywords {
 		if named, ok := schema[keyword].(map[string]any); ok {
 			for _, subschema := range named {
-				dropNullFromSubschemas(subschema)
+				changed = dropNullFromSubschemas(subschema) || changed
 			}
 		}
 	}
 
 	for _, keyword := range subschemaKeywords {
-		dropNullFromSubschemas(schema[keyword])
+		changed = dropNullFromSubschemas(schema[keyword]) || changed
 	}
+
+	return changed
 }
 
 // dropNullFromSubschemas narrows a keyword's value, which is a single schema or,
-// for allOf, anyOf, oneOf, prefixItems and a draft-4 items, a list of them.
-func dropNullFromSubschemas(value any) {
-	if list, isList := value.([]any); isList {
-		for _, subschema := range list {
-			dropNullFromTypes(subschema)
-		}
-
-		return
+// for allOf, anyOf, oneOf, prefixItems and a draft-4 items, a list of them, and
+// reports whether it dropped any null.
+func dropNullFromSubschemas(value any) bool {
+	list, isList := value.([]any)
+	if !isList {
+		return dropNullFromTypes(value)
 	}
 
-	dropNullFromTypes(value)
+	changed := false
+
+	for _, subschema := range list {
+		changed = dropNullFromTypes(subschema) || changed
+	}
+
+	return changed
 }
 
 // namedSubschemaKeywords map a name to a subschema. dependencies may also map a
@@ -184,16 +272,22 @@ var namedSubschemaKeywords = []string{
 }
 
 // subschemaKeywords hold a subschema, or a list of them.
+//
+// not and if are left out on purpose. Dropping null only narrows what a
+// subschema accepts, which narrows the whole schema everywhere else, but not
+// there: under not it widens it (null, refused, becomes accepted), and under if
+// it moves null from then to else.
 var subschemaKeywords = []string{
 	"items", "prefixItems", "additionalItems", "additionalProperties", "unevaluatedItems",
-	"unevaluatedProperties", "propertyNames", "contains", "not", "if", "then", "else",
+	"unevaluatedProperties", "propertyNames", "contains", "then", "else",
 	"allOf", "anyOf", "oneOf", "contentSchema",
 }
 
 // withoutNull drops "null" from a type union, and collapses a union left with a
 // single type to that plain keyword. A union of null alone is returned as it
-// is: emptied, it would read "type": [], which no value satisfies.
-func withoutNull(types []any) any {
+// is: emptied, it would read "type": [], which no value satisfies. So is a union
+// holding no null, which has nothing to drop. It reports whether it dropped one.
+func withoutNull(types []any) (any, bool) {
 	narrowed := make([]any, 0, len(types))
 
 	for _, name := range types {
@@ -202,13 +296,13 @@ func withoutNull(types []any) any {
 		}
 	}
 
-	switch len(narrowed) {
-	case 0:
-		return types
-	case 1:
-		return narrowed[0]
+	switch {
+	case len(narrowed) == 0, len(narrowed) == len(types):
+		return types, false
+	case len(narrowed) == 1:
+		return narrowed[0], true
 	default:
-		return narrowed
+		return narrowed, true
 	}
 }
 

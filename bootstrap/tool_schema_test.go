@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -247,7 +248,12 @@ func TestToolSchemas_RequiredParameters(t *testing.T) {
 // schema, rejected each call with "is not of type 'null', 'array'".
 //
 // It sweeps the tools the server actually registered, not toolsUnderTest, so a
-// tool added later is covered without anyone remembering to list it.
+// tool added later is covered without anyone remembering to list it. Nothing
+// rewrites a schema at registration, so this is also what catches a tool built
+// with a bare mcp.WithInputSchema instead of tools.WithInputSchema. It flags
+// every form a nullable input takes, not only the ["null", T] union
+// tools.WithInputSchema drops: a "type": "null" or a null anyOf branch has to be
+// written by hand, and is refused just the same.
 func TestToolSchemas_InputTypesAdmitNoNull(t *testing.T) {
 	t.Parallel()
 
@@ -260,6 +266,87 @@ func TestToolSchemas_InputTypesAdmitNoNull(t *testing.T) {
 
 			assert.Empty(t, nullableTypePaths(advertisedSchema(t, tool), "$"),
 				"tool %q advertises input types that admit null", name)
+		})
+	}
+}
+
+// nullableTypePaths is the oracle of TestToolSchemas_InputTypesAdmitNoNull, so
+// it is pinned on its own: it must see every way a schema can admit null, and
+// nothing that does not.
+func TestNullableTypePaths(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		schema string
+		want   []string
+	}{
+		"type union holding null": {
+			schema: `{"type": ["null", "array"]}`,
+			want:   []string{"$"},
+		},
+		"type null alone": {
+			schema: `{"properties": {"a": {"type": "null"}}}`,
+			want:   []string{"$.properties.a"},
+		},
+		"null branch of anyOf": {
+			schema: `{"properties": {"a": {"anyOf": [{"type": "null"}, {"type": "array"}]}}}`,
+			want:   []string{"$.properties.a.anyOf[0]"},
+		},
+		"null below items and $defs": {
+			schema: `{"items": {"type": ["null", "string"]}, "$defs": {"d": {"type": ["null", "object"]}}}`,
+			want:   []string{"$.items", "$.$defs.d"},
+		},
+		"null held in value keywords": {
+			schema: `{"properties": {"a": {
+				"type": "object",
+				"default": {"type": ["null", "string"]},
+				"const": {"type": "null"},
+				"enum": [{"type": ["null", "string"]}],
+				"examples": [{"type": "null"}]
+			}}}`,
+			want: nil,
+		},
+		"null under not refuses it": {
+			schema: `{"properties": {"a": {"not": {"type": ["null", "string"]}}}}`,
+			want:   nil,
+		},
+		"null in an if condition, and in then": {
+			schema: `{"properties": {"a": {"if": {"type": ["null", "string"]}, "then": {"type": ["null", "string"]}}}}`,
+			want:   []string{"$.properties.a.then"},
+		},
+		"a property named default is a schema": {
+			schema: `{"properties": {"default": {"type": ["null", "array"]}}}`,
+			want:   []string{"$.properties.default"},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var schema any
+
+			require.NoError(t, json.Unmarshal([]byte(tc.schema), &schema), "fixture %q", name)
+			assert.ElementsMatch(t, tc.want, nullableTypePaths(schema, "$"), "schema %s", tc.schema)
+		})
+	}
+}
+
+// Every test built on toolsUnderTest reads the schema from Definition(). That is
+// only sound if registration advertises that very schema, rather than a
+// rewritten one no such test sees.
+func TestToolSchemas_DefinitionIsWhatTheServerAdvertises(t *testing.T) {
+	t.Parallel()
+
+	registered := registeredTools()
+
+	for name, subject := range toolsUnderTest() {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Contains(t, registered, name, "tool %q is not registered", name)
+			assert.Equal(t, advertisedSchema(t, subject.tool), advertisedSchema(t, registered[name]),
+				"tool %q: Definition() schema vs the one the server advertises", name)
 		})
 	}
 }
@@ -290,6 +377,8 @@ func TestToolSchemas_CollectionParametersAdvertiseAPlainType(t *testing.T) {
 	registered := registeredTools()
 
 	for name, parameters := range expected {
+		require.Contains(t, registered, name, "tool %q is not registered", name)
+
 		properties := propertiesOf(t, registered[name])
 
 		for parameter, want := range parameters {
@@ -301,8 +390,9 @@ func TestToolSchemas_CollectionParametersAdvertiseAPlainType(t *testing.T) {
 }
 
 // registeredTools returns the tools as the server advertises them, after every
-// step registration applies to their definitions.
-func registeredTools() map[string]mcp.Tool {
+// step registration applies to their definitions. The server is built once, as
+// building it registers every tool and resource; callers only read the map.
+var registeredTools = sync.OnceValue(func() map[string]mcp.Tool {
 	registered := make(map[string]mcp.Tool)
 
 	for name, serverTool := range GetMCPServerAndRegisterTools().ListTools() {
@@ -310,25 +400,58 @@ func registeredTools() map[string]mcp.Tool {
 	}
 
 	return registered
-}
+})
 
-// nullableTypePaths lists the schema paths whose `type` is an array holding
-// "null", at any depth (properties, items, $defs, …).
+// nullableTypePaths lists the paths of the subschemas whose type admits null —
+// "null" alone, or a union holding it, which also covers a null branch of
+// anyOf / oneOf — at any depth (properties, items, $defs, …).
+//
+// It walks only the keywords holding subschemas, listed here from the JSON
+// Schema spec rather than taken from the production code it checks. It skips
+// default, enum, const and examples, which hold values, and not and the if
+// condition, where a null type refuses null or only picks a branch.
 func nullableTypePaths(node any, path string) []string {
+	schema, isSchema := node.(map[string]any)
+	if !isSchema {
+		return nil
+	}
+
 	var found []string
 
-	switch typed := node.(type) {
-	case map[string]any:
-		if types, isUnion := typed["type"].([]any); isUnion && slices.Contains(types, any("null")) {
+	switch types := schema["type"].(type) {
+	case string:
+		if types == "null" {
 			found = append(found, path)
 		}
-
-		for key, child := range typed {
-			found = append(found, nullableTypePaths(child, path+"."+key)...)
-		}
 	case []any:
-		for index, child := range typed {
-			found = append(found, nullableTypePaths(child, path+"["+strconv.Itoa(index)+"]")...)
+		if slices.Contains(types, any("null")) {
+			found = append(found, path)
+		}
+	}
+
+	for _, keyword := range []string{
+		"properties", "patternProperties", "$defs", "definitions", "dependentSchemas", "dependencies",
+	} {
+		named, _ := schema[keyword].(map[string]any)
+		for name, subschema := range named {
+			found = append(found, nullableTypePaths(subschema, path+"."+keyword+"."+name)...)
+		}
+	}
+
+	for _, keyword := range []string{
+		"items", "prefixItems", "additionalItems", "additionalProperties", "unevaluatedItems",
+		"unevaluatedProperties", "propertyNames", "contains", "then", "else",
+		"allOf", "anyOf", "oneOf", "contentSchema",
+	} {
+		list, isList := schema[keyword].([]any)
+		if !isList {
+			found = append(found, nullableTypePaths(schema[keyword], path+"."+keyword)...)
+
+			continue
+		}
+
+		for index, subschema := range list {
+			found = append(found, nullableTypePaths(subschema, path+"."+keyword+"["+strconv.Itoa(index)+"]")...)
 		}
 	}
 
