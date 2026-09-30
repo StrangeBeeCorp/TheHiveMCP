@@ -21,6 +21,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A `pattern` filter on `platforms` is now rejected.** TheHive does not index the field, so it accepted such a filter and returned zero rows with no error,
   which a model reported as "no technique targets that platform". The search now fails fast with an error pointing at `extra-columns: ["platforms"]`, and the
   pattern fact sheet no longer lists platform among the filterable fields.
+- **List parameters are advertised as a plain `array`.** `entity-ids` (`manage-entities`), and `extra-columns`, `extra-data` and `additional-queries`
+  (`search-entities`) used to be advertised as `["null", "array"]`, a union the schema inference adds to every slice field. For an input it means nothing (an
+  omitted parameter and a `null` one decode alike), but models read it as "not quite an array": one sent `extra-columns` as the JSON string
+  `'["description", "platforms"]'`, and a gateway validating arguments against the schema (LiteLLM) rejected every call. No tool input schema offers `null` any
+  more, at any depth. As a consequence, an explicit `null` for one of these parameters is now refused by such a gateway (`None is not of type 'array'`); omit
+  the parameter instead.
 
 ## [1.1.0] - 2026-09-10
 
