@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -43,6 +44,9 @@ const (
 	entityCase  = "case"
 	entityTask  = "task"
 	entityObs   = "observable"
+
+	typeArray  = "array"
+	typeObject = "object"
 )
 
 func advertisedSchema(t *testing.T, tool mcp.Tool) map[string]any {
@@ -241,40 +245,71 @@ func TestToolSchemas_RequiredParameters(t *testing.T) {
 // extra-columns came in as the JSON-encoded STRING '["description", …]' on every
 // one of 59 alerts, and the MCP gateway, which validates arguments against this
 // schema, rejected each call with "is not of type 'null', 'array'".
+//
+// It sweeps the tools the server actually registered, not toolsUnderTest, so a
+// tool added later is covered without anyone remembering to list it.
 func TestToolSchemas_InputTypesAdmitNoNull(t *testing.T) {
 	t.Parallel()
 
-	for name, subject := range toolsUnderTest() {
+	registered := registeredTools()
+	require.NotEmpty(t, registered, "the server registered no tools")
+
+	for name, tool := range registered {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			assert.Empty(t, nullableTypePaths(advertisedSchema(t, subject.tool), "$"),
+			assert.Empty(t, nullableTypePaths(advertisedSchema(t, tool), "$"),
 				"tool %q advertises input types that admit null", name)
 		})
 	}
 }
 
 // Dropping null must leave the type the struct declares, as a plain keyword: an
-// array parameter reads "array", not "null" or ["array"].
-func TestToolSchemas_ListParametersAdvertiseAPlainArray(t *testing.T) {
+// array parameter reads "array", not "null" or ["array"]. The map parameters
+// never carried a union, but are pinned alongside so the collections a caller
+// most often sends JSON-encoded as a string all have their type stated here.
+func TestToolSchemas_CollectionParametersAdvertiseAPlainType(t *testing.T) {
 	t.Parallel()
 
-	expected := map[string][]string{
-		toolManageEntities: {"entity-ids"},
-		toolSearchEntities: {"extra-columns", "extra-data", "additional-queries"},
+	expected := map[string]map[string]string{
+		toolManageEntities: {
+			"entity-ids":  typeArray,
+			"entity-data": typeObject,
+		},
+		toolSearchEntities: {
+			"extra-columns":      typeArray,
+			"extra-data":         typeArray,
+			"additional-queries": typeArray,
+			"filters":            typeObject,
+		},
+		toolExecuteAutomation: {
+			"parameters": typeObject,
+		},
 	}
 
-	subjects := toolsUnderTest()
+	registered := registeredTools()
 
 	for name, parameters := range expected {
-		properties := propertiesOf(t, subjects[name].tool)
+		properties := propertiesOf(t, registered[name])
 
-		for _, parameter := range parameters {
+		for parameter, want := range parameters {
 			property, ok := properties[parameter].(map[string]any)
 			require.True(t, ok, "tool %q has no property %q", name, parameter)
-			assert.Equal(t, "array", property["type"], "tool %q parameter %q", name, parameter)
+			assert.Equal(t, want, property["type"], "tool %q parameter %q", name, parameter)
 		}
 	}
+}
+
+// registeredTools returns the tools as the server advertises them, after every
+// step registration applies to their definitions.
+func registeredTools() map[string]mcp.Tool {
+	registered := make(map[string]mcp.Tool)
+
+	for name, serverTool := range GetMCPServerAndRegisterTools().ListTools() {
+		registered[name] = serverTool.Tool
+	}
+
+	return registered
 }
 
 // nullableTypePaths lists the schema paths whose `type` is an array holding
@@ -284,7 +319,7 @@ func nullableTypePaths(node any, path string) []string {
 
 	switch typed := node.(type) {
 	case map[string]any:
-		if types, isUnion := typed["type"].([]any); isUnion && slicesContainsAny(types, "null") {
+		if types, isUnion := typed["type"].([]any); isUnion && slices.Contains(types, any("null")) {
 			found = append(found, path)
 		}
 
@@ -298,16 +333,6 @@ func nullableTypePaths(node any, path string) []string {
 	}
 
 	return found
-}
-
-func slicesContainsAny(values []any, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-
-	return false
 }
 
 // constraintsUnderTest pairs each tool with the constraint map its definition

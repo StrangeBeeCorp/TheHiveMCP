@@ -51,7 +51,7 @@ func (r *Registry) Register(tool BaseTool) {
 // RegisterAll registers every tool in the registry with the given MCP server.
 func (r *Registry) RegisterAll(s *server.MCPServer) {
 	for _, tool := range r.tools {
-		s.AddTool(tool.Definition(), tool.Handler())
+		s.AddTool(withNullFreeInputSchema(tool.Definition()), tool.Handler())
 	}
 }
 
