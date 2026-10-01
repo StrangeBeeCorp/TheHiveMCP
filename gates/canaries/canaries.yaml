@@ -98,3 +98,10 @@ canaries:
     patch: silent-create.patch
     expect: "--- FAIL: TestACreateTheHiveAnswersWithNothingIsAnError"
     why: an observable create that TheHive answered with an empty list is reported as a success
+
+  - id: weaken-test
+    item: TST-001
+    gate: integrity
+    patch: weaken-test.patch
+    expect: "TestWrap_UnknownFieldIsWrapped checks less"
+    why: a test loses the call that checked its result, and still passes

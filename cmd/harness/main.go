@@ -4,7 +4,7 @@
 //	harness run --cadence stop|commit|pr|ci|nightly [--base REF | --staged | --all] [--gate ID]... [--force]
 //	harness select [--base REF | --staged | --all]
 //	harness list [--cadence C]
-//	harness check structure|public-safety|docs|go-source|branch|spec|changelog
+//	harness check structure|public-safety|docs|go-source|branch|spec|changelog|integrity
 //	harness docs [--check]
 //	harness hook pre-tool-use|post-tool-use|stop|subagent-stop|session-start|pre-compact  (JSON on stdin)
 //	harness pr [--push=false] [--force] [--person]  (make pr: the pr gates at HEAD, the evidence, the push)
@@ -238,11 +238,12 @@ const (
 	builtinBranch    = "branch"
 	builtinSpec      = "spec"
 	builtinChangelog = "changelog"
+	builtinIntegrity = "integrity"
 )
 
 func isBuiltin(name string) bool {
 	switch name {
-	case builtinStructure, builtinSafety, builtinDocs, builtinGoSource, builtinBranch, builtinSpec, builtinChangelog:
+	case builtinStructure, builtinSafety, builtinDocs, builtinGoSource, builtinBranch, builtinSpec, builtinChangelog, builtinIntegrity:
 		return true
 	}
 
@@ -293,6 +294,8 @@ func (e env) builtin(ctx context.Context, name string) ([]string, error) {
 		found, err = checks.SpecTraces(tree, e.reg)
 	case builtinChangelog:
 		found, err = e.changelog(ctx)
+	case builtinIntegrity:
+		found, err = e.integrity(ctx, tree, e.limits.Integrity)
 	default:
 		return nil, fmt.Errorf("unknown builtin %q", name)
 	}
@@ -307,6 +310,22 @@ func (e env) builtin(ctx context.Context, name string) ([]string, error) {
 	}
 
 	return lines, nil
+}
+
+// integrity compares the changed tests with the base's; with no base there is nothing to compare.
+func (e env) integrity(ctx context.Context, tree checks.Tree, limits checks.IntegrityLimits) ([]checks.Finding, error) {
+	if e.base == "" {
+		return nil, nil
+	}
+
+	before := func(p string) ([]byte, bool) { return gitx.At(ctx, e.root, e.base, p) }
+
+	found, err := checks.Integrity(tree, e.changed, before, limits)
+	if err != nil {
+		return nil, fmt.Errorf("compare the tests with %s: %w", e.base, err)
+	}
+
+	return found, nil
 }
 
 // onBranch is the branch check: work is committed on a branch, and main changes only when a

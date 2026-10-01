@@ -214,6 +214,16 @@ gates:
       a change to baselines/surface/ (what the model reads) with no new entry under
       `## [Unreleased]` of CHANGELOG.md
 
+  - id: integrity
+    builtin: integrity
+    cadence: [stop, pr, ci]
+    suites: [tests]
+    budget_s: 20
+    static: true
+    blocks: >-
+      a changed test that is gone, now skips, or has fewer assertions or table cases than at the
+      base, unless gates/limits.yaml (integrity.allow) has a person's reason for it
+
   # A tool's schema is also built from the code around its definition (validation.go's enums, the
   # constants of internal/types, the date fields of internal/utils): the tools suite, which the
   # trust and server suites imply, selects the surface gates too.

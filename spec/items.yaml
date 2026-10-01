@@ -148,3 +148,13 @@ items:
     tests:
       - internal/analyzers/analyzers_test.go:TestParallelFindsIntegrationTestsOutOfOrder
     gates: [analyzers]
+
+  - id: TST-001
+    title: The tests do not get weaker unseen
+    status: active
+    rule: >-
+      A change does not remove a test, make one skip, or take assertions or table cases out of it,
+      unless a person accepted it in gates/limits.yaml (integrity.allow).
+    tests:
+      - internal/harness/checks/integrity_test.go:TestAWeakenedTestIsRefused
+    gates: [integrity]

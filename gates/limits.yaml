@@ -90,3 +90,8 @@ hooks:
   # An agent that stops while check-fast is red is sent back to work. After this many red rounds
   # it must write .cache/harness/BLOCKED.md (what it tried, what fails, what it needs) to stop.
   max_red_rounds: 6
+
+integrity:
+  # The tests a person accepted to remove or weaken, "path_test.go:TestName": why. The integrity
+  # gate refuses any other test that is gone, now skips, or checks less than at the base.
+  allow: {}

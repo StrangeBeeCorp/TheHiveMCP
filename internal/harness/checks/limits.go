@@ -40,6 +40,7 @@ type Limits struct {
 	Structure    StructureLimits `yaml:"structure"`
 	PublicSafety SafetyRules     `yaml:"public_safety"`
 	Hooks        HookLimits      `yaml:"hooks"`
+	Integrity    IntegrityLimits `yaml:"integrity"`
 }
 
 // HookLimits bound what the Claude Code hooks let an agent do.
