@@ -245,7 +245,7 @@ func TestScopeBuildersDoNotMutateCallerPermFilters(t *testing.T) {
 		name  string
 		build func(map[string]any)
 	}{
-		{"scopeFilterOperation", func(pf map[string]any) { scopeFilterOperation(pf) }},
+		{"FilterOperation", func(pf map[string]any) { FilterOperation(pf) }},
 		{"scopeInFilterOperation", func(pf map[string]any) { scopeInFilterOperation(pf, []string{"~1", "~2"}) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
