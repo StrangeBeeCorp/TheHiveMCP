@@ -174,7 +174,7 @@ func docsRepo(t *testing.T, agents, ci, page string) (string, []string, *registr
 func TestDocsAcceptsTrueReferences(t *testing.T) {
 	t.Parallel()
 
-	agents := "- `internal/tools/` and `internal/tools/{tool,schema}.go`, `internal/resources/*/a.go`, `internal/tools/tool.go:12`.\n" +
+	agents := "- `internal/tools/` and `internal/tools/{tool,schema}.go`, `internal/resources/*/a.go`, `internal/tools/tool.go:12`, `internal/tools/schema.go:Schema`.\n" +
 		"- not paths: `make check-fast`, `internal/tools/<tool>/`, `facts/*.txt`, `/etc/hosts`, `FOO=bar`.\n" +
 		"```text\ninternal/old/ inside a fence is not checked\n```\n"
 	root, files, reg := docsRepo(t, agents, "run: bin/harness run --cadence ci --gate lint\n", "")

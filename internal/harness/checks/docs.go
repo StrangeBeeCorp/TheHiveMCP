@@ -19,7 +19,7 @@ const CIWorkflow = ".github/workflows/ci.yml"
 
 var (
 	inlineCode = regexp.MustCompile("`([^`]+)`")
-	lineSuffix = regexp.MustCompile(`:\d+(-\d+)?$`)
+	lineSuffix = regexp.MustCompile(`:(\d+(-\d+)?|[A-Za-z_][A-Za-z0-9_.]*)$`) // a line, a range or a symbol
 	gateFlag   = regexp.MustCompile(`--gate[ =]([A-Za-z0-9_,-]+)`)
 	braces     = regexp.MustCompile(`\{([^{}]*)\}`)
 )
