@@ -32,3 +32,14 @@
   from a pullable licensing image; otherwise the free license, which runs the tests one by one (slowest). It prints the mode it picked.
 - TheHive 5.5 and 5.6 do not always answer the same way. For example, a duplicate organisation gets 409 on 5.6 but 400 with "already exists" on 5.5 (see
   `organisationAlreadyExists`). When a test fails on one version only, check this before blaming the code.
+
+## What the pr gates hold the tests to
+
+- **Integrity:** a changed test may not be removed, skip, or lose assertions or table cases (a helper given `t` counts as one). A person who accepts it adds
+  `path_test.go:TestName: why` to `integrity.allow` in `gates/limits.yaml`. Assertions inside a helper's own body are not counted.
+- **Coverage:** each package keeps the unit-test coverage floor of `gates/coverage.yaml`. Test the code you add; raise a floor when its package gains tests.
+- **Mutation:** a changed package with a floor in `gates/mutation.yaml` must kill that share of gremlins' mutants (`bin/harness mutation`). A mutant that lives
+  is a behaviour no test pins: gremlins' log names the line.
+- **Race and benchmarks:** `make test-race` must stay clean, and `bin/harness bench` holds the hot paths to `gates/bench.yaml` against the base.
+- **Fuzzing:** `FuzzUntrustedWrap`, `FuzzFilterDSL`, `FuzzPermissionProfile` and `FuzzRetypeDateFields` run their seeds with the unit tests and fuzz nightly. An
+  input the fuzzer finds lands in the package's `testdata/fuzz/`: fix the code and commit it as a seed.

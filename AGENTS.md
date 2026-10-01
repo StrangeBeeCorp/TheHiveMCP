@@ -41,6 +41,12 @@ Any test that needs a live TheHive instance goes through this helper (directly, 
 
 A test that does **not** require a container will run under `make test` and must therefore stay fast and deterministic (cacheable).
 
+### What the gates hold tests to
+
+At pr and in CI, a changed test may not get weaker (the integrity gate), each package keeps its coverage floor (`gates/coverage.yaml`) and, where it has one,
+its mutation floor (`gates/mutation.yaml`, gremlins), the unit tests run under the race detector, and the hot paths' benchmarks stay within
+`gates/bench.yaml`. `.claude/skills/develop-feature/references/testing.md` says what each one asks.
+
 ## Configuration
 
 Config comes from env vars (see `.env.template`) or CLI flags; flags override env vars. `.env` is auto-loaded at startup.
