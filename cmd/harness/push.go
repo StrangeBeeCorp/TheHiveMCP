@@ -36,6 +36,10 @@ func pushTarget(branch string) (string, error) {
 // push pushes the branch checked out to origin, under its own name. The pr gates must have
 // passed at HEAD (make pr) and the adversarial review must be ready for HEAD. A person at a
 // terminal gets the same checks as warnings; anyone else, an agent first, is refused.
+//
+// This stops an agent's mistakes and a subagent's shortcuts, not a person's main session: that
+// session may run code the policy cannot read (python3), and so could write any file. CI runs
+// every gate again on the pull request, and a person merges it.
 func (e env) push(ctx context.Context, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("push", flag.ContinueOnError)
 	force := fs.Bool("force", false, "push with --force-with-lease, after a rebase")

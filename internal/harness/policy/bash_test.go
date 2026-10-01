@@ -52,6 +52,11 @@ func TestBypassesAreDeniedToEveryone(t *testing.T) {
 		"export CLAUDECODE=; make pr",
 		"echo '{}' > .cache/harness/evidence/abc.json",
 		"cp /tmp/x .cache/harness/state.json",
+		"env -uCLAUDECODE bin/harness push",
+		"exec -c bin/harness push",
+		"cp -R /tmp/evidence .cache/harness/",
+		"mv /tmp/evidence .cache/harness",
+		"tar -xf /tmp/e.tar -C .cache/harness",
 	} {
 		for _, role := range []policy.Role{policy.Main, policy.Coder, policy.Other} {
 			assert.True(t, bash(role, line).Deny, "%s: %s", role, line)

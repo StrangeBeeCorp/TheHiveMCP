@@ -75,9 +75,34 @@ func (j *judge) rules(name string, args []string) Decision {
 		if d := j.write(target); d.Deny {
 			return d
 		}
+
+		if d := j.copyOverRecords(name, args, target); d.Deny {
+			return d
+		}
 	}
 
 	return j.trees(name, args)
+}
+
+// copyOverRecords refuses a directory copy, a move or an extraction into a directory that holds the
+// harness's records: it could drop a forged evidence file where make pr's goes.
+func (j *judge) copyOverRecords(name string, args []string, target string) Decision {
+	whole := name == "mv" || name == "rsync" || name == "tar" || name == "unzip" ||
+		slices.ContainsFunc(args, func(a string) bool { return a == "-r" || a == "-R" || a == "-a" || a == "--recursive" })
+	if !whole || !filepath.IsAbs(j.cwd) {
+		return Allow
+	}
+
+	abs := target
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(j.cwd, target)
+	}
+
+	if rel, inside := relative(j.root, filepath.Clean(abs)); inside && holdsRecords(rel) {
+		return deny("%s %s writes a whole tree into %s, which holds the harness's records: copy the files you need one by one", name, target, rel)
+	}
+
+	return Allow
 }
 
 // noFiles are commands that read no file their arguments name.

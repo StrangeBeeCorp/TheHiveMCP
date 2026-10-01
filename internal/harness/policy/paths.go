@@ -196,6 +196,12 @@ func record(rel string) bool {
 	return under(rel, ".cache/harness/evidence/") || rel == ".cache/harness/state.json"
 }
 
+// holdsRecords reports whether rel is a directory a record lies under: the checkout, .cache or
+// .cache/harness.
+func holdsRecords(rel string) bool {
+	return rel == "." || rel == "" || rel == ".cache" || rel == ".cache/harness"
+}
+
 // under reports whether rel is the directory dir (given with its trailing slash) or inside it.
 func under(rel, dir string) bool {
 	return rel == strings.TrimSuffix(dir, "/") || strings.HasPrefix(rel, dir)

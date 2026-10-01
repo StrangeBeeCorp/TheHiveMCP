@@ -217,6 +217,10 @@ func (j *judge) unwrap(name string, args []string, depth int) (Decision, bool) {
 		return Allow, false
 	}
 
+	if name == "exec" && slices.Contains(args, "-c") {
+		return deny("exec -c empties the environment Claude Code sets: run the command as it is"), true
+	}
+
 	rest := skipOptions(args, valued)
 	if name == "timeout" && len(rest) > 0 {
 		rest = rest[1:]
@@ -374,7 +378,7 @@ func mentions(s, name string) bool {
 func clearsClaudeCode(args []string) bool {
 	for i, a := range args {
 		switch {
-		case a == "-i" || a == "--ignore-environment" || a == "-" || a == "--unset="+claudeCode:
+		case a == "-i" || a == "--ignore-environment" || a == "-" || a == "--unset="+claudeCode || a == "-u"+claudeCode:
 			return true
 		case (a == "-u" || a == "--unset") && i+1 < len(args) && args[i+1] == claudeCode:
 			return true
