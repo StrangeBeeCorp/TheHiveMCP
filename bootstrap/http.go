@@ -31,6 +31,9 @@ func parseAuthValidationCacheTTL(ttl string) time.Duration {
 	return duration
 }
 
+// headerAuthorization may carry a client's key; see ExtractBearerToken.
+const headerAuthorization = "Authorization"
+
 // resolveHiveCredsIntoContext extracts TheHive credential/URL headers (falling
 // back to the configured env defaults when opted in) and stores them in the
 // returned context.
@@ -50,8 +53,8 @@ func resolveHiveCredsIntoContext(ctx context.Context, r *http.Request, options *
 	}
 
 	keys := []keyMap{
-		{"Authorization", types.HiveAPIKeyCtxKey, envAPIKey},
-		{string(types.HeaderKeyTheHiveAPIKey), types.HiveAPIKeyCtxKey, envAPIKey},
+		{headerAuthorization, types.HiveAPIKeyCtxKey, ""},
+		{string(types.HeaderKeyTheHiveAPIKey), types.HiveAPIKeyCtxKey, ""},
 		{string(types.HeaderKeyTheHiveOrganisation), types.HiveOrgCtxKey, options.TheHiveOrganisation},
 		{string(types.HeaderKeyTheHiveURL), types.HiveURLCtxKey, options.TheHiveURL},
 	}
@@ -63,6 +66,12 @@ func resolveHiveCredsIntoContext(ctx context.Context, r *http.Request, options *
 
 	for _, km := range keys {
 		val := r.Header.Get(km.header)
+
+		// Special handling for Authorization header
+		if km.header == headerAuthorization {
+			val = ExtractBearerToken(val)
+		}
+
 		if val == "" {
 			val = km.deflt
 		}
@@ -71,12 +80,14 @@ func resolveHiveCredsIntoContext(ctx context.Context, r *http.Request, options *
 			continue
 		}
 
-		// Special handling for Authorization header
-		if km.header == "Authorization" {
-			val = ExtractBearerToken(val)
-		}
-
 		resolved[km.ctxKey] = val
+	}
+
+	// The env key applies only when neither key header carries a key, so it
+	// can never replace one a client sent. X-TheHive-Api-Key, read last, wins
+	// over Authorization.
+	if _, ok := resolved[types.HiveAPIKeyCtxKey]; !ok && envAPIKey != "" {
+		resolved[types.HiveAPIKeyCtxKey] = envAPIKey
 	}
 
 	if v, ok := resolved[types.HiveAPIKeyCtxKey]; ok {
@@ -126,11 +137,12 @@ func validateHiveAuthIntoContext(ctx context.Context, allowlist *TheHiveURLAllow
 	}
 
 	creds := &TheHiveCredentials{
-		URL:          hiveURL,
-		APIKey:       hiveAPIKey,
-		Username:     envUsername,
-		Password:     envPassword,
-		Organisation: hiveOrganisation,
+		URL:            hiveURL,
+		APIKey:         hiveAPIKey,
+		Username:       envUsername,
+		Password:       envPassword,
+		Organisation:   hiveOrganisation,
+		RequestTimeout: options.TheHiveRequestTimeout,
 	}
 
 	newCtx, err := AddTheHiveClientToContextWithCreds(ctx, creds)
@@ -224,6 +236,11 @@ func StartHTTPServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOption
 	_, err := NewTheHiveURLAllowlist(options.TheHiveURLAllowlist, options.TheHiveURL)
 	if err != nil {
 		return fmt.Errorf("invalid TheHive URL allowlist configuration: %w", err)
+	}
+
+	err = checkPermissionsConfig(options)
+	if err != nil {
+		return err
 	}
 
 	_, httpServer := newHTTPServer(s, options)

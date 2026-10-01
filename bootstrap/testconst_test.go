@@ -14,8 +14,9 @@ const (
 	testHiveInternal   = "http://hive.internal:9000"
 	testDefaultHiveURL = "https://default.thehive.com"
 
-	testOrg      = "my-org"
-	testValidKey = "valid-key"
+	testOrg       = "my-org"
+	testValidKey  = "valid-key"
+	testClientKey = "client-key"
 
 	// #nosec G101 -- test fixture credential value, not a real secret
 	testEnvSecretKey = "env-secret-key"

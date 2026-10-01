@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 )
@@ -87,17 +88,19 @@ func (e *ToolError) API(resp *http.Response) *ToolError {
 
 // Error implements the error interface
 func (e *ToolError) Error() string {
+	message, hints := e.messageAndHints()
+
 	errorObj := map[string]any{
 		"error":   true,
-		"message": e.message,
+		"message": message,
 	}
 
 	if e.cause != nil {
 		errorObj["cause"] = e.cause.Error()
 	}
 
-	if len(e.hints) > 0 {
-		errorObj["hints"] = e.hints
+	if len(hints) > 0 {
+		errorObj["hints"] = hints
 	}
 
 	if e.apiResponse != nil {
@@ -106,7 +109,7 @@ func (e *ToolError) Error() string {
 
 	errorJSON, err := json.Marshal(errorObj)
 	if err != nil {
-		return "error: " + e.message
+		return "error: " + message
 	}
 
 	return string(errorJSON)
@@ -119,22 +122,24 @@ func (e *ToolError) Error() string {
 // unwrapped, while cause and apiResponse carry upstream content and must stay
 // plain so they are wrapped (DL-6703).
 func (e *ToolError) ToMap() map[string]any {
+	message, hints := e.messageAndHints()
+
 	errorObj := map[string]any{
 		"error":   true,
-		"message": utils.TrustedString(e.message),
+		"message": utils.TrustedString(message),
 	}
 
 	if e.cause != nil {
 		errorObj["cause"] = e.cause.Error()
 	}
 
-	if len(e.hints) > 0 {
-		hints := make([]utils.TrustedString, len(e.hints))
-		for i, hint := range e.hints {
-			hints[i] = utils.TrustedString(hint)
+	if len(hints) > 0 {
+		trustedHints := make([]utils.TrustedString, len(hints))
+		for i, hint := range hints {
+			trustedHints[i] = utils.TrustedString(hint)
 		}
 
-		errorObj["hints"] = hints
+		errorObj["hints"] = trustedHints
 	}
 
 	if e.apiResponse != nil {
@@ -147,4 +152,16 @@ func (e *ToolError) ToMap() map[string]any {
 // Unwrap returns the underlying cause for errors.Is/As support
 func (e *ToolError) Unwrap() error {
 	return e.cause
+}
+
+// messageAndHints leads with the timeout when the cause is one: the tool's own
+// message ("failed to update case") says what failed, not why, and a timeout
+// needs the recovery hints more than any other failure.
+func (e *ToolError) messageAndHints() (string, []string) {
+	timeoutErr, ok := utils.AsTheHiveTimeout(e.cause)
+	if !ok {
+		return e.message, e.hints
+	}
+
+	return e.message + ": " + timeoutErr.Summary(), append(slices.Clone(e.hints), timeoutErr.Hints()...)
 }

@@ -8,9 +8,10 @@ TheHiveMCP serves plain HTTP and doesn't authenticate callers itself. Before exp
 
 - **Always place a TLS-terminating, authenticating reverse proxy** (nginx, Traefik, Caddy, and so on) in front of the MCP port. Never expose port 8082 directly
   to untrusted networks.
-- **Clients must send their own TheHive credentials** (`Authorization` or `X-TheHive-Api-Key` header). Requests without credentials are rejected unless you
-  explicitly set `ALLOW_ENV_CREDENTIAL_FALLBACK=true`, which makes every request fall back to the server's `THEHIVE_API_KEY`—only do this for single-user
-  deployments behind an authenticating proxy.
+- **Clients must send their own TheHive credentials**: `Authorization: Bearer <key>` or `X-TheHive-Api-Key: <key>`, the latter winning when both are sent.
+  Another `Authorization` scheme, such as your proxy's Basic credentials, is ignored and never forwarded to TheHive. Requests without credentials are rejected
+  unless you explicitly set `ALLOW_ENV_CREDENTIAL_FALLBACK=true`, which makes those requests fall back to the server's `THEHIVE_API_KEY`; a request that sends
+  its own key keeps it. Only do this for single-user deployments behind an authenticating proxy.
 - **The `X-TheHive-Url` header is restricted** to the configured `THEHIVE_URL`. To allow additional TheHive instances (multi-tenant), list them explicitly in
   `THEHIVE_URL_ALLOWLIST` (comma-separated, exact scheme/host/port match). Any other destination is rejected before TheHive is contacted.
 - **The server bounds slow and oversized requests itself**: 10 s to send the headers, 30 s for the whole request, 4 MiB per body. It does not cap how many
@@ -32,6 +33,7 @@ Create `.env` file:
 THEHIVE_URL=https://your-thehive.com
 THEHIVE_API_KEY=your-api-key
 THEHIVE_ORGANISATION=your-org  # Optional, defaults to user's own organisation
+# THEHIVE_REQUEST_TIMEOUT=2m  # Optional, maximum wait for TheHive to answer one request
 
 # HTTP transport security (optional, defaults are the safe choice)
 # THEHIVE_URL_ALLOWLIST=https://thehive-eu.example.com,https://thehive-us.example.com

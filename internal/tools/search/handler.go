@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"maps"
 	"slices"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
@@ -237,18 +236,12 @@ func (t *Tool) buildListOperation(entityType string) *thehive.InputQueryGenericO
 	return thehive.NewInputQueryGenericOperation(utils.ListOperationName(entityType))
 }
 
+// buildFilterOperation must not edit filters: they embed the permission
+// filters, which are the session's own config maps.
 func (t *Tool) buildFilterOperation(filters map[string]any) *map[string]any {
-	// Shallow copy so we don't mutate the caller's filters.
-	filtersCopy := make(map[string]any)
-	maps.Copy(filtersCopy, filters)
+	filterOp := utils.FilterOperation(filters)
 
-	// Repair malformed keys (over-quoting/whitespace from weaker models) before
-	// the date pass so it and TheHive see valid keys.
-	normalizedFilters := utils.NormalizeFilterKeys(filtersCopy)
-	parsedFilters := utils.TranslateDatesToTimestamps(normalizedFilters)
-	parsedFilters["_name"] = "filter"
-
-	return &parsedFilters
+	return &filterOp
 }
 
 func (t *Tool) buildSortOperation(sortBy, sortOrder string) *thehive.InputQuerySortOperation {
