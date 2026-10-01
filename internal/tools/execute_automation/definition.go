@@ -39,7 +39,7 @@ var ExecuteAutomationParamConstraints = map[string]tools.SchemaConstraint{
 	"operation": {Enum: []string{
 		OperationRunAnalyzer, OperationRunResponder, OperationGetJobStatus, OperationGetActionStatus,
 	}},
-	"entity-type": {Enum: []string{"case", "alert", "task", "observable"}},
+	"entity-type": {Enum: automationEntityTypes},
 }
 
 // Definition returns the MCP tool definition (schema and description).

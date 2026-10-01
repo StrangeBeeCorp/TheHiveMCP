@@ -149,75 +149,70 @@ func (c *Config) GetToolFilters(toolName string) map[string]any {
 	return perm.Filters
 }
 
-// IsAnalyzerAllowed checks if an analyzer is permitted based on global rules
-func (c *Config) IsAnalyzerAllowed(analyzerName string) bool {
+// IsAnalyzerAllowed reports whether an analyzer may run. Pass every identifier
+// the analyzer is known by, its ID and its name, since the rules may list either.
+func (c *Config) IsAnalyzerAllowed(identifiers ...string) bool {
 	if c == nil {
 		return false
 	}
 
-	return isAutomationAllowed(analyzerName, c.Permissions.Analyzers.Mode, c.Permissions.Analyzers.Allowed, c.Permissions.Analyzers.Blocked)
+	return c.Permissions.Analyzers.allows(identifiers)
 }
 
-// IsResponderAllowed checks if a responder is permitted based on global rules
-func (c *Config) IsResponderAllowed(responderName string) bool {
+// IsResponderAllowed reports whether a responder may run. Pass every identifier
+// the responder is known by, its ID and its name, since the rules may list either.
+func (c *Config) IsResponderAllowed(identifiers ...string) bool {
 	if c == nil {
 		return false
 	}
 
-	return isAutomationAllowed(responderName, c.Permissions.Responders.Mode, c.Permissions.Responders.Allowed, c.Permissions.Responders.Blocked)
+	return c.Permissions.Responders.allows(identifiers)
 }
 
-// GetAllowedAnalyzers returns list of allowed analyzer names
-func (c *Config) GetAllowedAnalyzers(allAnalyzers []string) []string {
-	if c == nil {
-		return []string{}
-	}
-
-	var allowed []string
-
-	for _, analyzer := range allAnalyzers {
-		if c.IsAnalyzerAllowed(analyzer) {
-			allowed = append(allowed, analyzer)
-		}
-	}
-
-	return allowed
+// AnalyzerRulesNameWorkers reports whether the analyzer rules single out
+// specific analyzers. When they do not, every analyzer gets the same answer,
+// so a caller can check one without looking up its other identifier.
+func (c *Config) AnalyzerRulesNameWorkers() bool {
+	return c != nil && c.Permissions.Analyzers.namesWorkers()
 }
 
-// GetAllowedResponders returns list of allowed responder names
-func (c *Config) GetAllowedResponders(allResponders []string) []string {
-	if c == nil {
-		return []string{}
-	}
-
-	var allowed []string
-
-	for _, responder := range allResponders {
-		if c.IsResponderAllowed(responder) {
-			allowed = append(allowed, responder)
-		}
-	}
-
-	return allowed
+// ResponderRulesNameWorkers is AnalyzerRulesNameWorkers for responders.
+func (c *Config) ResponderRulesNameWorkers() bool {
+	return c != nil && c.Permissions.Responders.namesWorkers()
 }
 
-func isAutomationAllowed(name, mode string, allowed, blocked []string) bool {
-	switch mode {
+// allows applies the rules to a worker known by several identifiers: an allow
+// list permits it when any of them is listed, a block list denies it when any
+// of them is blocked. Checking only the identifier a caller sent let a
+// responder blocked by name run under its ID.
+func (p AutomationPermissions) allows(identifiers []string) bool {
+	listed := func(list []string) bool {
+		return slices.ContainsFunc(identifiers, func(id string) bool {
+			return id != "" && slices.Contains(list, id)
+		})
+	}
+
+	if !slices.ContainsFunc(identifiers, func(id string) bool { return id != "" }) {
+		return false
+	}
+
+	switch p.Mode {
 	case modeAllowList:
-		if len(allowed) == 0 {
-			return false
-		}
-		// Check for wildcard
-		if slices.Contains(allowed, "*") {
-			return true
-		}
-		// Check if explicitly allowed
-		return slices.Contains(allowed, name)
-
+		return slices.Contains(p.Allowed, "*") || listed(p.Allowed)
 	case modeBlockList:
-		// Check if explicitly blocked
-		return !slices.Contains(blocked, name)
+		return !listed(p.Blocked)
+	default:
+		return false
+	}
+}
 
+// namesWorkers reports whether the answer of allows depends on the worker.
+func (p AutomationPermissions) namesWorkers() bool {
+	switch p.Mode {
+	case modeAllowList:
+		return len(p.Allowed) > 0 && !slices.Contains(p.Allowed, "*")
+	case modeBlockList:
+		return len(p.Blocked) > 0
 	default:
 		return false
 	}

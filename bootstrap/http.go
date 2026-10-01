@@ -137,11 +137,12 @@ func validateHiveAuthIntoContext(ctx context.Context, allowlist *TheHiveURLAllow
 	}
 
 	creds := &TheHiveCredentials{
-		URL:          hiveURL,
-		APIKey:       hiveAPIKey,
-		Username:     envUsername,
-		Password:     envPassword,
-		Organisation: hiveOrganisation,
+		URL:            hiveURL,
+		APIKey:         hiveAPIKey,
+		Username:       envUsername,
+		Password:       envPassword,
+		Organisation:   hiveOrganisation,
+		RequestTimeout: options.TheHiveRequestTimeout,
 	}
 
 	newCtx, err := AddTheHiveClientToContextWithCreds(ctx, creds)
@@ -234,6 +235,11 @@ func StartHTTPServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOption
 	_, err := NewTheHiveURLAllowlist(options.TheHiveURLAllowlist, options.TheHiveURL)
 	if err != nil {
 		return fmt.Errorf("invalid TheHive URL allowlist configuration: %w", err)
+	}
+
+	err = checkPermissionsConfig(options)
+	if err != nil {
+		return err
 	}
 
 	httpServer := server.NewStreamableHTTPServer(s, StreamableHTTPOptions(options)...)
