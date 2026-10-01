@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 
@@ -37,6 +38,9 @@ type TheHiveCredentials struct {
 	Username     string
 	Password     string
 	Organisation string
+	// RequestTimeout bounds each request to TheHive; zero means
+	// types.DefaultTheHiveRequestTimeout.
+	RequestTimeout time.Duration
 }
 
 // Validate requires a valid URL plus either an API key or a username/password pair.
@@ -70,15 +74,21 @@ func (c *TheHiveCredentials) Validate() error {
 
 // LoadTheHiveCredentialsFromEnv loads TheHive credentials from environment variables
 func LoadTheHiveCredentialsFromEnv() (*TheHiveCredentials, error) {
-	creds := &TheHiveCredentials{
-		URL:          os.Getenv(string(types.EnvKeyTheHiveURL)),
-		APIKey:       os.Getenv(string(types.EnvKeyTheHiveAPIKey)),
-		Username:     os.Getenv(string(types.EnvKeyTheHiveUsername)),
-		Password:     os.Getenv(string(types.EnvKeyTheHivePassword)),
-		Organisation: os.Getenv(string(types.EnvKeyTheHiveOrganisation)),
+	requestTimeout, err := types.ParseTheHiveRequestTimeout(os.Getenv(string(types.EnvKeyTheHiveRequestTimeout)))
+	if err != nil {
+		return nil, fmt.Errorf("invalid TheHive request timeout: %w", err)
 	}
 
-	err := creds.Validate()
+	creds := &TheHiveCredentials{
+		URL:            os.Getenv(string(types.EnvKeyTheHiveURL)),
+		APIKey:         os.Getenv(string(types.EnvKeyTheHiveAPIKey)),
+		Username:       os.Getenv(string(types.EnvKeyTheHiveUsername)),
+		Password:       os.Getenv(string(types.EnvKeyTheHivePassword)),
+		Organisation:   os.Getenv(string(types.EnvKeyTheHiveOrganisation)),
+		RequestTimeout: requestTimeout,
+	}
+
+	err = creds.Validate()
 	if err != nil {
 		return nil, fmt.Errorf("invalid TheHive credentials: %w", err)
 	}
@@ -93,9 +103,20 @@ func CreateTheHiveConfig(creds *TheHiveCredentials) (*thehive.Configuration, err
 		return nil, err
 	}
 
+	requestTimeout := creds.RequestTimeout
+	if requestTimeout <= 0 {
+		requestTimeout = types.DefaultTheHiveRequestTimeout
+	}
+
+	// Without a limit, a TheHive that accepts the connection but never answers
+	// holds the tool call until the MCP client gives up, which reads as a
+	// crashed server (DL-7371).
 	httpClient := &http.Client{
-		Transport: &logging.Transport{
-			Transport: http.DefaultTransport,
+		Transport: &utils.TimeoutTransport{
+			Transport: &logging.Transport{
+				Transport: http.DefaultTransport,
+			},
+			Timeout: requestTimeout,
 		},
 	}
 

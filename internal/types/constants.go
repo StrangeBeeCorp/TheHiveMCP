@@ -54,6 +54,9 @@ const EnvKeyTheHivePassword EnvKey = "THEHIVE_PASSWORD" // #nosec G101 -- env va
 // EnvKeyTheHiveOrganisation is the env var name for TheHive organisation.
 const EnvKeyTheHiveOrganisation EnvKey = "THEHIVE_ORGANISATION"
 
+// EnvKeyTheHiveRequestTimeout is the env var name for the per-request TheHive timeout.
+const EnvKeyTheHiveRequestTimeout EnvKey = "THEHIVE_REQUEST_TIMEOUT"
+
 // EnvKeyTheHiveURLAllowlist is the env var name for TheHive URL allowlist.
 const EnvKeyTheHiveURLAllowlist EnvKey = "THEHIVE_URL_ALLOWLIST"
 
@@ -101,6 +104,9 @@ const FlagVarTheHivePassword FlagVar = "thehive-password" // #nosec G101 -- flag
 
 // FlagVarTheHiveOrganisation is the CLI flag name for TheHive organisation.
 const FlagVarTheHiveOrganisation FlagVar = "thehive-organisation"
+
+// FlagVarTheHiveRequestTimeout is the CLI flag name for the per-request TheHive timeout.
+const FlagVarTheHiveRequestTimeout FlagVar = "thehive-request-timeout"
 
 // FlagVarTheHiveURLAllowlist is the CLI flag name for TheHive URL allowlist.
 const FlagVarTheHiveURLAllowlist FlagVar = "thehive-url-allowlist"

@@ -126,11 +126,12 @@ func validateHiveAuthIntoContext(ctx context.Context, allowlist *TheHiveURLAllow
 	}
 
 	creds := &TheHiveCredentials{
-		URL:          hiveURL,
-		APIKey:       hiveAPIKey,
-		Username:     envUsername,
-		Password:     envPassword,
-		Organisation: hiveOrganisation,
+		URL:            hiveURL,
+		APIKey:         hiveAPIKey,
+		Username:       envUsername,
+		Password:       envPassword,
+		Organisation:   hiveOrganisation,
+		RequestTimeout: options.TheHiveRequestTimeout,
 	}
 
 	newCtx, err := AddTheHiveClientToContextWithCreds(ctx, creds)
