@@ -12,7 +12,7 @@ import (
 )
 
 func run(ctx context.Context, dir string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", args...) //nolint:gosec // G204: fixed git subcommands; only refs and paths vary
+	cmd := exec.CommandContext(ctx, "git", args...) // #nosec G204 -- fixed git subcommands; only refs and paths vary
 	cmd.Dir = dir
 
 	var stderr bytes.Buffer

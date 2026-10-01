@@ -124,13 +124,13 @@ func runBuiltin(ctx context.Context, g registry.Gate, opts Options, logPath stri
 }
 
 func runCommand(ctx context.Context, command string, g registry.Gate, opts Options, logPath string) Result {
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, logPerm) //nolint:gosec // G304: the path is built from the gate id
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, logPerm) // #nosec G304 -- the path is built from the gate id
 	if err != nil {
 		return Result{Verdict: Fail, Summary: fmt.Sprintf("cannot write the log: %v", err)}
 	}
 	defer func() { _ = logFile.Close() }()
 
-	cmd := exec.CommandContext(ctx, "sh", "-c", command) //nolint:gosec // G204: gate commands come from the reviewed registry
+	cmd := exec.CommandContext(ctx, "sh", "-c", command) // #nosec G204 -- gate commands come from the reviewed registry
 	cmd.Dir = opts.Root
 	killGroupOnCancel(cmd)
 
@@ -170,7 +170,7 @@ func lastLine(logPath string) string {
 
 // Tail returns the last n non-empty lines of a log.
 func Tail(logPath string, n int) []string {
-	data, err := os.ReadFile(logPath) //nolint:gosec // G304: the path is a log this package wrote
+	data, err := os.ReadFile(logPath) // #nosec G304 -- the path is a log this package wrote
 	if err != nil {
 		return nil
 	}

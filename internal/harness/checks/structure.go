@@ -20,7 +20,7 @@ func Structure(root string, files []string, lim StructureLimits) ([]Finding, err
 	seen := map[string]bool{}
 
 	for _, f := range files {
-		content, err := os.ReadFile(filepath.Join(root, f)) //nolint:gosec // G304: files come from git ls-files
+		content, err := os.ReadFile(filepath.Join(root, f)) // #nosec G304 -- files come from git ls-files
 		if os.IsNotExist(err) {
 			continue // deleted in the working tree
 		}

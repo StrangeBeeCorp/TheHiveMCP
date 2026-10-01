@@ -60,7 +60,7 @@ type SafetyRules struct {
 
 // LoadLimits reads gates/limits.yaml, rejecting unknown keys.
 func LoadLimits(file string) (Limits, error) {
-	data, err := os.ReadFile(file) //nolint:gosec // G304: the path is the repository's own limits file
+	data, err := os.ReadFile(file) // #nosec G304 -- the path is the repository's own limits file
 	if err != nil {
 		return Limits{}, fmt.Errorf("read limits: %w", err)
 	}

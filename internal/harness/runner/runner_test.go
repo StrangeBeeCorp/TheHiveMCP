@@ -65,7 +65,7 @@ func TestRunGivesEachGateItsVerdict(t *testing.T) {
 	assert.Equal(t, "over its 1 s budget", results[3].Summary)
 	assert.Equal(t, "2 finding(s): a.go: too long", results[5].Summary)
 
-	log, err := os.ReadFile(filepath.Join(logDir, "ok.log")) //nolint:gosec // G304: a log the test just wrote
+	log, err := os.ReadFile(filepath.Join(logDir, "ok.log")) // #nosec G304 -- a log the test just wrote
 	require.NoError(t, err)
 	assert.Contains(t, string(log), "scope --changed HEAD", "the cadence's scope replaces {scope}")
 	assert.True(t, runner.Failed(results))
@@ -83,7 +83,7 @@ func TestRecordIsWrittenAsJSON(t *testing.T) {
 	rec := runner.Record{Cadence: "ci", Verdict: runner.Pass, Results: []runner.Result{{Gate: "lint", Verdict: runner.Pass}}}
 	p, err := rec.Write(dir)
 	require.NoError(t, err)
-	data, err := os.ReadFile(p) //nolint:gosec // G304: the record the test just wrote
+	data, err := os.ReadFile(p) // #nosec G304 -- the record the test just wrote
 	require.NoError(t, err)
 
 	var back runner.Record

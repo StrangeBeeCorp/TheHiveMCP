@@ -55,7 +55,7 @@ type Registry struct {
 // Load reads and validates the registry at path. Unknown keys are errors, so a typo in a field
 // name cannot silently disable a gate.
 func Load(path string) (*Registry, error) {
-	data, err := os.ReadFile(path) //nolint:gosec // G304: the path is the repository's own registry
+	data, err := os.ReadFile(path) // #nosec G304 -- the path is the repository's own registry
 	if err != nil {
 		return nil, fmt.Errorf("read registry: %w", err)
 	}

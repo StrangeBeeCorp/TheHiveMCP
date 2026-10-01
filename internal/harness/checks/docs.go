@@ -35,7 +35,7 @@ func Docs(root string, files []string, reg *registry.Registry) ([]Finding, error
 			continue
 		}
 
-		content, err := os.ReadFile(filepath.Join(root, f)) //nolint:gosec // G304: files come from git ls-files
+		content, err := os.ReadFile(filepath.Join(root, f)) // #nosec G304 -- files come from git ls-files
 		if os.IsNotExist(err) {
 			continue
 		}
@@ -47,7 +47,7 @@ func Docs(root string, files []string, reg *registry.Registry) ([]Finding, error
 		out = append(out, missingPaths(root, f, content, tops, files)...)
 	}
 
-	page, err := os.ReadFile(filepath.Join(root, gatesdoc.Path)) //nolint:gosec // G304: a fixed path in the repository
+	page, err := os.ReadFile(filepath.Join(root, gatesdoc.Path)) // #nosec G304 -- a fixed path in the repository
 	if err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("docs: %w", err)
 	}
@@ -158,7 +158,7 @@ func exists(root, p string, files []string) bool {
 		return false
 	}
 
-	_, err := os.Stat(filepath.Join(root, p)) //nolint:gosec // G703: only tells whether a path a document names exists
+	_, err := os.Stat(filepath.Join(root, p)) // #nosec G703 -- only tells whether a path a document names exists
 
 	return err == nil
 }
@@ -166,7 +166,7 @@ func exists(root, p string, files []string) bool {
 // ciFindings checks that ci.yml runs every ci gate through bin/harness, and names no gate the
 // registry does not have.
 func ciFindings(root string, reg *registry.Registry) ([]Finding, error) {
-	content, err := os.ReadFile(filepath.Join(root, CIWorkflow)) //nolint:gosec // G304: a fixed path in the repository
+	content, err := os.ReadFile(filepath.Join(root, CIWorkflow)) // #nosec G304 -- a fixed path in the repository
 	if err != nil {
 		return nil, fmt.Errorf("docs: %w", err)
 	}

@@ -205,7 +205,7 @@ func (e env) docs(args []string, out io.Writer) error {
 
 	p := filepath.Join(e.root, gatesdoc.Path)
 	if len(args) == 1 && args[0] == "--check" {
-		current, err := os.ReadFile(p) //nolint:gosec // G304: the generated page of this repository
+		current, err := os.ReadFile(p) // #nosec G304 -- the generated page of this repository
 		if err != nil || string(current) != page {
 			_, _ = fmt.Fprintf(out, "%s is stale: run make harness-docs\n", gatesdoc.Path)
 			return errFailed

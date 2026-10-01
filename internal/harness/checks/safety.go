@@ -29,7 +29,7 @@ func PublicSafety(root string, files []string, rules SafetyRules) ([]Finding, er
 			continue
 		}
 
-		content, err := os.ReadFile(filepath.Join(root, f)) //nolint:gosec // G304: files come from git ls-files
+		content, err := os.ReadFile(filepath.Join(root, f)) // #nosec G304 -- files come from git ls-files
 		if os.IsNotExist(err) {
 			continue
 		}
