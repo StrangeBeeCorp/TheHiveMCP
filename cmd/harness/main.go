@@ -7,7 +7,10 @@
 //	harness check structure|public-safety|docs|go-source|branch|spec|changelog
 //	harness docs [--check]
 //	harness hook pre-tool-use|post-tool-use|stop|subagent-stop|session-start|pre-compact  (JSON on stdin)
+//	harness pr [--base REF] [--push=false] [--force]  (make pr: the pr gates at HEAD, the evidence, the push)
 //	harness push [--force]
+//	harness evidence [--markdown]
+//	harness review-effort [--base REF]
 //	harness canaries [--id ID]... [--integration]
 package main
 
@@ -153,7 +156,7 @@ func stagedRun(args []string) bool {
 
 func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer) error {
 	if len(args) == 0 {
-		return usageError{"usage: harness run|select|list|check|docs|hook|push|canaries (see cmd/harness/main.go)"}
+		return usageError{"usage: harness run|select|list|check|docs|hook|pr|push|evidence|review-effort|canaries (see cmd/harness/main.go)"}
 	}
 
 	e, err := load(ctx, stagedRun(args))
@@ -178,6 +181,12 @@ func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer
 		return e.push(ctx, args[1:], out)
 	case "canaries":
 		return e.canaries(ctx, args[1:], out)
+	case "pr":
+		return e.pr(ctx, args[1:], out)
+	case "evidence":
+		return e.showEvidence(ctx, args[1:], out)
+	case "review-effort":
+		return e.reviewEffort(ctx, args[1:], out)
 	default:
 		return usageError{fmt.Sprintf("unknown command %q", args[0])}
 	}
@@ -272,7 +281,7 @@ func (e env) builtin(ctx context.Context, name string) ([]string, error) {
 // onBranch is the branch check: work is committed on a branch, and main changes only when a
 // person merges a pull request.
 func onBranch(branch string) []checks.Finding {
-	if branch == "main" {
+	if branch == mainBranch {
 		return []checks.Finding{{Msg: "this commit is on main: commit on a branch (<type>/DL-<n>-<name>) and open a pull request"}}
 	}
 

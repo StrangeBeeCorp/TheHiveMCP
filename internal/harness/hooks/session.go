@@ -23,7 +23,7 @@ const (
 
 const rules = `The rules: every stop runs make check-fast (docs/reference/gates.md), and an agent does not stop red.
 The Tester writes the tests and the Coder the code (.claude/agents/); the implement-task workflow runs their duel.
-Push with make push, which never pushes main or the public mirror; a person merges. The hooks deny what breaks
+Ship with make pr: the pr gates at HEAD, recorded, then the push (after the review; never main); a person merges. The hooks deny what breaks
 these rules, and say what to do instead.`
 
 // SessionStart tells the agent where it is: the checkout and its ticket, the last check-fast, a

@@ -130,7 +130,7 @@ func TestPreToolUseDeniesWithAReasonAndOtherwiseSaysNothing(t *testing.T) {
 	assert.Contains(t, denied(t, hooks.PreToolUse(root, tester)), "only tests")
 
 	push := hooks.Input{ToolName: "Bash", ToolInput: map[string]any{"command": "git push public main"}}
-	assert.Contains(t, denied(t, hooks.PreToolUse(root, push)), "make push")
+	assert.Contains(t, denied(t, hooks.PreToolUse(root, push)), "make pr")
 
 	env := hooks.Input{ToolName: "Read", ToolInput: map[string]any{filePath: filepath.Join(root, ".env")}}
 	assert.NotEmpty(t, denied(t, hooks.PreToolUse(root, env)))

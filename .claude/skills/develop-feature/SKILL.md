@@ -29,8 +29,8 @@ description:
    `github.com/StrangeBeeCorp/thehive4go` in `go.mod`.
 3. **Implement test first.** Run the `implement-task` workflow (`.claude/workflows/implement-task.js`, args `{ticket, task, items}`): the Tester
    (`.claude/agents/tester.md`) writes failing tests from the task's "Done when", the Coder (`.claude/agents/coder.md`) makes them pass, and the Tester attacks
-   until it finds nothing more. The hooks keep each to its files, and every stop runs `make check-fast`. Review what they did, then commit and push yourself
-   (`make push`). Read the reference that matches the change first:
+   until it finds nothing more. The hooks keep each to its files, and every stop runs `make check-fast`. Review what they did, then commit. Read the reference
+   that matches the change first:
    - adding a tool, an operation or a parameter → `references/tool-anatomy.md`
    - a new response field, an error that quotes entity data, or any edit to `internal/utils/parsers.go` → `references/untrusted-data.md`
    - any test → `references/testing.md`
@@ -48,7 +48,9 @@ description:
 6. **Measure a model-facing change** before review, from a checkout of StrangeBee/TheHiveMCPEval:
    `uv run eval-cli eval run mcp-tools --local <this checkout> --model <label> --judge glm-5.3-judge`. `<label>` is a row of that repo's
    `configs/providers.yaml`. Without `--judge`, the model grades itself. The run is tagged `MCP local`, so it can never be published as release evidence.
-7. **Gate.** Run `make all` before asking for review. CI runs the gates of `gates/registry.yaml` again on the pull request.
+7. **Gate and ship.** Run `make all` before the review. Once the review is ready for HEAD, `make pr` runs the pr gates at that exact commit, records the
+   evidence (`bin/harness evidence --markdown` prints it for the pull request) and pushes; from an agent's session it refuses without both. Agents never merge:
+   a person does. CI runs the gates of `gates/registry.yaml` again on the pull request.
 
 ## Rules for model-facing code
 

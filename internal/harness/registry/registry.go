@@ -31,7 +31,12 @@ type Suite struct {
 	About   string   `yaml:"about"`
 	Paths   []string `yaml:"paths"`
 	Implies []string `yaml:"implies"`
+	// Review is the effort of the adversarial review a change of this suite needs.
+	Review string `yaml:"review"`
 }
+
+// ReviewEfforts are the efforts of the review skill, from the lightest.
+var ReviewEfforts = []string{"low", "medium", "high"}
 
 // Gate is one check with a verdict: a shell command or a check built into the harness.
 type Gate struct {
@@ -151,6 +156,10 @@ func (r *Registry) suiteProblems() (map[string]bool, []string) {
 
 		if len(s.Paths) == 0 {
 			problems = append(problems, fmt.Sprintf("suite %q has no paths", s.ID))
+		}
+
+		if !slices.Contains(ReviewEfforts, s.Review) {
+			problems = append(problems, fmt.Sprintf("suite %q: review must be one of %s", s.ID, strings.Join(ReviewEfforts, ", ")))
 		}
 	}
 

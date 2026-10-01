@@ -14,7 +14,8 @@
 #
 # Suites: the changed paths select suites, and a gate runs when one of its suites is selected
 # ("*" means whatever changed). A path that no suite claims selects every suite, and so does
-# the `everything` suite. `implies` selects other suites too.
+# the `everything` suite. `implies` selects other suites too. `review` is the effort of the
+# adversarial review a change of the suite needs: bin/harness review-effort gives the highest.
 #
 # {scope} in `runs` becomes the file scope of the cadence (see `scopes`): at edit and stop, the
 # uncommitted files and those of the last commit (the commits before it passed the commit hook);
@@ -39,6 +40,7 @@ scopes:
 
 suites:
   - id: everything
+    review: high
     about: The harness and the repository-wide tooling; a change here checks everything
     paths:
       - cmd/harness/**
@@ -64,6 +66,7 @@ suites:
       - go.mod
       - go.sum
   - id: surface
+    review: high
     about: What the model reads - tool definitions and descriptions, schemas, resources
     implies: [tools]
     paths:
@@ -77,6 +80,7 @@ suites:
       # The snapshot of what the model reads (make surface-propose).
       - baselines/**
   - id: trust
+    review: high
     about: The untrusted-data boundary, permissions and authentication
     implies: [tools]
     paths:
@@ -88,6 +92,7 @@ suites:
       # The example profiles are also the permission fixtures of the integration tests.
       - docs/reference/permissions-examples/**
   - id: tools
+    review: medium
     about: Tool handlers and the code they share
     paths:
       - internal/tools/**
@@ -95,6 +100,7 @@ suites:
       - internal/types/**
       - internal/logging/**
   - id: server
+    review: medium
     about: Server wiring, transports and the binary
     implies: [tools]
     paths:
@@ -102,6 +108,7 @@ suites:
       - cmd/server/**
       - version/**
   - id: tests
+    review: medium
     about: Test helpers, fixtures and the integration stack
     paths:
       - internal/testutils/**
@@ -111,6 +118,7 @@ suites:
       - scripts/run-integration-tests.sh
       - scripts/reset-integration-db.sh
   - id: packaging
+    review: medium
     about: The production image, the MCPB packages and the release archives
     paths:
       - deployment/**
@@ -121,16 +129,19 @@ suites:
       - scripts/sign-windows.sh
       - .dockerignore
   - id: spec
+    review: medium
     about: The spec items - what the server promises a model, each traced to what proves it
     paths:
       - spec/**
   - id: docs
+    review: low
     about: Documentation and agent instructions
     paths:
       - docs/**
       - "*.md"
       - .claude/skills/**
   - id: meta
+    review: low
     about: Repository metadata that no test reads
     paths:
       - LICENSE

@@ -19,9 +19,9 @@ gate: ## Run one gate now, whatever changed (list: docs/reference/gates.md) ##@ 
 harness-docs: ## Regenerate docs/reference/gates.md from gates/registry.yaml ##@ make harness-docs
 	@bin/harness docs
 
-.PHONY: push
-push: ## Push this branch to origin: never main, never the public mirror ##@ make push [FORCE=1]
-	@bin/harness push $(if $(FORCE),--force)
+.PHONY: pr
+pr: ## The pr gates at HEAD, recorded, then push the branch (never main) ##@ make pr [FORCE=1]
+	@bin/harness pr $(if $(FORCE),--force)
 
 .PHONY: go
 go: ## Run a go command in the pinned image (the harness's Go programs) ##@ make go CMD="run ./cmd/surface --check"

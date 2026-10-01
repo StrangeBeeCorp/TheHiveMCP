@@ -333,7 +333,7 @@ func (j *judge) harness(args []string) Decision {
 	}
 
 	switch {
-	case sub == subPush && (j.role.Duel() || j.role.ReadOnly()):
+	case (sub == subPush || sub == "pr") && (j.role.Duel() || j.role.ReadOnly()):
 		return deny("the %s does not push: the session that runs the duel ships the change", j.role)
 	case j.role.ReadOnly() && !slices.Contains([]string{"select", subList, "check", "hook"}, sub):
 		return deny("the %s reads and reports; it does not run gates", j.role)

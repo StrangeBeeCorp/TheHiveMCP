@@ -91,3 +91,37 @@ func firstLines(s string, n int) string {
 
 	return strings.Join(lines, "\n")
 }
+
+// Clean reports whether the working tree has no change, staged or not, and no untracked file.
+func Clean(ctx context.Context, root string) (bool, error) {
+	out, err := run(ctx, root, "status", "--porcelain")
+	if err != nil {
+		return false, err
+	}
+
+	return strings.TrimSpace(out) == "", nil
+}
+
+// GitDir is the git directory of the checkout: .git, or the worktree's under it.
+func GitDir(ctx context.Context, root string) string {
+	out, err := run(ctx, root, "rev-parse", "--path-format=absolute", "--git-dir")
+	if err != nil {
+		return filepath.Join(root, ".git")
+	}
+
+	return strings.TrimSpace(out)
+}
+
+// Resolve is the commit a ref names, or "" when it names none.
+func Resolve(ctx context.Context, root, ref string) string {
+	if ref == "" {
+		return ""
+	}
+
+	out, err := run(ctx, root, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(out)
+}

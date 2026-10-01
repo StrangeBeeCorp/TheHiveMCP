@@ -1,0 +1,22 @@
+# The parts of the repository a person must read closely in a pull request: the promises the
+# server makes a model, the harness that judges every change, its gates and limits, and the
+# default permission profile. GitHub requests a review from these owners when a pull request
+# touches them; the pull request's Gate evidence (bin/harness evidence --markdown) flags them too.
+# Only the main session of a person may change them (internal/harness/policy/paths.go).
+
+/spec/                                                   @jean-collette_stb @antoine-salesse_stb
+/gates/                                                  @jean-collette_stb @antoine-salesse_stb
+/baselines/                                              @jean-collette_stb @antoine-salesse_stb
+/cmd/harness/                                            @jean-collette_stb @antoine-salesse_stb
+/internal/harness/                                       @jean-collette_stb @antoine-salesse_stb
+/cmd/surface/                                            @jean-collette_stb @antoine-salesse_stb
+/cmd/analyzers/                                          @jean-collette_stb @antoine-salesse_stb
+/internal/surface/                                       @jean-collette_stb @antoine-salesse_stb
+/internal/analyzers/                                     @jean-collette_stb @antoine-salesse_stb
+/bin/                                                    @jean-collette_stb @antoine-salesse_stb
+/.githooks/                                              @jean-collette_stb @antoine-salesse_stb
+/.github/                                                @jean-collette_stb @antoine-salesse_stb
+/.claude/                                                @jean-collette_stb @antoine-salesse_stb
+/CLAUDE.md                                               @jean-collette_stb @antoine-salesse_stb
+/Makefile                                                @jean-collette_stb @antoine-salesse_stb
+/internal/permissions/embedded/default_permissions.yaml  @jean-collette_stb @antoine-salesse_stb

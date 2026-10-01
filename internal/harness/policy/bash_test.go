@@ -136,6 +136,7 @@ func TestOrdinaryWorkIsNotInTheWay(t *testing.T) {
 		"git commit -m 'x'",
 		"git rebase origin/main",
 		"bin/harness push",
+		"bin/harness pr",
 		"gh pr create --title x --body-file body.md",
 		"gh api -X PATCH repos/o/r -f allow_merge_commit=true",
 		"docker run --rm alpine true",
@@ -161,6 +162,8 @@ func TestTheDuelKeepsEachSideToItsFiles(t *testing.T) {
 		"git stash",
 		"git commit -am x",
 		"bin/harness push",
+		"bin/harness pr",
+		"make pr",
 		"gh pr create --title x",
 		"{ cat; } < .claude/sealed/DL-1234/x_test.go",
 		`echo "$(< .claude/sealed/DL-1234/x_test.go)"`,
@@ -240,7 +243,7 @@ func TestReadOnlyRolesOnlyRead(t *testing.T) {
 func TestDenialsSayWhatToDoInstead(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, bash(policy.Main, "git push").Reason, "make push")
+	assert.Contains(t, bash(policy.Main, "git push").Reason, "make pr")
 	assert.Contains(t, bash(policy.Main, "go test ./...").Reason, "make test")
 	assert.Contains(t, bash(policy.Coder, "rm internal/x/y_test.go").Reason, "Tester")
 }

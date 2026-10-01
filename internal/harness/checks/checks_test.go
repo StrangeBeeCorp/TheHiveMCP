@@ -144,7 +144,7 @@ func TestPublicSafety(t *testing.T) {
 const docsRegistry = `
 scopes: {edit: a, stop: a, commit: a, pr: a, ci: a, nightly: a}
 suites:
-  - {id: everything, paths: [gates/**]}
+  - {id: everything, paths: [gates/**], review: high}
 gates:
   - {id: lint, runs: lint, cadence: [ci], suites: ["*"], budget_s: 1, blocks: x}
   - {id: docs, builtin: docs, cadence: [stop], suites: ["*"], budget_s: 1, blocks: x}

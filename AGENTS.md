@@ -26,7 +26,8 @@ All targets run in Docker; no local Go install needed.
 
 While you work, run `make check-fast`: it runs the gates your changed paths select, in about a minute. The gates, their cadences and what makes each
 one block are listed in `docs/reference/gates.md`, generated from `gates/registry.yaml`. The git pre-commit hook runs `make pre-commit`
-(`make dev-setup` enables it), CI runs the same gates through `bin/harness`, and `make gate ID=<gate>` runs one of them on demand.
+(`make dev-setup` enables it), CI runs the same gates through `bin/harness`, and `make gate ID=<gate>` runs one of them on demand. `make pr` runs the pr
+gates at the exact commit, records the evidence and pushes the branch; nothing merges a pull request but a person.
 
 When running commands, never pipe its output through a small `tail`/`head` that discards most of it — you lose the full result and must re-run the whole slow suite.
 Redirect stdout+stderr to a temp file (e.g. `make test-integration > /tmp/integration.log 2>&1`), then `grep`/inspect that file afterwards.

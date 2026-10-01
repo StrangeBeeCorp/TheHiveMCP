@@ -134,3 +134,22 @@ func (r *Registry) At(cadence string) []Gate {
 
 	return gates
 }
+
+// ReviewEffort is the effort of the review the selection needs: the highest of its suites'. A
+// change the harness cannot place (every suite selected) gets the highest.
+func (r *Registry) ReviewEffort(sel Selection) string {
+	top := ReviewEfforts[len(ReviewEfforts)-1]
+	if sel.All {
+		return top
+	}
+
+	best := 0
+
+	for _, s := range r.Suites {
+		if _, ok := sel.Suites[s.ID]; ok {
+			best = max(best, slices.Index(ReviewEfforts, s.Review))
+		}
+	}
+
+	return ReviewEfforts[best]
+}

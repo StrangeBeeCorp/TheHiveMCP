@@ -1,0 +1,160 @@
+// Package evidence records that the gates of the pr cadence passed at one exact commit (make pr),
+// decides whether that commit may be pushed, and renders the record for the pull request.
+package evidence
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
+	"time"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/runner"
+)
+
+// Dir holds one record per commit that make pr judged, in the checkout (git-ignored).
+const Dir = ".cache/harness/evidence"
+
+const (
+	dirPerm  = 0o750
+	filePerm = 0o600
+	shortSHA = 7
+)
+
+// Evidence is what make pr found at one commit.
+type Evidence struct {
+	Head     string          `json:"head"`
+	Base     string          `json:"base"`
+	Branch   string          `json:"branch"`
+	Verdict  runner.Verdict  `json:"verdict"`
+	Started  time.Time       `json:"started"`
+	Finished time.Time       `json:"finished"`
+	Suites   []string        `json:"suites"`
+	Changed  []string        `json:"changed"`
+	Results  []runner.Result `json:"results"`
+}
+
+func path(root, head string) string {
+	return filepath.Join(root, Dir, head+".json")
+}
+
+// Write records the evidence under its commit.
+func (ev Evidence) Write(root string) (string, error) {
+	p := path(root, ev.Head)
+
+	err := os.MkdirAll(filepath.Dir(p), dirPerm)
+	if err != nil {
+		return "", fmt.Errorf("create %s: %w", filepath.Dir(p), err)
+	}
+
+	data, err := json.MarshalIndent(ev, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("encode the evidence: %w", err)
+	}
+
+	err = os.WriteFile(p, data, filePerm)
+	if err != nil {
+		return "", fmt.Errorf("write %s: %w", p, err)
+	}
+
+	return p, nil
+}
+
+// Read returns the evidence of a commit, or nil when make pr never judged it.
+func Read(root, head string) (*Evidence, error) {
+	data, err := os.ReadFile(path(root, head)) // #nosec G304 -- this checkout's own record, named by a commit id
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil //nolint:nilnil // no record is not an error
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("read the evidence of %s: %w", short(head), err)
+	}
+
+	var ev Evidence
+
+	err = json.Unmarshal(data, &ev)
+	if err != nil {
+		return nil, fmt.Errorf("decode the evidence of %s: %w", short(head), err)
+	}
+
+	return &ev, nil
+}
+
+// Review is what the adversarial review (the review skill of sb-personal) records about the
+// branch: its verdict, and the commit it judged.
+type Review struct {
+	Verdict string `json:"verdict"`
+	Head    string `json:"verdict_head"`
+}
+
+// ReviewPath is where the review skill keeps its state, under the checkout's git directory.
+const ReviewPath = "sb-review/state.json"
+
+// ReadReview returns the review state of the checkout whose git directory is gitDir, or nil.
+func ReadReview(gitDir string) (*Review, error) {
+	data, err := os.ReadFile(filepath.Join(gitDir, ReviewPath)) // #nosec G304 -- the review state of this checkout
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil //nolint:nilnil // no review is not an error
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("read the review state: %w", err)
+	}
+
+	var r Review
+
+	err = json.Unmarshal(data, &r)
+	if err != nil {
+		return nil, fmt.Errorf("decode the review state: %w", err)
+	}
+
+	return &r, nil
+}
+
+// ErrNotShippable is why a commit may not be pushed.
+var ErrNotShippable = errors.New("not ready to push")
+
+// PushAllowed decides whether head may be pushed. The pr gates must have passed at head (make
+// pr). In an agent's session (strict), the adversarial review must also be ready for head; a
+// person's push gets the same checks as warnings, since they can push anyway.
+func PushAllowed(head string, ev *Evidence, review *Review, strict bool) ([]string, error) {
+	var problems []string
+
+	switch {
+	case ev == nil || ev.Head != head:
+		problems = append(problems, fmt.Sprintf("the pr gates have not run at %s: run make pr", short(head)))
+	case ev.Verdict != runner.Pass:
+		problems = append(problems, fmt.Sprintf("the pr gates were %s at %s: fix them, commit, and run make pr", ev.Verdict, short(head)))
+	}
+
+	switch {
+	case review == nil || review.Verdict == "":
+		problems = append(problems, "no adversarial review of this branch: run the review in fix mode")
+	case review.Head != head:
+		problems = append(problems, fmt.Sprintf("the review judged %s but HEAD is %s: let the review check the new commits",
+			short(review.Head), short(head)))
+	case !slices.Contains([]string{"ready", "ready_with_known_issues"}, review.Verdict):
+		problems = append(problems, fmt.Sprintf("the review's verdict is %s: finish the review first", review.Verdict))
+	}
+
+	if strict && len(problems) > 0 {
+		return nil, fmt.Errorf("%w: %s", ErrNotShippable, problems[0])
+	}
+
+	return problems, nil
+}
+
+func short(sha string) string {
+	if len(sha) > shortSHA {
+		return sha[:shortSHA]
+	}
+
+	if sha == "" {
+		return "(none)"
+	}
+
+	return sha
+}

@@ -56,8 +56,8 @@ func (j *judge) gitSub(sub string, rest []string) Decision {
 	}
 
 	if sub == subPush || sub == "send-pack" {
-		return deny("push with make push (bin/harness push): it pushes this branch to origin, " +
-			"never main and never the public mirror")
+		return deny("push with make pr: it runs the pr gates at HEAD, records the evidence and pushes this branch to " +
+			"origin, never main and never the public mirror")
 	}
 
 	if movesMain(sub, rest) {

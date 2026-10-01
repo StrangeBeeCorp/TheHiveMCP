@@ -67,10 +67,10 @@ func TestTheRepositoryRegistryIsValid(t *testing.T) {
 const sampleRegistry = `
 scopes: {edit: e, stop: s, commit: c, pr: p, ci: i, nightly: n}
 suites:
-  - {id: everything, paths: [gates/**]}
-  - {id: tools, paths: ["internal/tools/**"]}
-  - {id: surface, paths: ["internal/tools/*/models.go"], implies: [tools]}
-  - {id: docs, paths: [docs/**, "*.md"]}
+  - {id: everything, paths: [gates/**], review: high}
+  - {id: tools, paths: ["internal/tools/**"], review: medium}
+  - {id: surface, paths: ["internal/tools/*/models.go"], implies: [tools], review: high}
+  - {id: docs, paths: [docs/**, "*.md"], review: low}
 gates:
   - {id: lint, runs: "lint {scope}", cadence: [stop, ci], suites: ["*"], budget_s: 9, blocks: x}
   - {id: unit, runs: "go test", cadence: [ci], suites: [tools], budget_s: 9, blocks: x}
@@ -182,4 +182,31 @@ func TestLoadRejectsUnknownFields(t *testing.T) {
 	t.Parallel()
 	_, err := load(t, strings.Replace(sampleRegistry, "budget_s: 9, blocks: x}", "budget: 9, budget_s: 9, blocks: x}", 1))
 	require.Error(t, err, "a misspelt field must not silently drop a setting")
+}
+
+func TestTheReviewEffortIsTheHighestTheChangeNeeds(t *testing.T) {
+	t.Parallel()
+
+	reg, err := load(t, sampleRegistry)
+	require.NoError(t, err)
+
+	high := registry.ReviewEfforts[2]
+
+	for paths, want := range map[string]string{
+		"docs/a.md": registry.ReviewEfforts[0],
+		"docs/a.md internal/tools/search/handler.go": registry.ReviewEfforts[1],
+		"internal/tools/search/models.go":            high,
+		"gates/registry.yaml":                        high,
+		"somewhere/unclaimed.txt":                    high,
+	} {
+		assert.Equal(t, want, reg.ReviewEffort(reg.Select(strings.Fields(paths))), paths)
+	}
+}
+
+func TestASuiteNeedsAReviewEffort(t *testing.T) {
+	t.Parallel()
+
+	_, err := load(t, strings.Replace(sampleRegistry, ", review: low}", "}", 1))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `suite "docs": review must be one of low, medium, high`)
 }

@@ -23,7 +23,7 @@ func specRegistry(t *testing.T) *registry.Registry {
 
 	reg, err := registry.Parse([]byte(`
 scopes: {edit: x, stop: x, commit: x, pr: x, ci: x, nightly: x}
-suites: [{id: everything, paths: ["**"]}]
+suites: [{id: everything, paths: ["**"], review: high}]
 gates: [{id: unit, runs: make test, cadence: [ci], suites: ["*"], budget_s: 1, blocks: a test}]
 `), "registry.yaml")
 	require.NoError(t, err)
