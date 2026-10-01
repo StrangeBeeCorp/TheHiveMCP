@@ -30,6 +30,35 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   which a model reported as "no technique targets that platform". The search now fails fast with an error pointing at `extra-columns: ["platforms"]`, and the
   pattern fact sheet no longer lists platform among the filterable fields.
 
+### Fixed
+
+- **Responders on a task or an observable are reachable.** TheHive's responder endpoints know those entities as `case_task` and `case_artifact`, not the `task`
+  and `observable` the tool and the responder catalog resource advertise, so the catalog and `run-responder` answered 404 for them. Both now translate, and a
+  task log can be named `log` or `case_task_log`.
+
+- **A search no longer rewrites the permission filters.** `search-entities` repaired filter keys and turned dates into timestamps in place, on maps that still
+  belonged to the permission config, so the first search changed the config a session shows in `hive://config/permissions`. Over stdio, where one config serves
+  every tool call of the session, two concurrent searches could write the same map, which stops a Go process. The search now works on a copy, as the scope
+  checks already did.
+
+### Security
+
+- **A responder blocked by name can no longer run by its ID.** Analyzer and responder lists match a worker's ID or its name, and the shipped profiles use names
+  (`blocked: ["DeleteCase_1_0"]`), but `run-analyzer` and `run-responder` only checked the identifier the caller sent. A responder blocked by name therefore ran
+  when called by its ID, which is the identifier the tool description tells the model to use. The catalog also kept listing it. Both paths now check a worker
+  under its ID and its name together. The fix also works the other way: an analyzer allowed by name is no longer refused when called by its ID. When the rules
+  name specific workers, a run first reads the analyzer or responder catalog to learn the worker's other identifier, and a worker missing from the catalog is
+  denied. Rules that name none (`"*"`, an empty block list) need no lookup and behave as before.
+- **`run-responder` and `get-action-status` refuse a malformed `entity-type` or `entity-id`.** Both values go into the path of a Cortex endpoint, and nothing
+  enforced the schema's enum at runtime. An entity ID must now be a TheHive ID (`~123456`, or its bare digits). The type may be given in any case, or as TheHive
+  spells it (`case_task`, `case_artifact`).
+- **A misspelt key in the permissions file now stops the server.** Unknown keys used to be dropped without a word, and what they named fell back to its most
+  permissive default: `entity_permission:` in place of `entity_permissions:` allowed every operation on every entity, and `filter:` in place of `filters:`
+  removed the filters. The file is now parsed strictly and checked at startup, over stdio and over HTTP, and the server refuses to start on an unknown key,
+  naming it. Before, a file that failed to load only logged a warning, and every tool call was then denied with no reason given; that is still what happens when
+  the file is edited into an invalid state while the HTTP server runs, since it reloads the file per request. **A file that contains such a typo no longer
+  starts: fix the key it names.**
+
 ## [1.1.0] - 2026-09-10
 
 ### Added

@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
 )
 
 func executeQuery(ctx context.Context, client *thehive.APIClient, parentOp, parentID, childOp string) ([]map[string]any, error) {
@@ -155,4 +157,22 @@ func GetActionsFromAlertID(ctx context.Context, client *thehive.APIClient, alert
 // GetActionsFromTaskID returns the Cortex responder runs of the given task.
 func GetActionsFromTaskID(ctx context.Context, client *thehive.APIClient, taskID string) ([]map[string]any, error) {
 	return executeQuery(ctx, client, "getTask", taskID, "actions")
+}
+
+// ResponderObjectType is the entity type TheHive's responder catalog and action
+// creation endpoints take for one the tools name. They resolve case_task,
+// case_artifact and case_task_log (v0 Conversion.toObjectType) but not task,
+// observable or log, which reached no entity. The action status endpoint
+// lowercases the type and takes the tools' names as they are.
+func ResponderObjectType(entityType string) string {
+	switch entityType {
+	case types.EntityTypeTask:
+		return "case_task"
+	case types.EntityTypeObservable:
+		return "case_artifact"
+	case "log":
+		return "case_task_log"
+	default:
+		return entityType
+	}
 }
