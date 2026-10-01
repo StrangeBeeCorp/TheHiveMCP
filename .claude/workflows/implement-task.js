@@ -6,13 +6,16 @@ export const meta = {
     { title: 'Tests first', detail: 'the Tester writes failing tests from the task' },
     { title: 'Implement', detail: 'the Coder makes them pass, never touching a test' },
     { title: 'Attack', detail: 'the Tester looks for what breaks the code; the Coder answers' },
+    { title: 'Unseal', detail: 'the sealed tests move into the code; the Coder fixes what they catch' },
   ],
 }
 
 // args: {ticket: "DL-1234", task: "what to build, with its Done when", items?: ["SIL-001"], rounds?: 2}
 // The two agents are .claude/agents/tester.md and coder.md; the hooks keep each to its files. They
-// never talk directly: each one's questions go into the other's next prompt. The session that runs
-// this workflow reviews, commits and pushes afterwards.
+// never talk directly: each one's questions go into the other's next prompt. With a ticket key, the
+// Tester also seals tests under .claude/sealed/<ticket>/, which the Coder cannot read: at the end
+// bin/harness unseal moves them into the code, and the Coder gets one round on what they catch. The
+// session that runs this workflow reviews, commits and pushes afterwards.
 
 const a = args || {}
 if (!a.task) throw new Error('implement-task needs args.task: what to build and its Done when')
@@ -30,6 +33,11 @@ const TESTS = {
         properties: { file: { type: 'string' }, name: { type: 'string' }, fails_because: { type: 'string' } },
         required: ['file', 'name', 'fails_because'],
       },
+    },
+    sealed: {
+      type: 'array',
+      items: { type: 'object', properties: { file: { type: 'string' }, name: { type: 'string' } }, required: ['file', 'name'] },
+      description: 'the sealed tests, under .claude/sealed/<ticket>/',
     },
     answers: { type: 'array', items: { type: 'string' }, description: "answers to the Coder's questions" },
     questions: { type: 'array', items: { type: 'string' }, description: 'questions for the Coder' },
@@ -54,17 +62,31 @@ const listTests = (t) => t.tests.map((x) => `- ${x.file}: ${x.name} (fails becau
 const relay = (label, lines) => (lines && lines.length ? `\n${label}:\n- ${lines.join('\n- ')}\n` : '')
 
 const header = `Ticket ${ticket}${items ? `, spec items ${items}` : ''}.\nThe task:\n${a.task}\n`
+const sealable = /^[A-Z][A-Z0-9]*-[0-9]+$/.test(ticket)
+const sealing = sealable
+  ? `\nAlso seal one to three tests the Coder will not see until the end: the cases an honest implementation of the task passes and one shaped to the visible tests would not. Write each under .claude/sealed/${ticket}/ at the path it will have in the repository (.claude/sealed/${ticket}/internal/tools/search/sealed_test.go), as a new file, and list them in sealed.`
+  : ''
+
+const UNSEALED = {
+  type: 'object',
+  properties: {
+    unsealed: { type: 'array', items: { type: 'string' } },
+    failing: TESTS.properties.tests,
+  },
+  required: ['unsealed', 'failing'],
+}
 
 phase('Tests first')
 let tests = await agent(
-  `${header}\nWrite the failing tests that prove this task, before any code exists. Check that each fails for the reason the task gives, and that the older tests still pass.`,
+  `${header}\nWrite the failing tests that prove this task, before any code exists. Check that each fails for the reason the task gives, and that the older tests still pass.${sealing}`,
   { agentType: 'tester', label: 'tester: tests first', schema: TESTS },
 )
 if (!tests || tests.tests.length === 0) {
   return { ticket, outcome: 'no tests', note: 'the Tester wrote no failing test: the task may already be done, or be unclear', tests }
 }
 
-const history = [{ round: 0, tests: tests.tests }]
+const sealed = (sealable && tests.sealed) || []
+const history = [{ round: 0, tests: tests.tests, sealed }]
 let code = null
 // Who spoke last: the Coder at the last round, or the Tester when an attack found nothing more.
 let testerLast = false
@@ -94,15 +116,36 @@ for (let round = 0; round <= rounds; round++) {
   history.push({ round: round + 1, tests: tests.tests })
 }
 
-// The last one to speak sent questions and answers the other never got. The other's questions
-// reached it, and count as answered when it gave answers.
+// The last one to speak in the duel sent questions and answers the other never got. The other's
+// questions reached it, and count as answered when it gave answers.
 const lastAnswers = (testerLast ? tests.answers : code.answers) || []
 const answered = lastAnswers.length > 0
-log(`duel over: ${history.length} round(s), tests passing: ${code.passing}`)
+const openQuestions = [...(testerLast || !answered ? tests.questions : []), ...(!testerLast || !answered ? code.questions : [])]
+const duelCode = code
+
+if (sealed.length > 0 && code && code.passing) {
+  phase('Unseal')
+  const unsealed = await agent(
+    `${header}\nThe duel is over and the visible tests pass. Run \`bin/harness unseal --ticket ${ticket}\`, which moves your sealed tests into the code, then run them (make test RUN=<their names>, or make test-integration RUN=… for those that need TheHive). List what you unsealed, and every sealed test that fails, with why.`,
+    { agentType: 'tester', label: 'tester: unseal', schema: UNSEALED },
+  )
+  history.push({ round: 'unseal', unsealed })
+
+  if (unsealed && unsealed.failing.length > 0) {
+    phase('Unseal')
+    code = await agent(
+      `${header}\nThe Tester's sealed tests are now in the code, and these fail:\n${listTests({ tests: unsealed.failing })}\nMake them pass with the smallest change that does what the task asks: they test the task, not your code.`,
+      { agentType: 'coder', label: 'coder: sealed tests', schema: CODE },
+    )
+    history[history.length - 1].code = code
+  }
+}
+
+log(`duel over: ${history.length} round(s), tests passing: ${code ? code.passing : false}`)
 return {
   ticket,
-  outcome: code.passing ? 'passing' : 'red',
-  open_questions: [...(testerLast || !answered ? tests.questions : []), ...(!testerLast || !answered ? code.questions : [])],
+  outcome: code && code.passing ? 'passing' : 'red',
+  open_questions: [...openQuestions, ...(code && code !== duelCode ? code.questions : [])],
   last_answers: lastAnswers,
   history,
 }

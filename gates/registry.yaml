@@ -354,6 +354,16 @@ gates:
       absolute budget there: the time the server adds to a TheHive call (a search through the
       in-process client against a TheHive stub), wrapping a page of results, the filter transforms
 
+  - id: mutation
+    runs: bin/harness mutation
+    docker: true
+    cadence: [pr, ci]
+    suites: ["*"]
+    budget_s: 1800
+    blocks: >-
+      a changed package with a floor in gates/mutation.yaml whose unit tests kill a smaller share
+      of gremlins' mutants than the floor
+
   - id: fuzz
     runs: >-
       make go CMD="test -run ^NoTest -fuzz ^FuzzUntrustedWrap -fuzztime 60s ./internal/utils" &&

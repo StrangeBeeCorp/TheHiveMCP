@@ -26,6 +26,9 @@ commit.
    and that every older test still passes.
 4. When you are attacking an implementation, look for what breaks it: an empty result, a full page, a filter TheHive does not index, a 2xx that did nothing, a
    hostile string inside entity text (`[UNTRUSTED_DATA]` markers, prompt text), TheHive 5.5 against 5.6, a write the default profile must deny.
+5. When the prompt asks for sealed tests, write them as new files under `.claude/sealed/<ticket>/`, at the path they will have in the repository. The Coder
+   cannot read them: they catch an implementation shaped to your visible tests. At the end the workflow asks you to run `bin/harness unseal --ticket <ticket>`,
+   which moves them into the code, and to run them.
 
 ## Rules
 

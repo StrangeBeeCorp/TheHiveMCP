@@ -18,6 +18,8 @@
 //	harness package tarballs|mcpb [--version V] [--build DIR] [--dist DIR] [--name N] [--targets "T ..." | --host]
 //	harness sign-windows BINARY...  (SIGNING_PROVIDER: none, signpath or azure)
 //	harness integration  (make test-integration: the stack up and reset, then the suite)
+//	harness unseal --ticket KEY  (the end of a duel: the Tester's sealed tests move into the code)
+//	harness mutation [--base REF]  (gremlins on the changed packages, against gates/mutation.yaml)
 //	harness bench [--base REF]  (the benchmarks at the merge base and at HEAD, against gates/bench.yaml)
 package main
 
@@ -50,6 +52,7 @@ const (
 	exitIncomplete = 3
 	dockerProbe    = 10 * time.Second
 	filePerm       = 0o644
+	dirPerm        = 0o750
 )
 
 var (
@@ -173,7 +176,7 @@ func stagedRun(args []string) bool {
 
 func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer) error {
 	if len(args) == 0 {
-		return usageError{"usage: harness run|select|list|check|docs|hook|pr|push|evidence|review-effort|canaries|structure|lint|fmt|package|sign-windows|integration (see cmd/harness/main.go)"}
+		return usageError{"usage: harness run|select|list|check|docs|hook|pr|push|evidence|review-effort|canaries|structure|lint|fmt|package|sign-windows|integration|bench|mutation|unseal (see cmd/harness/main.go)"}
 	}
 
 	if command, ok := standalone[args[0]]; ok {
@@ -206,6 +209,8 @@ func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer
 		builtinStructure: e.structure,
 		"review-effort":  e.reviewEffort,
 		"bench":          e.bench,
+		"mutation":       e.mutate,
+		"unseal":         func(_ context.Context, a []string, w io.Writer) error { return e.unseal(a, w) },
 	}
 
 	command, ok := commands[args[0]]
