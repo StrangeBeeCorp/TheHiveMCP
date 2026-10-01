@@ -8,14 +8,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Fixed
-
-- **A TheHive that stops answering no longer hangs the tool call.** The connection to TheHive had no timeout, so a TheHive that accepted the connection and
-  never answered held the call until the MCP client gave up — about four minutes in Claude Desktop — with no error, which read as a crashed server. Every
-  request to TheHive is now bounded (2 minutes by default, set with `THEHIVE_REQUEST_TIMEOUT` or `--thehive-request-timeout`), and a request that runs out of
-  time fails with an error saying so. Its hints warn that an abandoned create, update or delete may still have been applied, so the entity should be read back
-  before retrying.
-
 ### Changed
 
 - **The MITRE ATT&CK catalog is no longer fenced as untrusted data.** A `search-entities` query on `entity-type: pattern` used to return its technique name and
@@ -31,6 +23,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pattern fact sheet no longer lists platform among the filterable fields.
 
 ### Fixed
+
+- **A TheHive that stops answering no longer hangs the tool call.** The connection to TheHive had no timeout, so a TheHive that accepted the connection and
+  never answered held the call until the MCP client gave up — about four minutes in Claude Desktop — with no error, which read as a crashed server. Every
+  request to TheHive is now bounded (2 minutes by default, set with `THEHIVE_REQUEST_TIMEOUT` or `--thehive-request-timeout`), and a request that runs out of
+  time fails with an error saying so. Its hints warn that an abandoned create, update or delete may still have been applied, so the entity should be read back
+  before retrying.
 
 - **Responders on a task or an observable are reachable.** TheHive's responder endpoints know those entities as `case_task` and `case_artifact`, not the `task`
   and `observable` the tool and the responder catalog resource advertise, so the catalog and `run-responder` answered 404 for them. Both now translate, and a
@@ -58,6 +56,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   naming it. Before, a file that failed to load only logged a warning, and every tool call was then denied with no reason given; that is still what happens when
   the file is edited into an invalid state while the HTTP server runs, since it reloads the file per request. **A file that contains such a typo no longer
   starts: fix the key it names.**
+- **A client's own TheHive key is no longer replaced by the server's.** With `ALLOW_ENV_CREDENTIAL_FALLBACK=true`, a key sent in the `Authorization` header was
+  overwritten by `THEHIVE_API_KEY`, so the client's calls ran under the service account: with its rights, and under its name in TheHive's audit trail. The
+  server's key now stands in only when a request carries no key.
+- **An `Authorization` header in another scheme than Bearer is no longer taken for a TheHive key.** The Basic credentials an authenticating proxy passes on were
+  forwarded to TheHive as the key, so the proxy user's password reached TheHive and the call failed. Such a value is now ignored: a request carrying only that
+  gets the env fallback when it is on, and is refused otherwise. When a request sends both headers, `X-TheHive-Api-Key` wins.
 
 ## [1.1.0] - 2026-09-10
 

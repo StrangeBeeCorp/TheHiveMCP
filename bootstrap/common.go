@@ -198,18 +198,23 @@ func AddTheHiveClientToContextWithCreds(ctx context.Context, creds *TheHiveCrede
 	return context.WithValue(ctx, types.HiveClientCtxKey, client), nil
 }
 
-// ExtractBearerToken strips a "Bearer " prefix if present, else returns the header unchanged.
+// ExtractBearerToken returns the TheHive key an Authorization header carries:
+// the token of a Bearer value, or a bare value with no scheme. Any other scheme,
+// such as the Basic credentials of an authenticating proxy, carries no TheHive
+// key and yields "", so it is never forwarded to TheHive as one.
 func ExtractBearerToken(authHeader string) string {
-	if authHeader == "" {
+	scheme, token, hasScheme := strings.Cut(strings.TrimSpace(authHeader), " ")
+
+	switch {
+	case !hasScheme && strings.EqualFold(scheme, "bearer"):
+		return "" // "Bearer " with its trailing space trimmed by the HTTP parser
+	case !hasScheme:
+		return scheme
+	case strings.EqualFold(scheme, "bearer"):
+		return strings.TrimSpace(token)
+	default:
 		return ""
 	}
-
-	const bearerPrefix = "bearer "
-	if strings.HasPrefix(strings.ToLower(authHeader), bearerPrefix) {
-		return strings.TrimSpace(authHeader[len(bearerPrefix):])
-	}
-
-	return authHeader
 }
 
 // ValidateTheHiveClient verifies the client's credentials by calling TheHive's

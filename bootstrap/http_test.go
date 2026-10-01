@@ -240,7 +240,7 @@ func TestGetHTTPAuthContextFunc_AuthorizationHeader(t *testing.T) {
 
 func clientHeaders(hiveURL string) map[string]string {
 	headers := map[string]string{
-		string(types.HeaderKeyTheHiveAPIKey): "client-key",
+		string(types.HeaderKeyTheHiveAPIKey): testClientKey,
 	}
 	if hiveURL != "" {
 		headers[string(types.HeaderKeyTheHiveURL)] = hiveURL
@@ -354,20 +354,97 @@ func TestGetHTTPAuthContextFunc_EnvCredentialFallback(t *testing.T) {
 		assert.Equal(t, "Bearer env-secret-key", hive.lastAuthorization())
 	})
 
+	// Regression: with fallback on, the env key was the default of each key
+	// header, so a key sent only as a Bearer token was overwritten by it.
 	t.Run("client-supplied credentials are used regardless of fallback setting", func(t *testing.T) {
 		t.Parallel()
 
-		hive := newFakeTheHive(t)
-		options := &types.TheHiveMcpDefaultOptions{
-			TheHiveURL:    hive.server.URL,
-			TheHiveAPIKey: testEnvSecretKey,
-		}
+		for _, fallback := range []bool{false, true} {
+			for header, value := range map[string]string{
+				string(types.HeaderKeyTheHiveAPIKey): testClientKey,
+				headerAuthorization:                  "Bearer " + testClientKey,
+			} {
+				t.Run(fmt.Sprintf("%s with fallback %t", header, fallback), func(t *testing.T) {
+					t.Parallel()
 
-		ctx := authContextForRequest(options, clientHeaders(""))
+					hive := newFakeTheHive(t)
+					options := &types.TheHiveMcpDefaultOptions{
+						TheHiveURL:                 hive.server.URL,
+						TheHiveAPIKey:              testEnvSecretKey,
+						AllowEnvCredentialFallback: fallback,
+					}
+
+					ctx := authContextForRequest(options, map[string]string{header: value})
+
+					assertAuthValidated(ctx, t)
+					assert.Equal(t, "Bearer client-key", hive.lastAuthorization())
+				})
+			}
+		}
+	})
+
+	// The Basic credentials an authenticating proxy passes on are not a
+	// TheHive key: they must never reach TheHive, and must not block the
+	// fallback a single-user deployment behind that proxy relies on.
+	t.Run("a proxy's Basic credentials are ignored", func(t *testing.T) {
+		t.Parallel()
+
+		basic := map[string]string{headerAuthorization: "Basic cHJveHktdXNlcjpwcm94eS1wYXNzd29yZA=="}
+
+		hive := newFakeTheHive(t)
+		ctx := authContextForRequest(&types.TheHiveMcpDefaultOptions{
+			TheHiveURL: hive.server.URL, TheHiveAPIKey: testEnvSecretKey, AllowEnvCredentialFallback: true,
+		}, basic)
+		assertAuthValidated(ctx, t)
+		assert.Equal(t, "Bearer env-secret-key", hive.lastAuthorization())
+
+		hive = newFakeTheHive(t)
+		ctx = authContextForRequest(&types.TheHiveMcpDefaultOptions{TheHiveURL: hive.server.URL, TheHiveAPIKey: testEnvSecretKey}, basic)
+		assertAuthRejected(ctx, t)
+		assert.Zero(t, hive.requests.Load(), "without fallback the request has no key and must not reach TheHive")
+	})
+
+	t.Run("X-TheHive-Api-Key wins over Authorization", func(t *testing.T) {
+		t.Parallel()
+
+		hive := newFakeTheHive(t)
+		ctx := authContextForRequest(&types.TheHiveMcpDefaultOptions{TheHiveURL: hive.server.URL}, map[string]string{
+			headerAuthorization:                  "Bearer other-key",
+			string(types.HeaderKeyTheHiveAPIKey): testClientKey,
+		})
 
 		assertAuthValidated(ctx, t)
 		assert.Equal(t, "Bearer client-key", hive.lastAuthorization())
 	})
+
+	t.Run("a client key wins over the env username and password", func(t *testing.T) {
+		t.Parallel()
+
+		hive := newFakeTheHive(t)
+		ctx := authContextForRequest(&types.TheHiveMcpDefaultOptions{
+			TheHiveURL: hive.server.URL, TheHiveUsername: "service", TheHivePassword: "service-password", AllowEnvCredentialFallback: true,
+		}, map[string]string{headerAuthorization: "Bearer " + testClientKey})
+
+		assertAuthValidated(ctx, t)
+		assert.Equal(t, "Bearer client-key", hive.lastAuthorization())
+	})
+}
+
+func TestExtractBearerToken(t *testing.T) {
+	t.Parallel()
+
+	for header, want := range map[string]string{
+		"Bearer " + testClientKey:    testClientKey,
+		"bearer " + testClientKey:    testClientKey,
+		" Bearer  " + testClientKey:  testClientKey,
+		testClientKey:                testClientKey,
+		"Bearer":                     "",
+		"Basic cHJveHk6cGFzcw==":     "",
+		"Negotiate YIIJvwYGKwYBBQ==": "",
+		"":                           "",
+	} {
+		assert.Equal(t, want, ExtractBearerToken(header), "header %q", header)
+	}
 }
 
 // Regression test for RandoriSec 5.5: an empty X-TheHive-Url with no
