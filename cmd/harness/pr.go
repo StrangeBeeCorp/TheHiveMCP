@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/checks"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/evidence"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/policy"
@@ -73,6 +74,7 @@ func (e env) pr(ctx context.Context, args []string, out io.Writer) error {
 	ev := evidence.Evidence{
 		Head: head, Base: gitx.Resolve(ctx, e.root, sel.Base), Branch: branch, Verdict: rec.Verdict,
 		Started: rec.Started, Finished: rec.Finished, Suites: rec.Suites, Changed: sel.Paths, Results: rec.Results,
+		FirstSnapshot: firstSnapshot(ctx, e.root, sel.Base),
 	}
 
 	p, err := ev.Write(e.root)
@@ -103,6 +105,12 @@ func (e env) pr(ctx context.Context, args []string, out io.Writer) error {
 	}
 
 	return e.push(ctx, pushArgs, out)
+}
+
+// firstSnapshot reports whether the change creates the snapshot of what the model reads: the base
+// has none. Without a base, nothing is known.
+func firstSnapshot(ctx context.Context, root, base string) bool {
+	return base != "" && !gitx.HasPath(ctx, root, base, checks.SurfaceSummary)
 }
 
 // errChangedDuringRun means the gates did not run on the commit HEAD names now.

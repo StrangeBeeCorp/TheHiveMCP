@@ -2,6 +2,7 @@ package evidence
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -40,8 +41,13 @@ func Flags(changed []string, classOf func(string) (string, bool)) []Flag {
 	return flags
 }
 
-// ModelFacing reports whether the change touches what the model reads: the surface snapshot.
+// ModelFacing reports whether the change touches what the model reads: the surface snapshot,
+// unless the change creates it.
 func (ev Evidence) ModelFacing() bool {
+	if ev.FirstSnapshot {
+		return false
+	}
+
 	for _, p := range ev.Changed {
 		if strings.HasPrefix(p, surfacePrefix) {
 			return true
@@ -85,6 +91,9 @@ func Markdown(ev Evidence, flags []Flag) string {
 			"check `baselines/surface/` and the protected parts by hand.\n")
 	case ev.ModelFacing():
 		b.WriteString("\n**Model-facing: yes.** `baselines/surface/` changed: tick the model-facing box of the release impact.\n")
+	case ev.FirstSnapshot:
+		b.WriteString("\n**Model-facing: no.** The base had no `baselines/surface/`: this change creates the first snapshot of " +
+			"what the server already advertised.\n")
 	default:
 		b.WriteString("\n**Model-facing: no.** `baselines/surface/` did not change.\n")
 	}
@@ -105,10 +114,15 @@ func ran(results []runner.Result) int {
 }
 
 // cell makes a summary fit a table cell: one line, no pipe, at most 120 characters.
+// colours are a terminal's colour and style codes, which a gate's summary may carry.
+var colours = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
+
 func cell(s string) string {
 	const width = 120
 
+	s = colours.ReplaceAllString(s, "")
 	s = strings.ReplaceAll(strings.SplitN(s, "\n", 2)[0], "|", "\\|")
+
 	if r := []rune(s); len(r) > width {
 		s = string(r[:width-1]) + "…"
 	}

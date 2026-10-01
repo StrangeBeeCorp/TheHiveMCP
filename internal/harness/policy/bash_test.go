@@ -50,6 +50,7 @@ func TestBypassesAreDeniedToEveryone(t *testing.T) {
 		"setsid bin/harness push --person",
 		`make go CMD="run ./cmd/harness push --person"`,
 		"P=--person; bin/harness push $P",
+		"bin/harness push --perso[n]",
 		"bin/harness push $(echo --person)",
 		"printf %s%s --per son | xargs bin/harness push",
 		"parallel bin/harness push :::: /tmp/args",

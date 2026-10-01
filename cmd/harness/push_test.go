@@ -104,5 +104,5 @@ func TestTheGateEvidenceFlagsThePolicysProtectedClasses(t *testing.T) {
 	}
 
 	assert.Equal(t, []string{"baselines", "gates", "harness policy", "spec", "trust"}, classes)
-	assert.Len(t, flags[2].Paths, 2, "the harness and its workflows")
+	assert.Len(t, flags[2].Paths, 2, "the policy and CODEOWNERS")
 }

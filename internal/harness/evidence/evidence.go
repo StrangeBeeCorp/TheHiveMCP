@@ -34,6 +34,9 @@ type Evidence struct {
 	Suites   []string        `json:"suites"`
 	Changed  []string        `json:"changed"`
 	Results  []runner.Result `json:"results"`
+	// FirstSnapshot is true when the base had no snapshot of what the model reads: this change
+	// creates it, which changes nothing a model reads.
+	FirstSnapshot bool `json:"first_snapshot,omitempty"`
 }
 
 func path(root, head string) string {

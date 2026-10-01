@@ -111,7 +111,7 @@ func TestTheEvidenceFlagsWhatOnlyAPersonChanges(t *testing.T) {
 		Started: time.Unix(0, 0), Finished: time.Unix(75, 0),
 		Changed: []string{"spec/items.yaml", "internal/tools/search/models.go", "gates/limits.yaml", "baselines/surface/tokens.json"},
 		Results: []runner.Result{
-			{Gate: lintGate, Verdict: runner.Pass, Seconds: 12.3, Summary: "lint | passed\nmore"},
+			{Gate: lintGate, Verdict: runner.Pass, Seconds: 12.3, Summary: "\x1b[32mlint\x1b[0m | passed\nmore"},
 			{Gate: itGate, Verdict: runner.Skipped, Summary: "not selected"},
 		},
 	}
@@ -123,7 +123,11 @@ func TestTheEvidenceFlagsWhatOnlyAPersonChanges(t *testing.T) {
 	assert.Contains(t, md, "> - gates: `gates/limits.yaml`\n> - spec: `spec/items.yaml`")
 	assert.Contains(t, md, "**Model-facing: yes.**")
 
-	ev.Changed = []string{"internal/tools/search/handler.go"}
+	ev.FirstSnapshot = true
+	assert.False(t, ev.ModelFacing(), "the first snapshot changes nothing a model reads")
+	assert.Contains(t, evidence.Markdown(ev, nil), "**Model-facing: no.** The base had no `baselines/surface/`")
+
+	ev.FirstSnapshot, ev.Changed = false, []string{"internal/tools/search/handler.go"}
 	md = evidence.Markdown(ev, evidence.Flags(ev.Changed, classOf))
 	assert.NotContains(t, md, "CAUTION")
 	assert.Contains(t, md, "**Model-facing: no.**")
