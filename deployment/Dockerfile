@@ -1,7 +1,10 @@
 # syntax=docker/dockerfile:1.4
 
 # Stage 1: Build the Go binary
-FROM golang:1.26.8-alpine AS builder
+# Runs on the build host's own platform and cross-compiles to TARGETOS/TARGETARCH
+# (Go needs no emulator for that), so a multi-platform build does not run the Go
+# toolchain under QEMU for the foreign architecture.
+FROM --platform=$BUILDPLATFORM golang:1.26.8-alpine AS builder
 
 # Set necessary environment variables
 ARG BINARY=server

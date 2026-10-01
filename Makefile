@@ -382,15 +382,21 @@ test-integration-down: ## Tear down the stack left up by test-integration ##@ ma
 # environment variable of the same name.
 # DOCKER_IMAGE is the name release.yml publishes under
 # (ghcr.io/<repository owner, lowercased>/thehivemcp/thehivemcp).
+# DOCKER_PLATFORMS: the platforms docker-build puts in the image, the same as
+# release.yml's. Keeping them all in one local image needs Docker's containerd
+# image store (the default on Docker Desktop); `docker run` then picks the
+# host's variant. Set DOCKER_PLATFORMS=linux/arm64 for a faster one-platform
+# build.
 DOCKER_IMAGE := ghcr.io/strangebee/thehivemcp/thehivemcp
 DOCKER_VERSION_TAG = $(if $(filter command line,$(origin VERSION)),-t $(DOCKER_IMAGE):${VERSION})
+DOCKER_PLATFORMS ?= linux/amd64,linux/arm64
 .PHONY: docker-build
-docker-build: ## Build the production Docker image (thehivemcp:latest, plus ghcr.io/strangebee/thehivemcp/thehivemcp:VERSION if given) ##@ make docker-build [VERSION=v1.2.0]
+docker-build: ## Build the production Docker image for DOCKER_PLATFORMS (thehivemcp:latest, plus ghcr.io/strangebee/thehivemcp/thehivemcp:VERSION if given) ##@ make docker-build [VERSION=v1.2.0] [DOCKER_PLATFORMS=linux/amd64,linux/arm64]
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Building Docker Image --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
 	export DOCKER_BUILDKIT=1; \
-	docker build \
+	docker build --platform $(DOCKER_PLATFORMS) \
 		--build-arg BUILD_DATE=${BUILD_DATE} \
 		--build-arg GIT_COMMIT=${GIT_COMMIT} \
 		--build-arg VERSION=${VERSION} \
