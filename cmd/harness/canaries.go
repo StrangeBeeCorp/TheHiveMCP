@@ -87,7 +87,8 @@ func (e env) canary(ctx context.Context, c checks.Canary, out io.Writer) canaryO
 	cmd.Dir = dir
 	cmd.Stdout, cmd.Stderr = io.Discard, io.Discard
 
-	cmd.Env = append(os.Environ(), "RUN="+c.Run)
+	// The change under test is the patch alone: compared with HEAD, not with the branch's base.
+	cmd.Env = append(os.Environ(), "RUN="+c.Run, "HARNESS_BASE=HEAD")
 
 	err = cmd.Run()
 
