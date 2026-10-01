@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -23,7 +24,10 @@ type Canary struct {
 	Patch string `yaml:"patch"`
 	// Run restricts a test gate to the tests that should catch it (passed as RUN to make).
 	Run string `yaml:"run"`
-	Why string `yaml:"why"`
+	// Expect is a regular expression the gate's log must match: the failure is the one the canary
+	// causes, not a compile error or a broken stack.
+	Expect string `yaml:"expect"`
+	Why    string `yaml:"why"`
 }
 
 // LoadCanaries parses the canary manifest and checks it against the registry and the spec: each
@@ -97,6 +101,11 @@ func canaryProblems(tree Tree, reg *registry.Registry, c Canary, items, seen map
 
 	if strings.TrimSpace(c.Why) == "" {
 		p = append(p, fmt.Sprintf("canary %q does not say what it breaks", c.ID))
+	}
+
+	_, err := regexp.Compile(c.Expect)
+	if c.Expect == "" || err != nil {
+		p = append(p, fmt.Sprintf("canary %q needs an expect: a regular expression of the failure its gate reports", c.ID))
 	}
 
 	return p

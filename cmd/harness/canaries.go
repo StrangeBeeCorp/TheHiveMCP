@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"time"
 
@@ -80,6 +81,8 @@ type canaryRun struct {
 	out      io.Writer
 	baseline map[string]int
 	stack    bool
+	// matched tells whether the last patched run's gate log matched the canary's expect.
+	matched bool
 }
 
 func (r *canaryRun) canary(ctx context.Context, c checks.Canary) canaryOutcome {
@@ -110,6 +113,8 @@ func (r *canaryRun) canary(ctx context.Context, c checks.Canary) canaryOutcome {
 		o.verdict, o.note = runner.Fail, err.Error()
 	case code == 0:
 		o.verdict, o.note = runner.Fail, "ESCAPED: the gate passed with the patch applied"
+	case code == 1 && !r.matched:
+		o.verdict, o.note = runner.Unavailable, fmt.Sprintf("the gate failed, but its log has no %q: it failed for another reason", c.Expect)
 	case code == 1:
 		o.verdict, o.note = runner.Pass, fmt.Sprintf("caught in %.0f s", time.Since(started).Seconds())
 	default:
@@ -150,6 +155,10 @@ func (r *canaryRun) runIn(ctx context.Context, c checks.Canary, patched bool) (i
 
 	err = cmd.Run()
 
+	if patched {
+		r.matched = logMatches(dir, c)
+	}
+
 	var exit *exec.ExitError
 
 	switch {
@@ -160,6 +169,26 @@ func (r *canaryRun) runIn(ctx context.Context, c checks.Canary, patched bool) (i
 	}
 
 	return 0, fmt.Errorf("the gate could not start: %w", err)
+}
+
+// logMatches reports whether the log the gate wrote in the scratch checkout matches the canary's
+// expect.
+func logMatches(dir string, c checks.Canary) bool {
+	logs, _ := filepath.Glob(filepath.Join(dir, ".cache", "harness", "runs", "nightly-*", c.Gate+".log"))
+
+	re, err := regexp.Compile(c.Expect)
+	if err != nil {
+		return false
+	}
+
+	for _, p := range logs {
+		data, err := os.ReadFile(p) // #nosec G304 -- a gate log of the scratch checkout
+		if err == nil && re.Match(data) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // teardown removes the TheHive stack the integration canaries started.

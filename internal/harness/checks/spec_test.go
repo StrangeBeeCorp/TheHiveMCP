@@ -118,7 +118,7 @@ func TestCanariesNameAGateAnItemAndAPatch(t *testing.T) {
 	tree := checks.MemTree{
 		specFile: []byte("items:\n  - {id: AAA-001, title: t, rule: r, status: active, gates: [unit]}\n"),
 		"gates/canaries/canaries.yaml": []byte(`canaries:
-  - {id: ok, item: AAA-001, gate: unit, patch: ok.patch, why: breaks it}
+  - {id: ok, item: AAA-001, gate: unit, patch: ok.patch, expect: FAIL, why: breaks it}
   - {id: bad, item: ZZZ-001, gate: nope, patch: missing.patch, why: ""}
 `),
 		"gates/canaries/ok.patch": []byte("diff\n"),
@@ -132,7 +132,7 @@ func TestCanariesNameAGateAnItemAndAPatch(t *testing.T) {
 	}
 
 	delete(tree, "gates/canaries/canaries.yaml")
-	tree["gates/canaries/canaries.yaml"] = []byte("canaries:\n  - {id: ok, item: AAA-001, gate: unit, patch: ok.patch, why: breaks it}\n")
+	tree["gates/canaries/canaries.yaml"] = []byte("canaries:\n  - {id: ok, item: AAA-001, gate: unit, patch: ok.patch, expect: FAIL, why: breaks it}\n")
 
 	list, err := checks.LoadCanaries(tree, specRegistry(t))
 	require.NoError(t, err)
