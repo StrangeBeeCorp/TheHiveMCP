@@ -10,8 +10,11 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 )
 
-// statusSuccess is Cortex's terminal success state.
-const statusSuccess = "Success"
+// Cortex run states.
+const (
+	statusSuccess    = "Success" // terminal
+	statusInProgress = "InProgress"
+)
 
 // TestJobReportIsAdversarialSubtree pins that Cortex analyzer reports are
 // typed UntrustedSubtree (DL-6703): every string inside them is wrapped
@@ -85,7 +88,7 @@ func TestWorkerStatusMessage_OnlyInvitesPollingWhileItCanChange(t *testing.T) {
 		status   string
 		wantPoll bool
 	}{
-		{"InProgress", true},
+		{statusInProgress, true},
 		{"Waiting", true},
 		{statusSuccess, false},
 		{"Failure", false},

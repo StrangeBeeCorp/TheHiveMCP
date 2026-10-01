@@ -48,10 +48,18 @@ func (t *ExecuteAutomationTool) ValidatePermissions(ctx context.Context, params 
 		return t.validateTargetScope(ctx, perms, params.EntityType, params.EntityID)
 	case OperationGetJobStatus:
 		return t.validateJobScope(ctx, perms, params.JobID)
+	case OperationWaitForJobs:
+		// Scope-checked per job while waiting, under the wait's deadline, so a
+		// job outside the permitted scope does not cost the others their reports.
+		return nil
 	default:
 		return tools.NewToolErrorf("unsupported operation: %s", params.Operation)
 	}
 }
+
+// errJobOutOfScope answers a job that does not exist and one outside the
+// permitted scope alike, so the answer does not reveal which.
+const errJobOutOfScope = "job %s was not found or its target is not within the scope permitted by your permissions configuration"
 
 // validateAnalyzer denies an analyzer the rules exclude. The caller may name it
 // by ID or by name and the rules may list either, so when the rules single out
@@ -159,7 +167,7 @@ func (t *ExecuteAutomationTool) validateJobScope(ctx context.Context, perms *per
 	}
 
 	if !inScope {
-		return tools.NewToolErrorf("job %s was not found or its target is not within the scope permitted by your permissions configuration", jobID).
+		return tools.NewToolErrorf(errJobOutOfScope, jobID).
 			Hint("The configured permission filters restrict which entities this tool can reach")
 	}
 
@@ -203,6 +211,8 @@ func (t *ExecuteAutomationTool) ValidateParams(params *ExecuteAutomationParams) 
 		return validateGetJobStatusParams(params)
 	case OperationGetActionStatus:
 		return validateGetActionStatusParams(params)
+	case OperationWaitForJobs:
+		return validateWaitForJobsParams(params)
 	default:
 		return tools.NewToolErrorf("unsupported operation: %s", params.Operation)
 	}
@@ -299,6 +309,52 @@ func validateAutomationTarget(params *ExecuteAutomationParams) error {
 
 	if !automationEntityIDPattern.MatchString(params.EntityID) {
 		return tools.NewToolErrorf("invalid entity-id %q: must be a TheHive entity ID such as ~123456", params.EntityID)
+	}
+
+	return nil
+}
+
+// Bounds of a wait-for-jobs call. The ceiling keeps one blocking call inside a
+// client's tool-call timeout; a caller with slower jobs calls again.
+const (
+	DefaultWaitSeconds = 45 // under the 60 s tool-call timeout of the MCP TypeScript SDK
+	MaxWaitSeconds     = 120
+	MaxWaitJobs        = 20
+)
+
+func validateWaitForJobsParams(params *ExecuteAutomationParams) error {
+	if len(params.JobIDs) == 0 {
+		return tools.NewToolErrorf("job-ids is required for wait-for-jobs operations. Provide the job IDs returned by run-analyzer")
+	}
+
+	seen := make(map[string]struct{}, len(params.JobIDs))
+	unique := params.JobIDs[:0]
+
+	for _, id := range params.JobIDs {
+		if id == "" {
+			return tools.NewToolErrorf("job-ids must not contain an empty ID")
+		}
+
+		if _, dup := seen[id]; !dup {
+			seen[id] = struct{}{}
+			unique = append(unique, id)
+		}
+	}
+
+	params.JobIDs = unique
+
+	if len(params.JobIDs) > MaxWaitJobs {
+		return tools.NewToolErrorf("wait-for-jobs accepts at most %d job IDs, got %d", MaxWaitJobs, len(params.JobIDs)).
+			Hint("Split the wait into several calls")
+	}
+
+	switch {
+	case params.TimeoutSecs < 0:
+		return tools.NewToolErrorf("timeout-seconds must be positive, got %d", params.TimeoutSecs)
+	case params.TimeoutSecs == 0:
+		params.TimeoutSecs = DefaultWaitSeconds
+	case params.TimeoutSecs > MaxWaitSeconds:
+		params.TimeoutSecs = MaxWaitSeconds
 	}
 
 	return nil

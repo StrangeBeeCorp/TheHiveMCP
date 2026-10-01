@@ -3,6 +3,8 @@
 package execute_automation
 
 import (
+	"time"
+
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
@@ -11,11 +13,13 @@ import (
 
 // ExecuteAutomationTool exposes Cortex analyzer/responder execution and status
 // retrieval as an MCP tool.
-type ExecuteAutomationTool struct{}
+type ExecuteAutomationTool struct {
+	pollInterval time.Duration // how often wait-for-jobs re-reads running jobs
+}
 
 // NewExecuteAutomationTool returns a new ExecuteAutomationTool.
 func NewExecuteAutomationTool() *ExecuteAutomationTool {
-	return &ExecuteAutomationTool{}
+	return &ExecuteAutomationTool{pollInterval: waitPollInterval}
 }
 
 // Name returns the tool's registered MCP name.
@@ -37,7 +41,7 @@ func (t *ExecuteAutomationTool) HasUntrustedData() bool { return true }
 // Exported so the schema tests can check every key against the struct.
 var ExecuteAutomationParamConstraints = map[string]tools.SchemaConstraint{
 	"operation": {Enum: []string{
-		OperationRunAnalyzer, OperationRunResponder, OperationGetJobStatus, OperationGetActionStatus,
+		OperationRunAnalyzer, OperationRunResponder, OperationGetJobStatus, OperationGetActionStatus, OperationWaitForJobs,
 	}},
 	"entity-type": {Enum: automationEntityTypes},
 }
