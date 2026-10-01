@@ -290,6 +290,25 @@ func TestManageCreateObservableInCaseReportsSuccess(t *testing.T) {
 	require.NotEmpty(t, obs["_id"])
 }
 
+// Regression: an observable without `data` (the value sent as `value`, or
+// missing) made TheHive answer 2xx with an empty list, and the tool reported
+// "Observable created successfully" for an observable that never existed.
+func TestManageCreateObservableWithoutDataIsAnError(t *testing.T) {
+	testutils.Parallel(t)
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t)
+
+	alert := createAlert(t, hiveClient, "Alert for an observable without data", "obs-without-data")
+
+	result := testutils.CallTool(t, mcpClient, testToolName, map[string]any{
+		testArgOperation:  testOpCreate,
+		testArgEntityType: types.EntityTypeObservable,
+		testArgEntityIDs:  []string{alert.UnderscoreId},
+		testArgEntityData: map[string]any{testFieldDataType: "ip", "value": "203.0.113.9"},
+	})
+	require.True(t, result.IsError, "a create that created nothing must be reported as an error")
+}
+
 func TestManageUpdateMultipleEntities(t *testing.T) {
 	testutils.Parallel(t)
 	hiveClient := testutils.SetupTestWithCleanup(t)

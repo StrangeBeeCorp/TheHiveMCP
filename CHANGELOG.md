@@ -33,6 +33,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Creating an observable that TheHive did not create is now an error.** An observable sent without `data` (a common slip is `value`) made TheHive answer 2xx
+  with an empty list, and `manage-entities` reported "Observable created successfully" with an empty `result`. A model then believed the observable existed and
+  built on it; one measured run spent its whole turn budget re-creating it. The tool now fails with a hint to set `entity-data.data`.
+
 - **A TheHive that stops answering no longer hangs the tool call.** The connection to TheHive had no timeout, so a TheHive that accepted the connection and
   never answered held the call until the MCP client gave up — about four minutes in Claude Desktop — with no error, which read as a crashed server. Every
   request to TheHive is now bounded (2 minutes by default, set with `THEHIVE_REQUEST_TIMEOUT` or `--thehive-request-timeout`), and a request that runs out of
