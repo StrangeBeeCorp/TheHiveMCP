@@ -57,6 +57,13 @@ func TestBypassesAreDeniedToEveryone(t *testing.T) {
 		"cp -R /tmp/evidence .cache/harness/",
 		"mv /tmp/evidence .cache/harness",
 		"tar -xf /tmp/e.tar -C .cache/harness",
+		"script -q /dev/null git push origin HEAD:main",
+		"setsid git push origin HEAD:main",
+		"flock /tmp/l git push origin HEAD:main",
+		"parallel ::: 'git push origin HEAD:main'",
+		"arch -arm64 /usr/bin/git push origin HEAD:main",
+		"script -q /dev/null gh pr merge 197 --merge",
+		"setsid env -u CLAUDECODE bin/harness push",
 	} {
 		for _, role := range []policy.Role{policy.Main, policy.Coder, policy.Other} {
 			assert.True(t, bash(role, line).Deny, "%s: %s", role, line)
@@ -138,6 +145,9 @@ func TestOrdinaryWorkIsNotInTheWay(t *testing.T) {
 		"bin/harness run --cadence stop",
 		"cat .env.template",
 		"bash -e -c 'make test'",
+		"cp internal/x.txt .",
+		"mkdir -p .cache/tmp/git",
+		"setsid make test",
 	} {
 		assert.False(t, bash(policy.Coder, line).Deny, "%s: %v", line, bash(policy.Coder, line).Reason)
 	}
