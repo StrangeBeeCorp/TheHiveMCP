@@ -16,6 +16,21 @@ YQ_IMAGE := mikefarah/yq@sha256:11a1f0b604b13dbbdc662260d8db6f644b22d8553122a25c
 # rule separator) when it directly follows an `ifeq (…)` conditional, a false
 # positive that would otherwise trip the phonydeclared / uniquetargets rules.
 MOUNT_APP := $(CURDIR):/app
+# STRANGEBEE_CA_BUNDLE: the Zscaler root CA bundle StrangeBee-managed Macs ship.
+# Zscaler inspects TLS and re-signs HTTPS with its own root, which the host trusts
+# but the images below do not, so any tool fetching from the network in a
+# container fails with "x509: certificate signed by unknown authority"
+# (govulncheck's vuln.go.dev database, trivy's checks bundle, a module download).
+# The file is mounted into /etc/ssl/certs, a directory Go-built tools (go, gosec,
+# govulncheck, trivy) scan IN ADDITION to the image's own bundle: the image's
+# roots stay trusted, unlike SSL_CERT_FILE, which would replace them.
+#
+# The bundle is detected, not configured: when the file exists it is mounted,
+# otherwise (CI, other hosts) no mount is added. The existence test goes through
+# the shell, not $(wildcard): wildcard splits its argument on spaces, and this
+# path has one ("Application Support"). Quoted in CA_MOUNT for the same reason.
+STRANGEBEE_CA_BUNDLE := /Library/Application Support/StrangeBee/Certificates/zscaler-ca-bundle.pem
+CA_MOUNT := $(if $(shell [ -f "$(STRANGEBEE_CA_BUNDLE)" ] && echo found),-v "$(STRANGEBEE_CA_BUNDLE)":/etc/ssl/certs/extra-ca-bundle.pem:ro)
 # All Go work runs inside the $(GO_IMAGE) container — there is NO host Go install
 # (see install-dev-deps). So every cache is a Docker named volume, never a host
 # path: named volumes are linux-native, populated in-container, and — unlike a
@@ -230,7 +245,7 @@ sast: ## Find insecure code patterns via SAST (gosec) ##@ make sast
 	@echo $(BGreen)---------------------------$(Color_Off)
 	@echo $(BGreen)-- Running SAST Analysis --$(Color_Off)
 	@echo $(BGreen)---------------------------$(Color_Off)
-	docker run -i --rm -v $(MOUNT_APP) -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install github.com/securego/gosec/v2/cmd/gosec@v2.26.1 && gosec ./...'
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install github.com/securego/gosec/v2/cmd/gosec@v2.26.1 && gosec ./...'
 
 # Every Dockerfile in the repo. hadolint lints each — the production image plus
 # the MCPB and LibreChat helper images — so a misconfig regression in any of them
@@ -263,7 +278,7 @@ dockersec: ## Scan Dockerfiles for HIGH+ security misconfigs (trivy) ##@ make do
 	@echo $(BGreen)---------------------------$(Color_Off)
 	@for f in $(DOCKERFILES); do \
 		echo "trivy config $$f"; \
-		docker run --rm -v $(CURDIR):/scan -w /scan $(TRIVY_CACHE) aquasec/trivy:0.72.0 \
+		docker run --rm -v $(CURDIR):/scan -w /scan $(CA_MOUNT) $(TRIVY_CACHE) aquasec/trivy:0.72.0 \
 			config --quiet --exit-code 1 --severity HIGH,CRITICAL "$$f" || exit 1; \
 	done
 	@echo "Dockerfiles security OK"
@@ -327,7 +342,7 @@ test: pre ## Default test loop: fast, cached unit tests (no live TheHive) ##@ ma
 	@echo $(BGreen)-----------------------$(Color_Off)
 	@echo $(BGreen)-- Running UnitTests --$(Color_Off)
 	@echo $(BGreen)-----------------------$(Color_Off)
-	docker run -i --rm -v $(MOUNT_APP) -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go test $(GO_TEST_COVER) $(GO_TEST_RUN) -short -v ./...
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go test $(GO_TEST_COVER) $(GO_TEST_RUN) -short -v ./...
 ifeq ($(COVERAGE),1)
 	docker run -i --rm -v $(MOUNT_APP) -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
 endif
@@ -340,7 +355,7 @@ endif
 .PHONY: test-race
 test-race: pre ## Catch data races in our concurrency (unit tests, -race) ##@ make test-race [RUN=<regexp>]
 	@echo $(BGreen)-- Running UnitTests under -race --$(Color_Off)
-	docker run -i --rm -v $(MOUNT_APP) -w /app -e CGO_ENABLED=1 $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE_CGO) go test -race $(GO_TEST_RUN) -short ./...
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) -e CGO_ENABLED=1 $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE_CGO) go test -race $(GO_TEST_RUN) -short ./...
 
 .PHONY: test-integration
 test-integration: pre ## Full suite vs a live TheHive stack; slow, leaves stack up ##@ make test-integration [COVERAGE=1] [RUN=<regexp>] [THEHIVE_TEST_IMAGE=..] [THEHIVE_TEST_URL=..]; then make test-integration-down
@@ -359,8 +374,18 @@ endif
 test-integration-down: ## Tear down the stack left up by test-integration ##@ make test-integration-down
 	docker compose -f docker-compose.test.yml down -v
 
+# DOCKER_VERSION_TAG: the image is always tagged thehivemcp:latest, which
+# docker-run uses; it is also tagged $(DOCKER_IMAGE):VERSION when VERSION is
+# given on the command line. The git-describe default is left out, so a plain
+# `make docker-build` adds no tag. $(origin) tells the two apart, and it is
+# enough: VERSION is assigned at the top, which already overrides an
+# environment variable of the same name.
+# DOCKER_IMAGE is the name release.yml publishes under
+# (ghcr.io/<repository owner, lowercased>/thehivemcp/thehivemcp).
+DOCKER_IMAGE := ghcr.io/strangebee/thehivemcp/thehivemcp
+DOCKER_VERSION_TAG = $(if $(filter command line,$(origin VERSION)),-t $(DOCKER_IMAGE):${VERSION})
 .PHONY: docker-build
-docker-build: ## Build the production Docker image (thehivemcp:latest) ##@ make docker-build
+docker-build: ## Build the production Docker image (thehivemcp:latest, plus ghcr.io/strangebee/thehivemcp/thehivemcp:VERSION if given) ##@ make docker-build [VERSION=v1.2.0]
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Building Docker Image --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
@@ -369,7 +394,7 @@ docker-build: ## Build the production Docker image (thehivemcp:latest) ##@ make 
 		--build-arg BUILD_DATE=${BUILD_DATE} \
 		--build-arg GIT_COMMIT=${GIT_COMMIT} \
 		--build-arg VERSION=${VERSION} \
-		-t ${BINARY_NAME}:latest \
+		-t ${BINARY_NAME}:latest $(DOCKER_VERSION_TAG) \
 		-f deployment/Dockerfile .
 
 .PHONY: docker-run
@@ -413,7 +438,7 @@ vulncheck: ## Check dependencies for known CVEs (govulncheck) ##@ make vulncheck
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Security Vulnerability  --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
-	docker run -i --rm -v $(MOUNT_APP) -w /app $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@v1.3.0 && govulncheck ./...'
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@v1.3.0 && govulncheck ./...'
 
 .PHONY: lint
 lint: ## Check the whole repo for lint issues, read-only ##@ make lint
@@ -448,7 +473,7 @@ updatedep: ## Upgrade Go deps to latest and tidy go.mod/go.sum ##@ make updatede
 	@echo $(BGreen)-----------------------$(Color_Off)
 	@echo $(BGreen)-- Update Dependencies --$(Color_Off)
 	@echo $(BGreen)-----------------------$(Color_Off)
-	docker run -i --rm -v $(MOUNT_APP) -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) sh -c 'go get -u ./... && go mod tidy'
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) sh -c 'go get -u ./... && go mod tidy'
 
 .PHONY: install-dev-deps
 install-dev-deps: ## No-op: tooling runs on-demand via Docker (kept for habit) ##@ make install-dev-deps
@@ -472,7 +497,7 @@ build-%: pre
 	@echo "Building for $*..."
 	@OS=$$(echo $* | cut -d- -f1); \
 	ARCH=$$(echo $* | cut -d- -f2); \
-	docker run -i --rm -v $(MOUNT_APP) -w /app -e GOOS=$$OS -e GOARCH=$$ARCH $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go build $(GOLDFLAGS) -o $(BUILDDIR)/$(BINARY_NAME)-$*$(call bin_ext,$*) ./cmd/server/main.go
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) -e GOOS=$$OS -e GOARCH=$$ARCH $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go build $(GOLDFLAGS) -o $(BUILDDIR)/$(BINARY_NAME)-$*$(call bin_ext,$*) ./cmd/server/main.go
 
 .PHONY: pre-dist
 pre-dist: ## Internal: ensure the dist/ directory exists (packaging dep) ##@ make pre-dist (usually run automatically)
