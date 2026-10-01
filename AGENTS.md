@@ -12,8 +12,8 @@ It builds an MCP server (`bootstrap.GetMCPServerAndRegisterTools`) and serves it
 - `bootstrap/` — server construction, tool registration, transports (`stdio.go`, `http.go`), auth middleware, URL allowlist, validation cache.
 - `internal/tools/` — the MCP **tools**, grouped by capability: `manage/` (CRUD), `search/`, `resource/`, `execute_automation/`. Shared middlewares in `middlewares.go`.
 - `internal/resources/` — MCP **resources** (static + dynamic) and their `facts/`, `rules/`, `schemas/`; registered via `resource_registry.go`.
-- `internal/confirmation/` — the approval gate for mutating operations; `Prompter` isolates how the question reaches the MCP client.
 - `internal/{types,permissions,auth,logging,utils,testutils}/` — config/options, RBAC, auth, logging, helpers, and the integration-test container harness.
+- `cmd/harness/`, `internal/harness/`, `gates/`, `bin/harness` — the harness: the gates every change must pass (see below).
 
 ## Main DevEx/AgentEx entrypoint (commands)
 
@@ -21,6 +21,10 @@ Run `make help-xml` to get all available commands, their purpose, and how to use
 Start by running `make help-xml` at the start of any session that will modify code.
 
 All targets run in Docker; no local Go install needed.
+
+While you work, run `make check-fast`: it runs the gates your changed paths select, in about a minute. The gates, their cadences and what makes each
+one block are listed in `docs/reference/gates.md`, generated from `gates/registry.yaml`. The git pre-commit hook runs `make pre-commit`
+(`make dev-setup` enables it), CI runs the same gates through `bin/harness`, and `make gate ID=<gate>` runs one of them on demand.
 
 When running commands, never pipe its output through a small `tail`/`head` that discards most of it — you lose the full result and must re-run the whole slow suite.
 Redirect stdout+stderr to a temp file (e.g. `make test-integration > /tmp/integration.log 2>&1`), then `grep`/inspect that file afterwards.

@@ -1,0 +1,89 @@
+# What the structure and public-safety gates enforce (gates/registry.yaml runs them).
+
+structure:
+  # A code file stays under this many lines. Split a file before it grows past it.
+  max_lines: 500
+  # A directory holds at most this many code files besides its tests: past it, split the package.
+  max_code_files_per_dir: 14
+  # What counts as code: a pattern with a slash matches the path, one without the file name.
+  code_files: ["*.go", "*.sh", "*.py", "*.js", "*.mjs", "*.ts", "*.mk", Makefile, Dockerfile, "Dockerfile.*", ".githooks/*", "bin/*"]
+  # The files that were already over the limit when the gate arrived (2026-10-01), capped at their
+  # size then (the Makefile with the harness targets that came with the gate). A cap may only go
+  # down: the gate asks for a lower cap when a file shrinks, and for its removal once the file is
+  # under the limit.
+  caps:
+    internal/tools/manage/manage_test.go: 1024
+    internal/tools/search/search_test.go: 920
+    internal/resources/static_resources.go: 891
+    bootstrap/tool_schema_test.go: 718
+    internal/resources/dynamic_resources.go: 689
+    scripts/lint.sh: 677
+    internal/utils/parsers.go: 635
+    Makefile: 613
+    internal/utils/parsers_test.go: 594
+    internal/tools/manage/models.go: 586
+    bootstrap/http_test.go: 580
+    internal/testutils/container.go: 543
+  # The top-level entries the repository may have. A new one is a deliberate change: add it here.
+  root:
+    - .air.toml
+    - .claude
+    - .dockerignore
+    - .env.template
+    - .githooks
+    - .github
+    - .gitignore
+    - .gitleaks.toml
+    - .golangci.yml
+    - .markdownlint.jsonc
+    - .pre-commit-config.yaml
+    - .prettierrc.json
+    - .sonarcloud.properties
+    - AGENTS.md
+    - CHANGELOG.md
+    - CLAUDE.md
+    - LICENSE
+    - Makefile
+    - NOTICE
+    - README.md
+    - RELEASING.md
+    - bin
+    - bootstrap
+    - checkmake.ini
+    - cmd
+    - deployment
+    - docker-compose.license.yml
+    - docker-compose.test.yml
+    - docs
+    - gates
+    - go.mod
+    - go.sum
+    - internal
+    - renovate.json
+    - scripts
+    - version
+
+public_safety:
+  # Per-machine and secret-bearing files: they stay out of this public repository (.gitignore).
+  forbidden_paths:
+    - .claude/settings.local.json
+    - .claude/worktrees/**
+    - .claude/logs/**
+    - CLAUDE.local.md
+    - .env
+    - ".env.*"
+    - "*.lic.local"
+    - key.md
+    - "*.pem"
+    - "*.p12"
+    - "*.key"
+    - "id_rsa*"
+    - "id_ed25519*"
+  # Exceptions to forbidden_paths: templates with no value in them.
+  allowed_paths:
+    - .env.template
+  # Names allowed after /Users/ or /home/: the CI runner and placeholders, not people.
+  home_names: [runner, user, you, username, name, example, me]
+  # Files whose content is not scanned for home paths (this file names the patterns).
+  skip_content:
+    - gates/limits.yaml

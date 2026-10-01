@@ -5,15 +5,11 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-    # Skip CI for docs-only changes — these can't affect the code checks or the
-    # integration suite, and the integration matrix boots a full TheHive per leg
-    # (~5 min each). Safe because no job here is a required status check on main;
-    # if that changes, switch to a paths-filter gate job so skips still report.
-    paths-ignore:
-      - '**/*.md'
-      - '.markdownlint.jsonc'
-      - 'LICENSE'
-      - 'NOTICE'
+    # Every pull request runs CI, docs-only ones included. The gates run through
+    # bin/harness, which skips those the changed paths don't select
+    # (gates/registry.yaml): a docs-only change runs the static checks and boots no
+    # TheHive, and every job still reports a result, so these jobs can become
+    # required checks without stranding a docs pull request.
 
 jobs:
   checks:
@@ -22,10 +18,16 @@ jobs:
     # containers as the runner uid (see the Makefile note), so the cache below
     # is actually mounted AND is runner-owned for actions/cache to save. This is
     # set job-wide so every make step (fmt/lint/sast/vulncheck) uses it.
+    # HARNESS_BASE is what bin/harness compares with to select the gates; it is
+    # empty on a push to main, which runs every gate.
     env:
       GO_CACHE_DIR: /home/runner/.cache/thehivemcp-go
+      HARNESS_BASE: ${{ github.event.pull_request.base.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The merge base with the pull request's base, for gate selection.
+          fetch-depth: 0
 
       # The make targets run inside pinned images and bind-mount these host caches
       # (via GO_CACHE_DIR / DOCKER_CACHE_MOUNTS / GOLANGCI_CACHE). Without them every
@@ -49,23 +51,28 @@ jobs:
       - name: Prepare cache dirs
         run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools "$GO_CACHE_DIR"/golangci
 
-      - name: Format check
-        run: make fmt-check
+      # One step per gate of gates/registry.yaml whose cadence includes ci. The
+      # docs gate fails when a ci gate is missing here.
+      - name: Structure, public safety and docs
+        run: bin/harness run --cadence ci --gate structure --gate public-safety --gate docs
 
-      - name: Run linter
-        run: make lint
+      - name: Format check
+        run: bin/harness run --cadence ci --gate fmt
+
+      - name: Lint and unit tests
+        run: bin/harness run --cadence ci --gate lint
 
       - name: Run SAST
-        run: make sast
+        run: bin/harness run --cadence ci --gate sast
 
       - name: Run vulnerability scan
-        run: make vulncheck
+        run: bin/harness run --cadence ci --gate vulncheck
 
       - name: Lint Dockerfiles
-        run: make dockerlint
+        run: bin/harness run --cadence ci --gate dockerlint
 
       - name: Scan for secrets
-        run: make secrets
+        run: bin/harness run --cadence ci --gate secrets
 
   docker-build:
     # Smoke-test that the production image still builds from deployment/Dockerfile
@@ -182,8 +189,11 @@ jobs:
     # GO_CACHE_DIR makes the Makefile bind these host dirs into the go-test
     # container as the runner uid (see the Makefile note), so the cache below is
     # actually mounted AND is runner-owned for actions/cache to save.
+    # HARNESS_BASE lets bin/harness skip the suite when the change cannot affect it
+    # (docs only, for instance): the leg then reports a pass without booting TheHive.
     env:
       GO_CACHE_DIR: /home/runner/.cache/thehivemcp-go
+      HARNESS_BASE: ${{ github.event.pull_request.base.sha }}
     # Run the integration suite against the oldest and the newest supported
     # TheHive versions, so a compatibility break at either end turns the PR red
     # instead of going unnoticed (see DL-6007). The versions in between share the
@@ -201,6 +211,9 @@ jobs:
           - strangebee/thehive:5.8.0
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The merge base with the pull request's base, for gate selection.
+          fetch-depth: 0
 
       # Persist the Go caches the test container uses (module cache, build cache,
       # and the go-installed gotestsum) across runs. Without this each fresh runner
@@ -244,7 +257,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run integration tests
-        run: make test-integration
+        run: bin/harness run --cadence ci --gate integration
         env:
           THEHIVE_TEST_IMAGE: ${{ matrix.thehive-image }}
           # A pre-minted multi-instance dev license. When set, the suite runs

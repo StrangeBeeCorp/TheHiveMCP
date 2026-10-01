@@ -124,8 +124,10 @@ forward for no-behavior-change releases). The full policy is in [RELEASING.md](R
 TheHiveMCP/
 ├── cmd/server/         # Main entrypoint
 ├── bootstrap/          # Server initialization (public API)
-├── internal/           # Core components (tools, resources, permissions, confirmation, utils)
+├── internal/           # Core components (tools, resources, permissions, auth, utils, harness)
 ├── deployment/         # Docker configuration
+├── gates/              # The harness's gate registry and limits (docs/reference/gates.md)
+├── bin/harness         # Runs the gates: make check-fast, make pre-commit, CI
 └── Makefile
 ```
 
@@ -557,15 +559,23 @@ compatibility break at either end fails the PR. The image is a single source of 
 - `make lint-changed` / `make lint-fix` / `make lint-fix-changed` - the same gate scoped to changed files, and its auto-fixing counterparts
 - `make vulncheck` - Vulnerability scanning
 
+**The harness:**
+
+- `make check-fast` - The gates your changed paths select, in about a minute: the loop to run while you work
+- `make gate ID=<gate>` - One gate now, whatever changed
+- `make harness-docs` - Regenerate `docs/reference/gates.md` after changing `gates/registry.yaml`
+
+Every gate, its cadences and what makes it block are in [docs/reference/gates.md](docs/reference/gates.md). CI runs the same gates through `bin/harness`.
+
 **Git hooks (recommended, one-time):**
 
 ```sh
 make dev-setup    # git config core.hooksPath .githooks
 ```
 
-This points git at the tracked hooks in `.githooks/`, which delegate to the same `scripts/lint.sh`: `pre-commit` runs `--staged` (exactly what the commit will
-carry) and `pre-push` runs `--all` (the full gate). Both are read-only — neither rewrites a file under you — and both are bypassable with `--no-verify` by
-design: they are a fast local signal, while the authoritative gate stays CI.
+This points git at the tracked hooks in `.githooks/`: `pre-commit` runs `make pre-commit` (the commit gates on exactly what the commit will carry, with
+`scripts/lint.sh --staged` among them) and `pre-push` runs `scripts/lint.sh --all` (the full gate). Both are read-only — neither rewrites a file under you — and
+both are bypassable with `--no-verify`: they are a fast local signal, while the authoritative gate stays CI.
 
 **Docker operations:**
 
@@ -583,7 +593,7 @@ design: they are a fast local signal, while the authoritative gate stays CI.
 - `make help` - Display all available targets
 
 **Architecture:** Transport (`bootstrap/`), Tools (`internal/tools/`), Resources (`internal/resources/`), Integration (`internal/utils/`), Permissions
-(`internal/permissions/`), Confirmation (`internal/confirmation/`)
+(`internal/permissions/`), Harness (`internal/harness/`, gates in `gates/registry.yaml`)
 
 </details>
 

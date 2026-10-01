@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# bin/harness — build the harness for this machine in the pinned Go image, then run it.
+#
+#   bin/harness run --cadence stop        what `make check-fast` runs
+#   bin/harness <command> -h              see cmd/harness/main.go for the commands
+#
+# The binary is built from origin/main's harness sources, so a branch cannot change the harness
+# that judges it. HARNESS=worktree builds this checkout's sources instead: for work on the harness
+# itself, and automatically while origin/main has no harness yet. The registry and the limits are
+# always read from the checkout: changing them is a reviewed change like any other.
+#
+# Binaries are cached by source hash under the main checkout's .cache/harness/, so a build costs
+# a few seconds once and nothing after. Needs Docker (OrbStack); there is no host Go.
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+common="$(git rev-parse --path-format=absolute --git-common-dir)"
+cache="$(dirname "$common")/.cache/harness"
+sources=(cmd/harness internal/harness go.mod go.sum)
+
+hash16() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum; else shasum -a 256; fi | cut -c1-16
+}
+
+os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+case "$(uname -m)" in
+  x86_64 | amd64) arch=amd64 ;;
+  arm64 | aarch64) arch=arm64 ;;
+  *)
+    echo "bin/harness: unsupported architecture $(uname -m)" >&2
+    exit 1
+    ;;
+esac
+
+mode="${HARNESS:-main}"
+if [[ "$mode" = main ]] && ! git -C "$root" cat-file -e origin/main:internal/harness 2>/dev/null; then
+  mode=worktree
+fi
+
+if [[ "$mode" = main ]]; then
+  key="main-$(git -C "$root" rev-parse "${sources[@]/#/origin/main:}" | hash16)"
+else
+  key="worktree-$(cd "$root" && find "${sources[@]}" -type f -print0 | LC_ALL=C sort -z | xargs -0 cat | hash16)"
+fi
+bin="$cache/bin/$key-$os-$arch/harness"
+
+build() {
+  local src="$1" out="$2" go_image bundle
+  go_image="$(grep -m1 '^GO_IMAGE *:=' "$root/Makefile" | sed 's/.*:= *//')"
+  if ! docker info >/dev/null 2>&1; then
+    echo "bin/harness: Docker is not running; the harness is built in $go_image. Start OrbStack and retry." >&2
+    exit 75
+  fi
+  # Same caches and CI settings as the Makefile's Go targets (see GO_CACHE_DIR there).
+  local mounts=(-v thehivemcp-gomod:/go/pkg/mod -v thehivemcp-gobuild:/root/.cache/go-build) user=() ca=()
+  if [[ -n "${GO_CACHE_DIR:-}" ]]; then
+    mounts=(-v "$GO_CACHE_DIR/gomod:/go/pkg/mod" -v "$GO_CACHE_DIR/gobuild:/go/cache/go-build")
+    user=(--user "$(id -u):$(id -g)" -e HOME=/tmp -e GOCACHE=/go/cache/go-build -e GOMODCACHE=/go/pkg/mod
+    -e GOPATH=/go -e GOSUMDB=off -e GOTOOLCHAIN=local)
+  fi
+  bundle="/Library/Application Support/StrangeBee/Certificates/zscaler-ca-bundle.pem"
+  [[ -f "$bundle" ]] && ca=(-v "$bundle:/etc/ssl/certs/extra-ca-bundle.pem:ro")
+  mkdir -p "$(dirname "$out")"
+  docker run --rm -v "$src:/src:ro" -v "$(dirname "$out"):/out" -w /src "${mounts[@]}" \
+    ${user[@]+"${user[@]}"} ${ca[@]+"${ca[@]}"} -e CGO_ENABLED=0 -e GOOS="$os" -e GOARCH="$arch" \
+    "$go_image" go build -trimpath -buildvcs=false -o /out/harness ./cmd/harness >&2
+}
+
+if [[ ! -x "$bin" ]]; then
+  if [[ "$mode" = main ]]; then
+    src="$cache/src/$key"
+    rm -rf "$src" && mkdir -p "$src"
+    git -C "$root" archive origin/main "${sources[@]}" | tar -x -C "$src"
+  else
+    src="$root"
+  fi
+  echo "bin/harness: building the harness ($mode, $os/$arch)..." >&2
+  build "$src" "$bin"
+fi
+
+cd "$root"
+exec "$bin" "$@"

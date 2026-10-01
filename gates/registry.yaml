@@ -1,0 +1,205 @@
+# The gate registry: every check the harness runs, when it runs, and what makes it block.
+#
+# bin/harness reads this file. docs/reference/gates.md is generated from it (make harness-docs),
+# and the docs gate fails when the two drift, or when .github/workflows/ci.yml does not run a
+# gate whose cadence includes ci.
+#
+# Cadences:
+#   edit     an agent edits a file (Claude Code PostToolUse hook)
+#   stop     an agent stops, or you run `make check-fast`
+#   commit   the git pre-commit hook (`make pre-commit`), on the staged files
+#   pr       before a pull request is opened
+#   ci       GitHub Actions, on every pull request and every push to main
+#   nightly  the nightly run
+#
+# Suites: the changed paths select suites, and a gate runs when one of its suites is selected
+# ("*" means whatever changed). A path that no suite claims selects every suite, and so does
+# the `everything` suite. `implies` selects other suites too.
+#
+# {scope} in `runs` becomes the file scope of the cadence (see `scopes`). A command that exits
+# 75 reports UNAVAILABLE: a stated limit, never a pass.
+
+scopes:
+  edit: --changed HEAD
+  stop: --changed HEAD
+  commit: --staged
+  pr: --all
+  ci: --all
+  nightly: --all
+
+suites:
+  - id: everything
+    about: The harness and the repository-wide tooling; a change here checks everything
+    paths:
+      - cmd/harness/**
+      - internal/harness/**
+      - gates/**
+      - bin/**
+      - .githooks/**
+      - .github/**
+      - Makefile
+      - scripts/lint.sh
+      - scripts/fmt.sh
+      - scripts/lint-makefile.sh
+      - .golangci.yml
+      - .markdownlint.jsonc
+      - .prettierrc.json
+      - .gitleaks.toml
+      - checkmake.ini
+      - go.mod
+      - go.sum
+  - id: surface
+    about: What the model reads - tool definitions and descriptions, schemas, resources
+    implies: [tools]
+    paths:
+      - internal/tools/*/definition.go
+      - internal/tools/*/models.go
+      - internal/tools/schema.go
+      - internal/tools/union_schema.go
+      - internal/tools/annotations.go
+      - internal/tools/errors.go
+      - internal/resources/**
+  - id: trust
+    about: The untrusted-data boundary, permissions and authentication
+    implies: [tools]
+    paths:
+      - internal/utils/parsers.go
+      - internal/permissions/**
+      - internal/auth/**
+      - bootstrap/allowlist.go
+      - bootstrap/inprocess.go
+  - id: tools
+    about: Tool handlers and the code they share
+    paths:
+      - internal/tools/**
+      - internal/utils/**
+      - internal/types/**
+      - internal/logging/**
+  - id: server
+    about: Server wiring, transports and the binary
+    implies: [tools]
+    paths:
+      - bootstrap/**
+      - cmd/server/**
+      - version/**
+  - id: tests
+    about: Test helpers, fixtures and the integration stack
+    paths:
+      - internal/testutils/**
+      - "**/*_test.go"
+      - docker-compose.test.yml
+      - docker-compose.license.yml
+      - scripts/run-integration-tests.sh
+      - scripts/reset-integration-db.sh
+  - id: packaging
+    about: The production image, the MCPB packages and the release archives
+    paths:
+      - deployment/**
+      - scripts/Dockerfile.mcpb
+      - scripts/generate-mcpb.sh
+      - scripts/generate-hashes.sh
+      - scripts/package-*.sh
+      - scripts/sign-windows.sh
+      - .dockerignore
+  - id: docs
+    about: Documentation and agent instructions
+    paths:
+      - docs/**
+      - "*.md"
+      - .claude/skills/**
+  - id: meta
+    about: Repository metadata that no test reads
+    paths:
+      - LICENSE
+      - NOTICE
+      - renovate.json
+      - .sonarcloud.properties
+      - .pre-commit-config.yaml
+      - .air.toml
+      - .env.template
+
+gates:
+  - id: structure
+    builtin: structure
+    cadence: [edit, stop, commit, pr, ci]
+    suites: ["*"]
+    budget_s: 20
+    blocks: >-
+      a code file over 500 lines or over its cap, more than 14 code files in a directory, a file
+      that is not UTF-8, or a top-level entry gates/limits.yaml does not list
+
+  - id: public-safety
+    builtin: public-safety
+    cadence: [edit, stop, commit, pr, ci]
+    suites: ["*"]
+    budget_s: 20
+    blocks: >-
+      a per-machine file (settings.local.json, CLAUDE.local.md, a licence or environment file,
+      a key) or a personal home path in the repository
+
+  - id: docs
+    builtin: docs
+    cadence: [stop, commit, pr, ci]
+    suites: ["*"]
+    budget_s: 20
+    blocks: >-
+      a path named in AGENTS.md, README.md, CLAUDE.md or .claude/ that does not exist, a stale
+      docs/reference/gates.md, or a ci gate that ci.yml does not run
+
+  - id: fmt
+    runs: ./scripts/fmt.sh {scope} --check
+    docker: true
+    cadence: [stop, pr, ci]
+    suites: ["*"]
+    budget_s: 300
+    blocks: a Go, shell or Markdown file that its formatter would rewrite
+
+  - id: lint
+    runs: ./scripts/lint.sh {scope} --check
+    docker: true
+    cadence: [stop, commit, pr, ci]
+    suites: ["*"]
+    budget_s: 900
+    blocks: >-
+      a finding of golangci-lint, shellcheck, markdownlint, yamllint, hadolint, checkmake or
+      actionlint, or a failing unit test (lint.sh runs go test -short when Go files are in scope)
+
+  - id: sast
+    runs: make sast
+    docker: true
+    cadence: [pr, ci]
+    suites: [surface, trust, tools, server, tests]
+    budget_s: 600
+    blocks: a gosec finding
+
+  - id: vulncheck
+    runs: make vulncheck
+    docker: true
+    cadence: [pr, ci]
+    suites: [surface, trust, tools, server]
+    budget_s: 600
+    blocks: a known vulnerability reachable from our code
+
+  - id: dockerlint
+    runs: make dockerlint
+    docker: true
+    cadence: [pr, ci]
+    suites: [packaging, docs]
+    budget_s: 300
+    blocks: a hadolint finding in one of the Dockerfiles
+
+  - id: secrets
+    runs: make secrets
+    docker: true
+    cadence: [pr, ci]
+    suites: ["*"]
+    budget_s: 300
+    blocks: a secret gitleaks finds in the working tree
+
+  - id: integration
+    runs: make test-integration
+    docker: true
+    cadence: [pr, ci]
+    suites: [surface, trust, tools, server, tests]
+    budget_s: 2700
+    blocks: a failing test against a live TheHive (CI runs it on 5.5 and 5.6)

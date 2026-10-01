@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Delegate, never re-implement a checker: scripts/lint.sh is the single source of
-# truth for this repo's checks. --staged is exactly what the commit will carry,
-# so unrelated work-in-progress can't fail the commit. It stays on --check (the
-# default): the fixers rewrite the WORKING TREE, not the index, so a --fix here
-# would let the commit carry the unfixed version anyway.
-# Bypassable with `git commit --no-verify` by design — the real gate is CI.
-exec "$(git rev-parse --show-toplevel)/scripts/lint.sh" --staged
+# The commit gates of gates/registry.yaml, selected by exactly what the commit carries (--staged):
+# lint (scripts/lint.sh --staged, as before) plus the structure, public-safety and docs checks,
+# which take well under a second. Unrelated work in progress can't fail the commit.
+# Bypassable with `git commit --no-verify`.
+exec "$(git rev-parse --show-toplevel)/bin/harness" run --cadence commit --staged

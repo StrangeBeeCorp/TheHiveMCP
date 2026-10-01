@@ -127,9 +127,9 @@ classify() {
     [[ -f "$f" ]] || continue
     case "$f" in
       *.go) go_files+=("$f") ;;
-      # Git hooks carry git-imposed names with no .sh extension, but they are
-      # bash all the same — shellcheck/shfmt must see them too.
-      *.sh | .githooks/*) sh_files+=("$f") ;;
+      # Git hooks and bin/ commands carry names with no .sh extension, but they
+      # are bash all the same — shellcheck/shfmt must see them too.
+      *.sh | .githooks/* | bin/*) sh_files+=("$f") ;;
       *.md | *.mdx) md_format_exempt "$f" || md_files+=("$f") ;;
       *) ;;
     esac
