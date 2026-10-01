@@ -1,27 +1,27 @@
 package checks
 
 import (
+	"errors"
 	"fmt"
-	"os"
+	"io/fs"
 	"path"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
 )
 
-// Structure checks every file of the repository: a code file stays under max_lines (or under its
-// cap, which may only go down), a directory holds at most max_code_files_per_dir code files
-// besides its tests, every text file is UTF-8, and the top level holds only the listed entries.
-func Structure(root string, files []string, lim StructureLimits) ([]Finding, error) {
+// Structure checks every file of the tree: a code file stays under max_lines (or under its cap,
+// which may only go down), a directory holds at most max_code_files_per_dir code files besides
+// its tests, every text file is UTF-8, and the top level holds only the listed entries.
+func Structure(tree Tree, lim StructureLimits) ([]Finding, error) {
 	var out []Finding
 
 	perDir := map[string]int{}
 	seen := map[string]bool{}
 
-	for _, f := range files {
-		content, err := os.ReadFile(filepath.Join(root, f)) // #nosec G304 -- files come from git ls-files
-		if os.IsNotExist(err) {
+	for _, f := range tree.Files() {
+		content, err := tree.Read(f)
+		if errors.Is(err, fs.ErrNotExist) {
 			continue // deleted in the working tree
 		}
 

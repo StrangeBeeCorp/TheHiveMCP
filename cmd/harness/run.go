@@ -136,6 +136,8 @@ func (e env) run(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 
+	e.staged = scope.staged
+
 	return e.execute(ctx, *cadence, gates, sel, runFlags{force: *force && len(only) > 0, stream: *stream}, out)
 }
 
@@ -195,14 +197,11 @@ func (e env) execute(ctx context.Context, cadence string, gates []registry.Gate,
 		results = append(results, runner.Result{Gate: g.ID, Verdict: runner.Skipped, Summary: "not selected by this change"})
 	}
 
-	runner.Print(out, results, f.stream)
+	runner.Print(out, results)
 
 	rec := runner.Record{
 		Cadence: cadence, Head: gitx.Head(ctx, e.root), Suites: sel.Names(), Reason: sel.Reason,
-		Started: started, Finished: time.Now(), Verdict: runner.Pass, Results: results,
-	}
-	if runner.Failed(results) {
-		rec.Verdict = runner.Fail
+		Started: started, Finished: time.Now(), Verdict: runner.Overall(results), Results: results,
 	}
 
 	p, err := rec.Write(logDir)
@@ -211,9 +210,13 @@ func (e env) execute(ctx context.Context, cadence string, gates []registry.Gate,
 	}
 
 	_, _ = fmt.Fprintf(out, "verdict %s · %s\n", rec.Verdict, p)
-	if rec.Verdict == runner.Fail {
-		return errFailed
-	}
 
-	return nil
+	switch rec.Verdict {
+	case runner.Fail:
+		return errFailed
+	case runner.Incomplete:
+		return errIncomplete
+	default:
+		return nil
+	}
 }

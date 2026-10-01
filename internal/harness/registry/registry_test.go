@@ -52,6 +52,9 @@ func TestTheRepositoryRegistryIsValid(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, reg.At("stop"), "check-fast must run something")
 
+	profile := reg.Select([]string{"docs/reference/permissions-examples/analyst.yaml"})
+	assert.True(t, profile.Has("trust"), "the example profiles are the integration tests' permission fixtures")
+
 	for _, g := range reg.Gates {
 		if strings.Contains(g.Runs, registry.ScopePlaceholder) {
 			for _, c := range g.Cadence {

@@ -29,12 +29,18 @@ const (
 	registryPath = "gates/registry.yaml"
 	limitsPath   = "gates/limits.yaml"
 	exitUsage    = 2
-	dockerProbe  = 10 * time.Second
-	filePerm     = 0o644
+	// exitIncomplete: no gate failed, but at least one could not run, so the run is not a pass.
+	exitIncomplete = 3
+	dockerProbe    = 10 * time.Second
+	filePerm       = 0o644
 )
 
-// errFailed means the command ran and reported failures; they are already printed.
-var errFailed = errors.New("failed")
+var (
+	// errFailed means a gate failed; the results are already printed.
+	errFailed = errors.New("failed")
+	// errIncomplete means a gate was UNAVAILABLE: a stated limit, never a pass.
+	errIncomplete = errors.New("incomplete")
+)
 
 func main() {
 	err := dispatch(context.Background(), os.Args[1:], os.Stdout)
@@ -44,6 +50,10 @@ func main() {
 	case err == nil:
 	case errors.Is(err, errFailed):
 		os.Exit(1)
+	case errors.Is(err, errIncomplete):
+		_, _ = fmt.Fprintln(os.Stderr, "harness: a gate could not run (UNAVAILABLE above), so this run is not a pass")
+
+		os.Exit(exitIncomplete)
 	case errors.As(err, &usage):
 		_, _ = fmt.Fprintln(os.Stderr, "harness:", err)
 
@@ -64,6 +74,8 @@ type env struct {
 	root   string
 	reg    *registry.Registry
 	limits checks.Limits
+	// staged makes the built-in checks read the index, for a commit, instead of the working tree.
+	staged bool
 }
 
 func load(ctx context.Context) (env, error) {
@@ -138,22 +150,77 @@ func isBuiltin(name string) bool {
 	return false
 }
 
-// builtin runs a check built into the harness over every file of the repository.
-func (e env) builtin(ctx context.Context, name string) ([]string, error) {
+// tree is what the built-in checks read: the index for a commit (exactly what it carries), else
+// the working tree with its untracked files.
+func (e env) tree(ctx context.Context) (checks.Tree, error) {
+	if e.staged {
+		files, err := gitx.Index(ctx, e.root)
+		if err != nil {
+			return nil, fmt.Errorf("read the index: %w", err)
+		}
+
+		return checks.MemTree(files), nil
+	}
+
 	files, err := gitx.Files(ctx, e.root)
 	if err != nil {
 		return nil, fmt.Errorf("list the files: %w", err)
+	}
+
+	return checks.DirTree{Root: e.root, Names: files}, nil
+}
+
+// rules are the registry and the limits of the tree being judged: for a commit, the staged ones,
+// so that an edit on disk that is not staged cannot change the verdict.
+func (e env) rules(tree checks.Tree) (*registry.Registry, checks.Limits, error) {
+	if !e.staged {
+		return e.reg, e.limits, nil
+	}
+
+	data, err := tree.Read(registryPath)
+	if err != nil {
+		return nil, checks.Limits{}, fmt.Errorf("staged registry: %w", err)
+	}
+
+	reg, err := registry.Parse(data, registryPath)
+	if err != nil {
+		return nil, checks.Limits{}, fmt.Errorf("staged registry: %w", err)
+	}
+
+	data, err = tree.Read(limitsPath)
+	if err != nil {
+		return nil, checks.Limits{}, fmt.Errorf("staged limits: %w", err)
+	}
+
+	limits, err := checks.ParseLimits(data, limitsPath)
+	if err != nil {
+		return nil, checks.Limits{}, fmt.Errorf("staged limits: %w", err)
+	}
+
+	return reg, limits, nil
+}
+
+// builtin runs a check built into the harness over every file of the tree.
+func (e env) builtin(ctx context.Context, name string) ([]string, error) {
+	tree, err := e.tree(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	reg, limits, err := e.rules(tree)
+	if err != nil {
+		return nil, err
 	}
 
 	var found []checks.Finding
 
 	switch name {
 	case builtinStructure:
-		found, err = checks.Structure(e.root, files, e.limits.Structure)
+		found, err = checks.Structure(tree, limits.Structure)
 	case builtinSafety:
-		found, err = checks.PublicSafety(e.root, files, e.limits.PublicSafety)
+		found, err = checks.PublicSafety(tree, limits.PublicSafety)
 	case builtinDocs:
-		found, err = checks.Docs(e.root, files, e.reg)
+		found, err = checks.Docs(tree, reg)
 	default:
 		return nil, fmt.Errorf("unknown builtin %q", name)
 	}

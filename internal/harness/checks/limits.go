@@ -65,12 +65,17 @@ func LoadLimits(file string) (Limits, error) {
 		return Limits{}, fmt.Errorf("read limits: %w", err)
 	}
 
+	return ParseLimits(data, file)
+}
+
+// ParseLimits decodes limits, rejecting unknown keys; file names them in errors.
+func ParseLimits(data []byte, file string) (Limits, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 
 	var l Limits
 
-	err = dec.Decode(&l)
+	err := dec.Decode(&l)
 	if err != nil {
 		return Limits{}, fmt.Errorf("parse %s: %w", file, err)
 	}

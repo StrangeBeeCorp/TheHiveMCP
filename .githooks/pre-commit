@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# The commit gates of gates/registry.yaml, selected by exactly what the commit carries (--staged):
-# lint (scripts/lint.sh --staged, as before) plus the structure, public-safety and docs checks,
-# which take well under a second. Unrelated work in progress can't fail the commit.
+# The commit gates of gates/registry.yaml, judged on exactly what the commit carries: the staged
+# files select the gates, scripts/lint.sh runs on them (--staged, as before), and the structure,
+# public-safety and docs checks read the index, not the working tree. Unrelated work in progress
+# can't fail the commit.
 # Bypassable with `git commit --no-verify`.
 exec "$(git rev-parse --show-toplevel)/bin/harness" run --cadence commit --staged

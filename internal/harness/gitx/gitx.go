@@ -3,11 +3,14 @@
 package gitx
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -109,4 +112,87 @@ func ChangedSince(ctx context.Context, root, base string) ([]string, error) {
 func HasRef(ctx context.Context, root, ref string) bool {
 	_, err := run(ctx, root, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
 	return err == nil
+}
+
+// indexFields is the number of fields of an `ls-files --stage` entry before the tab, and of a
+// `cat-file --batch` header.
+const indexFields = 3
+
+// Index returns the content of every regular file in the index: exactly what the next commit
+// carries, whatever the working tree holds. Symbolic links and submodules are left out.
+func Index(ctx context.Context, root string) (map[string][]byte, error) {
+	listing, err := run(ctx, root, "ls-files", "-z", "--stage")
+	if err != nil {
+		return nil, err
+	}
+
+	var names, blobs []string
+
+	for entry := range strings.SplitSeq(listing, "\x00") {
+		// "<mode> <blob> <stage>\t<path>"
+		meta, name, ok := strings.Cut(entry, "\t")
+		fields := strings.Fields(meta)
+
+		if !ok || len(fields) != indexFields || !strings.HasPrefix(fields[0], "100") {
+			continue
+		}
+
+		names = append(names, name)
+		blobs = append(blobs, fields[1])
+	}
+
+	return readBlobs(ctx, root, names, blobs)
+}
+
+// readBlobs reads the blobs in one `cat-file --batch` process.
+func readBlobs(ctx context.Context, root string, names, blobs []string) (map[string][]byte, error) {
+	cmd := exec.CommandContext(ctx, "git", "cat-file", "--batch") // #nosec G204 -- a fixed git subcommand
+	cmd.Dir = root
+	cmd.Stdin = strings.NewReader(strings.Join(blobs, "\n") + "\n")
+
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("git cat-file --batch: %w", err)
+	}
+
+	files := make(map[string][]byte, len(names))
+	r := bufio.NewReader(bytes.NewReader(out))
+
+	for _, name := range names {
+		content, err := nextBlob(r)
+		if err != nil {
+			return nil, fmt.Errorf("read %s from the index: %w", name, err)
+		}
+
+		files[name] = content
+	}
+
+	return files, nil
+}
+
+// nextBlob reads one "<blob> <type> <size>\n<content>\n" record of `cat-file --batch`.
+func nextBlob(r *bufio.Reader) ([]byte, error) {
+	header, err := r.ReadString('\n')
+	if err != nil {
+		return nil, fmt.Errorf("header: %w", err)
+	}
+
+	fields := strings.Fields(header)
+	if len(fields) != indexFields {
+		return nil, fmt.Errorf("unexpected header %q", strings.TrimSpace(header))
+	}
+
+	size, err := strconv.Atoi(fields[2])
+	if err != nil {
+		return nil, fmt.Errorf("size in %q: %w", strings.TrimSpace(header), err)
+	}
+
+	content := make([]byte, size+1) // the content, then a newline
+
+	_, err = io.ReadFull(r, content)
+	if err != nil {
+		return nil, fmt.Errorf("content: %w", err)
+	}
+
+	return content[:size], nil
 }

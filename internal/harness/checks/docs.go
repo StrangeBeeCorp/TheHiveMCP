@@ -3,9 +3,9 @@ package checks
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
+	"io/fs"
 	"regexp"
 	"sort"
 	"strings"
@@ -26,17 +26,19 @@ var (
 
 // Docs checks that the documentation agents and people start from stays true: every repository
 // path it names exists, docs/reference/gates.md matches the registry, and ci.yml runs every ci gate.
-func Docs(root string, files []string, reg *registry.Registry) ([]Finding, error) {
+func Docs(tree Tree, reg *registry.Registry) ([]Finding, error) {
 	var out []Finding
 
+	files := tree.Files()
 	tops := topDirs(files)
+
 	for _, f := range files {
 		if !isEntryDoc(f) {
 			continue
 		}
 
-		content, err := os.ReadFile(filepath.Join(root, f)) // #nosec G304 -- files come from git ls-files
-		if os.IsNotExist(err) {
+		content, err := tree.Read(f)
+		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
 
@@ -44,11 +46,11 @@ func Docs(root string, files []string, reg *registry.Registry) ([]Finding, error
 			return nil, fmt.Errorf("docs: %w", err)
 		}
 
-		out = append(out, missingPaths(root, f, content, tops, files)...)
+		out = append(out, missingPaths(tree, f, content, tops)...)
 	}
 
-	page, err := os.ReadFile(filepath.Join(root, gatesdoc.Path)) // #nosec G304 -- a fixed path in the repository
-	if err != nil && !os.IsNotExist(err) {
+	page, err := tree.Read(gatesdoc.Path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("docs: %w", err)
 	}
 
@@ -56,7 +58,7 @@ func Docs(root string, files []string, reg *registry.Registry) ([]Finding, error
 		out = append(out, Finding{Path: gatesdoc.Path, Msg: "does not match gates/registry.yaml: run make harness-docs"})
 	}
 
-	ci, err := ciFindings(root, reg)
+	ci, err := ciFindings(tree, reg)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +89,7 @@ func topDirs(files []string) map[string]bool {
 	return tops
 }
 
-func missingPaths(root, doc string, content []byte, tops map[string]bool, files []string) []Finding {
+func missingPaths(tree Tree, doc string, content []byte, tops map[string]bool) []Finding {
 	var out []Finding
 
 	sc := bufio.NewScanner(bytes.NewReader(content))
@@ -106,7 +108,7 @@ func missingPaths(root, doc string, content []byte, tops map[string]bool, files 
 
 		for _, m := range inlineCode.FindAllStringSubmatch(text, -1) {
 			for _, p := range candidatePaths(m[1], tops) {
-				if !exists(root, p, files) {
+				if !exists(tree, p) {
 					out = append(out, Finding{Path: doc, Line: line, Msg: fmt.Sprintf("names %q, which does not exist", p)})
 				}
 			}
@@ -146,27 +148,25 @@ func expand(p string) []string {
 	return out
 }
 
-func exists(root, p string, files []string) bool {
-	if strings.Contains(p, "*") {
-		pat := strings.TrimSuffix(p, "/")
-		for _, f := range files {
-			if registry.Match(pat, f) || registry.Match(pat+"/**", f) {
-				return true
-			}
-		}
-
-		return false
+func exists(tree Tree, p string) bool {
+	if !strings.Contains(p, "*") {
+		return tree.Exists(p)
 	}
 
-	_, err := os.Stat(filepath.Join(root, p)) // #nosec G703 -- only tells whether a path a document names exists
+	pat := strings.TrimSuffix(p, "/")
+	for _, f := range tree.Files() {
+		if registry.Match(pat, f) || registry.Match(pat+"/**", f) {
+			return true
+		}
+	}
 
-	return err == nil
+	return false
 }
 
 // ciFindings checks that ci.yml runs every ci gate through bin/harness, and names no gate the
 // registry does not have.
-func ciFindings(root string, reg *registry.Registry) ([]Finding, error) {
-	content, err := os.ReadFile(filepath.Join(root, CIWorkflow)) // #nosec G304 -- a fixed path in the repository
+func ciFindings(tree Tree, reg *registry.Registry) ([]Finding, error) {
+	content, err := tree.Read(CIWorkflow)
 	if err != nil {
 		return nil, fmt.Errorf("docs: %w", err)
 	}

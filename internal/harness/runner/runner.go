@@ -1,5 +1,6 @@
 // Package runner runs gates and records what happened: one log per gate and a results.json that
-// states each verdict. A limit (UNAVAILABLE) is reported, never counted as a pass.
+// states each verdict. A limit (UNAVAILABLE) is reported, never counted as a pass: a run with one
+// ends INCOMPLETE.
 package runner
 
 import (
@@ -20,12 +21,14 @@ import (
 // Verdict is the outcome of one gate.
 type Verdict string
 
-// The verdicts. SKIPPED means the change did not select the gate.
+// The verdicts. SKIPPED means the change did not select the gate. INCOMPLETE is the verdict of a
+// run in which no gate failed but one could not run.
 const (
 	Pass        Verdict = "PASS"
 	Fail        Verdict = "FAIL"
 	Unavailable Verdict = "UNAVAILABLE"
 	Skipped     Verdict = "SKIPPED"
+	Incomplete  Verdict = "INCOMPLETE"
 )
 
 // ExitUnavailable is the exit code by which a gate command says it could not run here.
@@ -58,6 +61,8 @@ type Result struct {
 	Seconds float64 `json:"seconds"`
 	Summary string  `json:"summary"`
 	Log     string  `json:"log,omitempty"`
+	// Streamed is true when the gate's output was copied to Out as it ran.
+	Streamed bool `json:"-"`
 }
 
 // Run runs the gates in order and returns one result per gate.
@@ -95,9 +100,10 @@ func runGate(ctx context.Context, reg *registry.Registry, g registry.Gate, opts 
 
 	var r Result
 	if g.Builtin != "" {
-		r = runBuiltin(ctx, g, opts, logPath)
+		r = runBuiltin(ctx, g, opts, logPath) // a builtin's findings go to its log, never to Out
 	} else {
 		r = runCommand(ctx, reg.Command(g, opts.Cadence), g, opts, logPath)
+		r.Streamed = opts.Stream
 	}
 
 	r.Gate, r.Seconds = g.ID, time.Since(start).Seconds()
@@ -201,6 +207,22 @@ func Failed(results []Result) bool {
 	return false
 }
 
+// Overall is the verdict of a run: FAIL when a gate failed, else INCOMPLETE when a gate could not
+// run, else PASS. A skipped gate (not selected by the change) does not count.
+func Overall(results []Result) Verdict {
+	if Failed(results) {
+		return Fail
+	}
+
+	for _, r := range results {
+		if r.Verdict == Unavailable {
+			return Incomplete
+		}
+	}
+
+	return Pass
+}
+
 // Record is results.json: the run as a whole.
 type Record struct {
 	Cadence  string    `json:"cadence"`
@@ -230,14 +252,15 @@ func (rec Record) Write(logDir string) (string, error) {
 	return p, nil
 }
 
-// Print writes the human summary: one line per gate, then the tail of each failed gate's log.
-func Print(w io.Writer, results []Result, streamed bool) {
+// Print writes the human summary: one line per gate, then the tail of each failed gate's log,
+// unless that output was already streamed (built-in gates never are, so CI sees their findings).
+func Print(w io.Writer, results []Result) {
 	for _, r := range results {
 		_, _ = fmt.Fprintf(w, "  %-11s %-14s %6.1f s  %s\n", r.Verdict, r.Gate, r.Seconds, r.Summary)
 	}
 
 	for _, r := range results {
-		if r.Verdict != Fail || r.Log == "" || streamed {
+		if r.Verdict != Fail || r.Log == "" || r.Streamed {
 			continue
 		}
 

@@ -3,9 +3,9 @@ package checks
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
+	"io/fs"
 	"regexp"
 	"slices"
 )
@@ -16,10 +16,10 @@ var homePath = regexp.MustCompile(`(?:/Users/|/home/|[A-Za-z]:\\Users\\)([A-Za-z
 // PublicSafety checks that nothing personal reaches this public repository: no per-machine or
 // secret-bearing file (by path) and no personal home directory (by content). Secrets themselves
 // are the secrets gate's job (gitleaks).
-func PublicSafety(root string, files []string, rules SafetyRules) ([]Finding, error) {
+func PublicSafety(tree Tree, rules SafetyRules) ([]Finding, error) {
 	var out []Finding
 
-	for _, f := range files {
+	for _, f := range tree.Files() {
 		if matchesFile(rules.ForbiddenPaths, f) && !matchesFile(rules.AllowedPaths, f) {
 			out = append(out, Finding{Path: f, Msg: "a per-machine or secret-bearing file must not be in the repository: add it to .gitignore"})
 			continue
@@ -29,8 +29,8 @@ func PublicSafety(root string, files []string, rules SafetyRules) ([]Finding, er
 			continue
 		}
 
-		content, err := os.ReadFile(filepath.Join(root, f)) // #nosec G304 -- files come from git ls-files
-		if os.IsNotExist(err) {
+		content, err := tree.Read(f)
+		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
 

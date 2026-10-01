@@ -60,12 +60,17 @@ func Load(path string) (*Registry, error) {
 		return nil, fmt.Errorf("read registry: %w", err)
 	}
 
+	return Parse(data, path)
+}
+
+// Parse decodes and validates a registry; path names it in errors.
+func Parse(data []byte, path string) (*Registry, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 
 	var reg Registry
 
-	err = dec.Decode(&reg)
+	err := dec.Decode(&reg)
 	if err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}

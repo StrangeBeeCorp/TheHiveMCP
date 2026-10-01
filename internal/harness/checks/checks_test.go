@@ -83,7 +83,7 @@ func TestStructure(t *testing.T) {
 		"data.bin":        "\x00\x01binary",
 		"notes/latin1.go": "caf\xe9\n",
 	})
-	found, err := checks.Structure(root, files, limits)
+	found, err := checks.Structure(checks.DirTree{Root: root, Names: files}, limits)
 	require.NoError(t, err)
 
 	got := messages(found)
@@ -103,7 +103,7 @@ func TestStructure(t *testing.T) {
 func TestStructureRefusesGrowthPastACap(t *testing.T) {
 	t.Parallel()
 	root, files := repo(t, map[string]string{bigGo: lines(21), shrunkGo: lines(30), smallGo: lines(15), goneGo: lines(40)})
-	found, err := checks.Structure(root, files, limits)
+	found, err := checks.Structure(checks.DirTree{Root: root, Names: files}, limits)
 	require.NoError(t, err)
 	assert.Equal(t, "big.go: 21 lines, over its cap of 20: a cap may only go down", found[0].String())
 	assert.Len(t, found, 1)
@@ -128,7 +128,7 @@ func TestPublicSafety(t *testing.T) {
 		HomeNames:      []string{"runner", "you"},
 		SkipContent:    []string{"gates/limits.yaml"},
 	}
-	found, err := checks.PublicSafety(root, files, rules)
+	found, err := checks.PublicSafety(checks.DirTree{Root: root, Names: files}, rules)
 	require.NoError(t, err)
 
 	got := messages(found)
@@ -178,7 +178,7 @@ func TestDocsAcceptsTrueReferences(t *testing.T) {
 		"- not paths: `make check-fast`, `internal/tools/<tool>/`, `facts/*.txt`, `/etc/hosts`, `FOO=bar`.\n" +
 		"```text\ninternal/old/ inside a fence is not checked\n```\n"
 	root, files, reg := docsRepo(t, agents, "run: bin/harness run --cadence ci --gate lint\n", "")
-	found, err := checks.Docs(root, files, reg)
+	found, err := checks.Docs(checks.DirTree{Root: root, Names: files}, reg)
 	require.NoError(t, err)
 	assert.Empty(t, found)
 }
@@ -188,7 +188,7 @@ func TestDocsFindsDrift(t *testing.T) {
 
 	agents := "- `internal/confirmation/` is gone, and so is `internal/tools/{tool,prompt}.go`.\n"
 	root, files, reg := docsRepo(t, agents, "run: bin/harness run --gate ghost\n", "# stale\n")
-	found, err := checks.Docs(root, files, reg)
+	found, err := checks.Docs(checks.DirTree{Root: root, Names: files}, reg)
 	require.NoError(t, err)
 
 	got := messages(found)
@@ -198,6 +198,25 @@ func TestDocsFindsDrift(t *testing.T) {
 	assert.Contains(t, got, `does not run gate "lint", whose cadence includes ci`)
 	assert.Contains(t, got, `runs gate "ghost", which gates/registry.yaml does not define`)
 	assert.Len(t, found, 5)
+}
+
+func TestChecksReadTheTreeTheyAreGiven(t *testing.T) {
+	t.Parallel()
+	// The index of a commit: nothing of it is on disk, and the checks must judge it all the same.
+	index := checks.MemTree{
+		"docs/a.md":  []byte("from /Us" + "ers/carol/x\n"),
+		"pkg/big.go": []byte(lines(11)),
+	}
+	found, err := checks.PublicSafety(index, checks.SafetyRules{})
+	require.NoError(t, err)
+	assert.Len(t, found, 1)
+
+	found, err = checks.Structure(index, checks.StructureLimits{MaxLines: 10, MaxCodeFilesPerDir: 9, CodeFiles: []string{"*.go"}, Root: []string{"docs", "pkg"}})
+	require.NoError(t, err)
+	assert.Equal(t, "pkg/big.go: 11 lines, over the limit of 10: split it", messages(found))
+	assert.True(t, index.Exists("pkg"))
+	assert.True(t, index.Exists("pkg/"))
+	assert.False(t, index.Exists("pk"))
 }
 
 func TestTheRepositoryLimitsParse(t *testing.T) {

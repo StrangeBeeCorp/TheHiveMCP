@@ -16,8 +16,12 @@
 # ("*" means whatever changed). A path that no suite claims selects every suite, and so does
 # the `everything` suite. `implies` selects other suites too.
 #
-# {scope} in `runs` becomes the file scope of the cadence (see `scopes`). A command that exits
-# 75 reports UNAVAILABLE: a stated limit, never a pass.
+# {scope} in `runs` becomes the file scope of the cadence (see `scopes`). A docker gate when Docker
+# is down, or a command that exits 75, reports UNAVAILABLE: a stated limit, never a pass. A run
+# with one ends INCOMPLETE and exits 3.
+#
+# At the commit cadence the built-in gates read the index, so a commit is judged on exactly what
+# it carries; elsewhere they read the working tree and its untracked files.
 
 scopes:
   edit: --changed HEAD
@@ -68,6 +72,8 @@ suites:
       - internal/auth/**
       - bootstrap/allowlist.go
       - bootstrap/inprocess.go
+      # The example profiles are also the permission fixtures of the integration tests.
+      - docs/reference/permissions-examples/**
   - id: tools
     about: Tool handlers and the code they share
     paths:
