@@ -1,0 +1,13 @@
+diff --git a/internal/permissions/embedded/default_permissions.yaml b/internal/permissions/embedded/default_permissions.yaml
+index 56ecf7d..04bbae2 100644
+--- a/internal/permissions/embedded/default_permissions.yaml
++++ b/internal/permissions/embedded/default_permissions.yaml
+@@ -8,7 +8,7 @@ permissions:
+     search-entities:
+       allowed: true
+     manage-entities:
+-      allowed: false
++      allowed: true
+     execute-automation:
+       allowed: false
+     get-resource:

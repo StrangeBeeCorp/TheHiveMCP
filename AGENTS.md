@@ -14,6 +14,8 @@ It builds an MCP server (`bootstrap.GetMCPServerAndRegisterTools`) and serves it
 - `internal/resources/` — MCP **resources** (static + dynamic) and their `facts/`, `rules/`, `schemas/`; registered via `resource_registry.go`.
 - `internal/{types,permissions,auth,logging,utils,testutils}/` — config/options, RBAC, auth, logging, helpers, and the integration-test container harness.
 - `cmd/harness/`, `internal/harness/`, `gates/`, `bin/harness` — the harness: the gates every change must pass (see below).
+- `spec/items.yaml` — what the server promises a model, each item traced to the tests and gates that prove it. `baselines/surface/` is the snapshot of what
+  the model reads (`cmd/surface`, `make surface-propose`), and `internal/analyzers/` the Go analyzers of the model-facing rules.
 
 ## Main DevEx/AgentEx entrypoint (commands)
 

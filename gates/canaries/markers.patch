@@ -1,0 +1,13 @@
+diff --git a/internal/utils/parsers.go b/internal/utils/parsers.go
+index c334f90..680c8fb 100644
+--- a/internal/utils/parsers.go
++++ b/internal/utils/parsers.go
+@@ -304,7 +304,7 @@ func wrapUntrustedValue(value any) any {
+ 		// depth should a server-returned id/status ever carry one.
+ 		return neutralizeMarkers(string(v))
+ 	case string:
+-		return untrustedOpenTag + neutralizeMarkers(v) + untrustedCloseTag
++		return untrustedOpenTag + v + untrustedCloseTag
+ 	case []any:
+ 		wrapped := make([]any, len(v))
+ 		for i, item := range v {

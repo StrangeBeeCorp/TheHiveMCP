@@ -49,6 +49,7 @@ structure:
     - NOTICE
     - README.md
     - RELEASING.md
+    - baselines
     - bin
     - bootstrap
     - checkmake.ini
@@ -63,6 +64,7 @@ structure:
     - internal
     - renovate.json
     - scripts
+    - spec
     - version
 
 public_safety:

@@ -23,6 +23,14 @@ harness-docs: ## Regenerate docs/reference/gates.md from gates/registry.yaml ##@
 push: ## Push this branch to origin: never main, never the public mirror ##@ make push [FORCE=1]
 	@bin/harness push $(if $(FORCE),--force)
 
+.PHONY: go
+go: ## Run a go command in the pinned image (the harness's Go programs) ##@ make go CMD="run ./cmd/surface --check"
+	@docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go $(CMD)
+
+.PHONY: surface-propose
+surface-propose: ## Rewrite baselines/surface/ from what the server advertises ##@ make surface-propose
+	@$(MAKE) --no-print-directory go CMD="run ./cmd/surface --write"
+
 # The workflows' tests (.claude/workflows/*.test.mjs) run in Node, which has all they need.
 NODE_IMAGE := node:22.23.3-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402
 

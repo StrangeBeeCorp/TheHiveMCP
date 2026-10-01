@@ -1,0 +1,393 @@
+{
+  "resources": [
+    {
+      "uri": "hive://catalog",
+      "name": "Resource Catalog",
+      "description": "Directory of all available resource categories and their purposes. This is the starting point for exploring resources.",
+      "mimeType": "application/json",
+      "tokens": 867,
+      "sha256": "2ecdb1275f5433779e7e12bae95baaac23217c4267dfede7eb161832d1cb5f80"
+    },
+    {
+      "uri": "hive://config/current-user",
+      "name": "Current User",
+      "description": "Currently authenticated user information",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "hive://config/permissions",
+      "name": "Current Permissions",
+      "description": "Currently active permissions configuration for this session",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "hive://config/server-time",
+      "name": "Server Time",
+      "description": "Current server date/time for timestamp calculations",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "hive://docs/automation/analyzers",
+      "name": "Analyzer Documentation",
+      "description": "How analyzers work, when to use them, and interpreting results",
+      "mimeType": "application/json",
+      "tokens": 222,
+      "sha256": "9b3345e3221a8f4d7293048b7aa5dea0f420320b42de8dd0e3f38fcf58c89a8e"
+    },
+    {
+      "uri": "hive://docs/automation/responders",
+      "name": "Responder Documentation",
+      "description": "How responders work, active response workflow, and PAP considerations",
+      "mimeType": "application/json",
+      "tokens": 223,
+      "sha256": "e5528e0ab4127b1f57c30607dc50ee14627ac88e2346996140bbdd8c690b15c0"
+    },
+    {
+      "uri": "hive://docs/entities/alert",
+      "name": "Alert Documentation",
+      "description": "How alerts work, lifecycle, and best practices",
+      "mimeType": "application/json",
+      "tokens": 256,
+      "sha256": "73b0f1a5719f7cad378dbc5d438ebe4a3b3a62c105cb606a05b131dbcefe9803"
+    },
+    {
+      "uri": "hive://docs/entities/case",
+      "name": "Case Documentation",
+      "description": "How cases work, investigation workflow, TLP/PAP usage",
+      "mimeType": "application/json",
+      "tokens": 644,
+      "sha256": "1b513a5ef33ba87c7662722bc4dced7818356c582c3993956c62585b4c9d69be"
+    },
+    {
+      "uri": "hive://docs/entities/case-template",
+      "name": "Case Template Documentation",
+      "description": "How case templates work, their role as AI knowledge layer, and usage patterns",
+      "mimeType": "application/json",
+      "tokens": 810,
+      "sha256": "c70d6ed0eac7b29781d4695e04f9afd2f9f1ea7b3f260b74eb139e4ca431b244"
+    },
+    {
+      "uri": "hive://docs/entities/observable",
+      "name": "Observable Documentation",
+      "description": "How observables work, IOC types, enrichment workflow",
+      "mimeType": "application/json",
+      "tokens": 96,
+      "sha256": "de5083273156f743ca39a14bd7364937b9961c1ee1a5200b66872c4e51ef943d"
+    },
+    {
+      "uri": "hive://docs/entities/page",
+      "name": "Page Documentation",
+      "description": "How pages work, their relationship to cases, and usage patterns",
+      "mimeType": "application/json",
+      "tokens": 176,
+      "sha256": "02110f5b5c04d345fcada797b0362ba6db259434401adb11543668d3da5dd2d6"
+    },
+    {
+      "uri": "hive://docs/entities/pattern",
+      "name": "Pattern Documentation",
+      "description": "How patterns work, syntax, and usage in procedures",
+      "mimeType": "application/json",
+      "tokens": 233,
+      "sha256": "b922eb35e6477d2836d8aa6ad7a7e37c02eb38c784fffc9ee3eae25e23a31cad"
+    },
+    {
+      "uri": "hive://docs/entities/procedure",
+      "name": "Procedure Documentation",
+      "description": "How procedures work, when to use them, and best practices",
+      "mimeType": "application/json",
+      "tokens": 65,
+      "sha256": "966ec2b12a0b0b9505e8620b6b5e25419ee78f2670bf686ef1673c156cf27d6e"
+    },
+    {
+      "uri": "hive://docs/entities/task",
+      "name": "Task Documentation",
+      "description": "How tasks work, assignment, and task groups",
+      "mimeType": "application/json",
+      "tokens": 51,
+      "sha256": "fb78c3067e91baeb7ce6eca00b1065874e852e699cafa2e564c0bfc3de7ed806"
+    },
+    {
+      "uri": "hive://docs/overview/filter-dsl",
+      "name": "Filter DSL Cheatsheet",
+      "description": "Operator grammar and worked examples for building TheHive search filters passed to the search-entities tool",
+      "mimeType": "text/markdown",
+      "tokens": 1604,
+      "sha256": "21d329ff122853adf818bcf47acd4ba763a273d944013d3680b7b71fa3825c7a"
+    },
+    {
+      "uri": "hive://docs/overview/platform",
+      "name": "TheHive Overview",
+      "description": "General facts about TheHive platform, workflow, and capabilities",
+      "mimeType": "application/json",
+      "tokens": 216,
+      "sha256": "da7866ad37468a328ace28b4966fc4b416aaedc8b78d2af66fec5a05483d57cb"
+    },
+    {
+      "uri": "hive://metadata/automation/analyzers",
+      "name": "Analyzers",
+      "description": "Available Cortex analyzers for observable enrichment. Optional query parameters: dataType (only analyzers accepting that observable type, e.g. ?dataType=hash), offset and limit (paging).",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "hive://metadata/automation/responders",
+      "name": "Responders",
+      "description": "Available Cortex responders for active response. Requires entityType and entityId query parameters; optional offset and limit (paging).",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "hive://metadata/entities/case/statuses",
+      "name": "Case Statuses",
+      "description": "Available status values for cases (New, InProgress, Resolved, etc.)",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "hive://metadata/entities/case/templates",
+      "name": "Case Templates",
+      "description": "Available case templates with predefined tasks and fields",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "hive://metadata/entities/custom-fields",
+      "name": "Custom Fields",
+      "description": "Organisation-defined custom fields across all entities",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "hive://metadata/entities/observable/types",
+      "name": "Observable Types",
+      "description": "Available observable data types (ip, domain, hash, url, etc.)",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "hive://metadata/organisation/users",
+      "name": "Users",
+      "description": "List of users in the organisation for assignment",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "hive://rule/filtering",
+      "name": "Filtering Rule",
+      "description": "TheHive filtering rule",
+      "mimeType": "application/json",
+      "tokens": 174,
+      "sha256": "50927eda5ed799a57596da465be71a73086b5416109f56b3bb78d7e1c590f206"
+    },
+    {
+      "uri": "hive://rule/formatting",
+      "name": "Formatting Rule",
+      "description": "TheHive formatting rule",
+      "mimeType": "application/json",
+      "tokens": 118,
+      "sha256": "40913b878ecdfeeabba969873815db44dffd46d27a1b139128f2d41f672dbd91"
+    },
+    {
+      "uri": "hive://rule/integrity",
+      "name": "Integrity Rule",
+      "description": "TheHive integrity rule",
+      "mimeType": "application/json",
+      "tokens": 314,
+      "sha256": "a8cd5e019e919cef2045cdec91ff31a9f2749614c8cf1a0811181cfd612c0fbd"
+    },
+    {
+      "uri": "hive://schema/action",
+      "name": "Responder Action Schema",
+      "description": "Output and filterable fields for Cortex responder actions returned from TheHive API",
+      "mimeType": "application/json",
+      "tokens": 1227,
+      "sha256": "d92eafdd140cea03c6b1f1e87c0be49b5378cad35745262c311007e79269b148"
+    },
+    {
+      "uri": "hive://schema/alert",
+      "name": "Alert Output Schema",
+      "description": "Output fields, types, and constraints for alerts returned from TheHive API",
+      "mimeType": "application/json",
+      "tokens": 3844,
+      "sha256": "f7e462f61ea78173b916e070b17e47bd21095d8cad305563e63cdfdd5336be34"
+    },
+    {
+      "uri": "hive://schema/alert/create",
+      "name": "Alert Create Schema",
+      "description": "Input fields and requirements for creating new alerts",
+      "mimeType": "application/json",
+      "tokens": 1266,
+      "sha256": "9f1c11dd8b51e30330b53c709e66bf746989d924f475d52005cc2bb74c2b546f"
+    },
+    {
+      "uri": "hive://schema/alert/update",
+      "name": "Alert Update Schema",
+      "description": "Partial input fields for updating existing alerts",
+      "mimeType": "application/json",
+      "tokens": 1310,
+      "sha256": "ec3ce339db6c2da83203190d691a835da8850b8cea3fe71c0d58efcefa15393d"
+    },
+    {
+      "uri": "hive://schema/case",
+      "name": "Case Output Schema",
+      "description": "Output fields, types, and constraints for cases returned from TheHive API",
+      "mimeType": "application/json",
+      "tokens": 4559,
+      "sha256": "1d2860efacc924e26f91efb2d85c92ecd81af929b6175c20394de95daa07010a"
+    },
+    {
+      "uri": "hive://schema/case-template",
+      "name": "Case Template Schema",
+      "description": "Output fields, types, and constraints for case templates",
+      "mimeType": "application/json",
+      "tokens": 1236,
+      "sha256": "889318ea6eb1264d2a596dcfe62429148c0586657ed7743a47878de34857239f"
+    },
+    {
+      "uri": "hive://schema/case-template/create",
+      "name": "Case Template Create Schema",
+      "description": "Input fields and requirements for creating new case templates",
+      "mimeType": "application/json",
+      "tokens": 815,
+      "sha256": "780928c769582ddd5209b50e024a233e6d6178c2cdefd4e9dba584f3c3c185a1"
+    },
+    {
+      "uri": "hive://schema/case-template/update",
+      "name": "Case Template Update Schema",
+      "description": "Partial input fields for updating existing case templates",
+      "mimeType": "application/json",
+      "tokens": 571,
+      "sha256": "a29b86a7746ba66a8a6934a056eaad1552f6ef72ee24f6e826aee17ee1153a0c"
+    },
+    {
+      "uri": "hive://schema/case/create",
+      "name": "Case Create Schema",
+      "description": "Input fields and requirements for creating new cases",
+      "mimeType": "application/json",
+      "tokens": 1259,
+      "sha256": "1a126661adcb647b74068c5ada6375544b05c4004c526d20b5eb4251f51c1fe9"
+    },
+    {
+      "uri": "hive://schema/case/update",
+      "name": "Case Update Schema",
+      "description": "Partial input fields for updating existing cases",
+      "mimeType": "application/json",
+      "tokens": 1220,
+      "sha256": "122cb23c465c2ab6d59be49bb41f9f1316596679833bba004de3ef67b13d2137"
+    },
+    {
+      "uri": "hive://schema/filter",
+      "name": "Filter Schema",
+      "description": "TheHive filter data structure for search queries",
+      "mimeType": "application/json",
+      "tokens": 1444,
+      "sha256": "dcd98c62e9bae5fa205b6eb3417adf7160005fa9df4273f9fce9e918d9281908"
+    },
+    {
+      "uri": "hive://schema/job",
+      "name": "Analyzer Job Schema",
+      "description": "Output and filterable fields for Cortex analyzer jobs returned from TheHive API",
+      "mimeType": "application/json",
+      "tokens": 1303,
+      "sha256": "909cf6e161051a894eb74f3d24ee891431bee512f14fc3412f0180cc24633b18"
+    },
+    {
+      "uri": "hive://schema/observable",
+      "name": "Observable Output Schema",
+      "description": "Output fields, types, and constraints for observables returned from TheHive API",
+      "mimeType": "application/json",
+      "tokens": 2095,
+      "sha256": "a85adb5ed8d0dd964a10c4942dc12d8a65c8b007dbd97794ccba3753ddf41f4f"
+    },
+    {
+      "uri": "hive://schema/observable/create",
+      "name": "Observable Create Schema",
+      "description": "Input fields and requirements for creating new observables",
+      "mimeType": "application/json",
+      "tokens": 884,
+      "sha256": "2d4f123217e59e0e67f98f75ed26ec11395955bad3a6daa8cb3ede1959483056"
+    },
+    {
+      "uri": "hive://schema/observable/update",
+      "name": "Observable Update Schema",
+      "description": "Partial input fields for updating existing observables",
+      "mimeType": "application/json",
+      "tokens": 704,
+      "sha256": "ac9e1441adc2dd573f41a98bf5aecbc74c088ad5da5b1539fbf749f25c9be79d"
+    },
+    {
+      "uri": "hive://schema/page",
+      "name": "Page Output Schema",
+      "description": "Output fields, types, and constraints for pages returned from TheHive API",
+      "mimeType": "application/json",
+      "tokens": 537,
+      "sha256": "8cd50d3f4a0d286ba87fe0a5fab6fdf0066f6fbe6ad3d2a8012f98011d4dc880"
+    },
+    {
+      "uri": "hive://schema/page/create",
+      "name": "Page Create Schema",
+      "description": "Input fields and requirements for creating new pages",
+      "mimeType": "application/json",
+      "tokens": 214,
+      "sha256": "f842ee2550f91b1098ee79866a25e9e57aa003b1ab9e63c73509fe76b75a847e"
+    },
+    {
+      "uri": "hive://schema/page/update",
+      "name": "Page Update Schema",
+      "description": "Partial input fields for updating existing pages",
+      "mimeType": "application/json",
+      "tokens": 219,
+      "sha256": "b115ccd2107d79d60cc111fe85037acaf30e0fc63b5ca02a970ebdcaf5856cbb"
+    },
+    {
+      "uri": "hive://schema/pattern",
+      "name": "Pattern Output Schema",
+      "description": "Output fields, types, and constraints for patterns returned from TheHive API",
+      "mimeType": "application/json",
+      "tokens": 1186,
+      "sha256": "57d209ac0d1309bc49565c22dd931ce7f168218e0539e3dc5296005955d51019"
+    },
+    {
+      "uri": "hive://schema/procedure",
+      "name": "Procedure Output Schema",
+      "description": "Output fields, types, and constraints for procedures returned from TheHive API",
+      "mimeType": "application/json",
+      "tokens": 706,
+      "sha256": "c027f382af2edabdaffa4205616eb22d996419841a95e78595fc91a0c7b24b66"
+    },
+    {
+      "uri": "hive://schema/procedure/create",
+      "name": "Procedure Create Schema",
+      "description": "Input fields and requirements for creating new procedures",
+      "mimeType": "application/json",
+      "tokens": 292,
+      "sha256": "fd361d89b4388ededd125e1c47de0a2f814f3cbb8d78569c21c2a184f7297af1"
+    },
+    {
+      "uri": "hive://schema/procedure/update",
+      "name": "Procedure Update Schema",
+      "description": "Partial input fields for updating existing procedures",
+      "mimeType": "application/json",
+      "tokens": 313,
+      "sha256": "6b7cc6593eefe80a335acb561fad76a56c735670c9e203b8536f0d7997f1c77f"
+    },
+    {
+      "uri": "hive://schema/task",
+      "name": "Task Output Schema",
+      "description": "Output fields, types, and constraints for tasks returned from TheHive API",
+      "mimeType": "application/json",
+      "tokens": 1701,
+      "sha256": "154aef94e1093dbe53d845fe541de3c512e675da9cbef0d3e467fa896a83789d"
+    },
+    {
+      "uri": "hive://schema/task/create",
+      "name": "Task Create Schema",
+      "description": "Input fields and requirements for creating new tasks",
+      "mimeType": "application/json",
+      "tokens": 685,
+      "sha256": "397dca1277ea148942f99807f82c17bf39da86c22e8481e0531f795f2bd1987a"
+    },
+    {
+      "uri": "hive://schema/task/update",
+      "name": "Task Update Schema",
+      "description": "Partial input fields for updating existing tasks",
+      "mimeType": "application/json",
+      "tokens": 699,
+      "sha256": "d79e57f6a94fe0894c6bb5bb49e556e00f3f6ee9073a8ea42223a56f5055a74c"
+    }
+  ],
+  "templates": []
+}

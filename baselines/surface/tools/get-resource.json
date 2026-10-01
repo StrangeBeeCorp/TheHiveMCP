@@ -1,0 +1,26 @@
+{
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "description": "Access TheHive resources for documentation, schemas, and metadata.\n\nResources are organized hierarchically:\n- hive://catalog - Directory of all categories\n- hive://config/* - Session and system info\n- hive://schema/* - Entity field definitions\n- hive://metadata/* - Available options and choices\n- hive://docs/* - Documentation and guides\n\nUsage:\n- Call without parameters to list all categories\n- Provide a URI to fetch resources, subcategories, and content at that path\n\nThe tool returns a unified response that includes:\n- The resource content (if the URI points to a specific resource)\n- Subcategories under the path (if any exist)\n- Resources available at the path (if any exist)\n\nExamples:\n- List all categories: get-resource()\n- Browse schemas: get-resource(uri=\"hive://schema\")\n- Browse automation metadata: get-resource(uri=\"hive://metadata/automation\")\n- Get alert schema: get-resource(uri=\"hive://schema/alert\")\n- Get case docs: get-resource(uri=\"hive://docs/entities/case\")\n\nThe get-resource tool is the entry point for exploring TheHive's capabilities. Start by browsing the catalog, then drill down into specific resources as needed. This allows you to understand available entities, their fields, and how to interact with them effectively.\nYou can then make informed calls to other tools like search, create, or update using the information obtained here. Always refer to the latest server resources to ensure accuracy and compatibility.",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "uri": {
+        "description": "Resource URI to query (e.g., 'hive://schema/alert', 'hive://metadata/automation'). Omit to list all categories.",
+        "type": "string"
+      }
+    },
+    "required": [],
+    "type": "object"
+  },
+  "name": "get-resource",
+  "outputSchema": {
+    "properties": {},
+    "required": [],
+    "type": "object"
+  }
+}

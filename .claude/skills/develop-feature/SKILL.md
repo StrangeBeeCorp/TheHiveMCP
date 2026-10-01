@@ -42,12 +42,19 @@ description:
    - a permission key → `docs/reference/permissions.md` and the example profiles
    - anything a user can see → an entry under `## [Unreleased]` in `CHANGELOG.md` (Keep a Changelog: Added / Changed / Fixed). Existing entries say what changed
      and why the old behaviour misled a model or a user. Follow that style.
+   - anything the model reads (a tool, a description, a schema, a resource text) → `make surface-propose`, and review the diff of `baselines/surface/` it
+     writes. The surface gate fails until the snapshot matches, the changelog gate until `CHANGELOG.md` has its entry, and the tokens gate when
+     `gates/budgets.yaml` is exceeded.
 6. **Measure a model-facing change** before review, from a checkout of StrangeBee/TheHiveMCPEval:
    `uv run eval-cli eval run mcp-tools --local <this checkout> --model <label> --judge glm-5.3-judge`. `<label>` is a row of that repo's
    `configs/providers.yaml`. Without `--judge`, the model grades itself. The run is tagged `MCP local`, so it can never be published as release evidence.
 7. **Gate.** Run `make all` before asking for review. CI runs the gates of `gates/registry.yaml` again on the pull request.
 
 ## Rules for model-facing code
+
+Each rule below is an item of `spec/items.yaml`, proven by the tests and gates it names (a test that proves one carries `// spec: <ID>` on the line above it).
+The analyzers gate (`internal/analyzers/`) checks the untrusted-data boundary, the hints, the cut flags and `testutils.Parallel`, and the canaries of
+`gates/canaries/` show each check catching its breach every night.
 
 - **A silent success is a bug.** When TheHive answers 2xx but did nothing, the tool must fail and give a hint. Examples: a create that returns an empty list, or
   a filter on a field TheHive does not index (it returns zero rows and no error). The recent `### Fixed` entries in `CHANGELOG.md` are all of this kind. Return

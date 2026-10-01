@@ -57,6 +57,15 @@ jobs:
       - name: Structure, public safety and docs
         run: bin/harness run --cadence ci --gate structure --gate public-safety --gate docs
 
+      - name: Spec items and changelog
+        run: bin/harness run --cadence ci --gate spec --gate changelog
+
+      - name: What the model reads, and its tokens
+        run: bin/harness run --cadence ci --gate surface --gate tokens
+
+      - name: Analyzers (trust boundary, cuts, parallel tests)
+        run: bin/harness run --cadence ci --gate analyzers
+
       - name: Format check
         run: bin/harness run --cadence ci --gate fmt
 

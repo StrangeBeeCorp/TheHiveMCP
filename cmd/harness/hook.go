@@ -106,6 +106,8 @@ func (e env) stopCheck(ctx context.Context, static bool) (hooks.Check, error) {
 		return hooks.Check{}, err
 	}
 
+	e.changed, e.base = sel.Paths, sel.Base
+
 	var buf bytes.Buffer
 
 	rec, err := e.runGates(ctx, "stop", gates, sel, runFlags{}, &buf)

@@ -1,0 +1,10 @@
+# What the model reads may cost at most this many tokens (the tokens gate: cmd/surface --budgets).
+# A token is 4 characters of the UTF-8 JSON a tools/list or a resource read returns, rounded up;
+# baselines/surface/tokens.json holds today's counts. The budgets were set at about 10 % over the
+# counts of 2026-10-01: tools 6,958 (the largest, search-entities, 2,539), static resources 36,368.
+# Raising a budget is a reviewed change, like a cap in gates/limits.yaml.
+
+surface:
+  tools_total: 7700
+  tool: 2800
+  resources_total: 40000

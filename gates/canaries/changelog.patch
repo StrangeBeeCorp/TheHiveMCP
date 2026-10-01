@@ -1,0 +1,43 @@
+diff --git a/baselines/surface/tokens.json b/baselines/surface/tokens.json
+index 9050478..ad66d9c 100644
+--- a/baselines/surface/tokens.json
++++ b/baselines/surface/tokens.json
+@@ -1,10 +1,10 @@
+ {
+   "tools": {
+     "execute-automation": 1449,
+-    "get-resource": 484,
++    "get-resource": 483,
+     "manage-entities": 2486,
+     "search-entities": 2539
+   },
+-  "tools_total": 6958,
++  "tools_total": 6957,
+   "resources_total": 36358
+ }
+diff --git a/baselines/surface/tools/get-resource.json b/baselines/surface/tools/get-resource.json
+index dbc2cba..d4f8f36 100644
+--- a/baselines/surface/tools/get-resource.json
++++ b/baselines/surface/tools/get-resource.json
+@@ -5,7 +5,7 @@
+     "idempotentHint": true,
+     "openWorldHint": false
+   },
+-  "description": "Access TheHive resources for documentation, schemas, and metadata.\n\nResources are organized hierarchically:\n- hive://catalog - Directory of all categories\n- hive://config/* - Session and system info\n- hive://schema/* - Entity field definitions\n- hive://metadata/* - Available options and choices\n- hive://docs/* - Documentation and guides\n\nUsage:\n- Call without parameters to list all categories\n- Provide a URI to fetch resources, subcategories, and content at that path\n\nThe tool returns a unified response that includes:\n- The resource content (if the URI points to a specific resource)\n- Subcategories under the path (if any exist)\n- Resources available at the path (if any exist)\n\nExamples:\n- List all categories: get-resource()\n- Browse schemas: get-resource(uri=\"hive://schema\")\n- Browse automation metadata: get-resource(uri=\"hive://metadata/automation\")\n- Get alert schema: get-resource(uri=\"hive://schema/alert\")\n- Get case docs: get-resource(uri=\"hive://docs/entities/case\")\n\nThe get-resource tool is the entry point for exploring TheHive's capabilities. Start by browsing the catalog, then drill down into specific resources as needed. This allows you to understand available entities, their fields, and how to interact with them effectively.\nYou can then make informed calls to other tools like search, create, or update using the information obtained here. Always refer to the latest server resources to ensure accuracy and compatibility.",
++  "description": "Access TheHive resources: documentation, schemas, and metadata.\n\nResources are organized hierarchically:\n- hive://catalog - Directory of all categories\n- hive://config/* - Session and system info\n- hive://schema/* - Entity field definitions\n- hive://metadata/* - Available options and choices\n- hive://docs/* - Documentation and guides\n\nUsage:\n- Call without parameters to list all categories\n- Provide a URI to fetch resources, subcategories, and content at that path\n\nThe tool returns a unified response that includes:\n- The resource content (if the URI points to a specific resource)\n- Subcategories under the path (if any exist)\n- Resources available at the path (if any exist)\n\nExamples:\n- List all categories: get-resource()\n- Browse schemas: get-resource(uri=\"hive://schema\")\n- Browse automation metadata: get-resource(uri=\"hive://metadata/automation\")\n- Get alert schema: get-resource(uri=\"hive://schema/alert\")\n- Get case docs: get-resource(uri=\"hive://docs/entities/case\")\n\nThe get-resource tool is the entry point for exploring TheHive's capabilities. Start by browsing the catalog, then drill down into specific resources as needed. This allows you to understand available entities, their fields, and how to interact with them effectively.\nYou can then make informed calls to other tools like search, create, or update using the information obtained here. Always refer to the latest server resources to ensure accuracy and compatibility.",
+   "inputSchema": {
+     "additionalProperties": false,
+     "properties": {
+diff --git a/internal/tools/resource/models.go b/internal/tools/resource/models.go
+index 69494d0..c8194e9 100644
+--- a/internal/tools/resource/models.go
++++ b/internal/tools/resource/models.go
+@@ -3,7 +3,7 @@ package resource
+ import "github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
+ 
+ // GetResourceToolDescription is the human-readable description advertised for the get-resource tool.
+-const GetResourceToolDescription = `Access TheHive resources for documentation, schemas, and metadata.
++const GetResourceToolDescription = `Access TheHive resources: documentation, schemas, and metadata.
+ 
+ Resources are organized hierarchically:
+ - hive://catalog - Directory of all categories

@@ -1,0 +1,145 @@
+# What TheHiveMCP promises the model that uses it. Each item is a rule a change must keep, and
+# each active item is traced to what proves it: tests (path_test.go:TestName, or a test with
+# `// spec: ID` on the line above it) and gates of gates/registry.yaml. The spec gate fails when an
+# active item has no trace, when a test or a gate it names does not exist, or when a tag names no
+# item. gates/canaries/ holds the known-bad patches that show each check catching its breach.
+#
+# Items change only through a reviewed pull request (the Tester and the Coder cannot edit them).
+
+items:
+  - id: SIL-001
+    title: A silent success is a bug
+    status: active
+    rule: >-
+      When TheHive answers 2xx but did nothing (a create that returns an empty list, a filter on a
+      field TheHive does not index), the tool fails with a hint instead of reporting success.
+    tests:
+      - internal/tools/manage/manage_test.go:TestManageCreateObservableWithoutDataIsAnError
+      - internal/tools/search/validation_test.go:TestValidateParamsRejectsPatternPlatformFilter
+      - internal/tools/execute_automation/wait_handler_test.go:TestWaitForJobsFailsWhenNoJobCanBeRead
+    gates: [integration]
+
+  - id: TRN-001
+    title: Say what was cut
+    status: active
+    rule: >-
+      Paged or truncated output says so: search-entities returns hasMore and nextOffset, the
+      automation catalogs return truncated. A full page never reads as the complete answer.
+    tests:
+      - internal/tools/search/pagination_test.go:TestNewSearchEntitiesResult_Pagination
+      - internal/resources/worker_page_test.go:TestNewWorkerPageReportsTruncation
+      - internal/tools/search/search_test.go:TestSearchPagesThroughResultsWithHasMore
+    gates: [analyzers]
+
+  - id: UNT-001
+    title: Entity text stays inside the untrusted-data markers
+    status: active
+    rule: >-
+      Every entity field outside the trusted list reaches the model wrapped in [UNTRUSTED_DATA],
+      markers inside the text are neutralized, and no entity text is passed to TrustedString or
+      Trustedf.
+    tests:
+      - internal/utils/parsers_test.go:TestWrap_UnknownFieldIsWrapped
+      - internal/utils/parsers_test.go:TestWrap_EscapesNestedMarkers
+      - internal/analyzers/analyzers_test.go:TestUntrustedFindsEntityTextInServerStrings
+    gates: [analyzers]
+
+  - id: UNT-002
+    title: Errors and hints never quote entity text
+    status: active
+    rule: >-
+      Tool errors and their hints are written by the server and reach the model unwrapped, so
+      NewToolError, NewToolErrorf, Hint and Hintf never receive an entity's free text.
+    tests:
+      - internal/analyzers/analyzers_test.go:TestUntrustedFindsEntityTextInServerStrings
+    gates: [analyzers]
+
+  - id: PRM-001
+    title: Writes are permitted, and the default profile is read-only
+    status: active
+    rule: >-
+      Every write operation passes ValidatePermissions, and the embedded default permission
+      profile allows searching only: every write is denied unless a profile grants it.
+    tests:
+      - internal/permissions/config_test.go:TestLoadDefault
+      - internal/permissions/permissions_test.go:TestIsEntityOperationAllowed
+      - internal/tools/manage/manage_test.go:TestManageWithReadOnlyPermissions
+
+  - id: SCH-001
+    title: The advertised input schema is what the handler accepts
+    status: active
+    rule: >-
+      Every parameter a tool's params struct reads is advertised with its type, enumeration,
+      default and constraints, and every advertised value passes the handler's validation.
+    tests:
+      - bootstrap/tool_schema_test.go:TestToolSchemas_AdvertiseTheirParameters
+      - bootstrap/tool_schema_test.go:TestToolSchemas_EnumerationsSurviveInference
+      - bootstrap/tool_schema_test.go:TestSearchEntityTypes_AdvertisedEnumMatchesValidation
+
+  - id: SCH-002
+    title: Output conforms to the advertised output schema
+    status: active
+    rule: Every tool result validates against the output schema the tool advertises.
+    tests:
+      - bootstrap/tool_output_schema_test.go:TestToolSchemas_OutputMatchesAdvertisedSchema
+      - internal/tools/manage/manage_test.go:TestManageCreateAlert
+
+  - id: FLT-001
+    title: Only filterable fields are offered as filters
+    status: active
+    rule: >-
+      Descriptions, facts and schemas offer as filters only the fields TheHive indexes, and a
+      filter on another field is refused with a pointer to the alternative.
+    tests:
+      - internal/tools/search/validation_test.go:TestValidateParamsRejectsPatternPlatformFilter
+      - internal/resources/filterable_test.go:TestMergeFilterModes_MarksEachDescribedProperty
+      - internal/tools/resource/resource_test.go:TestGetResourcePatternSchemaMatchesDescribe
+
+  - id: VER-001
+    title: TheHive 5.5 and 5.6 both work
+    status: active
+    rule: >-
+      Every tool works on TheHive 5.5 and 5.6 (CI runs the integration suite on both). A feature
+      that exists only on 5.6 is gated by version, and its documentation says "5.6+".
+    tests:
+      - internal/tools/resource/resource_test.go:TestGetResourcePatternSchemaMatchesDescribe
+    gates: [integration]
+
+  - id: SRF-001
+    title: The filter guide keeps its layout
+    status: active
+    rule: >-
+      internal/resources/docs/filter-dsl.md reaches the model byte for byte: its compact JSON lines
+      are what the model copies, so no formatter reflows it.
+    gates: [surface]
+
+  - id: SUR-001
+    title: A change to what the model reads is reviewed and announced
+    status: active
+    rule: >-
+      Tools, descriptions, schemas and resource texts match the committed snapshot of
+      baselines/surface/, stay within the token budgets of gates/budgets.yaml, and every change to
+      them has an entry under ## [Unreleased] in CHANGELOG.md.
+    tests:
+      - internal/surface/surface_test.go:TestTakeReadsTheServersSurface
+    gates: [surface, tokens, changelog]
+
+  - id: SPC-001
+    title: Every promise is traced
+    status: active
+    rule: >-
+      Every active item of this file is proven by a test or a gate that exists, and every
+      `// spec:` tag in a test names an item that exists.
+    tests:
+      - internal/harness/checks/spec_test.go:TestSpecTracesEveryActiveItem
+    gates: [spec]
+
+  - id: PAR-001
+    title: Integration tests run in order without a license
+    status: active
+    rule: >-
+      An integration test calls testutils.Parallel(t), not t.Parallel(): without a license every
+      test shares one organisation and must run in source order.
+    tests:
+      - internal/analyzers/analyzers_test.go:TestParallelFindsIntegrationTestsOutOfOrder
+    gates: [analyzers]

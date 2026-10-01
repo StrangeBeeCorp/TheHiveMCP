@@ -44,7 +44,10 @@ func (s *scopeFlags) selection(ctx context.Context, e env) (registry.Selection, 
 			return registry.Selection{}, fmt.Errorf("list the staged files: %w", err)
 		}
 
-		return e.reg.Select(paths), nil
+		sel := e.reg.Select(paths)
+		sel.Base = "HEAD"
+
+		return sel, nil
 	}
 
 	base := s.base
@@ -65,7 +68,10 @@ func (s *scopeFlags) selection(ctx context.Context, e env) (registry.Selection, 
 		return registry.Selection{}, fmt.Errorf("list the changes since %s: %w", base, err)
 	}
 
-	return e.reg.Select(paths), nil
+	sel := e.reg.Select(paths)
+	sel.Base = base
+
+	return sel, nil
 }
 
 type gateList []string
@@ -139,6 +145,8 @@ func (e env) run(ctx context.Context, args []string, out io.Writer) error {
 	if scope.staged != e.staged {
 		return usageError{"--staged takes no value"}
 	}
+
+	e.changed, e.base = sel.Paths, sel.Base
 
 	return e.execute(ctx, *cadence, gates, sel, runFlags{force: *force && len(only) > 0, stream: *stream}, out)
 }

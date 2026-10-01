@@ -4,10 +4,11 @@
 //	harness run --cadence stop|commit|pr|ci|nightly [--base REF | --staged | --all] [--gate ID]... [--force]
 //	harness select [--base REF | --staged | --all]
 //	harness list [--cadence C]
-//	harness check structure|public-safety|docs|go-source|branch
+//	harness check structure|public-safety|docs|go-source|branch|spec|changelog
 //	harness docs [--check]
 //	harness hook pre-tool-use|post-tool-use|stop|subagent-stop|session-start|pre-compact  (JSON on stdin)
 //	harness push [--force]
+//	harness canaries [--id ID]... [--integration]
 package main
 
 import (
@@ -85,6 +86,9 @@ type env struct {
 	limits checks.Limits
 	// staged makes the built-in checks read the index, for a commit, instead of the working tree.
 	staged bool
+	// changed are the paths the change touches since base, for the checks that judge a change.
+	changed []string
+	base    string
 }
 
 // load reads the registry and the limits: from the index when staged (the pre-commit hook), so
@@ -148,7 +152,7 @@ func stagedRun(args []string) bool {
 
 func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer) error {
 	if len(args) == 0 {
-		return usageError{"usage: harness run|select|list|check|docs|hook|push (see cmd/harness/main.go)"}
+		return usageError{"usage: harness run|select|list|check|docs|hook|push|canaries (see cmd/harness/main.go)"}
 	}
 
 	e, err := load(ctx, stagedRun(args))
@@ -171,6 +175,8 @@ func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer
 		return e.hook(ctx, args[1:], stdin, out)
 	case "push":
 		return e.push(ctx, args[1:], out)
+	case "canaries":
+		return e.canaries(ctx, args[1:], out)
 	default:
 		return usageError{fmt.Sprintf("unknown command %q", args[0])}
 	}
@@ -189,11 +195,13 @@ const (
 	builtinDocs      = "docs"
 	builtinGoSource  = "go-source"
 	builtinBranch    = "branch"
+	builtinSpec      = "spec"
+	builtinChangelog = "changelog"
 )
 
 func isBuiltin(name string) bool {
 	switch name {
-	case builtinStructure, builtinSafety, builtinDocs, builtinGoSource, builtinBranch:
+	case builtinStructure, builtinSafety, builtinDocs, builtinGoSource, builtinBranch, builtinSpec, builtinChangelog:
 		return true
 	}
 
@@ -240,6 +248,10 @@ func (e env) builtin(ctx context.Context, name string) ([]string, error) {
 		found, err = checks.GoSource(tree)
 	case builtinBranch:
 		found = onBranch(gitx.Branch(ctx, e.root))
+	case builtinSpec:
+		found, err = checks.SpecTraces(tree, reg)
+	case builtinChangelog:
+		found = checks.Changelog(e.changed, e.base == "" || gitx.HasPath(ctx, e.root, e.base, checks.SurfaceSummary))
 	default:
 		return nil, fmt.Errorf("unknown builtin %q", name)
 	}
@@ -275,7 +287,7 @@ func dockerUp(ctx context.Context) bool {
 
 func (e env) check(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) != 1 || !isBuiltin(args[0]) {
-		return usageError{"usage: harness check structure|public-safety|docs|go-source|branch"}
+		return usageError{"usage: harness check structure|public-safety|docs|go-source|branch|spec|changelog"}
 	}
 
 	lines, err := e.builtin(ctx, args[0])

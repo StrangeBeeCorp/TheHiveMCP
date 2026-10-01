@@ -17,6 +17,10 @@ type Selection struct {
 	Suites map[string][]string
 	// Unclaimed lists the changed paths no suite claims.
 	Unclaimed []string
+	// Paths are the changed paths, when the selection came from them.
+	Paths []string
+	// Base is the revision the paths changed from ("" when every suite is selected).
+	Base string
 }
 
 // SelectAll selects every suite, for the reason given.
@@ -27,7 +31,7 @@ func SelectAll(reason string) Selection {
 // Select maps changed paths to suites. A path no suite claims, or a path of the everything
 // suite, selects every suite: the harness cannot tell what such a change affects.
 func (r *Registry) Select(paths []string) Selection {
-	sel := Selection{Suites: map[string][]string{}}
+	sel := Selection{Suites: map[string][]string{}, Paths: paths}
 
 	for _, p := range paths {
 		claimed := false

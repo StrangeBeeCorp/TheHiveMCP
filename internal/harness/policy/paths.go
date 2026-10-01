@@ -38,6 +38,10 @@ var protected = []struct {
 }{
 	{"cmd/harness/**", HarnessPolicy},
 	{"internal/harness/**", HarnessPolicy},
+	{"cmd/surface/**", HarnessPolicy},
+	{"cmd/analyzers/**", HarnessPolicy},
+	{"internal/surface/**", HarnessPolicy},
+	{"internal/analyzers/**", HarnessPolicy},
 	{"bin/**", HarnessPolicy},
 	{".githooks/**", HarnessPolicy},
 	{".github/**", HarnessPolicy},

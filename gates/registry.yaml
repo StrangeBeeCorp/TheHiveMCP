@@ -43,6 +43,10 @@ suites:
     paths:
       - cmd/harness/**
       - internal/harness/**
+      - cmd/surface/**
+      - cmd/analyzers/**
+      - internal/surface/**
+      - internal/analyzers/**
       - gates/**
       - bin/**
       - .githooks/**
@@ -70,6 +74,8 @@ suites:
       - internal/tools/annotations.go
       - internal/tools/errors.go
       - internal/resources/**
+      # The snapshot of what the model reads (make surface-propose).
+      - baselines/**
   - id: trust
     about: The untrusted-data boundary, permissions and authentication
     implies: [tools]
@@ -114,6 +120,10 @@ suites:
       - scripts/package-*.sh
       - scripts/sign-windows.sh
       - .dockerignore
+  - id: spec
+    about: The spec items - what the server promises a model, each traced to what proves it
+    paths:
+      - spec/**
   - id: docs
     about: Documentation and agent instructions
     paths:
@@ -177,6 +187,52 @@ gates:
     budget_s: 20
     static: true
     blocks: a commit on main - main changes only when a person merges a pull request
+
+  - id: spec
+    builtin: spec
+    cadence: [stop, commit, pr, ci]
+    suites: [spec, tests]
+    budget_s: 20
+    static: true
+    blocks: >-
+      an active item of spec/items.yaml that nothing proves, a test or a gate it names that does
+      not exist, or a `// spec:` tag naming no item
+
+  - id: changelog
+    builtin: changelog
+    cadence: [stop, pr, ci]
+    suites: [surface]
+    budget_s: 20
+    static: true
+    blocks: a change to baselines/surface/ (what the model reads) with no change to CHANGELOG.md
+
+  - id: surface
+    runs: make go CMD="run ./cmd/surface --check"
+    docker: true
+    cadence: [stop, pr, ci]
+    suites: [surface, server]
+    budget_s: 300
+    blocks: >-
+      a tool, a description, a schema or a resource text that differs from baselines/surface/
+      (make surface-propose rewrites it, for review)
+
+  - id: tokens
+    runs: make go CMD="run ./cmd/surface --budgets"
+    docker: true
+    cadence: [pr, ci]
+    suites: [surface]
+    budget_s: 300
+    blocks: the tools or the static resources costing more tokens than gates/budgets.yaml allows
+
+  - id: analyzers
+    runs: make go CMD="run ./cmd/analyzers ./..."
+    docker: true
+    cadence: [stop, pr, ci]
+    suites: [surface, trust, tools, server, tests]
+    budget_s: 600
+    blocks: >-
+      entity text in a string the server writes itself (UNT-001, UNT-002), a result literal that
+      hides a cut (TRN-001), or t.Parallel in an integration test
 
   - id: fmt
     runs: ./scripts/fmt.sh {scope} --check
@@ -246,3 +302,19 @@ gates:
     suites: [surface, trust, tools, server, tests]
     budget_s: 2700
     blocks: a failing test against a live TheHive (CI runs it on 5.5 and 5.6)
+
+  - id: unit
+    runs: make test
+    docker: true
+    cadence: [nightly]
+    suites: ["*"]
+    budget_s: 900
+    blocks: a failing unit test (the lint gate runs them at the other cadences)
+
+  - id: canaries
+    runs: bin/harness canaries
+    docker: true
+    cadence: [nightly]
+    suites: ["*"]
+    budget_s: 5400
+    blocks: a known-bad patch of gates/canaries/ that the gate it names lets through

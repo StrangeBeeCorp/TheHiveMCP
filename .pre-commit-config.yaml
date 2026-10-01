@@ -2,8 +2,11 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
+      # A patch's blank context lines are a single space: the canaries must stay byte for byte.
       - id: trailing-whitespace
+        exclude: ^gates/canaries/.*\.patch$
       - id: end-of-file-fixer
+        exclude: ^gates/canaries/.*\.patch$
       - id: check-yaml
       - id: check-added-large-files
 
