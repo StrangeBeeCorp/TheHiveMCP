@@ -42,8 +42,11 @@ func TestSpecTracesEveryActiveItem(t *testing.T) {
   - {id: DDD-001, title: untraced, rule: r, status: active}
   - {id: EEE-001, title: draft, rule: r, status: draft}
   - {id: FFF-001, title: bad refs, rule: r, status: active, tests: ["pkg/a_test.go:TestGone"], gates: [lint]}
+  - {id: GGG-001, title: by fuzz target, rule: r, status: active, tests: ["pkg/a_test.go:FuzzA"]}
+  - {id: HHH-001, title: no fuzz target, rule: r, status: active, tests: ["pkg/a_test.go:FuzzGone"]}
 `),
-		testFile: []byte("package pkg\n\n" + tag("BBB-001") + "func TestA(t *testing.T) {}\n\n" + tag("ZZZ-999") + "func TestB(t *testing.T) {}\n"),
+		testFile: []byte("package pkg\n\n" + tag("BBB-001") + "func TestA(t *testing.T) {}\n\n" + tag("ZZZ-999") + "func TestB(t *testing.T) {}\n\n" +
+			"func FuzzA(f *testing.F) {}\n"),
 	}
 
 	found, err := checks.SpecTraces(tree, specRegistry(t))
@@ -54,8 +57,9 @@ func TestSpecTracesEveryActiveItem(t *testing.T) {
 	assert.Contains(t, msgs, `FFF-001: names pkg/a_test.go:TestGone, which is not a test`)
 	assert.Contains(t, msgs, `FFF-001: names gate "lint"`)
 	assert.Contains(t, msgs, `pkg/a_test.go:6: tags spec item "ZZZ-999"`)
+	assert.Contains(t, msgs, `HHH-001: names pkg/a_test.go:FuzzGone, which is not a test`)
 
-	for _, ok := range []string{"AAA-001", "BBB-001", "CCC-001", "EEE-001"} {
+	for _, ok := range []string{"AAA-001", "BBB-001", "CCC-001", "EEE-001", "GGG-001"} {
 		assert.NotContains(t, msgs, ok+":", "%s is traced or a draft", ok)
 	}
 }

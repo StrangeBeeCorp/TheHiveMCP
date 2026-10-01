@@ -343,6 +343,21 @@ gates:
     budget_s: 900
     blocks: a data race the unit tests run into (go test -race, with cgo)
 
+  - id: fuzz
+    runs: >-
+      make go CMD="test -run ^NoTest -fuzz ^FuzzUntrustedWrap -fuzztime 60s ./internal/utils" &&
+      make go CMD="test -run ^NoTest -fuzz ^FuzzFilterDSL -fuzztime 60s ./internal/utils" &&
+      make go CMD="test -run ^NoTest -fuzz ^FuzzPermissionProfile -fuzztime 60s ./internal/permissions" &&
+      make go CMD="test -run ^NoTest -fuzz ^FuzzRetypeDateFields -fuzztime 60s ./internal/tools"
+    docker: true
+    cadence: [nightly]
+    suites: ["*"]
+    budget_s: 600
+    blocks: >-
+      an input that breaks a fuzz target's property: the untrusted-data boundary, the filter fields,
+      the permission checks, the schema's date retyping (go test writes it under testdata/fuzz:
+      commit it with the fix, as a seed)
+
   - id: unit
     runs: make test
     docker: true

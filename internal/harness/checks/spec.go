@@ -197,7 +197,18 @@ func fileTags(f string, content []byte, known map[string]bool, tags map[string]i
 // testExists reports whether ref, path_test.go:TestName, names a test function of the tree.
 func testExists(tree Tree, ref string) bool {
 	file, name, ok := strings.Cut(ref, ":")
-	if !ok || !strings.HasSuffix(file, "_test.go") || !strings.HasPrefix(name, "Test") {
+	if !ok || !strings.HasSuffix(file, "_test.go") {
+		return false
+	}
+
+	var params string
+
+	switch {
+	case strings.HasPrefix(name, "Test"):
+		params = "(t *testing.T)"
+	case strings.HasPrefix(name, "Fuzz"):
+		params = "(f *testing.F)"
+	default:
 		return false
 	}
 
@@ -206,7 +217,7 @@ func testExists(tree Tree, ref string) bool {
 		return false
 	}
 
-	return bytes.Contains(content, []byte("func "+name+"(t *testing.T)"))
+	return bytes.Contains(content, []byte("func "+name+params))
 }
 
 // Changelog checks that a change to what the model reads has a CHANGELOG.md entry: the surface
