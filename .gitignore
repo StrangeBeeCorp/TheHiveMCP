@@ -48,11 +48,18 @@ internal/testutils/testdata/*.lic.local
 # Minted dev license token (raw JWT — a secret; never commit).
 key.md
 
-.claude/
-CLAUDE.md
-extension/
-
-mcp-cli.py
+# Claude Code: .claude/ and CLAUDE.md are the agent harness and are committed, except what
+# belongs to one machine or one session. The public-safety gate refuses these if they slip in.
+.claude/settings.local.json
+.claude/worktrees/
+.claude/logs/
+.claude/last-prompt-ts
+.claude/.lint-verified
+CLAUDE.local.md
 
 # The harness's build cache and run logs (bin/harness, .cache/harness/runs/).
 .cache/
+
+extension/
+
+mcp-cli.py
