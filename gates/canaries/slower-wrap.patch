@@ -1,0 +1,13 @@
+diff --git a/internal/utils/parsers.go b/internal/utils/parsers.go
+index c334f90..8149c13 100644
+--- a/internal/utils/parsers.go
++++ b/internal/utils/parsers.go
+@@ -291,7 +291,7 @@ var untrustedSubtreeType = reflect.TypeFor[UntrustedSubtree]()
+ // neutralizeMarkers replaces boundary markers found inside a value (see
+ // neutralizedMarker) so embedded tags cannot open or close a boundary.
+ func neutralizeMarkers(s string) string {
+-	neutralized := strings.ReplaceAll(s, untrustedOpenTag, neutralizedMarker)
++	neutralized := strings.ReplaceAll(strings.Clone(s), untrustedOpenTag, neutralizedMarker)
+ 	return strings.ReplaceAll(neutralized, untrustedCloseTag, neutralizedMarker)
+ }
+ 

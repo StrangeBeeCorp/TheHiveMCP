@@ -343,6 +343,17 @@ gates:
     budget_s: 900
     blocks: a data race the unit tests run into (go test -race, with cgo)
 
+  - id: bench
+    runs: bin/harness bench
+    docker: true
+    cadence: [pr, ci]
+    suites: [everything, surface, trust, tools, server]
+    budget_s: 900
+    blocks: >-
+      a hot path slower or allocating more than at the base beyond gates/bench.yaml, or over its
+      absolute budget there: the time the server adds to a TheHive call (a search through the
+      in-process client against a TheHive stub), wrapping a page of results, the filter transforms
+
   - id: fuzz
     runs: >-
       make go CMD="test -run ^NoTest -fuzz ^FuzzUntrustedWrap -fuzztime 60s ./internal/utils" &&

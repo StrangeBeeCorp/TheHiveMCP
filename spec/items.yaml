@@ -162,3 +162,13 @@ items:
     tests:
       - internal/harness/checks/integrity_test.go:TestAWeakenedTestIsRefused
     gates: [integrity]
+
+  - id: PRF-001
+    title: The server does not get slower unseen
+    status: active
+    rule: >-
+      The time the server adds to a TheHive call, the wrapping of results and the filter
+      transforms stay within gates/bench.yaml, against the base and in absolute terms.
+    tests:
+      - internal/harness/bench/bench_test.go:TestAHeadSlowerOrAllocatingMoreThanTheBaseFails
+    gates: [bench]

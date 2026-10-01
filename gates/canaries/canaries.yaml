@@ -105,3 +105,10 @@ canaries:
     patch: weaken-test.patch
     expect: "TestWrap_UnknownFieldIsWrapped checks less"
     why: a test loses the call that checked its result, and still passes
+
+  - id: slower-wrap
+    item: PRF-001
+    gate: bench
+    patch: slower-wrap.patch
+    expect: "BenchmarkWrapSearchPage: allocates"
+    why: wrapping untrusted text copies every value once more, and every search result pays for it

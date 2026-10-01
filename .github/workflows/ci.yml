@@ -78,6 +78,9 @@ jobs:
       - name: Coverage floors and data races
         run: bin/harness run --cadence ci --gate coverage --gate race
 
+      - name: Benchmarks against the base and their budgets
+        run: bin/harness run --cadence ci --gate bench
+
       - name: Run SAST
         run: bin/harness run --cadence ci --gate sast
 

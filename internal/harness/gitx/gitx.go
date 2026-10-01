@@ -176,6 +176,16 @@ func Remote(ctx context.Context, root, ref string) string {
 	return full
 }
 
+// MergeBase is the merge base of ref and HEAD, or "" when there is none.
+func MergeBase(ctx context.Context, root, ref string) string {
+	out, err := run(ctx, root, "merge-base", ref, "HEAD")
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(out)
+}
+
 // HasRef reports whether the ref resolves to a commit.
 func HasRef(ctx context.Context, root, ref string) bool {
 	_, err := run(ctx, root, "rev-parse", "--verify", "--quiet", ref+"^{commit}")

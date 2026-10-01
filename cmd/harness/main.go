@@ -18,6 +18,7 @@
 //	harness package tarballs|mcpb [--version V] [--build DIR] [--dist DIR] [--name N] [--targets "T ..." | --host]
 //	harness sign-windows BINARY...  (SIGNING_PROVIDER: none, signpath or azure)
 //	harness integration  (make test-integration: the stack up and reset, then the suite)
+//	harness bench [--base REF]  (the benchmarks at the merge base and at HEAD, against gates/bench.yaml)
 package main
 
 import (
@@ -204,6 +205,7 @@ func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer
 		"evidence":       e.showEvidence,
 		builtinStructure: e.structure,
 		"review-effort":  e.reviewEffort,
+		"bench":          e.bench,
 	}
 
 	command, ok := commands[args[0]]

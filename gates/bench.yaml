@@ -1,0 +1,22 @@
+# The bench gate (bin/harness bench): the hot paths' benchmarks run at the merge base and at HEAD,
+# on the same machine, and HEAD's medians are held to these budgets. Measured on 2026-10-02 in the
+# pinned Go image (Apple M-series, 5 runs of 300 ms): a search-entities call 4.85 ms and 20,376
+# allocations (50 alerts from a TheHive stub that answers at once: the time the server adds), a
+# page of 50 alerts wrapped 180 µs and 3,403 allocations, the filter transforms 7.2 µs and 110
+# allocations. Raising a budget is a reviewed change, like a cap in gates/limits.yaml.
+
+packages: [./bootstrap, ./internal/utils]
+count: 5
+benchtime: 300ms
+
+# Against the base: a benchmark may take up to this many times its median there, and make this
+# share more allocations per op (at least one). Times are noisy across runs; allocations are not.
+slower: 1.5
+more_allocs: 0.05
+
+# Whatever the base: about four times today's time, for slower CI machines, and 10 % more
+# allocations than today's.
+max:
+  BenchmarkSearchEntitiesCall: {ns: 20000000, allocs: 22500}
+  BenchmarkWrapSearchPage: {ns: 800000, allocs: 3750}
+  BenchmarkFilterTransforms: {ns: 40000, allocs: 121}
