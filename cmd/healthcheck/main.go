@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/types"
@@ -37,6 +38,9 @@ func run() int {
 	if endpoint == "" {
 		endpoint = "/mcp" // mirror the server default in internal/types/options.go
 	}
+
+	// Normalized as the server's router does, so "/mcp/" probes the path served.
+	endpoint = "/" + strings.Trim(endpoint, "/")
 
 	// Always probe the loopback interface: the probe runs inside the same
 	// network namespace as the server, and the bind host may be a wildcard

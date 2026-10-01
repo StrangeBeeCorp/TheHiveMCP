@@ -14,6 +14,8 @@ TheHiveMCP serves plain HTTP and doesn't authenticate callers itself. Before exp
   its own key keeps it. Only do this for single-user deployments behind an authenticating proxy.
 - **The `X-TheHive-Url` header is restricted** to the configured `THEHIVE_URL`. To allow additional TheHive instances (multi-tenant), list them explicitly in
   `THEHIVE_URL_ALLOWLIST` (comma-separated, exact scheme/host/port match). Any other destination is rejected before TheHive is contacted.
+- **The server bounds slow and oversized requests itself**: 10 s to send the headers, 30 s for the whole request, 4 MiB per body. It does not cap how many
+  connections or event streams a client opens, and anyone who reaches the port can open one without credentials: set connection limits on your proxy.
 
 ## Prerequisites
 

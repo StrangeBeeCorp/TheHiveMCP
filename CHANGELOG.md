@@ -39,6 +39,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   every tool call of the session, two concurrent searches could write the same map, which stops a Go process. The search now works on a copy, as the scope
   checks already did.
 
+- **`MCP_SERVER_ENDPOINT` is documented under its real name.** The README and the basic Docker Compose file used `MCP_ENDPOINT_PATH`, which the server never
+  read, so a custom endpoint path set that way was silently ignored. The `--help` text also named `HIVEMIND_*` variables, and the HTTP startup error `MCP_URL`,
+  none of which exist.
+- **The basic Docker Compose file no longer reports the container as unhealthy.** Its healthcheck ran `wget` against `/health`, but the image is distroless,
+  with no `wget`, and the server has no such route. The override is gone, so the image's own probe applies.
+
 ### Security
 
 - **A responder blocked by name can no longer run by its ID.** Analyzer and responder lists match a worker's ID or its name, and the shipped profiles use names
@@ -62,6 +68,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **An `Authorization` header in another scheme than Bearer is no longer taken for a TheHive key.** The Basic credentials an authenticating proxy passes on were
   forwarded to TheHive as the key, so the proxy user's password reached TheHive and the call failed. Such a value is now ignored: a request carrying only that
   gets the env fallback when it is on, and is refused otherwise. When a request sends both headers, `X-TheHive-Api-Key` wins.
+- **The HTTP server no longer waits indefinitely on a slow or huge request.** It served with no timeouts and read a request body of any size in full before
+  checking credentials, so a client that could reach the port could hold a connection with headers or a body sent a byte at a time, or exhaust the server's
+  memory with one huge body. Headers must now arrive within 10 s and a whole request within 30 s, and a body is capped at 4 MiB: one that declares more is
+  refused with 413 before any of it is read, and a chunked one is cut off at the cap with a JSON-RPC parse error. Long tool calls and SSE streams are
+  unaffected, since these limits stop applying once the request has been read. They do not cap how many connections or streams a client opens, which the
+  authenticating proxy the deployment docs require must still do.
 
 ## [1.1.0] - 2026-09-10
 

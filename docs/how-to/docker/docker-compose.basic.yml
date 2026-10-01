@@ -17,7 +17,7 @@ services:
       # MCP Server Configuration
       - MCP_BIND_HOST=0.0.0.0
       - MCP_PORT=8082
-      - MCP_ENDPOINT_PATH=/mcp
+      - MCP_SERVER_ENDPOINT=/mcp
       - MCP_HEARTBEAT_INTERVAL=30s
 
       # Permissions (choose one)
@@ -28,11 +28,7 @@ services:
     # volumes:  # Not needed with built-in permission profiles
     #   - ./config/permissions.yaml:/app/permissions.yaml:ro
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8082/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    # No healthcheck override: the image ships its own probe (/app/healthcheck).
     networks:
       - thehive-mcp
 

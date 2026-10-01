@@ -193,7 +193,8 @@ func GetHTTPAuthContextFunc(options *types.TheHiveMcpDefaultOptions) func(ctx co
 // is otherwise unobservable.
 func StreamableHTTPOptions(options *types.TheHiveMcpDefaultOptions) []server.StreamableHTTPOption {
 	httpOptions := []server.StreamableHTTPOption{
-		server.WithEndpointPath(options.MCPServerEndpointPath),
+		// No WithEndpointPath: only mcp-go's own Start reads it, to build the
+		// mux newHTTPServer builds instead.
 		server.WithStateLess(false),
 		server.WithHTTPContextFunc(GetHTTPAuthContextFunc(options)),
 
@@ -242,7 +243,7 @@ func StartHTTPServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOption
 		return err
 	}
 
-	httpServer := server.NewStreamableHTTPServer(s, StreamableHTTPOptions(options)...)
+	_, httpServer := newHTTPServer(s, options)
 
 	slog.Info("Starting HTTP server",
 		"bind_addr", options.BindAddr,
