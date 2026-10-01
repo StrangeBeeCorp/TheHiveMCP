@@ -41,9 +41,10 @@ RUN go build \
 RUN go build -ldflags="-s -w" -o /healthcheck ./cmd/healthcheck/main.go
 
 # Stage 2: Runtime image
-# Pinned by digest for reproducible builds. Bump the digest to pick up a newer
-# distroless/static-debian12 base.
-FROM gcr.io/distroless/static-debian12@sha256:7d14daf425206f9e79b463e57226c1d6500a6b42f4923d5f0a9a413657f5774f
+# Pinned by digest for reproducible builds. The digest is the multi-platform
+# index's, not one platform's manifest: a single-platform digest would give every
+# target the same base, whatever TARGETPLATFORM is. The tag lets Renovate bump it.
+FROM gcr.io/distroless/static-debian12:latest@sha256:d75cdd72874d4790092fcb1b058493ecf6bb5bf2b2b897045b00ff01d91843f2
 LABEL io.modelcontextprotocol.server.name="io.github.StrangeBeeCorp/TheHiveMCP"
 
 # Copy the server and the standalone healthcheck probe. No shell or HTTP client
