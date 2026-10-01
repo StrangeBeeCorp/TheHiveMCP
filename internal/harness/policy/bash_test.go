@@ -49,6 +49,11 @@ func TestBypassesAreDeniedToEveryone(t *testing.T) {
 		"bin/harness pr -person=true",
 		"setsid bin/harness push --person",
 		`make go CMD="run ./cmd/harness push --person"`,
+		"P=--person; bin/harness push $P",
+		"bin/harness push $(echo --person)",
+		"printf %s%s --per son | xargs bin/harness push",
+		"parallel bin/harness push :::: /tmp/args",
+		`find . -maxdepth 0 -exec bin/harness push {} \;`,
 		"echo '{}' > .cache/harness/evidence/abc.json",
 		"cp /tmp/x .cache/harness/state.json",
 		"cp -R /tmp/evidence .cache/harness/",
@@ -157,6 +162,8 @@ func TestOrdinaryWorkIsNotInTheWay(t *testing.T) {
 		"cp -rf internal/tools .cache/tmp/tools",
 		"sort -o .cache/tmp/s.txt .cache/tmp/x.txt",
 		"env LC_ALL=C grep -i foo internal/x.go",
+		"timeout 600 bin/harness run --cadence stop",
+		"mkdir -p .cache/tmp/harness",
 	} {
 		assert.False(t, bash(policy.Coder, line).Deny, "%s: %v", line, bash(policy.Coder, line).Reason)
 	}

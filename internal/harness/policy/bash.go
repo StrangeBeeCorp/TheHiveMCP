@@ -205,6 +205,8 @@ func (j *judge) passedOn(name string, args []string, depth int) Decision {
 		var d Decision
 
 		switch {
+		case harnessWord(a) || (spaced && harnessWord(first)):
+			d = deny("run bin/harness itself, not through %s: a command that runs it may add arguments the policy cannot read", name)
 		case guarded(a):
 			d = j.run(args[i:], depth+1)
 		case spaced && guarded(first):
@@ -255,6 +257,10 @@ func (j *judge) unwrap(name string, args []string, depth int) (Decision, bool) {
 		return j.env(args, depth), true
 	case name == "xargs":
 		rest := skipOptions(args, []string{"-n", "-I", "-i", "-L", "-l", "-P", "-d", "-s", "-E", "-e", "-a", "--max-args", "--delimiter"})
+		if len(rest) > 0 && harnessWord(rest[0]) {
+			return deny("run bin/harness itself, not through xargs: xargs adds arguments the policy cannot read"), true
+		}
+
 		return j.run(rest, depth+1), true
 	case name == "find":
 		return j.find(args, depth), true
@@ -440,6 +446,11 @@ func (j *judge) byPath(name string) Decision {
 
 func isHarness(name string) bool {
 	return name == "bin/harness" || name == "./bin/harness" || strings.HasSuffix(name, "/bin/harness")
+}
+
+// harnessWord reports whether word runs the harness: bin/harness by any path, or harness itself.
+func harnessWord(word string) bool {
+	return isHarness(word) || word == "harness"
 }
 
 // write judges a file the command line writes, relative to where the line has cd'ed. A path the

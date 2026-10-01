@@ -447,6 +447,8 @@ func (j *judge) harness(args []string) Decision {
 	switch {
 	case slices.ContainsFunc(args, personFlag):
 		return deny(personDenied)
+	case slices.ContainsFunc(args, func(a string) bool { return strings.Contains(a, shell.Computed) || a == "{}" }):
+		return deny("write the harness's arguments out: the policy reads them before it runs, and cannot read a variable, a substitution or find's {}")
 	case (sub == subPush || sub == "pr") && (j.role.Duel() || j.role.ReadOnly()):
 		return deny("the %s does not push: the session that runs the duel ships the change", j.role)
 	case j.role.ReadOnly() && !slices.Contains([]string{"select", subList, "check", "hook"}, sub):
