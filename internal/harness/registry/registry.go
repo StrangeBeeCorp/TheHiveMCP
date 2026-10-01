@@ -43,6 +43,9 @@ type Gate struct {
 	Suites  []string `yaml:"suites"`
 	BudgetS int      `yaml:"budget_s"`
 	Blocks  string   `yaml:"blocks"`
+	// Static gates read files without building them: they are the only ones the Tester's stop
+	// runs, since its tests fail on purpose and may not compile yet.
+	Static bool `yaml:"static"`
 }
 
 // Registry is the parsed gates/registry.yaml.

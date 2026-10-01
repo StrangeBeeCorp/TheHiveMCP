@@ -4,8 +4,10 @@
 //	harness run --cadence stop|commit|pr|ci|nightly [--base REF | --staged | --all] [--gate ID]... [--force]
 //	harness select [--base REF | --staged | --all]
 //	harness list [--cadence C]
-//	harness check structure|public-safety|docs
+//	harness check structure|public-safety|docs|go-source|branch
 //	harness docs [--check]
+//	harness hook pre-tool-use|post-tool-use|stop|subagent-stop|session-start|pre-compact  (JSON on stdin)
+//	harness push [--force]
 package main
 
 import (
@@ -48,7 +50,7 @@ var (
 func main() {
 	// Ctrl-C, or a hook's timeout, cancels the run: each running gate's process group is stopped.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	err := dispatch(ctx, os.Args[1:], os.Stdout)
+	err := dispatch(ctx, os.Args[1:], os.Stdin, os.Stdout)
 
 	stop()
 
@@ -144,9 +146,9 @@ func stagedRun(args []string) bool {
 	return slices.Contains(args[1:], "--staged") || slices.Contains(args[1:], "-staged")
 }
 
-func dispatch(ctx context.Context, args []string, out io.Writer) error {
+func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer) error {
 	if len(args) == 0 {
-		return usageError{"usage: harness run|select|list|check|docs (see cmd/harness/main.go)"}
+		return usageError{"usage: harness run|select|list|check|docs|hook|push (see cmd/harness/main.go)"}
 	}
 
 	e, err := load(ctx, stagedRun(args))
@@ -165,6 +167,10 @@ func dispatch(ctx context.Context, args []string, out io.Writer) error {
 		return e.check(ctx, args[1:], out)
 	case "docs":
 		return e.docs(args[1:], out)
+	case "hook":
+		return e.hook(ctx, args[1:], stdin, out)
+	case "push":
+		return e.push(ctx, args[1:], out)
 	default:
 		return usageError{fmt.Sprintf("unknown command %q", args[0])}
 	}
@@ -181,11 +187,13 @@ const (
 	builtinStructure = "structure"
 	builtinSafety    = "public-safety"
 	builtinDocs      = "docs"
+	builtinGoSource  = "go-source"
+	builtinBranch    = "branch"
 )
 
 func isBuiltin(name string) bool {
 	switch name {
-	case builtinStructure, builtinSafety, builtinDocs:
+	case builtinStructure, builtinSafety, builtinDocs, builtinGoSource, builtinBranch:
 		return true
 	}
 
@@ -228,6 +236,10 @@ func (e env) builtin(ctx context.Context, name string) ([]string, error) {
 		found, err = checks.PublicSafety(tree, e.limits.PublicSafety)
 	case builtinDocs:
 		found, err = checks.Docs(tree, e.reg)
+	case builtinGoSource:
+		found, err = checks.GoSource(tree)
+	case builtinBranch:
+		found = onBranch(gitx.Branch(ctx, e.root))
 	default:
 		return nil, fmt.Errorf("unknown builtin %q", name)
 	}
@@ -244,6 +256,16 @@ func (e env) builtin(ctx context.Context, name string) ([]string, error) {
 	return lines, nil
 }
 
+// onBranch is the branch check: work is committed on a branch, and main changes only when a
+// person merges a pull request.
+func onBranch(branch string) []checks.Finding {
+	if branch == "main" {
+		return []checks.Finding{{Msg: "this commit is on main: commit on a branch (<type>/DL-<n>-<name>) and open a pull request"}}
+	}
+
+	return nil
+}
+
 func dockerUp(ctx context.Context) bool {
 	ctx, cancel := context.WithTimeout(ctx, dockerProbe)
 	defer cancel()
@@ -253,7 +275,7 @@ func dockerUp(ctx context.Context) bool {
 
 func (e env) check(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) != 1 || !isBuiltin(args[0]) {
-		return usageError{"usage: harness check structure|public-safety|docs"}
+		return usageError{"usage: harness check structure|public-safety|docs|go-source|branch"}
 	}
 
 	lines, err := e.builtin(ctx, args[0])

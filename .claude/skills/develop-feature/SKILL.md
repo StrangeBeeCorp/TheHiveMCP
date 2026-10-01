@@ -27,7 +27,10 @@ description:
    `.github/PULL_REQUEST_TEMPLATE.md`. That box makes the next release re-run the accuracy and security suites (`RELEASING.md`).
 2. **Missing TheHive API field or endpoint?** Fix it in thehive4go, not here. Regenerate it there, tag a release, then bump
    `github.com/StrangeBeeCorp/thehive4go` in `go.mod`.
-3. **Implement.** Read the reference that matches the change first:
+3. **Implement test first.** Run the `implement-task` workflow (`.claude/workflows/implement-task.js`, args `{ticket, task, items}`): the Tester
+   (`.claude/agents/tester.md`) writes failing tests from the task's "Done when", the Coder (`.claude/agents/coder.md`) makes them pass, and the Tester attacks
+   until it finds nothing more. The hooks keep each to its files, and every stop runs `make check-fast`. Review what they did, then commit and push yourself
+   (`make push`). Read the reference that matches the change first:
    - adding a tool, an operation or a parameter → `references/tool-anatomy.md`
    - a new response field, an error that quotes entity data, or any edit to `internal/utils/parsers.go` → `references/untrusted-data.md`
    - any test → `references/testing.md`

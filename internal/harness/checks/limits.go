@@ -39,6 +39,13 @@ func (f Finding) String() string {
 type Limits struct {
 	Structure    StructureLimits `yaml:"structure"`
 	PublicSafety SafetyRules     `yaml:"public_safety"`
+	Hooks        HookLimits      `yaml:"hooks"`
+}
+
+// HookLimits bound what the Claude Code hooks let an agent do.
+type HookLimits struct {
+	// MaxRedRounds is how many times an agent may stop red before it must write BLOCKED.md.
+	MaxRedRounds int `yaml:"max_red_rounds"`
 }
 
 // StructureLimits bounds file and directory size.
@@ -78,6 +85,10 @@ func ParseLimits(data []byte, file string) (Limits, error) {
 	err := dec.Decode(&l)
 	if err != nil {
 		return Limits{}, fmt.Errorf("parse %s: %w", file, err)
+	}
+
+	if l.Hooks.MaxRedRounds <= 0 {
+		return Limits{}, fmt.Errorf("%s: hooks.max_red_rounds must be at least 1", file)
 	}
 
 	return l, nil

@@ -168,6 +168,23 @@ type runFlags struct {
 }
 
 func (e env) execute(ctx context.Context, cadence string, gates []registry.Gate, sel registry.Selection, f runFlags, out io.Writer) error {
+	rec, err := e.runGates(ctx, cadence, gates, sel, f, out)
+	if err != nil {
+		return err
+	}
+
+	switch rec.Verdict {
+	case runner.Fail:
+		return errFailed
+	case runner.Incomplete:
+		return errIncomplete
+	default:
+		return nil
+	}
+}
+
+// runGates runs the gates the selection selects, prints their results and records the run.
+func (e env) runGates(ctx context.Context, cadence string, gates []registry.Gate, sel registry.Selection, f runFlags, out io.Writer) (runner.Record, error) {
 	var run, skipped []registry.Gate
 
 	for _, g := range gates {
@@ -192,7 +209,7 @@ func (e env) execute(ctx context.Context, cadence string, gates []registry.Gate,
 		Builtin: e.builtin, DockerUp: dockerUp,
 	})
 	if err != nil {
-		return fmt.Errorf("run the gates: %w", err)
+		return runner.Record{}, fmt.Errorf("run the gates: %w", err)
 	}
 
 	for _, g := range skipped {
@@ -208,17 +225,10 @@ func (e env) execute(ctx context.Context, cadence string, gates []registry.Gate,
 
 	p, err := rec.Write(logDir)
 	if err != nil {
-		return fmt.Errorf("record the run: %w", err)
+		return runner.Record{}, fmt.Errorf("record the run: %w", err)
 	}
 
 	_, _ = fmt.Fprintf(out, "verdict %s · %s\n", rec.Verdict, p)
 
-	switch rec.Verdict {
-	case runner.Fail:
-		return errFailed
-	case runner.Incomplete:
-		return errIncomplete
-	default:
-		return nil
-	}
+	return rec, nil
 }

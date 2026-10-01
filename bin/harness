@@ -13,8 +13,10 @@
 # a few seconds once and nothing after. Needs Docker (OrbStack); there is no host Go.
 set -euo pipefail
 
-root="$(git rev-parse --show-toplevel)"
-common="$(git rev-parse --path-format=absolute --git-common-dir)"
+# The checkout is the one this script is in, wherever it is called from: a hook keeps judging
+# this checkout even when the agent's shell has moved elsewhere.
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+common="$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)"
 cache="$(dirname "$common")/.cache/harness"
 sources=(cmd/harness internal/harness go.mod go.sum)
 

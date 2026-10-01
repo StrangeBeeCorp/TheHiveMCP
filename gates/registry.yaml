@@ -5,7 +5,7 @@
 # gate whose cadence includes ci.
 #
 # Cadences:
-#   edit     an agent edits a file (Claude Code PostToolUse hook)
+#   edit     an agent edits a file: the PostToolUse hook runs this cadence's built-in gates on it
 #   stop     an agent stops, or you run `make check-fast`
 #   commit   the git pre-commit hook (`make pre-commit`), on the staged files
 #   pr       before a pull request is opened
@@ -25,6 +25,9 @@
 # With --staged (the pre-commit hook) this registry, gates/limits.yaml and every file a built-in
 # gate reads come from the index, so a commit is judged on exactly what it carries; otherwise they
 # come from the working tree and its untracked files.
+#
+# `static: true` marks the gates that read files without building them. When the Tester stops,
+# only those run: its tests fail on purpose, and may not compile until the Coder's turn.
 
 scopes:
   edit: --changed HEAD
@@ -134,6 +137,7 @@ gates:
     cadence: [edit, stop, commit, pr, ci]
     suites: ["*"]
     budget_s: 20
+    static: true
     blocks: >-
       a code file over 500 lines or over its cap, more than 14 code files in a directory, a file
       that is not UTF-8, or a top-level entry gates/limits.yaml does not list
@@ -143,6 +147,7 @@ gates:
     cadence: [edit, stop, commit, pr, ci]
     suites: ["*"]
     budget_s: 20
+    static: true
     blocks: >-
       a per-machine file (settings.local.json, CLAUDE.local.md, a licence or environment file,
       a key) or a personal home path in the repository
@@ -152,9 +157,26 @@ gates:
     cadence: [stop, commit, pr, ci]
     suites: ["*"]
     budget_s: 20
+    static: true
     blocks: >-
       a path named in AGENTS.md, README.md, CLAUDE.md or .claude/ that does not exist, a stale
       docs/reference/gates.md, or a ci gate that ci.yml does not run
+
+  - id: go-source
+    builtin: go-source
+    cadence: [edit]
+    suites: ["*"]
+    budget_s: 20
+    static: true
+    blocks: a Go file that does not parse, or that gofmt would rewrite
+
+  - id: branch
+    builtin: branch
+    cadence: [commit]
+    suites: ["*"]
+    budget_s: 20
+    static: true
+    blocks: a commit on main - main changes only when a person merges a pull request
 
   - id: fmt
     runs: ./scripts/fmt.sh {scope} --check
@@ -162,6 +184,7 @@ gates:
     cadence: [stop, pr, ci]
     suites: ["*"]
     budget_s: 300
+    static: true
     blocks: a Go, shell or Markdown file that its formatter would rewrite
 
   - id: lint

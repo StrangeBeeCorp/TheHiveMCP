@@ -55,6 +55,8 @@ key.md
 .claude/logs/
 .claude/last-prompt-ts
 .claude/.lint-verified
+# The Tester's sealed tests of the task in progress: moved into the code at the end of the duel.
+.claude/sealed/
 CLAUDE.local.md
 
 # The harness's build cache and run logs (bin/harness, .cache/harness/runs/).

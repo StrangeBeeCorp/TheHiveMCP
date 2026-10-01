@@ -74,6 +74,24 @@ func fileFindings(f string, content []byte, lim StructureLimits) []Finding {
 }
 
 func lineFindings(f string, lines int, lim StructureLimits) []Finding {
+	if over := overFindings(f, lines, lim); len(over) > 0 {
+		return over
+	}
+
+	limit, capped := lim.Caps[f]
+
+	switch {
+	case capped && lines <= lim.MaxLines:
+		return []Finding{{Path: f, Msg: fmt.Sprintf("%d lines, within the limit of %d: remove its cap from gates/limits.yaml", lines, lim.MaxLines)}}
+	case capped && lines < limit:
+		return []Finding{{Path: f, Msg: fmt.Sprintf("%d lines, under its cap of %d: lower the cap to %d in gates/limits.yaml", lines, limit, lines)}}
+	}
+
+	return nil
+}
+
+// overFindings reports a code file longer than the limit, or than its cap.
+func overFindings(f string, lines int, lim StructureLimits) []Finding {
 	limit, capped := lim.Caps[f]
 
 	switch {
@@ -81,10 +99,6 @@ func lineFindings(f string, lines int, lim StructureLimits) []Finding {
 		return []Finding{{Path: f, Msg: fmt.Sprintf("%d lines, over the limit of %d: split it", lines, lim.MaxLines)}}
 	case capped && lines > limit:
 		return []Finding{{Path: f, Msg: fmt.Sprintf("%d lines, over its cap of %d: a cap may only go down", lines, limit)}}
-	case capped && lines <= lim.MaxLines:
-		return []Finding{{Path: f, Msg: fmt.Sprintf("%d lines, within the limit of %d: remove its cap from gates/limits.yaml", lines, lim.MaxLines)}}
-	case capped && lines < limit:
-		return []Finding{{Path: f, Msg: fmt.Sprintf("%d lines, under its cap of %d: lower the cap to %d in gates/limits.yaml", lines, limit, lines)}}
 	}
 
 	return nil

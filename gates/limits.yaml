@@ -1,4 +1,5 @@
-# What the structure and public-safety gates enforce (gates/registry.yaml runs them).
+# What the structure and public-safety gates enforce (gates/registry.yaml runs them), and the
+# limits of the Claude Code hooks.
 
 structure:
   # A code file stays under this many lines. Split a file before it grows past it.
@@ -70,6 +71,7 @@ public_safety:
     - .claude/settings.local.json
     - .claude/worktrees/**
     - .claude/logs/**
+    - .claude/sealed/**
     - .claude/last-prompt-ts
     - .claude/.lint-verified
     - CLAUDE.local.md
@@ -90,3 +92,8 @@ public_safety:
   # Files whose content is not scanned for home paths (this file names the patterns).
   skip_content:
     - gates/limits.yaml
+
+hooks:
+  # An agent that stops while check-fast is red is sent back to work. After this many red rounds
+  # it must write .cache/harness/BLOCKED.md (what it tried, what fails, what it needs) to stop.
+  max_red_rounds: 6

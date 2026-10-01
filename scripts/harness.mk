@@ -18,3 +18,7 @@ gate: ## Run one gate now, whatever changed (list: docs/reference/gates.md) ##@ 
 .PHONY: harness-docs
 harness-docs: ## Regenerate docs/reference/gates.md from gates/registry.yaml ##@ make harness-docs
 	@bin/harness docs
+
+.PHONY: push
+push: ## Push this branch to origin: never main, never the public mirror ##@ make push [FORCE=1]
+	@bin/harness push $(if $(FORCE),--force)
