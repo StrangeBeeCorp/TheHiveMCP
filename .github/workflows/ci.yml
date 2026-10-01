@@ -75,6 +75,9 @@ jobs:
       - name: Workflow tests
         run: bin/harness run --cadence ci --gate workflows
 
+      - name: Coverage floors and data races
+        run: bin/harness run --cadence ci --gate coverage --gate race
+
       - name: Run SAST
         run: bin/harness run --cadence ci --gate sast
 

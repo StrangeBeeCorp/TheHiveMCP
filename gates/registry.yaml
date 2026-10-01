@@ -47,6 +47,7 @@ suites:
       - internal/harness/**
       - cmd/surface/**
       - cmd/analyzers/**
+      - cmd/coverage/**
       - internal/surface/**
       - internal/analyzers/**
       - gates/**
@@ -323,6 +324,24 @@ gates:
     suites: [surface, trust, tools, server, tests]
     budget_s: 2700
     blocks: a failing test against a live TheHive (CI runs it on 5.5 and 5.6)
+
+  - id: coverage
+    runs: make test COVERAGE=1 && make go CMD="run ./cmd/coverage --profile coverage.out --floors gates/coverage.yaml"
+    docker: true
+    cadence: [pr, ci]
+    suites: ["*"]
+    budget_s: 900
+    blocks: >-
+      a package whose unit-test coverage falls under its floor in gates/coverage.yaml (set from a
+      measurement, a point under it), or a floor whose package is gone
+
+  - id: race
+    runs: make test-race
+    docker: true
+    cadence: [pr, ci]
+    suites: ["*"]
+    budget_s: 900
+    blocks: a data race the unit tests run into (go test -race, with cgo)
 
   - id: unit
     runs: make test
