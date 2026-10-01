@@ -8,11 +8,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Fixed
+### Added
 
-- **Creating an observable that TheHive did not create is now an error.** An observable sent without `data` (a common slip is `value`) made TheHive answer 2xx
-  with an empty list, and `manage-entities` reported "Observable created successfully" with an empty `result`. A model then believed the observable existed and
-  built on it; one measured run spent its whole turn budget re-creating it. The tool now fails with a hint to set `entity-data.data`.
+- **`execute-automation` can wait for analyzer jobs: operation `wait-for-jobs`.** It takes up to 20 `job-ids` and blocks until every one is final or
+  `timeout-seconds` passes (default 45, at most 120), then returns each job with its verdict (the report's `success`, `summary` and `errorMessage`), plus
+  `pendingJobIds` for any still running; `get-job-status` returns a job's full report. Real analyzers take minutes, and the only way to learn they had finished
+  was to call `get-job-status` again: one model turn, and one resend of the whole conversation, per poll. Each job has its own outcome: one outside the
+  permitted scope, unknown to TheHive, or unanswered in time is listed in `jobErrors` without costing the others their verdicts, and the timeout bounds every
+  call to TheHive. Verdicts stay fenced as untrusted data.
 
 ### Changed
 
@@ -27,6 +30,63 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A `pattern` filter on `platforms` is now rejected.** TheHive does not index the field, so it accepted such a filter and returned zero rows with no error,
   which a model reported as "no technique targets that platform". The search now fails fast with an error pointing at `extra-columns: ["platforms"]`, and the
   pattern fact sheet no longer lists platform among the filterable fields.
+
+### Fixed
+
+- **Creating an observable that TheHive did not create is now an error.** An observable sent without `data` (a common slip is `value`) made TheHive answer 2xx
+  with an empty list, and `manage-entities` reported "Observable created successfully" with an empty `result`. A model then believed the observable existed and
+  built on it; one measured run spent its whole turn budget re-creating it. The tool now fails with a hint to set `entity-data.data`.
+
+- **A TheHive that stops answering no longer hangs the tool call.** The connection to TheHive had no timeout, so a TheHive that accepted the connection and
+  never answered held the call until the MCP client gave up — about four minutes in Claude Desktop — with no error, which read as a crashed server. Every
+  request to TheHive is now bounded (2 minutes by default, set with `THEHIVE_REQUEST_TIMEOUT` or `--thehive-request-timeout`), and a request that runs out of
+  time fails with an error saying so. Its hints warn that an abandoned create, update or delete may still have been applied, so the entity should be read back
+  before retrying.
+
+- **Responders on a task or an observable are reachable.** TheHive's responder endpoints know those entities as `case_task` and `case_artifact`, not the `task`
+  and `observable` the tool and the responder catalog resource advertise, so the catalog and `run-responder` answered 404 for them. Both now translate, and a
+  task log can be named `log` or `case_task_log`.
+
+- **A search no longer rewrites the permission filters.** `search-entities` repaired filter keys and turned dates into timestamps in place, on maps that still
+  belonged to the permission config, so the first search changed the config a session shows in `hive://config/permissions`. Over stdio, where one config serves
+  every tool call of the session, two concurrent searches could write the same map, which stops a Go process. The search now works on a copy, as the scope
+  checks already did.
+
+- **`MCP_SERVER_ENDPOINT` is documented under its real name.** The README and the basic Docker Compose file used `MCP_ENDPOINT_PATH`, which the server never
+  read, so a custom endpoint path set that way was silently ignored. The `--help` text also named `HIVEMIND_*` variables, and the HTTP startup error `MCP_URL`,
+  none of which exist.
+- **The basic Docker Compose file no longer reports the container as unhealthy.** Its healthcheck ran `wget` against `/health`, but the image is distroless,
+  with no `wget`, and the server has no such route. The override is gone, so the image's own probe applies.
+
+### Security
+
+- **A responder blocked by name can no longer run by its ID.** Analyzer and responder lists match a worker's ID or its name, and the shipped profiles use names
+  (`blocked: ["DeleteCase_1_0"]`), but `run-analyzer` and `run-responder` only checked the identifier the caller sent. A responder blocked by name therefore ran
+  when called by its ID, which is the identifier the tool description tells the model to use. The catalog also kept listing it. Both paths now check a worker
+  under its ID and its name together. The fix also works the other way: an analyzer allowed by name is no longer refused when called by its ID. When the rules
+  name specific workers, a run first reads the analyzer or responder catalog to learn the worker's other identifier, and a worker missing from the catalog is
+  denied. Rules that name none (`"*"`, an empty block list) need no lookup and behave as before.
+- **`run-responder` and `get-action-status` refuse a malformed `entity-type` or `entity-id`.** Both values go into the path of a Cortex endpoint, and nothing
+  enforced the schema's enum at runtime. An entity ID must now be a TheHive ID (`~123456`, or its bare digits). The type may be given in any case, or as TheHive
+  spells it (`case_task`, `case_artifact`).
+- **A misspelt key in the permissions file now stops the server.** Unknown keys used to be dropped without a word, and what they named fell back to its most
+  permissive default: `entity_permission:` in place of `entity_permissions:` allowed every operation on every entity, and `filter:` in place of `filters:`
+  removed the filters. The file is now parsed strictly and checked at startup, over stdio and over HTTP, and the server refuses to start on an unknown key,
+  naming it. Before, a file that failed to load only logged a warning, and every tool call was then denied with no reason given; that is still what happens when
+  the file is edited into an invalid state while the HTTP server runs, since it reloads the file per request. **A file that contains such a typo no longer
+  starts: fix the key it names.**
+- **A client's own TheHive key is no longer replaced by the server's.** With `ALLOW_ENV_CREDENTIAL_FALLBACK=true`, a key sent in the `Authorization` header was
+  overwritten by `THEHIVE_API_KEY`, so the client's calls ran under the service account: with its rights, and under its name in TheHive's audit trail. The
+  server's key now stands in only when a request carries no key.
+- **An `Authorization` header in another scheme than Bearer is no longer taken for a TheHive key.** The Basic credentials an authenticating proxy passes on were
+  forwarded to TheHive as the key, so the proxy user's password reached TheHive and the call failed. Such a value is now ignored: a request carrying only that
+  gets the env fallback when it is on, and is refused otherwise. When a request sends both headers, `X-TheHive-Api-Key` wins.
+- **The HTTP server no longer waits indefinitely on a slow or huge request.** It served with no timeouts and read a request body of any size in full before
+  checking credentials, so a client that could reach the port could hold a connection with headers or a body sent a byte at a time, or exhaust the server's
+  memory with one huge body. Headers must now arrive within 10 s and a whole request within 30 s, and a body is capped at 4 MiB: one that declares more is
+  refused with 413 before any of it is read, and a chunked one is cut off at the cap with a JSON-RPC parse error. Long tool calls and SSE streams are
+  unaffected, since these limits stop applying once the request has been read. They do not cap how many connections or streams a client opens, which the
+  authenticating proxy the deployment docs require must still do.
 
 ## [1.1.0] - 2026-09-10
 

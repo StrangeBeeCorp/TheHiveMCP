@@ -45,11 +45,16 @@ func StartStdioServer(s *server.MCPServer, options *types.TheHiveMcpDefaultOptio
 		return errors.New("options cannot be nil")
 	}
 
+	err := checkPermissionsConfig(options)
+	if err != nil {
+		return err
+	}
+
 	slog.Info("Starting STDIO server with context injection")
 
 	contextFunc := makeStdioAuthContextFunc(options)
 
-	err := server.ServeStdio(s, server.WithStdioContextFunc(contextFunc))
+	err = server.ServeStdio(s, server.WithStdioContextFunc(contextFunc))
 	if err != nil {
 		slog.Error("Failed to start STDIO server", "error", err)
 		return fmt.Errorf("failed to start STDIO server: %w", err)

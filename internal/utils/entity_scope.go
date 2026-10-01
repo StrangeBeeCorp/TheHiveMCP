@@ -208,7 +208,7 @@ func ScopedEntityIDsByGetOneByOne(ctx context.Context, entityType string, entity
 		return nil, errors.New("cannot verify scope: missing entity type")
 	}
 
-	filterOp := scopeFilterOperation(permFilters)
+	filterOp := FilterOperation(permFilters)
 
 	for _, entityID := range entityIDs {
 		getOp := map[string]any{
@@ -242,7 +242,7 @@ func IsJobObservableInScope(ctx context.Context, jobID string, permFilters map[s
 		opNameKey:   "getJob",
 		idOrNameKey: jobID,
 	}
-	filterOp := scopeFilterOperation(permFilters)
+	filterOp := FilterOperation(permFilters)
 
 	matched, err := executeScopeQuery(ctx, []thehive.InputQueryNamedOperation{
 		thehive.MapmapOfStringAnyAsInputQueryNamedOperation(&getJobOp),
@@ -256,8 +256,12 @@ func IsJobObservableInScope(ctx context.Context, jobID string, permFilters map[s
 	return matched, nil
 }
 
-func scopeFilterOperation(permFilters map[string]any) map[string]any {
-	filterOp := deepCopyFilter(permFilters)
+// FilterOperation builds a query's filter operation from filters without
+// touching them: keys are repaired and dates translated on a deep copy, since
+// filters may hold the permission config's own maps, which every request of a
+// session shares.
+func FilterOperation(filters map[string]any) map[string]any {
+	filterOp := deepCopyFilter(filters)
 
 	filterOp = NormalizeFilterKeys(filterOp)
 	filterOp = TranslateDatesToTimestamps(filterOp)

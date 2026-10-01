@@ -378,7 +378,7 @@ func GetAvailableAnalyzers(ctx context.Context, req mcp.ReadResourceRequest) ([]
 		allowed = []thehive.OutputWorker{}
 
 		for _, analyzer := range analyzers {
-			if perms.IsAnalyzerAllowed(analyzer.GetId()) || perms.IsAnalyzerAllowed(analyzer.GetName()) {
+			if perms.IsAnalyzerAllowed(analyzer.GetId(), analyzer.GetName()) {
 				allowed = append(allowed, analyzer)
 			}
 		}
@@ -441,7 +441,7 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 		return nil, fmt.Errorf("failed to get TheHive client from context: %w. Check authentication and connection settings", err)
 	}
 
-	responders, resp, err := hiveClient.CortexAPI.ListResponders(ctx, entityType, entityID).Execute()
+	responders, resp, err := hiveClient.CortexAPI.ListResponders(ctx, utils.ResponderObjectType(entityType), entityID).Execute()
 	if err != nil {
 		return nil, fmt.Errorf("failed to find responders for %s %s: %w. Check that Cortex integration is enabled and you have permissions to list responders. API response: %s", entityType, entityID, err, utils.DescribeHTTPResponse(resp))
 	}
@@ -453,7 +453,7 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 		allowed = []thehive.OutputWorker{}
 
 		for _, responder := range responders {
-			if perms.IsResponderAllowed(responder.GetId()) || perms.IsResponderAllowed(responder.GetName()) {
+			if perms.IsResponderAllowed(responder.GetId(), responder.GetName()) {
 				allowed = append(allowed, responder)
 			}
 		}

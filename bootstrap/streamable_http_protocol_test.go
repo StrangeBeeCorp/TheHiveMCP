@@ -52,7 +52,6 @@ func servedUnfencedOverStreamableHTTP(t *testing.T) string {
 	options := protocolTestOptions(t)
 
 	unfenced := []server.StreamableHTTPOption{
-		server.WithEndpointPath(options.MCPServerEndpointPath),
 		server.WithStateLess(false),
 		server.WithHTTPContextFunc(GetHTTPAuthContextFunc(options)),
 	}

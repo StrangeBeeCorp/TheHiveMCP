@@ -153,59 +153,6 @@ func TestIsResponderAllowed_AllowList(t *testing.T) {
 	}
 }
 
-func TestGetAllowedAnalyzers(t *testing.T) {
-	t.Parallel()
-
-	config := &Config{
-		Permissions: Section{
-			Analyzers: AutomationPermissions{
-				Mode:    modeAllowList,
-				Allowed: []string{testAnalyzer1, testAnalyzer2},
-			},
-		},
-	}
-
-	allAnalyzers := []string{testAnalyzer1, testAnalyzer2, "Analyzer3", "Analyzer4"}
-	allowed := config.GetAllowedAnalyzers(allAnalyzers)
-
-	if len(allowed) != 2 {
-		t.Errorf("Expected 2 allowed analyzers, got %d", len(allowed))
-	}
-
-	expected := map[string]bool{testAnalyzer1: true, testAnalyzer2: true}
-	for _, name := range allowed {
-		if !expected[name] {
-			t.Errorf("Unexpected analyzer in allowed list: %s", name)
-		}
-	}
-}
-
-func TestGetAllowedResponders(t *testing.T) {
-	t.Parallel()
-
-	config := &Config{
-		Permissions: Section{
-			Responders: AutomationPermissions{
-				Mode:    modeBlockList,
-				Blocked: []string{testBadResponder},
-			},
-		},
-	}
-
-	allResponders := []string{testResponder1, testBadResponder, "Responder2"}
-	allowed := config.GetAllowedResponders(allResponders)
-
-	if len(allowed) != 2 {
-		t.Errorf("Expected 2 allowed responders, got %d", len(allowed))
-	}
-
-	for _, name := range allowed {
-		if name == testBadResponder {
-			t.Error("BadResponder should not be in allowed list")
-		}
-	}
-}
-
 func TestIsEntityOperationAllowed(t *testing.T) {
 	t.Parallel()
 

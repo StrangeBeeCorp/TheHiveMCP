@@ -154,7 +154,7 @@ var trustedFields = map[string]struct{}{
 	// MCP result envelope (our own structs, not SDK fields).
 	"operation": {}, "entityType": {}, "templateId": {}, "caseIds": {},
 	"commentId": {}, "entityId": {}, "entityIds": {}, "jobId": {}, "actionId": {},
-	"targetId": {},
+	"targetId": {}, "pendingJobIds": {},
 }
 
 // structuralSubtrees lists field names whose whole value is request-side query

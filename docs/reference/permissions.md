@@ -52,6 +52,9 @@ permissions:
     blocked: ["DeleteCase_1_0", "PurgeAlert_1_0"]
 ```
 
+The file is parsed strictly: a key the format does not define, such as a misspelt `entity_permission`, is an error, and the server refuses to start rather than
+drop it and grant what the key was meant to restrict. Keys inside `filters` are TheHive filter syntax and are not checked.
+
 ## Tool Permissions
 
 ### Available tools
@@ -107,9 +110,9 @@ query; those IDs always arrive as the internal `_id`. See [ADR-0002](../explanat
   referenced entity is scope-checked. An entity outside the filter is reported as "not found or not within the scope" and nothing is mutated. IDs may be given
   as the internal `_id` or as a bare case/alert number.
 - `execute-automation`: the filter applies to the **entity the automation acts on**, not to the analyzer or responder. Before running, the target is
-  scope-checked — the observable for `run-analyzer`, the entity (case/alert/task/observable) for `run-responder` and `get-action-status`. For `get-job-status`,
-  the job's target observable is resolved server-side (`getJob → observable`) and scope-checked before the report is returned. (Analyzers and responders
-  themselves are gated separately by the allow/block lists below, not by these filters.)
+  scope-checked — the observable for `run-analyzer`, the entity (case/alert/task/observable) for `run-responder` and `get-action-status`. For `get-job-status`
+  and each job of `wait-for-jobs`, the job's target observable is resolved server-side (`getJob → observable`) and scope-checked before the report is returned.
+  (Analyzers and responders themselves are gated separately by the allow/block lists below, not by these filters.)
 
 A filter that **is not configured** for a tool means "no restriction" — that tool behaves exactly as before (backward compatible). Only configured filters
 constrain reach.
@@ -198,6 +201,17 @@ responders:
   mode: "block_list"
   blocked: ["DeleteCase_1_0"]
 ```
+
+### IDs and names
+
+Cortex identifies each worker by an opaque ID and by a name such as `DeleteCase_1_0`, and a list entry may be either. A worker counts as listed when its ID or
+its name is listed, whichever identifier the model uses to call it: a responder blocked by name is denied when called by its ID, and an analyzer allowed by name
+may be called by its ID.
+
+When the rules name specific workers, `run-analyzer` and `run-responder` read the analyzer or responder catalog first to learn the worker's other identifier:
+one extra call to TheHive per run. A worker that is not in the catalog is denied, and the catalog can miss one: TheHive lists no worker at all when it cannot
+reach Cortex, and lists a worker enabled on several Cortex instances under a single ID, so an ID from another instance is denied. A `"*"` allow list or an empty
+block list names no worker, so it needs no lookup.
 
 ## Example Configurations
 
@@ -390,6 +404,13 @@ Alternatively, users can specify a permissions path when configuring the MCPB in
 **"Analyzer/Responder is not permitted"**
 
 - Add to `allowed` list or remove from `blocked` list
+
+**"Analyzer/Responder … is not among the N … TheHive lists"**
+
+- The rules name specific workers, and this one is not in the analyzer catalog or in the responders listed for that entity. Use an analyzer ID or name from
+  `hive://metadata/automation/analyzers`, or a responder ID from `hive://metadata/automation/responders?entityType=<type>&entityId=<id>`: a responder must be
+  run by its ID.
+- N = 0 means TheHive listed nothing, which it does when it cannot reach Cortex.
 
 **"not found or is not within the scope permitted"**
 

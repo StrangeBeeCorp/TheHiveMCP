@@ -11,18 +11,20 @@ observables with threat intelligence and run responders to perform automated act
 
 ## Parameters
 
-| Parameter       | Type   | Required    | Description                                                                                                |
-| --------------- | ------ | ----------- | ---------------------------------------------------------------------------------------------------------- |
-| `operation`     | string | Yes         | Operation type (`run-analyzer`, `run-responder`, `get-job-status`, `get-action-status`)                    |
-| `analyzer-id`   | string | Conditional | Analyzer ID (required for `run-analyzer`)                                                                  |
-| `responder-id`  | string | Conditional | Responder ID (required for `run-responder`)                                                                |
-| `cortex-id`     | string | No          | Cortex instance ID (auto-routed if not specified)                                                          |
-| `observable-id` | string | Conditional | Observable ID (required for `run-analyzer`)                                                                |
-| `entity-type`   | string | Conditional | Entity type (`case`, `alert`, `task`, `observable`) - required for `run-responder` and `get-action-status` |
-| `entity-id`     | string | Conditional | Entity ID - required for `run-responder` and `get-action-status`                                           |
-| `job-id`        | string | Conditional | Job ID (required for `get-job-status`)                                                                     |
-| `action-id`     | string | Conditional | Action ID (required for `get-action-status`)                                                               |
-| `parameters`    | object | No          | JSON object with automation-specific configuration                                                         |
+| Parameter         | Type   | Required    | Description                                                                                                |
+| ----------------- | ------ | ----------- | ---------------------------------------------------------------------------------------------------------- |
+| `operation`       | string | Yes         | Operation type (`run-analyzer`, `run-responder`, `get-job-status`, `get-action-status`, `wait-for-jobs`)   |
+| `analyzer-id`     | string | Conditional | Analyzer ID (required for `run-analyzer`)                                                                  |
+| `responder-id`    | string | Conditional | Responder ID (required for `run-responder`)                                                                |
+| `cortex-id`       | string | No          | Cortex instance ID (auto-routed if not specified)                                                          |
+| `observable-id`   | string | Conditional | Observable ID (required for `run-analyzer`)                                                                |
+| `entity-type`     | string | Conditional | Entity type (`case`, `alert`, `task`, `observable`) - required for `run-responder` and `get-action-status` |
+| `entity-id`       | string | Conditional | Entity ID - required for `run-responder` and `get-action-status`                                           |
+| `job-id`          | string | Conditional | Job ID (required for `get-job-status`)                                                                     |
+| `job-ids`         | array  | Conditional | Job IDs (required for `wait-for-jobs`, at most 20)                                                         |
+| `timeout-seconds` | int    | No          | Longest wait for `wait-for-jobs`, in seconds (default 45, clamped to 120)                                  |
+| `action-id`       | string | Conditional | Action ID (required for `get-action-status`)                                                               |
+| `parameters`      | object | No          | JSON object with automation-specific configuration                                                         |
 
 ## Operations
 
@@ -117,6 +119,29 @@ Responders perform active responses on entities (block IP, send email, create ti
 }
 ```
 
+#### Wait for analyzer jobs
+
+Analyzers can take minutes. Rather than polling `get-job-status` once per turn, a client passes every job it started and blocks until all are final or
+`timeout-seconds` passes. The result carries each job with its status and verdict (the report's `success`, `summary` and `errorMessage`), `pendingJobIds` for
+every job worth asking about again, and `waitedSeconds`; a caller with slower jobs calls again with the pending IDs, and gets a job's full report from
+`get-job-status`.
+
+The wait defaults to 45 seconds, under the 60-second tool-call timeout of the MCP TypeScript SDK, and is capped at 120; only raise it when your client allows a
+longer call. The timeout bounds every call to TheHive too, so a stalled TheHive cannot hold the call past it.
+
+Each job has its own outcome. A job TheHive fails to return, one outside the permitted scope, or one TheHive did not answer in time is listed in `jobErrors`
+with the reason, and the other jobs keep their verdicts. A transient failure is retried on the next poll and, if it is still failing when the wait ends, is
+marked `retryable` and kept in `pendingJobIds`; a refusal, such as an unknown job ID or one outside the scope, is not asked again. The call fails only when not
+one job could be read.
+
+```json
+{
+  "operation": "wait-for-jobs",
+  "job-ids": ["AWxyz123", "AWxyz456"],
+  "timeout-seconds": 45
+}
+```
+
 #### Get responder action status
 
 ```json
@@ -174,11 +199,12 @@ Before using automation, discover available analyzers and responders:
 ## Notes
 
 - **Scope.** The permission filter applies to the entity the automation acts on—the observable for `run-analyzer`, and the target entity for `run-responder` /
-  `get-action-status`. For `get-job-status`, the job's target observable is resolved and scope-checked before the report is returned. Which analyzers and
-  responders may run at all is gated separately by the automation allow/block lists. See the [permissions reference](../permissions.md).
+  `get-action-status`. For `get-job-status` and `wait-for-jobs`, each job's target observable is resolved and scope-checked before its report is returned;
+  `wait-for-jobs` reports a job outside the scope in `jobErrors` rather than failing the whole call. Which analyzers and responders may run at all is gated
+  separately by the automation allow/block lists. See the [permissions reference](../permissions.md).
 - **Cortex routing.** `cortex-id` is optional. Omit it to let TheHive route to the configured Cortex instance (`CORTEX_ID`, default `local`).
-- **Asynchronous execution.** `run-analyzer` and `run-responder` start a job/action and return its ID. Poll `get-job-status` / `get-action-status` for
-  completion.
+- **Asynchronous execution.** `run-analyzer` and `run-responder` start a job/action and return its ID. Wait for analyzer jobs with `wait-for-jobs`, or check one
+  with `get-job-status`; check a responder action with `get-action-status`.
 
 Discover the available automation with [`get-resource`](get-resource.md), find target entities with [`search-entities`](search-entities.md), and record results
 with [`manage-entities`](manage-entities.md).

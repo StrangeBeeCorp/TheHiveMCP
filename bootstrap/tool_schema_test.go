@@ -163,7 +163,7 @@ func TestToolSchemas_EnumerationsSurviveInference(t *testing.T) {
 			"sort-order":    {"asc", "desc"},
 		},
 		toolExecuteAutomation: {
-			paramOperation:  {"run-analyzer", "run-responder", "get-job-status", "get-action-status"},
+			paramOperation:  {"run-analyzer", "run-responder", "get-job-status", "get-action-status", "wait-for-jobs"},
 			paramEntityType: {entityCase, entityAlert, entityTask, entityObs},
 		},
 	}

@@ -11,6 +11,13 @@ import (
 // a large HTML error page cannot flood the model's context.
 const maxDescribedBodyBytes = 2048
 
+// IsClientError reports whether resp is a 4xx other than 429: a refusal that
+// asking again will not change, unlike a network error or a 5xx.
+func IsClientError(resp *http.Response) bool {
+	return resp != nil && resp.StatusCode >= http.StatusBadRequest && resp.StatusCode < http.StatusInternalServerError &&
+		resp.StatusCode != http.StatusTooManyRequests
+}
+
 // DescribeHTTPResponse renders the part of an API response worth showing a
 // caller: the status line, and whatever the body still holds.
 //

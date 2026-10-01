@@ -371,6 +371,7 @@ This allows you to set defaults via environment variables while overriding speci
 | Username                    | `THEHIVE_USERNAME`              | `--thehive-username`              | -                                      | -                  | Username for basic auth                                                                                                        |
 | Password                    | `THEHIVE_PASSWORD`              | `--thehive-password`              | -                                      | -                  | Password for basic auth                                                                                                        |
 | Organisation                | `THEHIVE_ORGANISATION`          | `--thehive-organisation`          | `X-TheHive-Org`                        | -                  | TheHive organisation (optional, defaults to user's own)                                                                        |
+| Request timeout             | `THEHIVE_REQUEST_TIMEOUT`       | `--thehive-request-timeout`       | -                                      | `2m`               | Maximum wait for TheHive to answer one request; past it, the tool call fails with an explicit timeout error                    |
 | **HTTP transport security** |
 | URL allowlist               | `THEHIVE_URL_ALLOWLIST`         | `--thehive-url-allowlist`         | -                                      | `THEHIVE_URL` only | Comma-separated TheHive base URLs clients may target via `X-TheHive-Url`; exact scheme/host/port match                         |
 | Env credential fallback     | `ALLOW_ENV_CREDENTIAL_FALLBACK` | `--allow-env-credential-fallback` | -                                      | `false`            | Allow HTTP requests without credentials to use the server's `THEHIVE_API_KEY`/username/password (single-user deployments only) |
@@ -380,7 +381,7 @@ This allows you to set defaults via environment variables while overriding speci
 | **MCP server**              |
 | Transport type              | -                               | `--transport`                     | -                                      | `http`             | Transport mode: `http` or `stdio`                                                                                              |
 | Bind address                | `MCP_BIND_HOST` + `MCP_PORT`    | `--addr`                          | -                                      | -                  | HTTP server bind address (for example, `0.0.0.0:8082`)                                                                         |
-| Endpoint path               | `MCP_ENDPOINT_PATH`             | `--mcp-endpoint-path`             | -                                      | `/mcp`             | HTTP endpoint path                                                                                                             |
+| Endpoint path               | `MCP_SERVER_ENDPOINT`           | `--mcp-endpoint-path`             | -                                      | `/mcp`             | HTTP endpoint path                                                                                                             |
 | Heartbeat interval          | `MCP_HEARTBEAT_INTERVAL`        | `--mcp-heartbeat-interval`        | -                                      | `30s`              | Heartbeat interval for HTTP connections                                                                                        |
 | **Cortex**                  |
 | Default Cortex ID           | `CORTEX_ID`                     | `--cortex-id`                     | -                                      | `local`            | Default Cortex instance ID for analyzer/responder execution                                                                    |
@@ -394,6 +395,7 @@ This allows you to set defaults via environment variables while overriding speci
 THEHIVE_URL=https://thehive.example.com
 THEHIVE_API_KEY=<thehive_api_key>
 THEHIVE_ORGANISATION=<thehive_organisation>  # Optional, defaults to user's own organisation
+# THEHIVE_REQUEST_TIMEOUT=2m  # Optional, maximum wait for TheHive to answer one request
 PERMISSIONS_CONFIG=docs/reference/permissions-examples/analyst.yaml  # Optional, defaults to read-only
 MCP_BIND_HOST=0.0.0.0  # Exposes the server to the network: requires a TLS-terminating, authenticating reverse proxy in front
 MCP_PORT=8082
