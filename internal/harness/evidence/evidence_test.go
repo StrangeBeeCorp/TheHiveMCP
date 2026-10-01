@@ -1,6 +1,8 @@
 package evidence_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -13,16 +15,18 @@ import (
 )
 
 const (
-	head  = "1111111aaaaaaa"
-	other = "2222222bbbbbbb"
-	ready = "ready"
+	head     = "1111111aaaaaaa"
+	other    = "2222222bbbbbbb"
+	ready    = "ready"
+	lintGate = "lint"
+	itGate   = "integration"
 )
 
 func TestEvidenceRoundTripsByCommit(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	ev := evidence.Evidence{Head: head, Verdict: runner.Pass, Results: []runner.Result{{Gate: "lint", Verdict: runner.Pass}}}
+	ev := evidence.Evidence{Head: head, Verdict: runner.Pass, Results: []runner.Result{{Gate: lintGate, Verdict: runner.Pass}}}
 
 	_, err := ev.Write(root)
 	require.NoError(t, err)
@@ -37,30 +41,44 @@ func TestEvidenceRoundTripsByCommit(t *testing.T) {
 	assert.Nil(t, none, "a commit make pr never judged has no evidence")
 }
 
+var prGates = []string{lintGate, itGate}
+
 func TestAnAgentPushesOnlyWhatTheGatesAndTheReviewPassed(t *testing.T) {
 	t.Parallel()
 
-	passed := &evidence.Evidence{Head: head, Verdict: runner.Pass}
+	passed := &evidence.Evidence{Head: head, Verdict: runner.Pass, Results: []runner.Result{
+		{Gate: lintGate, Verdict: runner.Pass}, {Gate: itGate, Verdict: runner.Skipped},
+	}}
 	reviewed := &evidence.Review{Verdict: ready, Head: head}
 
-	_, err := evidence.PushAllowed(head, passed, reviewed, true)
+	_, err := evidence.PushAllowed(head, passed, reviewed, prGates, true)
 	require.NoError(t, err)
+
+	_, err = evidence.PushAllowed(head, passed, &evidence.Review{Verdict: "ready_with_known_issues", Head: head}, prGates, true)
+	require.NoError(t, err, "known issues are shipped and stated, not blocked")
 
 	for name, c := range map[string]struct {
 		ev   *evidence.Evidence
 		rv   *evidence.Review
 		want string
 	}{
-		"no evidence":           {nil, reviewed, "have not run at 1111111"},
-		"evidence of another":   {&evidence.Evidence{Head: other, Verdict: runner.Pass}, reviewed, "have not run at 1111111"},
-		"gates failed":          {&evidence.Evidence{Head: head, Verdict: runner.Fail}, reviewed, "were FAIL"},
-		"gates incomplete":      {&evidence.Evidence{Head: head, Verdict: runner.Incomplete}, reviewed, "were INCOMPLETE"},
-		"no review":             {passed, nil, "no adversarial review"},
-		"review of another":     {passed, &evidence.Review{Verdict: ready, Head: other}, "judged 2222222 but HEAD is 1111111"},
-		"review not finished":   {passed, &evidence.Review{Verdict: "continue", Head: head}, "verdict is continue"},
-		"review needs a person": {passed, &evidence.Review{Verdict: "needs_you", Head: head}, "verdict is needs_you"},
+		"no evidence":            {nil, reviewed, "have not run at 1111111"},
+		"evidence of another":    {&evidence.Evidence{Head: other, Verdict: runner.Pass}, reviewed, "have not run at 1111111"},
+		"gates failed":           {&evidence.Evidence{Head: head, Verdict: runner.Fail}, reviewed, "were FAIL"},
+		"gates incomplete":       {&evidence.Evidence{Head: head, Verdict: runner.Incomplete}, reviewed, "were INCOMPLETE"},
+		"no review":              {passed, nil, "no adversarial review"},
+		"review of another":      {passed, &evidence.Review{Verdict: ready, Head: other}, "judged 2222222 but HEAD is 1111111"},
+		"review not finished":    {passed, &evidence.Review{Verdict: "continue", Head: head}, "verdict is continue"},
+		"review needs a person":  {passed, &evidence.Review{Verdict: "needs_you", Head: head}, "verdict is needs_you"},
+		"review without verdict": {passed, &evidence.Review{Head: head}, "no adversarial review"},
+		"review verdict unknown": {passed, &evidence.Review{Verdict: "readyish", Head: head}, "verdict is readyish"},
+		"a gate without result": {
+			&evidence.Evidence{Head: head, Verdict: runner.Pass, Results: []runner.Result{{Gate: lintGate, Verdict: runner.Pass}}},
+			reviewed, "no result for [integration]",
+		},
+		"a hand-written record": {&evidence.Evidence{Head: head, Verdict: runner.Pass}, reviewed, "no result for [lint integration]"},
 	} {
-		_, err := evidence.PushAllowed(head, c.ev, c.rv, true)
+		_, err := evidence.PushAllowed(head, c.ev, c.rv, prGates, true)
 		require.ErrorIs(t, err, evidence.ErrNotShippable, name)
 		assert.Contains(t, err.Error(), c.want, name)
 	}
@@ -69,7 +87,7 @@ func TestAnAgentPushesOnlyWhatTheGatesAndTheReviewPassed(t *testing.T) {
 func TestAPersonIsWarnedNotStopped(t *testing.T) {
 	t.Parallel()
 
-	warnings, err := evidence.PushAllowed(head, nil, nil, false)
+	warnings, err := evidence.PushAllowed(head, nil, nil, prGates, false)
 	require.NoError(t, err)
 	assert.Len(t, warnings, 2)
 }
@@ -93,8 +111,8 @@ func TestTheEvidenceFlagsWhatOnlyAPersonChanges(t *testing.T) {
 		Started: time.Unix(0, 0), Finished: time.Unix(75, 0),
 		Changed: []string{"spec/items.yaml", "internal/tools/search/models.go", "gates/limits.yaml", "baselines/surface/tokens.json"},
 		Results: []runner.Result{
-			{Gate: "lint", Verdict: runner.Pass, Seconds: 12.3, Summary: "lint | passed\nmore"},
-			{Gate: "integration", Verdict: runner.Skipped, Summary: "not selected"},
+			{Gate: lintGate, Verdict: runner.Pass, Seconds: 12.3, Summary: "lint | passed\nmore"},
+			{Gate: itGate, Verdict: runner.Skipped, Summary: "not selected"},
 		},
 	}
 
@@ -109,4 +127,30 @@ func TestTheEvidenceFlagsWhatOnlyAPersonChanges(t *testing.T) {
 	md = evidence.Markdown(ev, evidence.Flags(ev.Changed, classOf))
 	assert.NotContains(t, md, "CAUTION")
 	assert.Contains(t, md, "**Model-facing: no.**")
+
+	ev.Base, ev.Changed = "", nil
+	assert.Contains(t, evidence.Markdown(ev, nil), "**Model-facing: unknown.**", "no base: the harness does not know what changed")
+}
+
+func TestTheReviewStateIsReadAsTheReviewSkillWritesIt(t *testing.T) {
+	t.Parallel()
+
+	gitDir := t.TempDir()
+
+	none, err := evidence.ReadReview(gitDir)
+	require.NoError(t, err)
+	assert.Nil(t, none)
+
+	p := filepath.Join(gitDir, evidence.ReviewPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o750))
+	require.NoError(t, os.WriteFile(p, []byte(`{"effort": "high", "verdict": "ready", "verdict_head": "`+head+`", "heads": []}`), 0o600))
+
+	review, err := evidence.ReadReview(gitDir)
+	require.NoError(t, err)
+	assert.Equal(t, &evidence.Review{Verdict: ready, Head: head}, review)
+
+	require.NoError(t, os.WriteFile(p, []byte("{"), 0o600))
+
+	_, err = evidence.ReadReview(gitDir)
+	assert.Error(t, err)
 }

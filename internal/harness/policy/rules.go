@@ -223,6 +223,10 @@ func (j *judge) everyone(name string, args []string) Decision {
 		return deny("no sudo here: everything runs as the user, in containers")
 	}
 
+	if name == "unset" && slices.Contains(args, claudeCode) {
+		return deny("CLAUDECODE tells the harness a person is not at the keyboard: it stays as Claude Code sets it")
+	}
+
 	if hint, ok := rawTools[name]; ok {
 		return deny("%s runs pinned in Docker: use %s", name, hint)
 	}

@@ -79,9 +79,13 @@ func Markdown(ev Evidence, flags []Flag) string {
 		}
 	}
 
-	if ev.ModelFacing() {
+	switch {
+	case ev.Base == "":
+		b.WriteString("\n**Model-facing: unknown.** There was no base to compare with, so the changed paths are not known: " +
+			"check `baselines/surface/` and the protected parts by hand.\n")
+	case ev.ModelFacing():
 		b.WriteString("\n**Model-facing: yes.** `baselines/surface/` changed: tick the model-facing box of the release impact.\n")
-	} else {
+	default:
 		b.WriteString("\n**Model-facing: no.** `baselines/surface/` did not change.\n")
 	}
 

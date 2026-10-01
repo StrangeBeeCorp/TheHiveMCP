@@ -124,6 +124,10 @@ func (j *judge) assign(a string) Decision {
 		return deny("environment that reconfigures git or make for one command is not allowed: the repository's configuration is policy")
 	}
 
+	if name == claudeCode {
+		return deny("CLAUDECODE tells the harness a person is not at the keyboard: it stays as Claude Code sets it")
+	}
+
 	if j.role.Agent() && slices.Contains([]string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE"}, name) {
 		return deny("git runs on this checkout as it is configured")
 	}
@@ -284,6 +288,10 @@ func (j *judge) env(args []string, depth int) Decision {
 		return deny("env -S splits a string into a command the policy cannot read")
 	}
 
+	if clearsClaudeCode(args) {
+		return deny("CLAUDECODE tells the harness a person is not at the keyboard: the environment stays as Claude Code sets it")
+	}
+
 	rest := skipOptions(args, []string{"-u", "--unset", "-C", "--chdir"})
 	for len(rest) > 0 && strings.Contains(rest[0], "=") && !strings.HasPrefix(rest[0], "-") {
 		d := j.assign(rest[0])
@@ -359,6 +367,21 @@ func rebinds(text string, line shell.Line, name string) bool {
 // mentions reports whether s names the variable other than by expanding it.
 func mentions(s, name string) bool {
 	return strings.Count(s, name) > strings.Count(s, "$"+name)+strings.Count(s, "${"+name+"}")
+}
+
+// clearsClaudeCode reports whether env's options drop CLAUDECODE: -u CLAUDECODE, or the whole
+// environment.
+func clearsClaudeCode(args []string) bool {
+	for i, a := range args {
+		switch {
+		case a == "-i" || a == "--ignore-environment" || a == "-" || a == "--unset="+claudeCode:
+			return true
+		case (a == "-u" || a == "--unset") && i+1 < len(args) && args[i+1] == claudeCode:
+			return true
+		}
+	}
+
+	return false
 }
 
 // byPath judges a command named by its path: a script in the checkout or in a temporary

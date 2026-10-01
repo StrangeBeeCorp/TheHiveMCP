@@ -92,3 +92,14 @@ func TestReadsKeepSecretsCanariesAndSealedTestsAway(t *testing.T) {
 	assert.True(t, policy.Read(policy.Coder, root, ".claude/sealed/DL-1/x_test.go").Deny)
 	assert.False(t, policy.Read(policy.Tester, root, ".claude/sealed/DL-1/x_test.go").Deny)
 }
+
+func TestTheHarnessRecordsAreNobodysToWrite(t *testing.T) {
+	t.Parallel()
+
+	for _, role := range []policy.Role{policy.Main, policy.Coder, policy.Tester, policy.Other} {
+		assert.True(t, policy.Write(role, root, ".cache/harness/evidence/1111111.json").Deny, "%s writes the evidence", role)
+		assert.True(t, policy.Write(role, root, ".cache/harness/state.json").Deny, "%s writes the hook state", role)
+	}
+
+	assert.False(t, policy.Write(policy.Coder, root, policy.BlockedFile).Deny, "BLOCKED.md stays the agent's to write")
+}

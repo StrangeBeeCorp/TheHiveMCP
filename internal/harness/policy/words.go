@@ -16,6 +16,7 @@ const (
 	subStatus  = "status"
 	subShow    = "show"
 	noNetwork  = "no network from the shell"
+	claudeCode = "CLAUDECODE"
 	mainBranch = "main"
 	hintFmt    = "make fmt"
 	hintLint   = "make lint"

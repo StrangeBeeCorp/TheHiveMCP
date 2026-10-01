@@ -33,9 +33,9 @@ func pushTarget(branch string) (string, error) {
 	return branch, nil
 }
 
-// push pushes the branch checked out to origin, under its own name. From an agent's session
-// (Claude Code sets CLAUDECODE), the pr gates must have passed at HEAD (make pr) and the
-// adversarial review must be ready for HEAD; a person gets the same checks as warnings.
+// push pushes the branch checked out to origin, under its own name. The pr gates must have
+// passed at HEAD (make pr) and the adversarial review must be ready for HEAD. A person at a
+// terminal gets the same checks as warnings; anyone else, an agent first, is refused.
 func (e env) push(ctx context.Context, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("push", flag.ContinueOnError)
 	force := fs.Bool("force", false, "push with --force-with-lease, after a rebase")
@@ -87,7 +87,12 @@ func (e env) shippable(ctx context.Context, out io.Writer) error {
 		return fmt.Errorf("push: %w", err)
 	}
 
-	warnings, err := evidence.PushAllowed(head, ev, review, os.Getenv("CLAUDECODE") != "")
+	gates := make([]string, 0, len(e.reg.At("pr")))
+	for _, g := range e.reg.At("pr") {
+		gates = append(gates, g.ID)
+	}
+
+	warnings, err := evidence.PushAllowed(head, ev, review, gates, !aPersonAtATerminal())
 	if err != nil {
 		return fmt.Errorf("push refused: %w", err)
 	}
@@ -97,4 +102,17 @@ func (e env) shippable(ctx context.Context, out io.Writer) error {
 	}
 
 	return nil
+}
+
+// aPersonAtATerminal reports whether a person runs the push: stdin is a terminal, and the process
+// does not run under Claude Code (which sets CLAUDECODE, and gives its commands no terminal).
+// The policy denies clearing CLAUDECODE, so an agent needs both to pass for a person.
+func aPersonAtATerminal() bool {
+	if os.Getenv("CLAUDECODE") != "" {
+		return false
+	}
+
+	info, err := os.Stdin.Stat()
+
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }

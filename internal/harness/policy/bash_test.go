@@ -45,6 +45,13 @@ func TestBypassesAreDeniedToEveryone(t *testing.T) {
 		"echo x > .git/hooks/pre-commit",
 		"git branch -f main HEAD",
 		"git checkout -B main",
+		"CLAUDECODE= bin/harness push",
+		"env -u CLAUDECODE bin/harness push",
+		"env -i bin/harness pr",
+		"unset CLAUDECODE; make pr",
+		"export CLAUDECODE=; make pr",
+		"echo '{}' > .cache/harness/evidence/abc.json",
+		"cp /tmp/x .cache/harness/state.json",
 	} {
 		for _, role := range []policy.Role{policy.Main, policy.Coder, policy.Other} {
 			assert.True(t, bash(role, line).Deny, "%s: %s", role, line)

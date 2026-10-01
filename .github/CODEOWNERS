@@ -2,7 +2,8 @@
 # server makes a model, the harness that judges every change, its gates and limits, and the
 # default permission profile. GitHub requests a review from these owners when a pull request
 # touches them; the pull request's Gate evidence (bin/harness evidence --markdown) flags them too.
-# Only the main session of a person may change them (internal/harness/policy/paths.go).
+# The list matches the protected classes of internal/harness/policy/paths.go, which no agent but
+# a person's main session may change (the Tester's .claude/sealed/ excepted).
 
 /spec/                                                   @jean-collette_stb @antoine-salesse_stb
 /gates/                                                  @jean-collette_stb @antoine-salesse_stb
@@ -16,7 +17,18 @@
 /bin/                                                    @jean-collette_stb @antoine-salesse_stb
 /.githooks/                                              @jean-collette_stb @antoine-salesse_stb
 /.github/                                                @jean-collette_stb @antoine-salesse_stb
-/.claude/                                                @jean-collette_stb @antoine-salesse_stb
+/.claude/settings.json                                   @jean-collette_stb @antoine-salesse_stb
+/.claude/agents/                                         @jean-collette_stb @antoine-salesse_stb
+/.claude/workflows/                                      @jean-collette_stb @antoine-salesse_stb
+/.claude/skills/                                         @jean-collette_stb @antoine-salesse_stb
 /CLAUDE.md                                               @jean-collette_stb @antoine-salesse_stb
 /Makefile                                                @jean-collette_stb @antoine-salesse_stb
+/scripts/lint.sh                                         @jean-collette_stb @antoine-salesse_stb
+/scripts/fmt.sh                                          @jean-collette_stb @antoine-salesse_stb
+/scripts/lint-makefile.sh                                @jean-collette_stb @antoine-salesse_stb
+/.golangci.yml                                           @jean-collette_stb @antoine-salesse_stb
+/.markdownlint.jsonc                                     @jean-collette_stb @antoine-salesse_stb
+/.prettierrc.json                                        @jean-collette_stb @antoine-salesse_stb
+/.gitleaks.toml                                          @jean-collette_stb @antoine-salesse_stb
+/checkmake.ini                                           @jean-collette_stb @antoine-salesse_stb
 /internal/permissions/embedded/default_permissions.yaml  @jean-collette_stb @antoine-salesse_stb

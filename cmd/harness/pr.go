@@ -15,12 +15,13 @@ import (
 )
 
 // pr runs the pr cadence's gates at the exact commit checked out, records the evidence, and on a
-// pass pushes the branch (make pr). The tree must be clean: the evidence is for a commit.
+// pass pushes the branch (make pr). The tree must be clean: the evidence is for a commit. The
+// change is always the branch against origin/main (every suite when there is none): no flag or
+// $HARNESS_BASE narrows what a pr verdict covers.
 func (e env) pr(ctx context.Context, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("pr", flag.ContinueOnError)
 
-	var scope scopeFlags
-	scope.register(fs)
+	scope := scopeFlags{base: defaultBase}
 	push := fs.Bool("push", true, "push the branch when the gates pass")
 	force := fs.Bool("force", false, "push with --force-with-lease, after a rebase")
 

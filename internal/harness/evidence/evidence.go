@@ -118,9 +118,10 @@ func ReadReview(gitDir string) (*Review, error) {
 var ErrNotShippable = errors.New("not ready to push")
 
 // PushAllowed decides whether head may be pushed. The pr gates must have passed at head (make
-// pr). In an agent's session (strict), the adversarial review must also be ready for head; a
-// person's push gets the same checks as warnings, since they can push anyway.
-func PushAllowed(head string, ev *Evidence, review *Review, strict bool) ([]string, error) {
+// pr), every one of gates with a result, and the adversarial review must be ready for head.
+// Strict (anyone but a person at a terminal) refuses; otherwise the problems come back as
+// warnings, since a person can push anyway.
+func PushAllowed(head string, ev *Evidence, review *Review, gates []string, strict bool) ([]string, error) {
 	var problems []string
 
 	switch {
@@ -128,6 +129,10 @@ func PushAllowed(head string, ev *Evidence, review *Review, strict bool) ([]stri
 		problems = append(problems, fmt.Sprintf("the pr gates have not run at %s: run make pr", short(head)))
 	case ev.Verdict != runner.Pass:
 		problems = append(problems, fmt.Sprintf("the pr gates were %s at %s: fix them, commit, and run make pr", ev.Verdict, short(head)))
+	default:
+		if missing := ev.missing(gates); len(missing) > 0 {
+			problems = append(problems, fmt.Sprintf("the evidence of %s has no result for %v: run make pr", short(head), missing))
+		}
 	}
 
 	switch {
@@ -145,6 +150,24 @@ func PushAllowed(head string, ev *Evidence, review *Review, strict bool) ([]stri
 	}
 
 	return problems, nil
+}
+
+// missing lists the gates the evidence has no result for.
+func (ev Evidence) missing(gates []string) []string {
+	have := map[string]bool{}
+	for _, r := range ev.Results {
+		have[r.Gate] = true
+	}
+
+	var out []string
+
+	for _, g := range gates {
+		if !have[g] {
+			out = append(out, g)
+		}
+	}
+
+	return out
 }
 
 func short(sha string) string {
