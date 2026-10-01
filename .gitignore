@@ -7,8 +7,10 @@
 # GoLand files
 .idea/
 
-# Local environment files
+# Local environment files (ignored files are also what Claude Code's Grep skips)
 .env
+.env.*
+!.env.template
 
 # Build directories
 build/

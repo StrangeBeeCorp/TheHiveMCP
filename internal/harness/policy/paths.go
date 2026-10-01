@@ -152,15 +152,20 @@ func Read(role Role, root, p string) Decision {
 		return Allow
 	}
 
-	if strings.HasPrefix(rel, CanaryDir) {
+	if under(rel, CanaryDir) {
 		return deny("the canaries are the known-bad patches the gates must catch: implement from the spec, not from them")
 	}
 
-	if role == Coder && strings.HasPrefix(rel, SealedDir) {
+	if role == Coder && under(rel, SealedDir) {
 		return deny("the sealed tests stay hidden from the Coder until the end: make the visible tests pass")
 	}
 
 	return Allow
+}
+
+// under reports whether rel is the directory dir (given with its trailing slash) or inside it.
+func under(rel, dir string) bool {
+	return rel == strings.TrimSuffix(dir, "/") || strings.HasPrefix(rel, dir)
 }
 
 func absolute(root, p string) string {

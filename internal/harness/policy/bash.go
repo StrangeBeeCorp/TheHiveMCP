@@ -188,9 +188,18 @@ func (j *judge) cd(args []string) {
 	}
 }
 
+// shell judges a shell's -c script. Options end at the first word that is not one, which names a
+// script: `bash gen.sh -c x` runs gen.sh, and -c x are its arguments.
 func (j *judge) shell(args []string, depth int) Decision {
-	for i, a := range args {
-		if strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && strings.Contains(a, "c") {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+
+		switch {
+		case a == "--" || (!strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "+")):
+			i = len(args)
+		case a == "-o" || a == "+o" || a == "-O" || a == "+O":
+			i++
+		case strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && strings.Contains(a, "c"):
 			if i+1 < len(args) {
 				return j.line(args[i+1], depth+1)
 			}

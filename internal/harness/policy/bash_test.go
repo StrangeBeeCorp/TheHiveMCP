@@ -82,6 +82,9 @@ func TestWrappedAndDisguisedBypassesAreDeniedToAgents(t *testing.T) {
 		"printf x | tee /r/other/.git/refs/heads/main",
 		"env -S 'git push'",
 		"sh scripts/anything.sh",
+		"bash ./gen.sh -c ok",
+		"sh tool.sh -xc y",
+		"bash -o pipefail -c 'git push'",
 		"./scripts/run-integration-tests.sh",
 		"/tmp/x.sh",
 		"docker run --rm -v /:/host alpine",
@@ -122,6 +125,7 @@ func TestOrdinaryWorkIsNotInTheWay(t *testing.T) {
 		"cp /tmp/x.txt .cache/tmp/y.txt",
 		"bin/harness run --cadence stop",
 		"cat .env.template",
+		"bash -e -c 'make test'",
 	} {
 		assert.False(t, bash(policy.Coder, line).Deny, "%s: %v", line, bash(policy.Coder, line).Reason)
 	}

@@ -20,10 +20,10 @@ func PreToolUse(root string, in Input) Output {
 		d = policy.Bash(role, root, cwdIn(root, in.Cwd), in.str("command"))
 	case "Edit", "Write", "MultiEdit", "NotebookEdit":
 		d = policy.Write(role, root, in.str("file_path", "notebook_path"))
-	case "Read", "Grep", "Glob", "NotebookRead":
-		if p := in.str("file_path", "notebook_path", "path"); p != "" {
-			d = policy.Read(role, root, p)
-		}
+	case "Read", "NotebookRead":
+		d = policy.Read(role, root, in.str("file_path", "notebook_path"))
+	case "Grep", "Glob":
+		d = search(role, root, in)
 	}
 
 	if !d.Deny {
@@ -35,6 +35,24 @@ func PreToolUse(root string, in Input) Output {
 		"permissionDecision":       "deny",
 		"permissionDecisionReason": d.Reason,
 	}})
+}
+
+// search judges a Grep or a Glob by every path it names: its directory, and its file pattern
+// (Grep's glob, Glob's pattern), so that `.env*` cannot be searched by pattern either. Searching a
+// directory skips the git-ignored files, the environment files among them.
+func search(role policy.Role, root string, in Input) policy.Decision {
+	for _, key := range []string{"path", "glob", "pattern"} {
+		p := in.str(key)
+		if p == "" || (key == "pattern" && in.ToolName == "Grep") {
+			continue
+		}
+
+		if d := policy.Read(role, root, p); d.Deny {
+			return d
+		}
+	}
+
+	return policy.Allow
 }
 
 // cwdIn is the shell's directory when it is inside the checkout, else the checkout's root.

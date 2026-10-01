@@ -20,6 +20,8 @@ const (
 type State struct {
 	// Rounds counts the red stops of each agent since its last green one.
 	Rounds map[string]int `json:"red_rounds,omitempty"`
+	// RedSince is when each agent's current red streak began: its BLOCKED.md must be newer.
+	RedSince map[string]time.Time `json:"red_since,omitempty"`
 	// Last is the last check-fast result and the checkout it judged.
 	Last *Last `json:"last,omitempty"`
 	// Progress is what PreCompact saved for after the compaction.
@@ -45,6 +47,10 @@ func load(root string) State {
 
 	if st.Rounds == nil {
 		st.Rounds = map[string]int{}
+	}
+
+	if st.RedSince == nil {
+		st.RedSince = map[string]time.Time{}
 	}
 
 	return st

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,6 +18,9 @@ import (
 const (
 	coderType = "coder"
 	filePath  = "file_path"
+	grepTool  = "Grep"
+	pathKey   = "path"
+	patternK  = "pattern"
 )
 
 func decode(t *testing.T, out hooks.Output) map[string]any {
@@ -188,4 +192,57 @@ func TestAGreenStopResetsTheRounds(t *testing.T) {
 
 	assert.NotContains(t, decode(t, s.Stop(context.Background(), coder))["reason"], "red rounds: stop trying",
 		"the count started again after the green stop")
+}
+
+func TestABlockedReportFromEarlierDoesNotCount(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	blocked := filepath.Join(root, policy.BlockedFile)
+	require.NoError(t, os.MkdirAll(filepath.Dir(blocked), 0o750))
+	require.NoError(t, os.WriteFile(blocked, []byte("an earlier task\n"), 0o600))
+
+	old := time.Now().Add(-time.Hour)
+	require.NoError(t, os.Chtimes(blocked, old, old))
+
+	check := &fakeCheck{result: hooks.Check{Red: true, Report: "x"}}
+	s := hooks.Stopper{Root: root, MaxRounds: 2, Check: check.run, Fingerprint: func(context.Context) (string, error) { return "f", nil }}
+	coder := hooks.Input{SessionID: "s", AgentType: coderType}
+
+	_ = s.Stop(context.Background(), coder)
+	assert.Equal(t, "block", decode(t, s.Stop(context.Background(), coder))["decision"], "round 2: the old report does not count")
+
+	require.NoError(t, os.WriteFile(blocked, []byte("this task: tried x\n"), 0o600))
+	assert.Nil(t, decode(t, s.Stop(context.Background(), coder))["decision"], "a report written now lets it stop")
+}
+
+func TestAGreenStopClearsTheBlockedReport(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	blocked := filepath.Join(root, policy.BlockedFile)
+	require.NoError(t, os.MkdirAll(filepath.Dir(blocked), 0o750))
+	require.NoError(t, os.WriteFile(blocked, []byte("x\n"), 0o600))
+
+	s := hooks.Stopper{Root: root, MaxRounds: 6, Check: (&fakeCheck{}).run, Fingerprint: func(context.Context) (string, error) { return "f", nil }}
+	_ = s.Stop(context.Background(), hooks.Input{SessionID: "s", AgentType: coderType})
+
+	assert.NoFileExists(t, blocked)
+}
+
+func TestSearchesCannotReachTheEnvironmentFiles(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	byGlob := hooks.Input{AgentType: coderType, ToolName: grepTool, ToolInput: map[string]any{patternK: "KEY", pathKey: ".", "glob": ".env*"}}
+	assert.NotEmpty(t, denied(t, hooks.PreToolUse(root, byGlob)))
+
+	byPattern := hooks.Input{ToolName: "Glob", ToolInput: map[string]any{patternK: "**/.env.local"}}
+	assert.NotEmpty(t, denied(t, hooks.PreToolUse(root, byPattern)))
+
+	canaries := hooks.Input{AgentType: coderType, ToolName: grepTool, ToolInput: map[string]any{patternK: "x", pathKey: "gates/canaries"}}
+	assert.NotEmpty(t, denied(t, hooks.PreToolUse(root, canaries)), "the directory itself, not only its files")
+
+	code := hooks.Input{AgentType: coderType, ToolName: grepTool, ToolInput: map[string]any{patternK: ".env", pathKey: "internal"}}
+	assert.Empty(t, hooks.PreToolUse(root, code).Stdout, "searching code for the word is fine")
 }

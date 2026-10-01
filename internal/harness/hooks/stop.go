@@ -110,6 +110,9 @@ func (s Stopper) apply(st *State, in Input, c Check) Output {
 
 	if !c.Red {
 		delete(st.Rounds, actor)
+		delete(st.RedSince, actor)
+		// Green: whatever blocked the task is over.
+		_ = os.Remove(filepath.Join(s.Root, policy.BlockedFile))
 
 		if c.Incomplete {
 			return note("check-fast could not run every gate, so this is not a pass:\n" + c.Report)
@@ -124,11 +127,16 @@ func (s Stopper) apply(st *State, in Input, c Check) Output {
 	if enforce {
 		rounds = st.Rounds[actor] + 1
 		st.Rounds[actor] = rounds
+
+		if rounds == 1 {
+			st.RedSince[actor] = time.Now()
+		}
 	}
 
-	a := Decide(c.Report, true, rounds, s.MaxRounds, blockedWritten(s.Root), enforce)
+	a := Decide(c.Report, true, rounds, s.MaxRounds, blockedSince(s.Root, st.RedSince[actor]), enforce)
 	if enforce && !a.Block {
 		delete(st.Rounds, actor)
+		delete(st.RedSince, actor)
 	}
 
 	return a.output()
@@ -149,7 +157,9 @@ func cached(ctx context.Context, st *State, fp string, static bool, check Checke
 	return c, nil
 }
 
-func blockedWritten(root string) bool {
+// blockedSince reports whether BLOCKED.md was written during the current red streak: a report
+// left by an earlier task or agent does not count.
+func blockedSince(root string, since time.Time) bool {
 	info, err := os.Stat(filepath.Join(root, policy.BlockedFile))
-	return err == nil && info.Size() > 0
+	return err == nil && info.Size() > 0 && !info.ModTime().Before(since)
 }
