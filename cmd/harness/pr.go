@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -24,6 +25,7 @@ func (e env) pr(ctx context.Context, args []string, out io.Writer) error {
 	scope := scopeFlags{base: defaultBase}
 	push := fs.Bool("push", true, "push the branch when the gates pass")
 	force := fs.Bool("force", false, "push with --force-with-lease, after a rebase")
+	person := fs.Bool("person", false, personUsage)
 
 	err := fs.Parse(args)
 	if err != nil {
@@ -44,6 +46,8 @@ func (e env) pr(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 
+	head := gitx.Head(ctx, e.root)
+
 	sel, err := scope.selection(ctx, e)
 	if err != nil {
 		return err
@@ -56,8 +60,18 @@ func (e env) pr(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 
+	clean, err = gitx.Clean(ctx, e.root)
+	if err != nil {
+		return fmt.Errorf("read the working tree: %w", err)
+	}
+
+	err = unchanged(head, gitx.Head(ctx, e.root), clean)
+	if err != nil {
+		return err
+	}
+
 	ev := evidence.Evidence{
-		Head: rec.Head, Base: gitx.Resolve(ctx, e.root, sel.Base), Branch: branch, Verdict: rec.Verdict,
+		Head: head, Base: gitx.Resolve(ctx, e.root, sel.Base), Branch: branch, Verdict: rec.Verdict,
 		Started: rec.Started, Finished: rec.Finished, Suites: rec.Suites, Changed: sel.Paths, Results: rec.Results,
 	}
 
@@ -84,7 +98,28 @@ func (e env) pr(ctx context.Context, args []string, out io.Writer) error {
 		pushArgs = append(pushArgs, "--force")
 	}
 
+	if *person {
+		pushArgs = append(pushArgs, "--person")
+	}
+
 	return e.push(ctx, pushArgs, out)
+}
+
+// errChangedDuringRun means the gates did not run on the commit HEAD names now.
+var errChangedDuringRun = errors.New("the commit or the working tree changed while the gates ran: commit, then run make pr again")
+
+// unchanged checks that HEAD is still the commit the gates started on and the tree still clean
+// once they have run: the evidence must describe the commit they ran on.
+func unchanged(before, after string, clean bool) error {
+	if after != before {
+		return fmt.Errorf("%w (HEAD was %s, it is now %s)", errChangedDuringRun, before, after)
+	}
+
+	if !clean {
+		return fmt.Errorf("%w (the working tree has changes)", errChangedDuringRun)
+	}
+
+	return nil
 }
 
 // showEvidence prints the evidence of HEAD: as the pull request's Gate evidence section with

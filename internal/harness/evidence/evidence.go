@@ -119,7 +119,7 @@ var ErrNotShippable = errors.New("not ready to push")
 
 // PushAllowed decides whether head may be pushed. The pr gates must have passed at head (make
 // pr), every one of gates with a result, and the adversarial review must be ready for head.
-// Strict (anyone but a person at a terminal) refuses; otherwise the problems come back as
+// Strict (anyone but a person who passed --person) refuses; otherwise the problems come back as
 // warnings, since a person can push anyway.
 func PushAllowed(head string, ev *Evidence, review *Review, gates []string, strict bool) ([]string, error) {
 	var problems []string

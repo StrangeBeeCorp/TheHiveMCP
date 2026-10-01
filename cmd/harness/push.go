@@ -18,6 +18,8 @@ const (
 	pushRemote = "origin"
 	// mainBranch changes only when a person merges a pull request.
 	mainBranch = "main"
+	// personUsage is the help of --person, the flag only a person types.
+	personUsage = "a person pushes: missing evidence or review only warn (the policy refuses it to Claude)"
 )
 
 // pushTarget is the branch a push may update: never main or a release branch, which change only
@@ -34,15 +36,19 @@ func pushTarget(branch string) (string, error) {
 }
 
 // push pushes the branch checked out to origin, under its own name. The pr gates must have
-// passed at HEAD (make pr) and the adversarial review must be ready for HEAD. A person at a
-// terminal gets the same checks as warnings; anyone else, an agent first, is refused.
+// passed at HEAD (make pr) and the adversarial review must be ready for HEAD, or the push is
+// refused. A person who says so (--person, which the policy refuses to every Claude session) gets
+// the same checks as warnings.
 //
-// This stops an agent's mistakes and a subagent's shortcuts, not a person's main session: that
-// session may run code the policy cannot read (python3), and so could write any file. CI runs
-// every gate again on the pull request, and a person merges it.
+// This stops an agent's mistakes and a subagent's shortcuts, not a determined forger. The policy
+// refuses the usual ways to write the evidence and the review state (the editor, redirects,
+// copies, archives, sort -o, curl -o), not every program that can write a file, and a main
+// session may run code it cannot read (python3). CI runs every gate again on the pull request,
+// and a person merges it.
 func (e env) push(ctx context.Context, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("push", flag.ContinueOnError)
 	force := fs.Bool("force", false, "push with --force-with-lease, after a rebase")
+	person := fs.Bool("person", false, personUsage)
 
 	err := fs.Parse(args)
 	if err != nil {
@@ -54,7 +60,7 @@ func (e env) push(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 
-	err = e.shippable(ctx, out)
+	err = e.shippable(out, gitx.Head(ctx, e.root), gitx.GitDir(ctx, e.root), !*person)
 	if err != nil {
 		return err
 	}
@@ -77,16 +83,15 @@ func (e env) push(ctx context.Context, args []string, out io.Writer) error {
 	return nil
 }
 
-// shippable checks the evidence and the review of HEAD before a push.
-func (e env) shippable(ctx context.Context, out io.Writer) error {
-	head := gitx.Head(ctx, e.root)
-
+// shippable checks the evidence and the review of head (the review state is under gitDir) before
+// a push: strict refuses, otherwise the problems are warnings.
+func (e env) shippable(out io.Writer, head, gitDir string, strict bool) error {
 	ev, err := evidence.Read(e.root, head)
 	if err != nil {
 		return fmt.Errorf("push: %w", err)
 	}
 
-	review, err := evidence.ReadReview(gitx.GitDir(ctx, e.root))
+	review, err := evidence.ReadReview(gitDir)
 	if err != nil {
 		return fmt.Errorf("push: %w", err)
 	}
@@ -96,9 +101,9 @@ func (e env) shippable(ctx context.Context, out io.Writer) error {
 		gates = append(gates, g.ID)
 	}
 
-	warnings, err := evidence.PushAllowed(head, ev, review, gates, !aPersonAtATerminal())
+	warnings, err := evidence.PushAllowed(head, ev, review, gates, strict)
 	if err != nil {
-		return fmt.Errorf("push refused: %w", err)
+		return fmt.Errorf("push refused: %w (a person who means to push anyway passes --person)", err)
 	}
 
 	for _, w := range warnings {
@@ -106,17 +111,4 @@ func (e env) shippable(ctx context.Context, out io.Writer) error {
 	}
 
 	return nil
-}
-
-// aPersonAtATerminal reports whether a person runs the push: stdin is a terminal, and the process
-// does not run under Claude Code (which sets CLAUDECODE, and gives its commands no terminal).
-// The policy denies clearing CLAUDECODE, so an agent needs both to pass for a person.
-func aPersonAtATerminal() bool {
-	if os.Getenv("CLAUDECODE") != "" {
-		return false
-	}
-
-	info, err := os.Stdin.Stat()
-
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }

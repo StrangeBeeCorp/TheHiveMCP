@@ -7,8 +7,8 @@
 //	harness check structure|public-safety|docs|go-source|branch|spec|changelog
 //	harness docs [--check]
 //	harness hook pre-tool-use|post-tool-use|stop|subagent-stop|session-start|pre-compact  (JSON on stdin)
-//	harness pr [--base REF] [--push=false] [--force]  (make pr: the pr gates at HEAD, the evidence, the push)
-//	harness push [--force]
+//	harness pr [--push=false] [--force] [--person]  (make pr: the pr gates at HEAD, the evidence, the push)
+//	harness push [--force] [--person]
 //	harness evidence [--markdown]
 //	harness review-effort [--base REF]
 //	harness canaries [--id ID]... [--integration]

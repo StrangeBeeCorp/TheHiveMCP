@@ -27,7 +27,7 @@ var (
 		"watch": {"-n", "-d"}, "caffeinate": {"-t", "-w"}, "chronic": nil, "unbuffer": nil,
 	}
 	readCommands = []string{
-		"ls", "cat", "head", "tail", "wc", "grep", "rg", "find", "file", "stat", "pwd", "echo", cmdPrintf, "sort",
+		"ls", "cat", "head", "tail", "wc", "grep", "rg", "find", "file", "stat", "pwd", "echo", cmdPrintf, cmdSort,
 		"uniq", subDiff, "tree", "jq", "yq", "true", "false", cmdSed, "awk", "cut", "tr", "basename", "dirname",
 		"realpath", "cd", "test", "[", "date", "which", "column", "less", "comm", "nl", "xxd", "od", "sha256sum",
 		"shasum", "md5", cmdGit, "gh", cmdMake, "sleep",
@@ -122,10 +122,6 @@ func (j *judge) assign(a string) Decision {
 	name, _, _ := strings.Cut(a, "=")
 	if strings.HasPrefix(name, "GIT_CONFIG") || name == "GIT_EXEC_PATH" || name == "MAKEFLAGS" || name == "MAKEFILES" {
 		return deny("environment that reconfigures git or make for one command is not allowed: the repository's configuration is policy")
-	}
-
-	if name == claudeCode {
-		return deny("CLAUDECODE tells the harness a person is not at the keyboard: it stays as Claude Code sets it")
 	}
 
 	if j.role.Agent() && slices.Contains([]string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE"}, name) {
@@ -271,10 +267,6 @@ func (j *judge) unwrap(name string, args []string, depth int) (Decision, bool) {
 		return Allow, false
 	}
 
-	if name == "exec" && slices.Contains(args, "-c") {
-		return deny("exec -c empties the environment Claude Code sets: run the command as it is"), true
-	}
-
 	rest := skipOptions(args, valued)
 	if name == "timeout" && len(rest) > 0 {
 		rest = rest[1:]
@@ -344,10 +336,6 @@ func (j *judge) shell(args []string, depth int) Decision {
 func (j *judge) env(args []string, depth int) Decision {
 	if slices.ContainsFunc(args, func(a string) bool { return strings.HasPrefix(a, "-S") || a == "--split-string" }) {
 		return deny("env -S splits a string into a command the policy cannot read")
-	}
-
-	if clearsClaudeCode(args) {
-		return deny("CLAUDECODE tells the harness a person is not at the keyboard: the environment stays as Claude Code sets it")
 	}
 
 	rest := skipOptions(args, []string{"-u", "--unset", "-C", "--chdir"})
@@ -425,21 +413,6 @@ func rebinds(text string, line shell.Line, name string) bool {
 // mentions reports whether s names the variable other than by expanding it.
 func mentions(s, name string) bool {
 	return strings.Count(s, name) > strings.Count(s, "$"+name)+strings.Count(s, "${"+name+"}")
-}
-
-// clearsClaudeCode reports whether env's options drop CLAUDECODE: -u CLAUDECODE, or the whole
-// environment.
-func clearsClaudeCode(args []string) bool {
-	for i, a := range args {
-		switch {
-		case a == "-i" || a == "--ignore-environment" || a == "-" || a == "--unset="+claudeCode || a == "-u"+claudeCode:
-			return true
-		case (a == "-u" || a == "--unset") && i+1 < len(args) && args[i+1] == claudeCode:
-			return true
-		}
-	}
-
-	return false
 }
 
 // byPath judges a command named by its path: a script in the checkout or in a temporary

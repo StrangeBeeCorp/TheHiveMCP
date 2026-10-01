@@ -45,16 +45,21 @@ func TestBypassesAreDeniedToEveryone(t *testing.T) {
 		"echo x > .git/hooks/pre-commit",
 		"git branch -f main HEAD",
 		"git checkout -B main",
-		"CLAUDECODE= bin/harness push",
-		"env -u CLAUDECODE bin/harness push",
-		"env -i bin/harness pr",
-		"unset CLAUDECODE; make pr",
-		"export CLAUDECODE=; make pr",
+		"bin/harness push --person",
+		"bin/harness pr -person=true",
+		"setsid bin/harness push --person",
+		`make go CMD="run ./cmd/harness push --person"`,
 		"echo '{}' > .cache/harness/evidence/abc.json",
 		"cp /tmp/x .cache/harness/state.json",
-		"env -uCLAUDECODE bin/harness push",
-		"exec -c bin/harness push",
 		"cp -R /tmp/evidence .cache/harness/",
+		"cp -rf /tmp/evidence .cache/harness",
+		"cp -Rp /tmp/evidence .cache",
+		"ditto /tmp/evidence .cache/harness",
+		"tar -xf /tmp/e.tar",
+		"cd .cache/harness && tar xf /tmp/e.tar",
+		"unzip -o /tmp/e.zip",
+		"sort -o .cache/harness/evidence/abc.json /tmp/x",
+		"curl -s -o .cache/harness/evidence/abc.json http://localhost:9/x",
 		"mv /tmp/evidence .cache/harness",
 		"tar -xf /tmp/e.tar -C .cache/harness",
 		"script -q /dev/null git push origin HEAD:main",
@@ -63,7 +68,6 @@ func TestBypassesAreDeniedToEveryone(t *testing.T) {
 		"parallel ::: 'git push origin HEAD:main'",
 		"arch -arm64 /usr/bin/git push origin HEAD:main",
 		"script -q /dev/null gh pr merge 197 --merge",
-		"setsid env -u CLAUDECODE bin/harness push",
 	} {
 		for _, role := range []policy.Role{policy.Main, policy.Coder, policy.Other} {
 			assert.True(t, bash(role, line).Deny, "%s: %s", role, line)
@@ -148,6 +152,11 @@ func TestOrdinaryWorkIsNotInTheWay(t *testing.T) {
 		"cp internal/x.txt .",
 		"mkdir -p .cache/tmp/git",
 		"setsid make test",
+		"tar -czf .cache/tmp/x.tgz internal",
+		"tar -xzf /tmp/x.tgz -C .cache/tmp",
+		"cp -rf internal/tools .cache/tmp/tools",
+		"sort -o .cache/tmp/s.txt .cache/tmp/x.txt",
+		"env LC_ALL=C grep -i foo internal/x.go",
 	} {
 		assert.False(t, bash(policy.Coder, line).Deny, "%s: %v", line, bash(policy.Coder, line).Reason)
 	}
