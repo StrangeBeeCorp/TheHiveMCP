@@ -25,7 +25,7 @@ pr: ## The pr gates at HEAD, recorded, then push the branch (never main) ##@ mak
 
 .PHONY: go
 go: ## Run a go command in the pinned image (the harness's Go programs) ##@ make go CMD="run ./cmd/surface --check" [GOFLAGS=-short]
-	@docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) -e CGO_ENABLED=0 $(DOCKER_CACHE_MOUNTS) $(if $(GOFLAGS),-e GOFLAGS='$(GOFLAGS)') $(GO_IMAGE_CGO) go $(CMD)
+	@docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) -e CGO_ENABLED=0 $(DOCKER_CACHE_MOUNTS) $(if $(GOFLAGS),-e GOFLAGS) $(GO_IMAGE_CGO) go $(CMD)
 
 .PHONY: surface-propose
 surface-propose: ## Rewrite baselines/surface/ from what the server advertises ##@ make surface-propose
