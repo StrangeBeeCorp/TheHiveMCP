@@ -135,6 +135,7 @@ func unchanged(before, after string, clean bool) error {
 func (e env) showEvidence(ctx context.Context, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("evidence", flag.ContinueOnError)
 	md := fs.Bool("markdown", false, "print the Gate evidence section of the pull request")
+	against := fs.String("base", "", "flag what the pull request changes against this ref, its base (a stacked pull request's is another branch)")
 
 	err := fs.Parse(args)
 	if err != nil {
@@ -150,6 +151,19 @@ func (e env) showEvidence(ctx context.Context, args []string, out io.Writer) err
 
 	if ev == nil {
 		return usageError{"no evidence for " + head + ": run make pr"}
+	}
+
+	if *against != "" {
+		if !gitx.HasRef(ctx, e.root, *against) {
+			return usageError{"evidence: no " + *against + " to compare with"}
+		}
+
+		changed, err := gitx.ChangedSince(ctx, e.root, *against)
+		if err != nil {
+			return fmt.Errorf("evidence: list the changes since %s: %w", *against, err)
+		}
+
+		ev.Changed, ev.FirstSnapshot, ev.Against = changed, firstSnapshot(ctx, e.root, *against), *against
 	}
 
 	if *md {

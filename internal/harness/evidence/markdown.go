@@ -71,6 +71,11 @@ func Markdown(ev Evidence, flags []Flag) string {
 	fmt.Fprintf(&b, "### Gate evidence\n\n`make pr` at `%s` (`%s`, compared with `%s`): **%s**, %d gates in %s.\n\n",
 		short(ev.Head), ev.Branch, short(ev.Base), ev.Verdict, ran(ev.Results), took)
 
+	if ev.Against != "" {
+		fmt.Fprintf(&b, "The gates were selected against `%s`; the files and the model-facing note below are this pull "+
+			"request's own change, against `%s`.\n\n", short(ev.Base), ev.Against)
+	}
+
 	b.WriteString("| Gate | Verdict | Time | Detail |\n|---|---|---|---|\n")
 
 	for _, r := range ev.Results {

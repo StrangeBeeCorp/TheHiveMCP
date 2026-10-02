@@ -37,11 +37,12 @@ func TestAPushWithoutEvidenceIsRefusedUnlessAPersonSaysSo(t *testing.T) {
 
 	var out strings.Builder
 
-	err := e.shippable(&out, shipHead, gitDir, true)
+	_, err := e.shippable(t.Context(), &out, shipHead, gitDir, true)
 	require.ErrorIs(t, err, evidence.ErrNotShippable)
 	assert.Contains(t, err.Error(), "--person")
 
-	require.NoError(t, e.shippable(&out, shipHead, gitDir, false), "a person gets warnings")
+	_, err = e.shippable(t.Context(), &out, shipHead, gitDir, false)
+	require.NoError(t, err, "a person gets warnings")
 	assert.Contains(t, out.String(), "warning: the pr gates have not run")
 	assert.Contains(t, out.String(), "warning: no adversarial review")
 }
@@ -62,10 +63,13 @@ func TestAPushWithTheEvidenceAndAReadyReviewOfHEADGoesAhead(t *testing.T) {
 
 	var out strings.Builder
 
-	require.NoError(t, e.shippable(&out, shipHead, gitDir, true))
+	shipped, err := e.shippable(t.Context(), &out, shipHead, gitDir, true)
+	require.NoError(t, err)
+	require.NotNil(t, shipped, "the review that lets it ship, for the push to keep")
+	assert.Equal(t, shipHead, shipped.Head)
 	assert.Empty(t, out.String())
 
-	err = e.shippable(&out, moved, gitDir, true)
+	_, err = e.shippable(t.Context(), &out, moved, gitDir, true)
 	require.ErrorIs(t, err, evidence.ErrNotShippable, "the evidence and the review are for another commit")
 }
 

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"time"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/runner"
@@ -37,6 +36,9 @@ type Evidence struct {
 	// FirstSnapshot is true when the base had no snapshot of what the model reads: this change
 	// creates it, which changes nothing a model reads.
 	FirstSnapshot bool `json:"first_snapshot,omitempty"`
+	// Against, when set, is the pull request's base: Changed and FirstSnapshot then describe the
+	// change against it, while Base is what selected the gates. Only the rendering sets it.
+	Against string `json:"-"`
 }
 
 func path(root, head string) string {
@@ -86,37 +88,6 @@ func Read(root, head string) (*Evidence, error) {
 	return &ev, nil
 }
 
-// Review is what the adversarial review (the review skill of sb-personal) records about the
-// branch: its verdict, and the commit it judged.
-type Review struct {
-	Verdict string `json:"verdict"`
-	Head    string `json:"verdict_head"`
-}
-
-// ReviewPath is where the review skill keeps its state, under the checkout's git directory.
-const ReviewPath = "sb-review/state.json"
-
-// ReadReview returns the review state of the checkout whose git directory is gitDir, or nil.
-func ReadReview(gitDir string) (*Review, error) {
-	data, err := os.ReadFile(filepath.Join(gitDir, ReviewPath)) // #nosec G304 -- the review state of this checkout
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil //nolint:nilnil // no review is not an error
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("read the review state: %w", err)
-	}
-
-	var r Review
-
-	err = json.Unmarshal(data, &r)
-	if err != nil {
-		return nil, fmt.Errorf("decode the review state: %w", err)
-	}
-
-	return &r, nil
-}
-
 // ErrNotShippable is why a commit may not be pushed.
 var ErrNotShippable = errors.New("not ready to push")
 
@@ -144,7 +115,7 @@ func PushAllowed(head string, ev *Evidence, review *Review, gates []string, stri
 	case review.Head != head:
 		problems = append(problems, fmt.Sprintf("the review judged %s but HEAD is %s: let the review check the new commits",
 			short(review.Head), short(head)))
-	case !slices.Contains([]string{"ready", "ready_with_known_issues"}, review.Verdict):
+	case !review.Ready():
 		problems = append(problems, fmt.Sprintf("the review's verdict is %s: finish the review first", review.Verdict))
 	}
 

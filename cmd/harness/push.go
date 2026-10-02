@@ -36,9 +36,10 @@ func pushTarget(branch string) (string, error) {
 }
 
 // push pushes the branch checked out to origin, under its own name. The pr gates must have
-// passed at HEAD (make pr) and the adversarial review must be ready for HEAD, or the push is
-// refused. A person who says so (--person, which the policy refuses to every Claude session) gets
-// the same checks as warnings.
+// passed at HEAD (make pr) and the adversarial review must be ready for HEAD, or for the same
+// change before a rebase, or the push is refused. A person who says so (--person, which the
+// policy refuses to every Claude session) gets the same checks as warnings. A push keeps the
+// review that let it ship (evidence.Keep), for that change's next rebase.
 //
 // This stops an agent's mistakes and a subagent's shortcuts, not a determined forger. The policy
 // refuses the usual ways to write the evidence and the review state (the editor, redirects,
@@ -60,7 +61,7 @@ func (e env) push(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 
-	err = e.shippable(out, gitx.Head(ctx, e.root), gitx.GitDir(ctx, e.root), !*person)
+	shipped, err := e.shippable(ctx, out, gitx.Head(ctx, e.root), gitx.GitDir(ctx, e.root), !*person)
 	if err != nil {
 		return err
 	}
@@ -80,20 +81,30 @@ func (e env) push(ctx context.Context, args []string, out io.Writer) error {
 		return fmt.Errorf("git push: %w", err)
 	}
 
-	return nil
-}
+	if shipped == nil {
+		return nil
+	}
 
-// shippable checks the evidence and the review of head (the review state is under gitDir) before
-// a push: strict refuses, otherwise the problems are warnings.
-func (e env) shippable(out io.Writer, head, gitDir string, strict bool) error {
-	ev, err := evidence.Read(e.root, head)
+	err = evidence.Keep(e.root, *shipped)
 	if err != nil {
 		return fmt.Errorf("push: %w", err)
 	}
 
-	review, err := evidence.ReadReview(gitDir)
+	return nil
+}
+
+// shippable checks the evidence and the review of head (the review state is under gitDir) before
+// a push: strict refuses, otherwise the problems are warnings. It returns the ready review that
+// covers head, for the push to keep, or nil.
+func (e env) shippable(ctx context.Context, out io.Writer, head, gitDir string, strict bool) (*evidence.Review, error) {
+	ev, err := evidence.Read(e.root, head)
 	if err != nil {
-		return fmt.Errorf("push: %w", err)
+		return nil, fmt.Errorf("push: %w", err)
+	}
+
+	review, covering, err := e.reviewOf(ctx, out, gitDir, head)
+	if err != nil {
+		return nil, fmt.Errorf("push: %w", err)
 	}
 
 	gates := make([]string, 0, len(e.reg.At("pr")))
@@ -103,12 +114,65 @@ func (e env) shippable(out io.Writer, head, gitDir string, strict bool) error {
 
 	warnings, err := evidence.PushAllowed(head, ev, review, gates, strict)
 	if err != nil {
-		return fmt.Errorf("push refused: %w (a person who means to push anyway passes --person)", err)
+		return nil, fmt.Errorf("push refused: %w (a person who means to push anyway passes --person)", err)
 	}
 
 	for _, w := range warnings {
 		_, _ = fmt.Fprintln(out, "warning:", w)
 	}
 
-	return nil
+	return covering, nil
+}
+
+// reviewOf finds the review of head: the review state's when it judged head; else a ready
+// review, the state's or one an earlier push kept, that judged the same change on an older base,
+// which a rebase leaves as it was (gitx.PatchID). The first result is what PushAllowed judges;
+// the second is the covering review as it was recorded, or nil when none covers head.
+func (e env) reviewOf(ctx context.Context, out io.Writer, gitDir, head string) (*evidence.Review, *evidence.Review, error) {
+	current, err := evidence.ReadReview(gitDir)
+	if err != nil {
+		return nil, nil, fmt.Errorf("find the review of %.7s: %w", head, err)
+	}
+
+	if current != nil && current.Head == head {
+		if current.Ready() {
+			return current, current, nil
+		}
+
+		return current, nil, nil
+	}
+
+	kept, err := evidence.Kept(e.root)
+	if err != nil {
+		return nil, nil, fmt.Errorf("find the review of %.7s: %w", head, err)
+	}
+
+	if current != nil {
+		kept = append([]evidence.Review{*current}, kept...)
+	}
+
+	for _, r := range kept {
+		if r.Ready() && e.sameChange(ctx, r, head) {
+			_, _ = fmt.Fprintf(out, "the review of %.7s covers %.7s: the same change, rebased onto %s\n", r.Head, head, r.Base)
+
+			found, rebased := r, r
+			rebased.Head = head
+
+			return &rebased, &found, nil
+		}
+	}
+
+	return current, nil, nil
+}
+
+// sameChange reports whether head, compared with the review's base as it is now, makes the change
+// the review read: from its merge base to the commit it judged.
+func (e env) sameChange(ctx context.Context, r evidence.Review, head string) bool {
+	if r.Base == "" || r.MergeBase == "" || r.Head == "" {
+		return false
+	}
+
+	judged := gitx.PatchID(ctx, e.root, r.MergeBase+".."+r.Head)
+
+	return judged != "" && judged == gitx.PatchID(ctx, e.root, r.Base+"..."+head)
 }

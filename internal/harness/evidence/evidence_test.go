@@ -147,14 +147,68 @@ func TestTheReviewStateIsReadAsTheReviewSkillWritesIt(t *testing.T) {
 
 	p := filepath.Join(gitDir, evidence.ReviewPath)
 	require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o750))
-	require.NoError(t, os.WriteFile(p, []byte(`{"effort": "high", "verdict": "ready", "verdict_head": "`+head+`", "heads": []}`), 0o600))
+	require.NoError(t, os.WriteFile(p, []byte(`{"effort": "high", "verdict": "ready", "verdict_head": "`+head+`", "heads": [],
+		"base": "origin/main", "merge_base": "`+other+`"}`), 0o600))
 
 	review, err := evidence.ReadReview(gitDir)
 	require.NoError(t, err)
-	assert.Equal(t, &evidence.Review{Verdict: ready, Head: head}, review)
+	assert.Equal(t, &evidence.Review{Verdict: ready, Head: head, Base: "origin/main", MergeBase: other}, review)
 
 	require.NoError(t, os.WriteFile(p, []byte("{"), 0o600))
 
 	_, err = evidence.ReadReview(gitDir)
 	assert.Error(t, err)
+}
+
+func TestOnlyAReadyReviewLetsAChangeShip(t *testing.T) {
+	t.Parallel()
+
+	for verdict, want := range map[string]bool{
+		ready: true, "ready_with_known_issues": true, "changes_needed": false, "needs_you": false, "continue": false, "": false,
+	} {
+		assert.Equal(t, want, evidence.Review{Verdict: verdict}.Ready(), verdict)
+	}
+}
+
+// A push keeps the review that let it ship, so that the same change rebased still has it once
+// the review state has moved on.
+func TestKeptReviewsOutliveTheReviewState(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+
+	none, err := evidence.Kept(root)
+	require.NoError(t, err)
+	assert.Empty(t, none)
+
+	first := evidence.Review{Verdict: ready, Head: head, Base: "origin/main", MergeBase: other}
+	second := evidence.Review{Verdict: ready, Head: other, Base: "origin/feat/below", MergeBase: head}
+
+	require.NoError(t, evidence.Keep(root, first))
+	require.NoError(t, evidence.Keep(root, second))
+
+	_, err = evidence.Evidence{Head: head, Verdict: runner.Pass}.Write(root)
+	require.NoError(t, err)
+
+	kept, err := evidence.Kept(root)
+	require.NoError(t, err)
+	assert.Equal(t, []evidence.Review{first, second}, kept, "the evidence next to them is not a review")
+
+	require.NoError(t, os.WriteFile(filepath.Join(root, evidence.Dir, "review-broken.json"), []byte("{"), 0o600))
+
+	_, err = evidence.Kept(root)
+	assert.Error(t, err)
+}
+
+// A stacked pull request's evidence says which base selected the gates and which one its files
+// are compared with.
+func TestTheEvidenceOfAStackedPullRequestNamesBothBases(t *testing.T) {
+	t.Parallel()
+
+	ev := evidence.Evidence{Head: head, Base: other, Branch: "feat/top", Verdict: runner.Pass}
+	assert.NotContains(t, evidence.Markdown(ev, nil), "selected against")
+
+	ev.Against = "origin/feat/below"
+	assert.Contains(t, evidence.Markdown(ev, nil), "The gates were selected against `2222222`; the files and the model-facing "+
+		"note below are this pull request's own change, against `origin/feat/below`.")
 }

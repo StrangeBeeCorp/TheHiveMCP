@@ -169,4 +169,35 @@ func TestIndexedReadsTheStagedContent(t *testing.T) {
 
 	_, err = gitx.Indexed(t.Context(), dir, "nowhere.md")
 	require.Error(t, err)
+
+// A rebase keeps a change's patch id; an edit to the change does not.
+func TestPatchIDNamesAChangeWhateverItSitsOn(t *testing.T) {
+	t.Parallel()
+
+	dir, _ := base(t)
+	gittest.Write(t, dir, map[string]string{docA: "# a, edited\n"})
+	gittest.Git(t, dir, "add", "-A")
+	gittest.Commit(t, dir)
+
+	start := gittest.Git(t, dir, "merge-base", "main", "HEAD")
+	before := gitx.PatchID(t.Context(), dir, start+"..HEAD")
+	require.NotEmpty(t, before)
+	assert.Equal(t, before, gitx.PatchID(t.Context(), dir, "main...HEAD"), "from the merge base")
+
+	gittest.Git(t, dir, "checkout", "-q", "main")
+	gittest.Write(t, dir, map[string]string{"docs/b.md": "# b\n"})
+	gittest.Git(t, dir, "add", "-A")
+	gittest.Commit(t, dir)
+	gittest.Git(t, dir, "checkout", "-q", "work")
+	gittest.Git(t, dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "rebase", "-q", "main")
+	assert.Equal(t, before, gitx.PatchID(t.Context(), dir, "main...HEAD"), "rebased onto a newer main")
+
+	gittest.Write(t, dir, map[string]string{docA: "# a, edited twice\n"})
+	gittest.Git(t, dir, "add", "-A")
+	gittest.Commit(t, dir)
+	assert.NotEqual(t, before, gitx.PatchID(t.Context(), dir, "main...HEAD"), "edited")
+
+	assert.Empty(t, gitx.PatchID(t.Context(), dir, "HEAD..HEAD"), "nothing changed")
+	assert.Empty(t, gitx.PatchID(t.Context(), dir, "0123456789012345678901234567890123456789..HEAD"), "an unknown commit")
+	assert.Empty(t, gitx.PatchID(t.Context(), dir, "--output=/tmp/x"), "an option is not a range")
 }
