@@ -68,7 +68,6 @@ func TestGitWritesAndRefsAreJudged(t *testing.T) {
 	assert.True(t, bash(policy.Main, "git format-patch -o .cache/harness/evidence HEAD^").Deny, "nobody writes the records")
 	assert.True(t, bash(policy.Other, "git apply x.patch").Deny, "a patch names its files inside itself")
 	assert.True(t, bash(policy.Other, "git am x.patch").Deny)
-	assert.False(t, bash(policy.Other, "git apply --check x.patch").Deny, "checking a patch writes nothing")
 
 	for _, line := range []string{
 		"git tag -f origin/main HEAD",
@@ -85,6 +84,14 @@ func TestGitWritesAndRefsAreJudged(t *testing.T) {
 	assert.False(t, bash(policy.Main, "git tag v1.2.3").Deny)
 	assert.True(t, bash(policy.Other, "git apply --stat --apply x.patch").Deny, "--apply applies after --stat")
 	assert.True(t, bash(policy.Other, "git apply --check --ap x.patch").Deny, "git takes --apply cut short")
+	assert.True(t, bash(policy.Other, "git apply --stat --no-stat x.patch").Deny, "--no-stat applies too: an agent applies no patch")
+
+	for _, line := range []string{"git tag --sort=refname v1", "git tag -i v1", "git tag --format=x v1", "git tag --column v1"} {
+		assert.True(t, bash(policy.Other, line).Deny, "an agent makes no tag, whatever option comes first: %s", line)
+	}
+
+	assert.True(t, bash(policy.Main, "git tag --sort=refname origin/main").Deny, "--sort lists nothing: it makes origin/main")
+	assert.False(t, bash(policy.Other, "git tag -l 'v1.*'").Deny)
 
 	for _, line := range []string{"git tag --merged origin/main", "git tag --contains main", "git tag -n5"} {
 		for _, role := range []policy.Role{policy.Main, policy.Other} {

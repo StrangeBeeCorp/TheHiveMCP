@@ -317,18 +317,10 @@ func (j *judge) gitAgent(sub string, rest []string) Decision {
 func agentRefs(sub string, rest []string) Decision {
 	switch sub {
 	case "apply", "am":
-		// --stat and its kin turn applying off, and --apply (git takes it cut short) turns it back on.
-		inspects := slices.ContainsFunc(rest, func(a string) bool {
-			return slices.Contains([]string{"--check", "--stat", "--numstat", "--summary"}, a)
-		})
-		applies := slices.ContainsFunc(rest, func(a string) bool { return abbreviates(a, "--apply", len("--ap")) })
-
-		if sub == "am" || !inspects || applies {
-			return deny("a patch names the files it writes inside itself: make the change with the editor")
-		}
+		return deny("a patch names the files it writes inside itself: make the change with the editor, and leave patches to people")
 	case subTag:
-		if len(rest) > 0 && !tagLists(rest) {
-			return deny("tags are made by people, when they release")
+		if !agentListsTags(rest) {
+			return deny("tags are made by people, when they release: list them with git tag -l")
 		}
 	default:
 		if slices.ContainsFunc(rest, func(a string) bool { return strings.Contains(a, ":") && !strings.Contains(a, "://") }) {
@@ -409,16 +401,27 @@ func movesMainRef(sub string, rest []string, isMain func(string) bool) bool {
 	})
 }
 
-// tagLists reports whether git tag lists tags: -l or --list, or one of the options that imply it
-// (-n, --contains, --merged, --points-at, --sort, --format and their kin), or -v, which verifies.
+// tagLists reports whether git tag lists tags: -l or --list, or one of the options git documents
+// as implying it (-n, --contains, --no-contains, --merged, --no-merged, --points-at), or -v, which
+// verifies. --sort, --format, --column and -i do not: with a name, git tag still makes the tag.
 func tagLists(rest []string) bool {
-	listing := []string{"-l", "--list", "-v", "--verify", optContains, "--no-contains", optMerged, "--no-merged", "--points-at",
-		"--sort", "--format", "--column", "--no-column", "-i", "--ignore-case"}
+	listing := []string{"-l", "--list", "-v", "--verify", optContains, "--no-contains", optMerged, "--no-merged", "--points-at"}
 
 	return slices.ContainsFunc(rest, func(a string) bool {
 		name, _, _ := strings.Cut(a, "=")
-		return slices.Contains(listing, name) || strings.HasPrefix(a, "-n")
+		return slices.Contains(listing, name) || (strings.HasPrefix(a, "-n") && !strings.HasPrefix(a, "--"))
 	})
+}
+
+// agentListsTags reports whether an agent's git tag only lists or verifies: no word at all, or a
+// listing option (tagLists) with the patterns or commits it reads, and no other option, since
+// --sort, --format and their kin leave git tag making the tag it is named.
+func agentListsTags(rest []string) bool {
+	if slices.ContainsFunc(rest, func(a string) bool { return strings.HasPrefix(a, "-") && !tagLists([]string{a}) }) {
+		return false
+	}
+
+	return len(rest) == 0 || tagLists(rest)
 }
 
 // tagName is the name git tag would give a tag: its first operand, past the values of -m, -F, -u
