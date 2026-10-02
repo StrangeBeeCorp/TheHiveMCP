@@ -52,6 +52,9 @@ if [[ ${#parts[@]} -gt 0 ]]; then
     [[ -f "$REPO_ROOT/checkmake.ini" ]] && cat "$REPO_ROOT/checkmake.ini"
     printf '\n[minphony]\ndisabled = true\n'
   } >"$part_cfg"
+  # The image runs as nobody, and checkmake ignores a config it cannot read: mktemp's 0600 would
+  # leave the fragment under the default rules wherever the mount keeps the owner (Linux, CI).
+  chmod 644 "$part_cfg"
   docker run --rm --entrypoint /checkmake -v "$REPO_ROOT":/app -v "$part_cfg":/checkmake.ini:ro -w /app "$CHECKMAKE_IMAGE" \
     --config=/checkmake.ini "${parts[@]}" || status=1
 fi
