@@ -156,6 +156,28 @@ gates:
 	}
 }
 
+// In an unquoted text, " #" starts a YAML comment: the rule would stop at "no new entry under".
+func TestARuleCutByACommentIsRefused(t *testing.T) {
+	t.Parallel()
+
+	gate := `  - id: changelog
+    builtin: changelog
+    cadence: [stop]
+    suites: [surface]
+    budget_s: 9
+    blocks: no new entry under %s of CHANGELOG.md
+`
+
+	_, err := load(t, sampleRegistry+fmt.Sprintf(gate, "## [Unreleased]"))
+	require.ErrorContains(t, err, "a comment after a value on line 17")
+
+	reg, err := load(t, sampleRegistry+fmt.Sprintf(gate, "`## [Unreleased]`"))
+	require.NoError(t, err, "a quoted heading is text")
+
+	changelog, _ := reg.Gate("changelog")
+	assert.Equal(t, "no new entry under `## [Unreleased]` of CHANGELOG.md", changelog.Blocks)
+}
+
 func TestLoadRejectsUnknownFields(t *testing.T) {
 	t.Parallel()
 	_, err := load(t, strings.Replace(sampleRegistry, "budget_s: 9, blocks: x}", "budget: 9, budget_s: 9, blocks: x}", 1))

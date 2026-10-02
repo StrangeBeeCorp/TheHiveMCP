@@ -87,6 +87,11 @@ func ParseLimits(data []byte, file string) (Limits, error) {
 		return Limits{}, fmt.Errorf("parse %s: %w", file, err)
 	}
 
+	err = registry.TrailingComments(data)
+	if err != nil {
+		return Limits{}, fmt.Errorf("%s: %w", file, err)
+	}
+
 	if l.Hooks.MaxRedRounds <= 0 {
 		return Limits{}, fmt.Errorf("%s: hooks.max_red_rounds must be at least 1", file)
 	}

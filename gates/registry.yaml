@@ -204,7 +204,9 @@ gates:
     suites: [surface]
     budget_s: 20
     static: true
-    blocks: a change to baselines/surface/ (what the model reads) with no new entry under ## [Unreleased] of CHANGELOG.md
+    blocks: >-
+      a change to baselines/surface/ (what the model reads) with no new entry under
+      `## [Unreleased]` of CHANGELOG.md
 
   # A tool's schema is also built from the code around its definition (validation.go's enums, the
   # constants of internal/types, the date fields of internal/utils): the tools suite, which the

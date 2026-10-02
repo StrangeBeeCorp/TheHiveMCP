@@ -60,6 +60,11 @@ func ParseSpec(data []byte) (Spec, error) {
 		return Spec{}, fmt.Errorf("parse %s: %w", SpecPath, err)
 	}
 
+	err = registry.TrailingComments(data)
+	if err != nil {
+		return Spec{}, fmt.Errorf("%s: %w", SpecPath, err)
+	}
+
 	return s, nil
 }
 

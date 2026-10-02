@@ -50,6 +50,11 @@ func LoadCanaries(tree Tree, reg *registry.Registry) ([]Canary, error) {
 		return nil, fmt.Errorf("parse %s: %w", CanariesPath, err)
 	}
 
+	err = registry.TrailingComments(data)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", CanariesPath, err)
+	}
+
 	items := map[string]bool{}
 
 	specData, err := tree.Read(SpecPath)

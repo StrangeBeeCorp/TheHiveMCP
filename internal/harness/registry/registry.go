@@ -78,6 +78,11 @@ func Parse(data []byte, path string) (*Registry, error) {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 
+	err = TrailingComments(data)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+
 	err = reg.Validate()
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
