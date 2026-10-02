@@ -101,7 +101,7 @@ func TestStreamedRunsStillPrintBuiltinFindings(t *testing.T) {
 	var out bytes.Buffer
 	runner.Print(&out, results)
 	assert.NotContains(t, out.String(), "--- bad", "streamed output is not printed twice")
-	assert.Contains(t, out.String(), "b.go: too long", "every finding of a builtin reaches the CI log")
+	assert.Contains(t, out.String(), "b.go: too long", "a builtin's findings after the first reach the CI log (its last 40 lines)")
 }
 
 func TestRecordIsWrittenAsJSON(t *testing.T) {

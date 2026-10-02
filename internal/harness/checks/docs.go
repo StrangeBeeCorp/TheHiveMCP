@@ -12,10 +12,15 @@ import (
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gatesdoc"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/registry"
+	"gopkg.in/yaml.v3"
 )
 
-// CIWorkflow is the workflow that must run every gate whose cadence includes ci.
-const CIWorkflow = ".github/workflows/ci.yml"
+const (
+	// CIWorkflow is the workflow that must run every gate whose cadence includes ci.
+	CIWorkflow = ".github/workflows/ci.yml"
+	// harnessRun is how a workflow step runs gates.
+	harnessRun = "bin/harness run"
+)
 
 var (
 	inlineCode = regexp.MustCompile("`([^`]+)`")
@@ -171,12 +176,9 @@ func ciFindings(tree Tree, reg *registry.Registry) ([]Finding, error) {
 		return nil, fmt.Errorf("docs: %w", err)
 	}
 
-	named := map[string]bool{}
-
-	for _, m := range gateFlag.FindAllStringSubmatch(string(content), -1) {
-		for id := range strings.SplitSeq(m[1], ",") {
-			named[id] = true
-		}
+	named, err := ranGates(content)
+	if err != nil {
+		return nil, err
 	}
 
 	var out []Finding
@@ -201,4 +203,52 @@ func ciFindings(tree Tree, reg *registry.Registry) ([]Finding, error) {
 	}
 
 	return out, nil
+}
+
+// workflow is the part of a GitHub workflow the docs gate reads: the scripts of each job's steps.
+type workflow struct {
+	Jobs map[string]struct {
+		Steps []struct {
+			Run string `yaml:"run"`
+		} `yaml:"steps"`
+	} `yaml:"jobs"`
+}
+
+// ranGates lists the gates the workflow's steps run: the --gate values of the step scripts that
+// call bin/harness run, comment lines left out. A YAML comment is no step, and a shell comment
+// runs nothing.
+func ranGates(content []byte) (map[string]bool, error) {
+	var wf workflow
+
+	err := yaml.Unmarshal(content, &wf)
+	if err != nil {
+		return nil, fmt.Errorf("docs: read %s: %w", CIWorkflow, err)
+	}
+
+	named := map[string]bool{}
+
+	for _, job := range wf.Jobs {
+		for _, step := range job.Steps {
+			if strings.Contains(step.Run, harnessRun) {
+				addGates(named, step.Run)
+			}
+		}
+	}
+
+	return named, nil
+}
+
+// addGates adds the --gate values of a step script to named, its comment lines left out.
+func addGates(named map[string]bool, script string) {
+	for line := range strings.SplitSeq(script, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			continue
+		}
+
+		for _, m := range gateFlag.FindAllStringSubmatch(line, -1) {
+			for id := range strings.SplitSeq(m[1], ",") {
+				named[id] = true
+			}
+		}
+	}
 }

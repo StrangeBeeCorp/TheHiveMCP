@@ -48,8 +48,9 @@ build() {
   local src="$1" out="$2" go_image bundle
   go_image="$(grep -m1 '^GO_IMAGE *:=' "$root/Makefile" | sed 's/.*:= *//')"
   if ! docker info >/dev/null 2>&1; then
+    # 3, as for a gate that could not run: nothing could, so this is no pass and no failure.
     echo "bin/harness: Docker is not running; the harness is built in $go_image. Start OrbStack and retry." >&2
-    exit 75
+    exit 3
   fi
   # Same caches and CI settings as the Makefile's Go targets (see GO_CACHE_DIR there).
   local mounts=(-v thehivemcp-gomod:/go/pkg/mod -v thehivemcp-gobuild:/root/.cache/go-build) user=() ca=()

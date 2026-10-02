@@ -1,6 +1,7 @@
 package checks_test
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -48,6 +49,8 @@ func messages(found []checks.Finding) string {
 }
 
 const (
+	readme   = "README.md"
+	agentsMD = "AGENTS.md"
 	makefile = "Makefile"
 	bigGo    = "big.go"
 	goneGo   = "gone.go"
@@ -60,7 +63,7 @@ var limits = checks.StructureLimits{
 	MaxCodeFilesPerDir: 5,
 	CodeFiles:          []string{"*.go", makefile, "bin/*"},
 	Caps:               map[string]int{bigGo: 20, shrunkGo: 30, smallGo: 15, goneGo: 40},
-	Root:               []string{bigGo, shrunkGo, smallGo, goneGo, "long.go", "pkg", "README.md", "bin", makefile, "data.bin"},
+	Root:               []string{bigGo, shrunkGo, smallGo, goneGo, "long.go", "pkg", readme, "bin", makefile, "data.bin"},
 }
 
 func TestStructure(t *testing.T) {
@@ -77,7 +80,7 @@ func TestStructure(t *testing.T) {
 		"pkg/e.go":        lines(1),
 		"pkg/f.go":        lines(1), // a sixth code file in pkg/
 		"pkg/a_test.go":   lines(1), // tests do not count
-		"README.md":       lines(1000),
+		readme:            lines(1000),
 		"bin/tool":        lines(3),
 		makefile:          lines(3),
 		"data.bin":        "\x00\x01binary",
@@ -95,7 +98,7 @@ func TestStructure(t *testing.T) {
 	assert.Contains(t, got, `notes/latin1.go: top-level entry "notes" is not in structure.root`)
 	assert.Contains(t, got, "notes/latin1.go: not valid UTF-8")
 	assert.NotContains(t, got, "big.go:", "a file at its cap is fine")
-	assert.NotContains(t, got, "README.md", "Markdown is not code")
+	assert.NotContains(t, got, readme, "Markdown is not code")
 	assert.NotContains(t, got, "data.bin", "binary files are not checked for text")
 	assert.Len(t, found, 7)
 }
@@ -119,7 +122,7 @@ func TestPublicSafety(t *testing.T) {
 		".claude/settings.json":       "{}",
 		".env.template":               "THEHIVE_URL=",
 		"docs/how-to.md":              "run it from " + home + "alice/dev/repo\nor from " + home + "you/dev/repo\n",
-		".github/workflows/ci.yml":    "GO_CACHE_DIR: /home/runner/.cache/x\n",
+		checks.CIWorkflow:             "GO_CACHE_DIR: /home/runner/.cache/x\n",
 		"gates/limits.yaml":           home + "bob/ is named here on purpose\n",
 	})
 	rules := checks.SafetyRules{
@@ -147,16 +150,37 @@ gates:
   - {id: docs, builtin: docs, cadence: [stop], suites: ["*"], budget_s: 1, blocks: x}
 `
 
-func docsRepo(t *testing.T, agents, ci, page string) (string, []string, *registry.Registry) {
+// ciRunning is a workflow with one step per script: each script is a step's run.
+func ciRunning(scripts ...string) string {
+	var b strings.Builder
+
+	b.WriteString("jobs:\n  checks:\n    steps:\n")
+
+	for _, s := range scripts {
+		b.WriteString("      - run: |\n")
+
+		for line := range strings.SplitSeq(s, "\n") {
+			b.WriteString("          " + line + "\n")
+		}
+	}
+
+	return b.String()
+}
+
+// docsRepo is a repository with the docs given (by path), a ci.yml, a few code files, the
+// registry above and the gates page (generated from it unless page is set).
+func docsRepo(t *testing.T, docs map[string]string, ci, page string) (string, []string, *registry.Registry) {
 	t.Helper()
-	root, files := repo(t, map[string]string{
-		"AGENTS.md":                     agents,
-		".github/workflows/ci.yml":      ci,
+
+	files := map[string]string{
+		checks.CIWorkflow:               ci,
 		"internal/tools/tool.go":        "package tools\n",
 		"internal/tools/schema.go":      "package tools\n",
 		"internal/resources/facts/a.go": "package facts\n",
 		"gates/registry.yaml":           docsRegistry,
-	})
+	}
+	maps.Copy(files, docs)
+	root, names := repo(t, files)
 	reg, err := registry.Load(filepath.Join(root, "gates", "registry.yaml"))
 	require.NoError(t, err)
 
@@ -168,7 +192,7 @@ func docsRepo(t *testing.T, agents, ci, page string) (string, []string, *registr
 	require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o750))
 	require.NoError(t, os.WriteFile(p, []byte(page), 0o600))
 
-	return root, append(files, gatesdoc.Path), reg
+	return root, append(names, gatesdoc.Path), reg
 }
 
 func TestDocsAcceptsTrueReferences(t *testing.T) {
@@ -177,7 +201,7 @@ func TestDocsAcceptsTrueReferences(t *testing.T) {
 	agents := "- `internal/tools/` and `internal/tools/{tool,schema}.go`, `internal/resources/*/a.go`, `internal/tools/tool.go:12`, `internal/tools/schema.go:Schema`.\n" +
 		"- not paths: `make check-fast`, `internal/tools/<tool>/`, `facts/*.txt`, `/etc/hosts`, `FOO=bar`.\n" +
 		"```text\ninternal/old/ inside a fence is not checked\n```\n"
-	root, files, reg := docsRepo(t, agents, "run: bin/harness run --cadence ci --gate lint\n", "")
+	root, files, reg := docsRepo(t, map[string]string{agentsMD: agents}, ciRunning("bin/harness run --cadence ci --gate lint"), "")
 	found, err := checks.Docs(checks.DirTree{Root: root, Names: files}, reg)
 	require.NoError(t, err)
 	assert.Empty(t, found)
@@ -187,7 +211,7 @@ func TestDocsFindsDrift(t *testing.T) {
 	t.Parallel()
 
 	agents := "- `internal/confirmation/` is gone, and so is `internal/tools/{tool,prompt}.go`.\n"
-	root, files, reg := docsRepo(t, agents, "run: bin/harness run --gate ghost\n", "# stale\n")
+	root, files, reg := docsRepo(t, map[string]string{agentsMD: agents}, ciRunning("bin/harness run --gate ghost"), "# stale\n")
 	found, err := checks.Docs(checks.DirTree{Root: root, Names: files}, reg)
 	require.NoError(t, err)
 
@@ -198,6 +222,57 @@ func TestDocsFindsDrift(t *testing.T) {
 	assert.Contains(t, got, `does not run gate "lint", whose cadence includes ci`)
 	assert.Contains(t, got, `runs gate "ghost", which gates/registry.yaml does not define`)
 	assert.Len(t, found, 5)
+}
+
+// The pages an agent or a newcomer reads first are all checked, and only those.
+func TestDocsChecksEveryEntryPage(t *testing.T) {
+	t.Parallel()
+
+	gone := "- see `internal/confirmation/`.\n"
+	pages := map[string]string{
+		agentsMD: gone, readme: gone, "CLAUDE.md": gone, ".claude/agents/coder.md": gone,
+		"docs/history.md": gone, ".claude/settings.json": "`internal/confirmation/`\n",
+	}
+	root, files, reg := docsRepo(t, pages, ciRunning("bin/harness run --cadence ci --gate lint"), "")
+	found, err := checks.Docs(checks.DirTree{Root: root, Names: files}, reg)
+	require.NoError(t, err)
+
+	var paths []string
+	for _, f := range found {
+		paths = append(paths, f.Path)
+	}
+
+	assert.ElementsMatch(t, []string{".claude/agents/coder.md", agentsMD, "CLAUDE.md", readme}, paths,
+		"a history page and a settings file are not entry pages")
+}
+
+// Only a step that runs a gate counts: a gate named in a YAML comment, in a shell comment or in
+// a step that does not call bin/harness runs nothing.
+func TestTheCIWorkflowCheckReadsTheStepsThatRun(t *testing.T) {
+	t.Parallel()
+
+	ci := ciRunning(
+		"bin/harness run --cadence ci --gate lint",
+		"# bin/harness run --cadence ci --gate sast\nbin/harness run --cadence ci --gate fmt",
+		"echo --gate vulncheck",
+	) + "      # - run: bin/harness run --cadence ci --gate leaks\n"
+	reg := &registry.Registry{Gates: []registry.Gate{
+		{ID: "lint", Cadence: []string{"ci"}}, {ID: "fmt", Cadence: []string{"ci"}}, {ID: "sast", Cadence: []string{"ci"}},
+		{ID: "vulncheck", Cadence: []string{"ci"}}, {ID: "leaks", Cadence: []string{"ci"}},
+	}}
+	root, files := repo(t, map[string]string{checks.CIWorkflow: ci, gatesdoc.Path: gatesdoc.Render(reg)})
+
+	found, err := checks.Docs(checks.DirTree{Root: root, Names: files}, reg)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{
+		`.github/workflows/ci.yml: does not run gate "sast", whose cadence includes ci`,
+		`.github/workflows/ci.yml: does not run gate "vulncheck", whose cadence includes ci`,
+		`.github/workflows/ci.yml: does not run gate "leaks", whose cadence includes ci`,
+	}, strings.Split(messages(found), "\n"))
+
+	broken, names := repo(t, map[string]string{checks.CIWorkflow: "jobs: [not, a, map\n"})
+	_, err = checks.Docs(checks.DirTree{Root: broken, Names: names}, reg)
+	require.Error(t, err, "a workflow that does not parse")
 }
 
 func TestChecksReadTheTreeTheyAreGiven(t *testing.T) {

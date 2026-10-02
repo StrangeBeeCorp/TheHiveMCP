@@ -2,9 +2,9 @@ BUILD_DATE := $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 GIT_COMMIT=$(shell git rev-parse HEAD)
 VERSION=$(shell git describe --tags 2> /dev/null || echo "v0.0.0-${GIT_COMMIT}")
 GO_IMAGE := golang:1.26.8-alpine
-# The race detector requires cgo (a C toolchain), which the Alpine GO_IMAGE lacks.
-# GO_IMAGE_CGO is the Debian-based image used by `make test-race`; it ships gcc, so
-# `-race` builds there with CGO_ENABLED=1.
+# GO_IMAGE_CGO is the Debian-based image: gcc for `make test-race` (-race needs cgo,
+# which the Alpine GO_IMAGE lacks) and git, which the harness's tests run. The unit
+# tests run there with CGO_ENABLED=0, so they build as they do in GO_IMAGE.
 GO_IMAGE_CGO := golang:1.26.8
 # jq and yq run the help-xml pipeline (JSON assembly + JSON→XML). Pinned by digest
 # so `make help-xml` needs no host jq/yq — everything stays in Docker.
@@ -342,7 +342,7 @@ test: pre ## Default test loop: fast, cached unit tests (no live TheHive) ##@ ma
 	@echo $(BGreen)-----------------------$(Color_Off)
 	@echo $(BGreen)-- Running UnitTests --$(Color_Off)
 	@echo $(BGreen)-----------------------$(Color_Off)
-	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go test $(GO_TEST_COVER) $(GO_TEST_RUN) -short -v ./...
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) -e CGO_ENABLED=0 $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE_CGO) go test $(GO_TEST_COVER) $(GO_TEST_RUN) -short -v ./...
 ifeq ($(COVERAGE),1)
 	docker run -i --rm -v $(MOUNT_APP) -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
 endif

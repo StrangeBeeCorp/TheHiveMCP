@@ -72,11 +72,11 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT" || exit 1
 
 # ── Pinned check tools. This script is the source of truth for the repo's check
-# versions (the plugin's Stop hook just launches it). GO_IMAGE is read from the
-# Makefile so `go test`/`go build` here never drift from `make test`. LINT_IMAGE
-# and the rest are pinned right here — this script is their single reference.
-# Only list the images this repo's file types need.
+# versions. GO_IMAGE and GO_TEST_IMAGE (it has git, which the harness's tests run)
+# come from the Makefile, so `go build`/`go test` here never drift from `make test`.
+# LINT_IMAGE and the rest are pinned right here. Only list what this repo needs.
 GO_IMAGE="$(grep -m1 '^GO_IMAGE *:=' "$REPO_ROOT/Makefile" | sed 's/.*:= *//')"
+GO_TEST_IMAGE="$(grep -m1 '^GO_IMAGE_CGO *:=' "$REPO_ROOT/Makefile" | sed 's/.*:= *//')"
 LINT_IMAGE="golangci/golangci-lint:v2.12.2"
 SHELLCHECK_IMAGE="koalaman/shellcheck:v0.11.0"
 SHFMT_IMAGE="mvdan/shfmt:v3.13.1"
@@ -408,7 +408,7 @@ $out
 
   # Fast unit tests (mirrors `make test`: -short skips the integration suite, so
   # results are go-test-cached and reruns are near-instant).
-  if ! out=$(docker run -i --rm -v "$REPO_ROOT":/app -w /app "${cache[@]}" "$GO_IMAGE" \
+  if ! out=$(docker run -i --rm -v "$REPO_ROOT":/app -w /app "${cache[@]}" -e CGO_ENABLED=0 "$GO_TEST_IMAGE" \
     go test -short ./... 2>&1); then
     failures+="=== go test -short ===
 $out

@@ -69,6 +69,8 @@ public_safety:
     - .claude/settings.local.json
     - .claude/worktrees/**
     - .claude/logs/**
+    - .claude/last-prompt-ts
+    - .claude/.lint-verified
     - CLAUDE.local.md
     - .env
     - ".env.*"
