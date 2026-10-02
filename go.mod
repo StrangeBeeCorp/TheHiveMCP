@@ -11,6 +11,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v3 v3.0.1
+	mvdan.cc/sh/v3 v3.14.1
 )
 
 require (
@@ -22,5 +23,4 @@ require (
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	gopkg.in/validator.v2 v2.0.1 // indirect
-	mvdan.cc/sh/v3 v3.14.1 // indirect
 )
