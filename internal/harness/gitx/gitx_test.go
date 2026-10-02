@@ -169,6 +169,7 @@ func TestIndexedReadsTheStagedContent(t *testing.T) {
 
 	_, err = gitx.Indexed(t.Context(), dir, "nowhere.md")
 	require.Error(t, err)
+}
 
 // A rebase keeps a change's patch id; an edit to the change does not.
 func TestPatchIDNamesAChangeWhateverItSitsOn(t *testing.T) {
