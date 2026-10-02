@@ -78,6 +78,16 @@ func (j *judge) rules(name string, args []string) Decision {
 		return deny("the %s only reads: %s is not a read command", j.role, name)
 	}
 
+	if d := j.writesOf(name, args); d.Deny {
+		return d
+	}
+
+	return j.trees(name, args)
+}
+
+// writesOf judges what a command writes and runs besides its output: the files it names, a tree
+// it brings over the records, the programs a sed or awk script runs, a link to a guarded place.
+func (j *judge) writesOf(name string, args []string) Decision {
 	for _, target := range targets(name, args) {
 		if d := j.write(target); d.Deny {
 			return d
@@ -92,7 +102,7 @@ func (j *judge) rules(name string, args []string) Decision {
 		return d
 	}
 
-	return j.trees(name, args)
+	return j.linksGuarded(name, args)
 }
 
 // personDenied is why no Claude role passes --person, the harness flag only a person types.

@@ -172,8 +172,10 @@ func cached(ctx context.Context, st State, fp string, static bool, check Checker
 }
 
 // blockedSince reports whether BLOCKED.md was written during the current red streak: a report
-// left by an earlier task or agent does not count.
+// left by an earlier task or agent does not count. The comparison is to the second: a
+// filesystem stamps a file from a coarser clock than time.Now (Linux's lags by milliseconds,
+// HFS+ keeps whole seconds), so a report written just after the streak began may look older.
 func blockedSince(root string, since time.Time) bool {
 	info, err := os.Stat(filepath.Join(root, policy.BlockedFile))
-	return err == nil && info.Size() > 0 && !info.ModTime().Before(since)
+	return err == nil && info.Size() > 0 && !info.ModTime().Before(since.Truncate(time.Second))
 }

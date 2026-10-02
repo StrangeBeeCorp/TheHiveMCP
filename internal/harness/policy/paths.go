@@ -132,7 +132,7 @@ func Write(role Role, root, p string) Decision {
 	}
 
 	rel, inside := relative(root, abs)
-	if inside && record(strings.ToLower(rel)) {
+	if (inside && record(strings.ToLower(rel))) || namesRecord(abs) {
 		return deny("%s is the harness's own record (make pr's evidence, the hooks' state): only the harness writes it", rel)
 	}
 
@@ -220,6 +220,33 @@ func record(rel string) bool {
 	return under(rel, ".cache/harness/evidence/") || rel == ".cache/harness/state.json"
 }
 
+// namesRecord reports whether a path, from wherever it comes, ends in a record of a harness
+// checkout: .cache/harness/evidence/… or .cache/harness/state.json, in any case.
+func namesRecord(abs string) bool {
+	lower := strings.ToLower(filepath.ToSlash(abs))
+
+	return strings.Contains(lower, "/.cache/harness/evidence/") || strings.HasSuffix(lower, "/.cache/harness/evidence") ||
+		strings.HasSuffix(lower, "/.cache/harness/state.json")
+}
+
+// guardedPlaces are the places a link may not point at, into or above: where the harness keeps its
+// records, and where git and gh read the configuration a person sets. A link to one of them, or
+// to a directory above it, would let a later write in the same line reach it under a name the
+// policy does not know yet.
+func guardedPlaces(root string) []string {
+	root = landing(root)
+	places := []string{filepath.Join(root, ".cache", "harness", "evidence"), filepath.Join(root, ".cache", "harness", "state.json")}
+
+	return append(places, configDirs()...)
+}
+
+// related reports whether a and b are the same place, or one is inside the other, in any case.
+func related(a, b string) bool {
+	a, b = strings.ToLower(a), strings.ToLower(b)
+
+	return a == b || strings.HasPrefix(a, b+"/") || strings.HasPrefix(b, a+"/")
+}
+
 // holdsRecords reports whether rel is a directory a record lies under: the checkout, .cache or
 // .cache/harness, in any case.
 func holdsRecords(rel string) bool {
@@ -232,10 +259,18 @@ func holdsRecords(rel string) bool {
 // ~/.gitconfig and the files it includes beside it (~/.gitconfig-work), and git's and gh's
 // directories under ~/.config, $XDG_CONFIG_HOME or $GH_CONFIG_DIR.
 func configFile(abs string) bool {
-	if base := strings.ToLower(filepath.Base(abs)); strings.HasPrefix(base, ".gitconfig") {
+	lower := strings.ToLower(filepath.ToSlash(abs))
+	if strings.HasPrefix(filepath.Base(lower), ".gitconfig") || strings.Contains(lower, "/.config/git/") ||
+		strings.Contains(lower, "/.config/gh/") {
 		return true
 	}
 
+	return slices.ContainsFunc(configDirs(), func(d string) bool { return related(lower, d) && len(lower) >= len(d) })
+}
+
+// configDirs are git's and gh's configuration directories, where they land: under ~/.config,
+// $XDG_CONFIG_HOME or $GH_CONFIG_DIR.
+func configDirs() []string {
 	var dirs []string
 
 	home, err := os.UserHomeDir()
@@ -251,12 +286,11 @@ func configFile(abs string) bool {
 		dirs = append(dirs, filepath.Clean(g))
 	}
 
-	lower := strings.ToLower(abs)
+	for i, d := range dirs {
+		dirs[i] = landing(d)
+	}
 
-	return slices.ContainsFunc(dirs, func(d string) bool {
-		d = strings.ToLower(landing(d))
-		return lower == d || strings.HasPrefix(lower, d+"/")
-	})
+	return dirs
 }
 
 // under reports whether rel is the directory dir (given with its trailing slash) or inside it.
@@ -282,11 +316,22 @@ func absolute(root, p string) string {
 // relative is p relative to root, slash-separated, and whether p is inside root.
 func relative(root, abs string) (string, bool) {
 	rel, err := filepath.Rel(filepath.Clean(root), abs)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, "../") {
+	if err == nil && rel != ".." && !strings.HasPrefix(rel, "../") {
+		return filepath.ToSlash(rel), true
+	}
+
+	// A filesystem that ignores case opens the checkout by any spelling of its path; the rest of
+	// the path keeps its own.
+	r, a := filepath.ToSlash(filepath.Clean(root)), filepath.ToSlash(abs)
+	if len(a) < len(r) || !strings.EqualFold(a[:len(r)], r) || (len(a) > len(r) && a[len(r)] != '/') {
 		return "", false
 	}
 
-	return filepath.ToSlash(rel), true
+	if rel = strings.TrimPrefix(a[len(r):], "/"); rel == "" {
+		rel = "."
+	}
+
+	return rel, true
 }
 
 func inGit(abs string) bool {
@@ -303,7 +348,7 @@ func landing(p string) string {
 		existing, rest := p, ""
 
 		for {
-			_, err := os.Lstat(existing)
+			_, err := os.Lstat(existing) // #nosec G703 -- the policy looks where a path lands; it opens nothing
 			if err == nil {
 				break
 			}

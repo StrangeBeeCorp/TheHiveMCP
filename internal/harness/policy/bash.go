@@ -51,6 +51,9 @@ type judge struct {
 	inChild bool
 	// passed is what the line may put in the environment of the commands it runs (passedBy).
 	passed environment
+	// written are where the line's earlier commands write, as they land: what a later copy in it
+	// may carry was not on disk when the line was judged.
+	written []string
 }
 
 func (j *judge) line(text string, depth int) Decision {
@@ -393,6 +396,8 @@ func (j *judge) write(target string) Decision {
 
 		target = filepath.Join(j.cwd, target)
 	}
+
+	j.written = append(j.written, landing(target))
 
 	if !strings.ContainsAny(target, "*?[") {
 		return Write(j.role, j.root, target)

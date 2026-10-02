@@ -55,7 +55,8 @@ func operandsBut(args []string, target string) []string {
 }
 
 // carriesCache reports whether a source of a copy may bring a .cache with it: it is one, holds one,
-// or is computed or a pattern whose matches do.
+// is computed or a pattern whose matches do, is not on disk before the line runs, or is where an
+// earlier command of the line writes.
 func (j *judge) carriesCache(src string) bool {
 	if computed(src) {
 		return true
@@ -68,14 +69,43 @@ func (j *judge) carriesCache(src string) bool {
 	}
 
 	return slices.ContainsFunc(paths, func(p string) bool {
-		if strings.EqualFold(filepath.Base(filepath.Clean(p)), ".cache") {
+		at := landing(p)
+
+		_, err := os.Lstat(at)
+		if err != nil || strings.EqualFold(filepath.Base(filepath.Clean(p)), ".cache") || strings.EqualFold(filepath.Base(at), ".cache") {
 			return true
 		}
 
-		_, err := os.Lstat(filepath.Join(p, ".cache"))
+		_, err = os.Lstat(filepath.Join(at, ".cache"))
 
-		return err == nil
+		return err == nil || slices.ContainsFunc(j.written, func(w string) bool { return related(w, at) && len(w) >= len(at) })
 	})
+}
+
+// linksGuarded refuses a link, symbolic or hard (ln, cp -l or -s), to a place the harness guards,
+// into it or above it: a later write in the same line would reach it through the link, under a
+// name the policy does not know when it judges the line.
+func (j *judge) linksGuarded(name string, args []string) Decision {
+	if name != "ln" && (name != "cp" || !slices.ContainsFunc(args, func(a string) bool {
+		return a == "--link" || a == "--symbolic-link" || (len(a) > 1 && a[0] == '-' && a[1] != '-' && strings.ContainsAny(a[1:], "ls"))
+	})) {
+		return Allow
+	}
+
+	places := guardedPlaces(j.root)
+
+	for _, op := range operandsBut(args, "") {
+		if computed(op) {
+			return deny("write the link's paths out: the policy reads where it points before it is made")
+		}
+
+		at := landing(j.abs(op))
+		if slices.ContainsFunc(places, func(p string) bool { return related(at, p) }) {
+			return deny("a link to %s would let a later write reach the harness's records or git's configuration through it: name the files you need", op)
+		}
+	}
+
+	return Allow
 }
 
 // recursive reports whether cp's options copy a whole tree: -r, -R or -a, alone or in a cluster

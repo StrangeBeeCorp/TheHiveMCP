@@ -3,6 +3,7 @@ package policy_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -117,10 +118,47 @@ func TestGhIsReadAsGhReadsIt(t *testing.T) {
 		"unzip -p /tmp/x.mcpb manifest.json",
 		"tar -xOf /tmp/r.tgz docs/a.md",
 		"tar -tf /tmp/r.tgz",
-		"mv /tmp/notes.md .",
 	} {
 		assert.False(t, bash(policy.Main, line).Deny, "%s: %v", line, bash(policy.Main, line).Reason)
 	}
 
 	assert.False(t, bash(policy.Other, "gh pr -R o/r view 5").Deny, "an agent reads a pull request of another repository")
+}
+
+// What a line writes or links before a copy is not on disk when the line is judged: the policy
+// knows it from the line itself.
+func TestALineIsJudgedWithWhatItWritesBeforeACopy(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, ".cache", "harness", "evidence"), 0o750))
+
+	tmp := t.TempDir()
+	notes := filepath.Join(tmp, "notes.md")
+	require.NoError(t, os.WriteFile(notes, []byte("# notes\n"), 0o600))
+
+	src, link := filepath.Join(tmp, "x"), filepath.Join(tmp, "c")
+	mixed := strings.ToUpper(root[:2]) + root[2:]
+
+	for _, line := range []string{
+		"mkdir -p " + src + "/.cache/harness/evidence && echo '{}' > " + src + "/.cache/harness/evidence/review-x.json && cp -R " + src + "/. .",
+		"mkdir -p " + src + "/.cache && rsync -a " + src + "/ .",
+		"cp -R " + filepath.Join(tmp, "absent") + "/. .",
+		"ln -s " + root + "/.cache " + link + " && echo '{}' > " + link + "/harness/evidence/review-x.json",
+		"ln -s " + root + " " + link,
+		"ln " + root + "/.cache/harness/state.json " + link,
+		"cp -l " + root + "/.cache/harness/state.json " + link,
+		"echo '{}' > " + mixed + "/.cache/harness/evidence/review-x.json",
+	} {
+		assert.True(t, policy.Bash(policy.Main, root, root, line).Deny, line)
+	}
+
+	for _, line := range []string{
+		"mv " + notes + " .",
+		"cp -R " + tmp + " docs",
+		"ln -s " + notes + " docs/notes.md",
+	} {
+		d := policy.Bash(policy.Main, root, root, line)
+		assert.False(t, d.Deny, "%s: %v", line, d.Reason)
+	}
 }
