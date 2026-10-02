@@ -98,11 +98,33 @@ func (j *judge) make(args []string) Decision {
 		return deny("%s gives make an environment the policy cannot read: pass make's variables on its command line (make gate ID=x)", j.passed.hidden)
 	}
 
+	if d := j.harnessByGo(args); d.Deny {
+		return d
+	}
+
 	if !j.role.Agent() {
 		return Allow
 	}
 
 	return j.makeAgent(args)
+}
+
+// harnessByGo judges a make variable that runs the harness from its sources (make go CMD="run
+// ./cmd/harness push") as the harness command it is.
+func (j *judge) harnessByGo(args []string) Decision {
+	for _, a := range append(slices.Clone(args), j.passed.assigns...) {
+		_, value, _ := strings.Cut(a, "=")
+		fields := strings.Fields(value)
+
+		for k, f := range fields {
+			f = strings.TrimSuffix(strings.TrimPrefix(f, "./"), "/")
+			if (f == "cmd/harness" || strings.HasSuffix(f, "/cmd/harness")) && slices.Contains(fields[:k], "run") {
+				return j.harness(fields[k+1:])
+			}
+		}
+	}
+
+	return Allow
 }
 
 func (j *judge) makeAgent(args []string) Decision {

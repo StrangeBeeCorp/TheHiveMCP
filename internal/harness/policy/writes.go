@@ -127,7 +127,7 @@ func extracts(name string, args []string) bool {
 
 	for i, a := range args {
 		switch {
-		case a == "--extract" || a == "--get":
+		case a == "--extract" || a == optGet:
 			return true
 		case strings.HasPrefix(a, "--"):
 		case strings.HasPrefix(a, "-") || i == 0:
@@ -288,7 +288,8 @@ func cutAtValued(cluster, valued string) string {
 }
 
 // flagValues are the values of a command's options shorts and longs, given as -o FILE, -oFILE, at
-// the end of a cluster (-sSo FILE) or inside one (-sSoFILE), --output FILE or --output=FILE.
+// the end of a cluster (-sSo FILE) or inside one (-sSoFILE), --output FILE or --output=FILE, or a
+// long option cut short as getopt accepts it (--out FILE).
 // valued are the command's other short options that take a value: in a cluster, what follows one
 // is its value, not more options.
 func flagValues(args []string, valued, shorts string, longs ...string) []string {
@@ -307,7 +308,9 @@ func flagValues(args []string, valued, shorts string, longs ...string) []string 
 			return out
 		case strings.HasPrefix(a, "--"):
 			name, v, attached := strings.Cut(a, "=")
-			if named = slices.Contains(longs, name); named && !attached && i+1 < len(args) {
+			named = slices.ContainsFunc(longs, func(l string) bool { return abbreviates(name, l, len("--o")) })
+
+			if named && !attached && i+1 < len(args) {
 				i++
 				v = args[i]
 			}

@@ -46,8 +46,15 @@ var agentDenied = map[string]string{
 
 var dockerReads = []string{"ps", "logs", "inspect", "images", subVersion, "info"}
 
+// variants are the other names of the commands the rules read: GNU's sed and awk, and other awks.
+var variants = map[string]string{"gsed": cmdSed, "gawk": cmdAwk, "mawk": cmdAwk, "nawk": cmdAwk}
+
 // rules judge a command once wrappers are unwrapped.
 func (j *judge) rules(name string, args []string) Decision {
+	if canonical, ok := variants[name]; ok {
+		name = canonical
+	}
+
 	if d := j.everyone(name, args); d.Deny {
 		return d
 	}

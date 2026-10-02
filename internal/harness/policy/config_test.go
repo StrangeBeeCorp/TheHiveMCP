@@ -147,3 +147,68 @@ func TestEveryWayACommandNamesTheFileItWritesIsJudged(t *testing.T) {
 	assert.True(t, bash(policy.Tester, `awk '{ print > "m" }' in.txt`).Deny, "awk's print > writes the file m")
 	assert.True(t, bash(policy.Coder, "sed '1e date' in.txt").Deny, "an agent's sed runs no command")
 }
+
+// What a fix-check found the parsers missing: git config options they did not know (and the
+// prefixes git accepts), BSD's sed -i SUFFIX, sed's comments, bracket expressions and scripts
+// joined across -e, and the other names of sed and awk.
+func TestTheParsersReadWhatGitAndSedRead(t *testing.T) {
+	t.Parallel()
+
+	const state = ".cache/harness/state.json"
+
+	for _, line := range []string{
+		`git config --no-type alias.p '!bin/harness push --person'`,
+		`git config --glob alias.m '!git push origin HEAD:main'`,
+		"git config --no-inc alias.q 'push origin HEAD:main'",
+		`git config --fil /tmp/x alias.p '!bin/harness push'`,
+		`git config --replace-all alias.p '!bin/harness push' old`,
+		"git config --ren x alias",
+		"git config --ed",
+		`git config submodule.x.update '!bin/harness push'`,
+		"sed -i x '1w .git/sb-review/state.json' notes.txt",
+		"sed -n '# a\\\nw " + state + "' in.txt",
+		"sed -n 'r x\\\nw " + state + "' in.txt",
+		"sed -n 's/[/]/x/w " + state + "' in.txt",
+		"sed -e 's/a/b\\' -e '/w " + state + "' in.txt",
+		"cd .cache/harness && sed -n 'w state.json' in.txt",
+		"gsed -n 'w " + state + "' in.txt",
+		`gawk 'BEGIN { print "{}" > "` + state + `" }'`,
+		"sort --out " + state + " in.txt",
+		`awk '{ print > f }' f=` + state + " in.txt",
+		`make go CMD="run ./cmd/harness push"`,
+		`git config alias.x.y '!bin/harness push'`,
+		`K=alias.p; git config "$K" '!bin/harness push'`,
+		`gh alias set p "$X"`,
+	} {
+		for _, role := range []policy.Role{policy.Main, policy.Other} {
+			assert.True(t, bash(role, line).Deny, "%s: %s", role, line)
+		}
+	}
+
+	for _, line := range []string{
+		`awk '{ print $1 > "internal/x.go" }' in.txt`,
+		"awk -f prog.awk in.txt",
+		"sed -f script.sed in.txt",
+		`gawk 'BEGIN { system("date") }'`,
+		`S='w x'; sed -n "$S" in.txt`,
+		`awk "$P" in.txt`,
+	} {
+		assert.True(t, bash(policy.Other, line).Deny, "an agent writes and runs through the editor and the shell: %s", line)
+	}
+
+	for _, line := range []string{
+		"git config --get-regexp alias.p x",
+		"git config --unset alias.p",
+		"git config --global --unset-all alias.p",
+		"sed -n '/warning/p' .cache/harness/runs/x/results.json",
+		"sed -n '1,40p' .git/sb-review/state.json",
+		"awk '$3 > 10' .cache/harness/x.json",
+		`sed -e ':a' -e 'N;$!ba' -e 's/\n/ /g' in.txt`,
+		`make go CMD="test ./cmd/harness/..."`,
+		`make go CMD="run ./cmd/surface --check"`,
+	} {
+		assert.False(t, bash(policy.Main, line).Deny, "%s: %v", line, bash(policy.Main, line).Reason)
+	}
+
+	assert.False(t, bash(policy.Tester, "sed -i '' 's/a/b/' internal/x_test.go").Deny, "BSD's sed -i '' edits the test")
+}

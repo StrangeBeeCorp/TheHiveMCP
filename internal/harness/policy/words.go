@@ -21,6 +21,8 @@ const (
 	subEdit    = "edit"
 	subSet     = "set"
 	optFile    = "--file"
+	optGet     = "--get"
+	subModule  = "submodule"
 	keyAlias   = "alias"
 	keyCmd     = "cmd"
 	keyBrowser = "browser"

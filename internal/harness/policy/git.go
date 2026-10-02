@@ -150,7 +150,7 @@ func gitLines(sub string, rest []string) []string {
 		return optionValues(rest, 'x', "--extcmd")
 	case sub == subGrep:
 		return optionValues(rest, 'O', "--open-files-in-pager")
-	case sub == "submodule" && len(rest) > 0 && rest[0] == "foreach":
+	case sub == subModule && len(rest) > 0 && rest[0] == "foreach":
 		return []string{strings.Join(skipOptions(rest[1:], nil), " ")}
 	case sub == "bisect" && len(rest) > 0 && rest[0] == "run":
 		return []string{strings.Join(rest[1:], " ")}
@@ -162,7 +162,7 @@ func gitLines(sub string, rest []string) []string {
 // transports reports whether a command that talks to a remote passes the program to run there or
 // here: --upload-pack, --receive-pack, --exec (or a prefix git accepts), clone -u.
 func transports(sub string, rest []string) bool {
-	if !slices.Contains([]string{"clone", "fetch", "pull", "ls-remote", "archive", "submodule"}, sub) {
+	if !slices.Contains([]string{"clone", "fetch", "pull", "ls-remote", "archive", subModule}, sub) {
 		return false
 	}
 
@@ -229,7 +229,7 @@ func (j *judge) gitAgent(sub string, rest []string) Decision {
 		}
 	case subConfig:
 		if !slices.ContainsFunc(rest, func(a string) bool {
-			return slices.Contains([]string{"--get", "--get-all", "--get-regexp", "--" + subList, "-l"}, a)
+			return slices.Contains([]string{optGet, "--get-all", "--get-regexp", "--" + subList, "-l"}, a)
 		}) {
 			return deny("git configuration is set by make dev-setup and does not change during a task")
 		}

@@ -5,10 +5,13 @@
 //
 // It reads a command line as the shell will run it, with the files its paths and patterns name
 // now, the files its commands' options name (sed's w, curl -o, find -fprint…), and the command
-// lines configuration will run later (a git or gh alias, a pager, an editor). What a program then
+// lines configuration will run later (a git or gh alias, a pager, an editor); what it cannot read
+// there (a computed key, an agent's sed or awk script from a file) it refuses. What a program then
 // does by its own logic is beyond it: a script, a recursive search of a directory above a hidden
 // one, a value read at run time into a variable the environment already exports, a program it has
-// no rule for that writes a file. The main session's scripts and computed paths are its own. The policy keeps an agent
+// no rule for that writes a file (a copy of the harness under another name among them), a sed or
+// awk program of the main session that builds a file name as it runs. The main session's scripts
+// and computed paths are its own. The policy keeps an agent
 // that follows its instructions in its lane; CI runs every gate again, and the person who merges
 // is the last check.
 package policy
