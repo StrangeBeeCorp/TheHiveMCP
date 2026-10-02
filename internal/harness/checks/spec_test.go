@@ -67,6 +67,8 @@ func TestSpecItemsAreWellFormed(t *testing.T) {
   - {id: bad, title: t, rule: r, status: active, gates: [unit]}
   - {id: AAA-001, title: t, rule: r, status: done, gates: [unit]}
   - {id: AAA-001, title: "", rule: r, status: active, gates: [unit]}
+  - {id: BBB-001, title: " ", rule: r, status: active, gates: [unit]}
+  - {id: CCC-001, title: t, rule: "", status: active, gates: [unit]}
 `)}
 
 	found, err := checks.SpecTraces(tree, specRegistry(t))
@@ -76,6 +78,8 @@ func TestSpecItemsAreWellFormed(t *testing.T) {
 	assert.Contains(t, msgs, "bad: an id is three capitals")
 	assert.Contains(t, msgs, "AAA-001: status is active or draft")
 	assert.Contains(t, msgs, "AAA-001: defined twice")
+	assert.Contains(t, msgs, "BBB-001: needs a title and a rule")
+	assert.Contains(t, msgs, "CCC-001: needs a title and a rule")
 }
 
 func TestTheRepositorySpecIsTraced(t *testing.T) {

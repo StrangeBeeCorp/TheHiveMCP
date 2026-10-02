@@ -21,8 +21,9 @@ import (
 // Verdict is the outcome of one gate.
 type Verdict string
 
-// The verdicts. SKIPPED means the change did not select the gate. INCOMPLETE is the verdict of a
-// run in which no gate failed but one could not run.
+// The verdicts. SKIPPED means the change did not select the gate, or gave its built-in check nothing
+// to judge (ErrSkipped). INCOMPLETE is the verdict of a run in which no gate failed but one could
+// not run.
 const (
 	Pass        Verdict = "PASS"
 	Fail        Verdict = "FAIL"
@@ -33,6 +34,10 @@ const (
 
 // ExitUnavailable is the exit code by which a gate command says it could not run here.
 const ExitUnavailable = 75
+
+// ErrSkipped is how a built-in check says the run gives it nothing to judge (no base to compare
+// with): its gate is SKIPPED, with the reason, never a pass.
+var ErrSkipped = errors.New("nothing to judge")
 
 const (
 	logPerm  = 0o600
@@ -122,7 +127,11 @@ func runGate(ctx context.Context, reg *registry.Registry, g registry.Gate, opts 
 
 func runBuiltin(ctx context.Context, g registry.Gate, opts Options, logPath string) Result {
 	findings, err := opts.Builtin(ctx, g.Builtin)
-	if err != nil {
+
+	switch {
+	case errors.Is(err, ErrSkipped):
+		return Result{Verdict: Skipped, Summary: err.Error()}
+	case err != nil:
 		return Result{Verdict: Fail, Summary: err.Error()}
 	}
 
@@ -217,7 +226,7 @@ func Failed(results []Result) bool {
 }
 
 // Overall is the verdict of a run: FAIL when a gate failed, else INCOMPLETE when a gate could not
-// run, else PASS. A skipped gate (not selected by the change) does not count.
+// run, else PASS. A skipped gate (not selected, or with nothing to judge) does not count.
 func Overall(results []Result) Verdict {
 	if Failed(results) {
 		return Fail

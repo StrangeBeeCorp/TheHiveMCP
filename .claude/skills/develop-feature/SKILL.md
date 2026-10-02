@@ -54,7 +54,7 @@ description:
 
 Each rule below is an item of `spec/items.yaml`, proven by the tests and gates it names (a test that proves one carries `// spec: <ID>` on the line above it).
 The analyzers gate (`internal/analyzers/`) checks the untrusted-data boundary, the hints, the cut flags and `testutils.Parallel`, and the canaries of
-`gates/canaries/` show each check catching its breach every night.
+`gates/canaries/` show each check catching its breach when they run (`bin/harness canaries`, the canaries gate of the nightly cadence).
 
 - **A silent success is a bug.** When TheHive answers 2xx but did nothing, the tool must fail and give a hint. Examples: a create that returns an empty list, or
   a filter on a field TheHive does not index (it returns zero rows and no error). The recent `### Fixed` entries in `CHANGELOG.md` are all of this kind. Return

@@ -43,6 +43,7 @@ items:
       - internal/utils/parsers_test.go:TestWrap_UnknownFieldIsWrapped
       - internal/utils/parsers_test.go:TestWrap_EscapesNestedMarkers
       - internal/analyzers/analyzers_test.go:TestUntrustedFindsEntityTextInServerStrings
+      - internal/utils/trusted_analyzer_test.go:TestTheAnalyzerTrustsWhatTheWrapperTrusts
     gates: [analyzers]
 
   - id: UNT-002
@@ -53,6 +54,7 @@ items:
       NewToolError, NewToolErrorf, Hint and Hintf never receive an entity's free text.
     tests:
       - internal/analyzers/analyzers_test.go:TestUntrustedFindsEntityTextInServerStrings
+      - internal/utils/trusted_analyzer_test.go:TestTheAnalyzerTrustsWhatTheWrapperTrusts
     gates: [analyzers]
 
   - id: PRM-001
@@ -124,6 +126,7 @@ items:
       them has an entry under ## [Unreleased] in CHANGELOG.md.
     tests:
       - internal/surface/surface_test.go:TestTakeReadsTheServersSurface
+      - cmd/harness/changelog_test.go:TestTheChangelogGateWantsAnUnreleasedEntry
     gates: [surface, tokens, changelog]
 
   - id: SPC-001

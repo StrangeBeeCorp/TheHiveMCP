@@ -2,7 +2,9 @@ package analyzers
 
 import (
 	"go/ast"
+	"go/constant"
 	"go/types"
+	"strconv"
 	"strings"
 
 	"golang.org/x/tools/go/analysis"
@@ -117,6 +119,8 @@ func (t taint) text(pass *analysis.Pass, arg ast.Expr) string {
 			}
 		case *ast.SelectorExpr:
 			found = entityField(pass, e)
+		case *ast.IndexExpr:
+			found = rowField(pass, e)
 		}
 
 		return true
@@ -125,7 +129,9 @@ func (t taint) text(pass *analysis.Pass, arg ast.Expr) string {
 	return found
 }
 
-// entityField names a field or getter of a TheHive entity that holds free text, or "".
+// entityField names a field or a method of a TheHive entity that can hold text the wrapper does
+// not trust, or "": a getter is judged by the field it reads, and any other method returning text
+// (ToMap) as entity text.
 func entityField(pass *analysis.Pass, sel *ast.SelectorExpr) string {
 	s := pass.TypesInfo.Selections[sel]
 	if s == nil {
@@ -137,8 +143,40 @@ func entityField(pass *analysis.Pass, sel *ast.SelectorExpr) string {
 		return ""
 	}
 
-	if freeText[fieldName(sel.Sel.Name)] {
-		return named.Obj().Name() + "." + sel.Sel.Name
+	held := s.Type()
+	if sig, ok := held.(*types.Signature); ok {
+		if sig.Results().Len() == 0 {
+			return ""
+		}
+
+		held = sig.Results().At(0).Type()
+	}
+
+	_, method := s.Obj().(*types.Func)
+	getter := !method || strings.HasPrefix(sel.Sel.Name, "Get")
+
+	if !carriesText(held) || (getter && trusted[jsonName(named, sel.Sel.Name)]) {
+		return ""
+	}
+
+	return named.Obj().Name() + "." + sel.Sel.Name
+}
+
+// rowField names the value of a row (a map with string keys, as search and manage results are)
+// read by a key the wrapper does not trust, or by a key computed at run time, or "".
+func rowField(pass *analysis.Pass, ix *ast.IndexExpr) string {
+	m, ok := pass.TypesInfo.TypeOf(ix.X).Underlying().(*types.Map)
+	if !ok || !carriesText(m.Key()) || !carriesText(m.Elem()) {
+		return ""
+	}
+
+	key := pass.TypesInfo.Types[ix.Index]
+	if key.Value == nil || key.Value.Kind() != constant.String {
+		return "a row read by a computed key"
+	}
+
+	if name := constant.StringVal(key.Value); !trusted[name] {
+		return "row[" + strconv.Quote(name) + "]"
 	}
 
 	return ""

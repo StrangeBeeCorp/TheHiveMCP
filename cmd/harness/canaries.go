@@ -48,6 +48,12 @@ func (e env) canaries(ctx context.Context, args []string, out io.Writer) error {
 		return fmt.Errorf("load the canaries: %w", err)
 	}
 
+	for _, id := range only {
+		if !slices.ContainsFunc(list, func(c checks.Canary) bool { return c.ID == id }) {
+			return usageError{fmt.Sprintf("no canary %q in %s", id, checks.CanariesPath)}
+		}
+	}
+
 	r := canaryRun{env: e, out: out, baseline: map[string]int{}}
 
 	var outcomes []canaryOutcome
@@ -204,8 +210,15 @@ func (r *canaryRun) teardown(ctx context.Context) {
 	_ = cmd.Run()
 }
 
+// report prints each canary's outcome. A run in which a canary escaped fails; one in which a
+// canary could not run, or none ran, is incomplete.
 func report(outcomes []canaryOutcome, out io.Writer) error {
 	failed, incomplete := 0, 0
+
+	if len(outcomes) == 0 {
+		_, _ = fmt.Fprintln(out, "no canary ran")
+		return errIncomplete
+	}
 
 	_, _ = fmt.Fprintln(out)
 

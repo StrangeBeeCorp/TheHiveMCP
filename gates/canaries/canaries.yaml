@@ -1,8 +1,8 @@
 # Known-bad patches, one per check: applied to HEAD, each one must make the gate it names fail.
 # bin/harness canaries applies each in a scratch worktree and runs that gate (the canaries gate,
-# nightly). A canary its gate lets through means the check stopped working; one that no longer
-# applies must be rewritten against the code it breaks. A canary of the integration gate needs its
-# own TheHive stack: it runs in CI, or locally with --integration.
+# of the nightly cadence). A canary its gate lets through means the check stopped working; one that
+# no longer applies must be rewritten against the code it breaks. A canary of the integration gate
+# needs its own TheHive stack: it runs with --integration, the default when $CI is set.
 #
 # The Tester and the Coder cannot read this directory: they implement from the spec, not from the
 # breaches the gates are known to catch.

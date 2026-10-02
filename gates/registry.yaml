@@ -204,13 +204,16 @@ gates:
     suites: [surface]
     budget_s: 20
     static: true
-    blocks: a change to baselines/surface/ (what the model reads) with no change to CHANGELOG.md
+    blocks: a change to baselines/surface/ (what the model reads) with no new entry under ## [Unreleased] of CHANGELOG.md
 
+  # A tool's schema is also built from the code around its definition (validation.go's enums, the
+  # constants of internal/types, the date fields of internal/utils): the tools suite, which the
+  # trust and server suites imply, selects the surface gates too.
   - id: surface
     runs: make go CMD="run ./cmd/surface --check"
     docker: true
     cadence: [stop, pr, ci]
-    suites: [surface, server]
+    suites: [surface, tools]
     budget_s: 300
     blocks: >-
       a tool, a description, a schema or a resource text that differs from baselines/surface/
@@ -220,7 +223,7 @@ gates:
     runs: make go CMD="run ./cmd/surface --budgets"
     docker: true
     cadence: [pr, ci]
-    suites: [surface]
+    suites: [surface, tools]
     budget_s: 300
     blocks: the tools or the static resources costing more tokens than gates/budgets.yaml allows
 

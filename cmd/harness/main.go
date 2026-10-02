@@ -29,6 +29,7 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gatesdoc"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/registry"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/runner"
 )
 
 const (
@@ -251,7 +252,7 @@ func (e env) builtin(ctx context.Context, name string) ([]string, error) {
 	case builtinSpec:
 		found, err = checks.SpecTraces(tree, e.reg)
 	case builtinChangelog:
-		found = checks.Changelog(e.changed, e.base == "" || gitx.HasPath(ctx, e.root, e.base, checks.SurfaceSummary))
+		found, err = e.changelog(ctx)
 	default:
 		return nil, fmt.Errorf("unknown builtin %q", name)
 	}
@@ -286,11 +287,25 @@ func dockerUp(ctx context.Context) bool {
 }
 
 func (e env) check(ctx context.Context, args []string, out io.Writer) error {
-	if len(args) != 1 || !isBuiltin(args[0]) {
-		return usageError{"usage: harness check structure|public-safety|docs|go-source|branch|spec|changelog"}
+	if len(args) == 0 || !isBuiltin(args[0]) || (len(args) > 1 && args[0] != builtinChangelog) {
+		return usageError{"usage: harness check structure|public-safety|docs|go-source|branch|spec|changelog [--base REF]"}
+	}
+
+	if args[0] == builtinChangelog {
+		var err error
+
+		e, err = e.changeSet(ctx, args[1:])
+		if err != nil {
+			return err
+		}
 	}
 
 	lines, err := e.builtin(ctx, args[0])
+	if errors.Is(err, runner.ErrSkipped) {
+		_, _ = fmt.Fprintf(out, "%s: not judged: %v\n", args[0], err)
+		return errIncomplete
+	}
+
 	if err != nil {
 		return err
 	}

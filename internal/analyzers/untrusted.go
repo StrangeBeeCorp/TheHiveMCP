@@ -9,6 +9,8 @@ package analyzers
 import (
 	"go/ast"
 	"go/types"
+	"reflect"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -27,13 +29,39 @@ const (
 	clientPath = "github.com/StrangeBeeCorp/thehive4go"
 )
 
-// freeText are the entity fields anyone with write access to TheHive can fill: they are
-// [UNTRUSTED_DATA] wherever they appear, so they never go into a string the server marks as its
-// own. Ids, statuses and labels from sealed enums are not here.
-var freeText = map[string]bool{
-	"title": true, "description": true, "summary": true, "message": true, "data": true, "tags": true,
-	"name": true, "displayName": true, "report": true, "content": true, "comment": true, "text": true,
-	"body": true, "details": true, "label": true, "value": true, "filename": true, "customFields": true,
+// trusted are the entity fields, by their JSON names, whose values the wrapper lets reach the model
+// unmarked: trustedFields and dateFields of internal/utils/parsers.go, which a test there keeps
+// equal to this list. Every other entity field that can hold text is [UNTRUSTED_DATA], as the
+// wrapper treats it (deny by default), so it never goes into a string the server marks as its own.
+var trusted = map[string]bool{
+	"_id": true, "_type": true, "_createdBy": true, "_updatedBy": true, "_kind": true, "id": true, "caseId": true,
+	"patternId": true, "organisationId": true, "attachmentId": true, "rootId": true, "requestId": true, "objectId": true,
+	"analyzerId": true, "responderId": true, "cortexId": true, "cortexJobId": true, "login": true, "assignee": true,
+	"owner": true, "createdBy": true, "updatedBy": true, "status": true, "stage": true, "impactStatus": true,
+	"dataType": true, "objectType": true, "dataTypeList": true, "cortexIds": true, "severityLabel": true,
+	"tlpLabel": true, "papLabel": true, "userPermissions": true, "tactic": true, "tacticLabel": true, "tactics": true,
+	"patternType": true, "patternName": true, "hashes": true, "operation": true, "entityType": true,
+	"templateId": true, "caseIds": true, "commentId": true, "entityId": true, "entityIds": true, "jobId": true,
+	"actionId": true, "targetId": true, "pendingJobIds": true,
+	// The date fields, which the wrapper rewrites to a formatted date rather than wraps.
+	"date": true, "startDate": true, "endDate": true, "sightedAt": true, "dueDate": true, "occurDate": true,
+	"lastSyncDate": true, "_createdAt": true, "_updatedAt": true, "newDate": true, "inProgressDate": true,
+	"closedDate": true, "importedDate": true, "alertDate": true, "alertNewDate": true, "alertInProgressDate": true,
+	"alertImportedDate": true, "createdAt": true, "updatedAt": true, "lastSuccessDate": true, "lastErrorDate": true,
+	"validFrom": true, "expiresAt": true, "includeInTimeline": true,
+}
+
+// TrustedFields are the JSON names the analyzer trusts, sorted: the test in internal/utils compares
+// them with the wrapper's.
+func TrustedFields() []string {
+	names := make([]string, 0, len(trusted))
+	for name := range trusted {
+		names = append(names, name)
+	}
+
+	slices.Sort(names)
+
+	return names
 }
 
 // Untrusted reports entity free text passed to the strings the server writes itself: the
@@ -97,14 +125,36 @@ func sinkOf(pass *analysis.Pass, call *ast.CallExpr) string {
 	return ""
 }
 
-// fieldName turns a client field or getter (Title, GetTitle, GetTitleOk) into its JSON name.
-func fieldName(selector string) string {
-	name := strings.TrimSuffix(strings.TrimPrefix(selector, "Get"), "Ok")
-	if name == "" {
+// jsonName is the JSON name of a client field or getter (Title, GetTitle, GetTitleOk): the json tag
+// of the struct field it reads, else the generator's convention (UnderscoreId is _id, Title is
+// title).
+func jsonName(named *types.Named, selector string) string {
+	goName := strings.TrimSuffix(strings.TrimPrefix(selector, "Get"), "Ok")
+	if goName == "" {
 		return ""
 	}
 
-	r := []rune(name)
+	if st, ok := named.Underlying().(*types.Struct); ok {
+		for i := range st.NumFields() {
+			if st.Field(i).Name() != goName {
+				continue
+			}
+
+			if tag, _, _ := strings.Cut(reflect.StructTag(st.Tag(i)).Get("json"), ","); tag != "" && tag != "-" {
+				return tag
+			}
+		}
+	}
+
+	if rest, ok := strings.CutPrefix(goName, "Underscore"); ok && rest != "" {
+		return "_" + lowerFirst(rest)
+	}
+
+	return lowerFirst(goName)
+}
+
+func lowerFirst(s string) string {
+	r := []rune(s)
 	r[0] = unicode.ToLower(r[0])
 
 	return string(r)
