@@ -29,9 +29,30 @@ if [[ -f "$REPO_ROOT/checkmake.ini" ]]; then
   flag=(--config=/checkmake.ini)
 fi
 
-app_paths=()
-for f in "${mk_paths[@]}"; do app_paths+=("/app/$f"); done
+# A fragment the Makefile includes (*.mk, such as scripts/harness.mk) gets the same rules but
+# minphony: the all, clean and test targets that rule asks for are the including Makefile's.
+whole=() parts=()
+for f in "${mk_paths[@]}"; do
+  case "$f" in
+    *.mk) parts+=("/app/$f") ;;
+    *) whole+=("/app/$f") ;;
+  esac
+done
 
-exec docker run --rm --entrypoint /checkmake \
-  -v "$REPO_ROOT":/app "${cfg[@]}" -w /app "$CHECKMAKE_IMAGE" \
-  "${flag[@]}" "${app_paths[@]}"
+status=0
+if [[ ${#whole[@]} -gt 0 ]]; then
+  docker run --rm --entrypoint /checkmake -v "$REPO_ROOT":/app ${cfg[@]+"${cfg[@]}"} -w /app "$CHECKMAKE_IMAGE" \
+    ${flag[@]+"${flag[@]}"} "${whole[@]}" || status=1
+fi
+if [[ ${#parts[@]} -gt 0 ]]; then
+  mkdir -p "$REPO_ROOT/.cache"
+  part_cfg="$(mktemp "$REPO_ROOT/.cache/checkmake-fragment.XXXXXX")"
+  trap 'rm -f "$part_cfg"' EXIT
+  {
+    [[ -f "$REPO_ROOT/checkmake.ini" ]] && cat "$REPO_ROOT/checkmake.ini"
+    printf '\n[minphony]\ndisabled = true\n'
+  } >"$part_cfg"
+  docker run --rm --entrypoint /checkmake -v "$REPO_ROOT":/app -v "$part_cfg":/checkmake.ini:ro -w /app "$CHECKMAKE_IMAGE" \
+    --config=/checkmake.ini "${parts[@]}" || status=1
+fi
+exit "$status"

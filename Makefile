@@ -122,7 +122,7 @@ lint-makefile: ## Check the Makefile's syntax and hygiene (checkmake) ##@ make l
 	@echo $(BGreen)----------------------$(Color_Off)
 	@make --dry-run -n all > /dev/null || exit 1
 	@echo "Syntax OK"
-	@./scripts/lint-makefile.sh Makefile || exit 1
+	@./scripts/lint-makefile.sh Makefile scripts/harness.mk || exit 1
 	@echo "checkmake OK"
 
 .PHONY: fmt
@@ -159,7 +159,7 @@ security: vulncheck sast dockerlint dockersec secrets ## Run every security chec
 # No leading `@`: recipes prefix their own (help/help-json) so this stays pure
 # command text usable inside `$$(...)` (help-xml captures it to guard on empty).
 define HELP_PARSE
-	grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk ' \
+	grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk ' \
 	{ \
 		target = $$0; sub(/:.*/, "", target); \
 		rest = $$0; sub(/^[^#]*## /, "", rest); \
@@ -501,24 +501,8 @@ dev-setup: ## Point git at the tracked .githooks (pre-commit/pre-push lint gate)
 	@echo "git hooks enabled: pre-commit -> make pre-commit, pre-push -> lint.sh --all"
 	@echo "Bypass either with --no-verify; the authoritative gate stays CI."
 
-# The harness: every target runs bin/harness, which builds cmd/harness in the pinned Go image and
-# runs the gates of gates/registry.yaml (listed in docs/reference/gates.md).
-.PHONY: check-fast
-check-fast: ## The fast loop: the gates the changed paths select, about a minute ##@ make check-fast
-	@bin/harness run --cadence stop
-
-.PHONY: pre-commit
-pre-commit: ## What the git pre-commit hook runs: the commit gates on the staged files ##@ make pre-commit
-	@bin/harness run --cadence commit --staged
-
-.PHONY: gate
-gate: ## Run one gate now, whatever changed (list: docs/reference/gates.md) ##@ make gate ID=<gate> [CADENCE=pr]
-	@test -n "$(ID)" || { echo 'usage: make gate ID=<gate> [CADENCE=pr]'; exit 2; }
-	@bin/harness run --cadence $(or $(CADENCE),pr) --gate $(ID) --force
-
-.PHONY: harness-docs
-harness-docs: ## Regenerate docs/reference/gates.md from gates/registry.yaml ##@ make harness-docs
-	@bin/harness docs
+# The harness's targets (check-fast, pre-commit, gate, ...): see that file.
+include scripts/harness.mk
 
 # Dynamic build target for any platform in RELEASE_TARGETS
 build-%: pre

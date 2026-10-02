@@ -8,7 +8,7 @@ structure:
   # What counts as code: a pattern with a slash matches the path, one without the file name.
   code_files: ["*.go", "*.sh", "*.py", "*.js", "*.mjs", "*.ts", "*.mk", Makefile, Dockerfile, "Dockerfile.*", ".githooks/*", "bin/*"]
   # The files that were already over the limit when the gate arrived (2026-10-01), capped at their
-  # size then (the Makefile with the harness targets that came with the gate). A cap may only go
+  # size then (the Makefile with the line that includes scripts/harness.mk). A cap may only go
   # down: the gate asks for a lower cap when a file shrinks, and for its removal once the file is
   # under the limit.
   caps:
@@ -19,7 +19,7 @@ structure:
     internal/resources/dynamic_resources.go: 689
     scripts/lint.sh: 677
     internal/utils/parsers.go: 635
-    Makefile: 613
+    Makefile: 597
     internal/utils/parsers_test.go: 594
     internal/tools/manage/models.go: 586
     bootstrap/http_test.go: 580

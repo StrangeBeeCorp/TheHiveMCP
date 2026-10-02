@@ -42,6 +42,7 @@ suites:
       - .githooks/**
       - .github/**
       - Makefile
+      - scripts/harness.mk
       - scripts/lint.sh
       - scripts/fmt.sh
       - scripts/lint-makefile.sh
