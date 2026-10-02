@@ -97,7 +97,7 @@ func BenchmarkSearchEntitiesCall(b *testing.B) {
 
 	request := mcp.CallToolRequest{}
 	request.Params.Name = "search-entities"
-	request.Params.Arguments = map[string]any{"entity-type": "alert", "limit": 50}
+	request.Params.Arguments = map[string]any{paramEntityType: "alert", "limit": 50}
 
 	b.ReportAllocs()
 

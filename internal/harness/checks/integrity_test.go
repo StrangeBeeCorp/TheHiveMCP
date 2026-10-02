@@ -104,6 +104,36 @@ func TestATestFileLeftOutOfTheBuildIsRefused(t *testing.T) {
 	assert.Empty(t, integrity(t, "//go:build ignore\n\n"+baseTest, nil, map[string]string{suiteFile + ":build": "a tool, not a test"}))
 }
 
+// A test file CI does not build (linux/amd64, no cgo, no tags) is refused, new or changed; a
+// constraint that only leaves other platforms out is not.
+func TestATestFileCIWouldNotBuildIsRefused(t *testing.T) {
+	t.Parallel()
+
+	for name, c := range map[string]struct {
+		constraint string
+		refused    bool
+	}{
+		"ignored":                 {"//go:build ignore", true},
+		"another system":          {"//go:build darwin", true},
+		"a tag CI does not set":   {"//go:build integration", true},
+		"cgo, which CI turns off": {"//go:build cgo", true},
+		"unix":                    {"//go:build unix", false},
+		"linux or darwin":         {"//go:build linux || darwin", false},
+		"a Go release":            {"//go:build go1.21", false},
+	} {
+		changed := integrity(t, c.constraint+"\n\n"+baseTest, nil, nil)
+		added := integrity(t, baseTest, checks.MemTree{"pkg/new_test.go": []byte(c.constraint + "\n\npackage pkg\n")}, nil)
+
+		if c.refused {
+			assert.Len(t, changed, 1, "a changed file, %s", name)
+			assert.Len(t, added, 1, "a new file, %s", name)
+		} else {
+			assert.Empty(t, changed, "a changed file, %s", name)
+			assert.Empty(t, added, "a new file, %s", name)
+		}
+	}
+}
+
 func TestANewTestMainIsRefused(t *testing.T) {
 	t.Parallel()
 

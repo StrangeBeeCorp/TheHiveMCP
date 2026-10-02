@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
+	buildconstraint "go/build/constraint"
 	"go/parser"
 	"go/token"
 	"io/fs"
@@ -74,7 +75,8 @@ func Integrity(tree Tree, changed []string, before func(string) ([]byte, bool), 
 }
 
 // compareFile adds a changed test file's shapes, at the base and now, and refuses a build
-// constraint it gained or changed: one can take its tests out of the build.
+// constraint that takes a test file out of CI's build, where the gates run it: on a new file, or one
+// CI built before. A constraint that only leaves other platforms out (unix) takes nothing away.
 func compareFile(tree Tree, p string, before func(string) ([]byte, bool), limits IntegrityLimits, was, now map[string]testShape) ([]Finding, error) {
 	old, existed := before(p)
 	if existed {
@@ -92,8 +94,9 @@ func compareFile(tree Tree, p string, before func(string) ([]byte, bool), limits
 
 	addShapes(now, p, data)
 
-	if c := constraint(data); c != "" && (!existed || c != constraint(old)) && !allowed(limits, p, "build") {
-		return []Finding{{Path: p, Msg: "its build constraint is now `" + c + "`, which can take its tests out of the build: " + allowHint}}, nil
+	if !ciBuilds(data) && (!existed || ciBuilds(old)) && !allowed(limits, p, "build") {
+		return []Finding{{Path: p, Msg: "its build constraint is now `" + constraint(data) + "`, which takes its tests out of CI's build " +
+			"(linux/amd64, no cgo, no tags): " + allowHint}}, nil
 	}
 
 	return nil, nil
@@ -117,6 +120,26 @@ func newTestMains(was, now map[string]testShape, limits IntegrityLimits) []Findi
 func allowed(limits IntegrityLimits, file, what string) bool {
 	_, ok := limits.Allow[file+":"+what]
 	return ok
+}
+
+// ciTags are the build tags CI's tests satisfy: GOOS linux, GOARCH amd64, the gc compiler, and the
+// Go releases (go1.N). CGO_ENABLED is 0 there, and no custom tag is set.
+var ciTags = map[string]bool{"linux": true, "amd64": true, "unix": true, "gc": true}
+
+// ciBuilds reports whether CI's build includes a Go file. A constraint go cannot read builds
+// nothing.
+func ciBuilds(src []byte) bool {
+	line := constraint(src)
+	if line == "" {
+		return true
+	}
+
+	expr, err := buildconstraint.Parse(line)
+	if err != nil {
+		return false
+	}
+
+	return expr.Eval(func(tag string) bool { return ciTags[tag] || strings.HasPrefix(tag, "go1.") })
 }
 
 // constraint is a Go file's build constraint (//go:build), or "".
