@@ -38,8 +38,9 @@ gates:
   - {id: no-docker, runs: "echo no docker here; exit 75", cadence: [nightly], suites: ["*"], budget_s: 10, blocks: x}
 `
 
-// glueLimits refuses a *.local file in the repository: the safety gate's one rule.
-const glueLimits = "public_safety: {forbidden_paths: [\"*.local\"]}\n"
+// glueLimits refuses a *.local file in the repository, the safety gate's one rule, and sets the
+// hooks' red-round limit the limits file must have.
+const glueLimits = "public_safety: {forbidden_paths: [\"*.local\"]}\nhooks: {max_red_rounds: 6}\n"
 
 // checkout is a repository whose main branch has the registry above, a doc and a Go file, with
 // a work branch checked out. It becomes the working directory, where the harness finds its
@@ -64,7 +65,7 @@ func harness(t *testing.T, args ...string) (string, error) {
 
 	var out strings.Builder
 
-	err := dispatch(t.Context(), args, &out)
+	err := dispatch(t.Context(), args, strings.NewReader(""), &out)
 
 	return out.String(), err
 }
