@@ -197,6 +197,16 @@ gates:
       a finding of golangci-lint, shellcheck, markdownlint, yamllint, hadolint, checkmake or
       actionlint, or a failing unit test (lint.sh runs go test -short when Go files are in scope)
 
+  - id: workflows
+    runs: make test-workflows
+    docker: true
+    cadence: [stop, pr, ci]
+    suites: [everything]
+    budget_s: 120
+    blocks: >-
+      a failing test of a Claude workflow (.claude/workflows/*.test.mjs), which runs it against
+      scripted agents: the order of the roles, what each is told, how the duel ends
+
   - id: sast
     runs: make sast
     docker: true

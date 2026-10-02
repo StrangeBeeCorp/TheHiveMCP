@@ -63,6 +63,9 @@ jobs:
       - name: Lint and unit tests
         run: bin/harness run --cadence ci --gate lint
 
+      - name: Workflow tests
+        run: bin/harness run --cadence ci --gate workflows
+
       - name: Run SAST
         run: bin/harness run --cadence ci --gate sast
 

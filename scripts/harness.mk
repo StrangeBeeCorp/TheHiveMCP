@@ -22,3 +22,10 @@ harness-docs: ## Regenerate docs/reference/gates.md from gates/registry.yaml ##@
 .PHONY: push
 push: ## Push this branch to origin: never main, never the public mirror ##@ make push [FORCE=1]
 	@bin/harness push $(if $(FORCE),--force)
+
+# The workflows' tests (.claude/workflows/*.test.mjs) run in Node, which has all they need.
+NODE_IMAGE := node:22.23.3-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402
+
+.PHONY: test-workflows
+test-workflows: ## The Claude workflows' tests, against scripted agents (no model runs) ##@ make test-workflows
+	@docker run -i --rm -v $(MOUNT_APP):ro -w /app $(NODE_IMAGE) node --test '.claude/workflows/*.test.mjs' && echo '✓ workflow tests passed'

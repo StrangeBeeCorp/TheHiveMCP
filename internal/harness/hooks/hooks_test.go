@@ -3,6 +3,7 @@ package hooks_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -88,6 +89,54 @@ func TestPostToolUseSendsFindingsBack(t *testing.T) {
 
 	clean := hooks.PostToolUse(root, in, func(string, []byte) ([]string, error) { return nil, nil })
 	assert.Empty(t, clean.Stdout)
+}
+
+// The edit check reads the file an edit names, relative or absolute, and nothing outside the
+// checkout or gone; a check that cannot run says so without blocking.
+func TestPostToolUseChecksTheFileTheEditNames(t *testing.T) {
+	t.Parallel()
+
+	const (
+		pkgA     = "pkg/a.go"
+		editTool = "Edit"
+	)
+
+	root := t.TempDir()
+	for _, name := range []string{pkgA, "..notes.md", "nb.ipynb"} {
+		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(root, name), []byte("x\n"), 0o600))
+	}
+
+	var seen []string
+
+	record := func(rel string, _ []byte) ([]string, error) {
+		seen = append(seen, rel)
+		return nil, nil
+	}
+	edit := func(key, p string) hooks.Input {
+		return hooks.Input{ToolName: editTool, ToolInput: map[string]any{key: p}}
+	}
+
+	for _, in := range []hooks.Input{
+		edit(filePath, pkgA),
+		edit(filePath, filepath.Join(root, pkgA)),
+		edit(filePath, "..notes.md"),
+		edit("notebook_path", "nb.ipynb"),
+		edit(filePath, filepath.Join(root, "..", "elsewhere.go")),
+		edit(filePath, "/etc/hosts"),
+		edit(filePath, "pkg/gone.go"),
+		{ToolName: "Edit", ToolInput: map[string]any{}},
+	} {
+		assert.Empty(t, hooks.PostToolUse(root, in, record).Stdout)
+	}
+
+	assert.Equal(t, []string{pkgA, pkgA, "..notes.md", "nb.ipynb"}, seen, "inside the checkout and on disk only")
+
+	broken := hooks.PostToolUse(root, edit(filePath, pkgA), func(string, []byte) ([]string, error) {
+		return nil, errors.New("no gofumpt here")
+	})
+	assert.NotEqual(t, "block", decode(t, broken)["decision"], "a check that cannot run does not block")
+	assert.Contains(t, broken.Stdout, "the file check could not run: no gofumpt here")
 }
 
 func TestDecideAppliesTheRedRoundRule(t *testing.T) {

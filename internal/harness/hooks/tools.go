@@ -62,11 +62,17 @@ func cwdIn(root, cwd string) string {
 	}
 
 	rel, err := filepath.Rel(root, cwd)
-	if err != nil || strings.HasPrefix(rel, "..") {
+	if err != nil || outside(rel) {
 		return root
 	}
 
 	return cwd
+}
+
+// outside reports whether a path relative to the checkout leaves it: "..", or under it. A name
+// that only starts with two dots (..notes.md) is inside.
+func outside(rel string) bool {
+	return rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // FileCheck returns what is wrong with one file, for the edit cadence.
@@ -85,7 +91,7 @@ func PostToolUse(root string, in Input, check FileCheck) Output {
 	}
 
 	rel, err := filepath.Rel(root, p)
-	if err != nil || strings.HasPrefix(rel, "..") {
+	if err != nil || outside(rel) {
 		return Output{}
 	}
 
