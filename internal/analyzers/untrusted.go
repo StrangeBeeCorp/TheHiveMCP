@@ -38,7 +38,8 @@ var freeText = map[string]bool{
 
 // Untrusted reports entity free text passed to the strings the server writes itself: the
 // TrustedString conversion, Trustedf, the tool errors and their hints. Those skip the
-// [UNTRUSTED_DATA] wrapper, so a title there could carry instructions to the model unmarked.
+// [UNTRUSTED_DATA] wrapper, so a title there could carry instructions to the model unmarked. The
+// text is followed through local variables (taint), not through calls.
 var Untrusted = &analysis.Analyzer{
 	Name:     "untrusted",
 	Doc:      "entity free text never reaches TrustedString, Trustedf, NewToolError(f) or Hint(f) (UNT-001, UNT-002)",
@@ -48,6 +49,7 @@ var Untrusted = &analysis.Analyzer{
 
 func runUntrusted(pass *analysis.Pass) (any, error) {
 	insp, _ := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
+	text := tainted(pass)
 
 	insp.Preorder([]ast.Node{(*ast.CallExpr)(nil)}, func(n ast.Node) {
 		call, _ := n.(*ast.CallExpr)
@@ -58,7 +60,7 @@ func runUntrusted(pass *analysis.Pass) (any, error) {
 		}
 
 		for _, arg := range call.Args {
-			if field := entityText(pass, arg); field != "" {
+			if field := text.text(pass, arg); field != "" {
 				pass.Reportf(arg.Pos(), "%s reaches %s: entity text in a string the server writes itself skips the "+
 					"[UNTRUSTED_DATA] boundary (UNT-001, UNT-002); quote ids and statuses only", field, sink)
 			}
@@ -93,44 +95,6 @@ func sinkOf(pass *analysis.Pass, call *ast.CallExpr) string {
 	}
 
 	return ""
-}
-
-// entityText finds, in an argument, a field or getter of a TheHive entity that holds free text.
-func entityText(pass *analysis.Pass, arg ast.Expr) string {
-	found := ""
-
-	ast.Inspect(arg, func(n ast.Node) bool {
-		if found != "" {
-			return false
-		}
-
-		if _, isFunc := n.(*ast.FuncLit); isFunc {
-			return false
-		}
-
-		sel, ok := n.(*ast.SelectorExpr)
-		if !ok {
-			return true
-		}
-
-		s := pass.TypesInfo.Selections[sel]
-		if s == nil {
-			return true
-		}
-
-		named := namedOf(s.Recv())
-		if named == nil || named.Obj().Pkg() == nil || !strings.HasPrefix(named.Obj().Pkg().Path(), clientPath) {
-			return true
-		}
-
-		if freeText[fieldName(sel.Sel.Name)] {
-			found = named.Obj().Name() + "." + sel.Sel.Name
-		}
-
-		return true
-	})
-
-	return found
 }
 
 // fieldName turns a client field or getter (Title, GetTitle, GetTitleOk) into its JSON name.

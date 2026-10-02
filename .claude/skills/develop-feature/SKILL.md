@@ -61,8 +61,8 @@ The analyzers gate (`internal/analyzers/`) checks the untrusted-data boundary, t
   `tools.NewToolError(...).Hint(...)`. Error messages and hints are written by us, so they reach the model unwrapped: never put entity text in them.
 - **Say what was cut.** Truncated or paged output must say so. `search-entities` returns `hasMore` and `nextOffset`, and the automation catalogs return
   `truncated`. A full page must never look like the complete result.
-- **Support TheHive 5.5 to 5.8.** A feature that exists only on a later version must be gated by version, and its docs must say since which one (for example
-  "5.6+").
+- **Support TheHive 5.5 to 5.8.** A feature that exists only on a later version must be gated by version, or left out on older ones without breaking anything (as the `filterable`
+  annotation is), and its docs must say since which one (for example "5.6+").
 - **Keep the filter doc's layout.** `internal/resources/docs/filter-dsl.md` is excluded from the markdown formatters because its compact JSON lines are what the
   model sees. Do not reflow it.
 - **Keep text and code in sync.** Tool descriptions and `facts/*.txt` must list only fields that are actually filterable, and only operations that actually

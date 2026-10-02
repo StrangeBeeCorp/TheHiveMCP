@@ -4,6 +4,7 @@ package thehive
 type OutputAlert struct {
 	Title  string
 	Status string
+	Tags   []string
 }
 
 func (a *OutputAlert) GetTitle() string            { return a.Title }

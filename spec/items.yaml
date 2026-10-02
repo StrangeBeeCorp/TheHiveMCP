@@ -14,6 +14,7 @@ items:
       When TheHive answers 2xx but did nothing (a create that returns an empty list, a filter on a
       field TheHive does not index), the tool fails with a hint instead of reporting success.
     tests:
+      - bootstrap/silent_success_test.go:TestACreateTheHiveAnswersWithNothingIsAnError
       - internal/tools/manage/manage_test.go:TestManageCreateObservableWithoutDataIsAnError
       - internal/tools/search/validation_test.go:TestValidateParamsRejectsPatternPlatformFilter
       - internal/tools/execute_automation/wait_handler_test.go:TestWaitForJobsFailsWhenNoJobCanBeRead
@@ -100,9 +101,10 @@ items:
     status: active
     rule: >-
       Every tool works on TheHive 5.5 and 5.6 (CI runs the integration suite on both). A feature
-      that exists only on 5.6 is gated by version, and its documentation says "5.6+".
+      that exists only on 5.6 is gated by version, or left out on 5.5 without breaking anything, and
+      its documentation says "5.6+".
     tests:
-      - internal/tools/resource/resource_test.go:TestGetResourcePatternSchemaMatchesDescribe
+      - bootstrap/versions_test.go:TestA56OnlyAnnotationIsLeftOutOn55AndNothingBreaks
     gates: [integration]
 
   - id: SRF-001

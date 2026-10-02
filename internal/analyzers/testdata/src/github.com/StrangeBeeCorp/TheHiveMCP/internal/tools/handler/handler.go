@@ -23,6 +23,6 @@ func failures(a *thehive.OutputAlert) []*tools.ToolError {
 		tools.NewToolErrorf("alert %s not found", a.GetUnderscoreId()),
 		tools.NewToolErrorf("alert %q not found", a.GetTitle()), // want `OutputAlert.GetTitle reaches tools.NewToolErrorf`
 		tools.NewToolError("no alert").Hintf("try %s", a.Title), // want `OutputAlert.Title reaches ToolError.Hintf`
-		tools.NewToolError("no alert").Hint(*title),
+		tools.NewToolError("no alert").Hint(*title),             // want `OutputAlert.GetTitleOk \(through title\) reaches ToolError.Hint`
 	}
 }

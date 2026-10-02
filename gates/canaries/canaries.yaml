@@ -91,3 +91,10 @@ canaries:
     patch: silent-wait.patch
     expect: "--- FAIL: TestWaitForJobsFailsWhenNoJobCanBeRead"
     why: wait-for-jobs reports an empty success when no job could be read
+
+  - id: silent-create
+    item: SIL-001
+    gate: unit
+    patch: silent-create.patch
+    expect: "--- FAIL: TestACreateTheHiveAnswersWithNothingIsAnError"
+    why: an observable create that TheHive answered with an empty list is reported as a success
