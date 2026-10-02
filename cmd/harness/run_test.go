@@ -28,9 +28,9 @@ const (
 const glueRegistry = `
 scopes: {edit: a, stop: a, commit: a, pr: a, ci: a, nightly: a}
 suites:
-  - {id: everything, paths: [gates/**]}
-  - {id: tools, paths: [internal/**]}
-  - {id: docs, paths: [docs/**]}
+  - {id: everything, review: high, paths: [gates/**]}
+  - {id: tools, review: medium, paths: [internal/**]}
+  - {id: docs, review: low, paths: [docs/**]}
 gates:
   - {id: docs-check, runs: "true", cadence: [ci], suites: [docs], budget_s: 10, blocks: x}
   - {id: tool-tests, runs: "echo tool tests broken; exit 1", cadence: [ci], suites: [tools], budget_s: 10, blocks: x}
