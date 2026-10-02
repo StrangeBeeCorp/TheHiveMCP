@@ -76,6 +76,16 @@ var remedies = map[Class]string{
 	Trust:         "The default permission profile is read-only on purpose: report why it should change.",
 }
 
+// ProtectedPatterns are the patterns of the protected classes, for .github/CODEOWNERS to match.
+func ProtectedPatterns() []string {
+	out := make([]string, 0, len(protected))
+	for _, p := range protected {
+		out = append(out, p.pattern)
+	}
+
+	return out
+}
+
 // ClassOf is the protected class of a repository-relative path, if it has one.
 func ClassOf(rel string) (Class, bool) {
 	for _, p := range protected {

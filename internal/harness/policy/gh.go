@@ -15,6 +15,10 @@ var ghRepoFlag = []string{"-R", "--repo"}
 
 func (j *judge) gh(args []string) Decision {
 	group, sub, before := ghWords(args)
+	if filledIn(group, sub) {
+		return deny("gh's command is filled in as the line runs (find's {}, parallel's :::): write it out")
+	}
+
 	if group == "pr" && before != "" {
 		return deny("write gh's command before its flags (gh %s <command> %s …): the policy reads which command it is", group, before)
 	}
@@ -39,6 +43,14 @@ func (j *judge) gh(args []string) Decision {
 	return deny("the %s may read GitHub with gh (view, list, diff, checks, status) but not change it", j.role)
 }
 
+// filledIn reports whether gh's group, or the command of gh pr, is not a name as it is written but
+// a placeholder filled in as the line runs (find's {}, parallel's :::).
+func filledIn(group, sub string) bool {
+	help := func(w string) bool { return w == "-h" || w == optHelp || w == "--version" }
+
+	return (group != "" && !plainWord(group) && !help(group)) || (group == "pr" && sub != "" && !plainWord(sub) && !help(sub))
+}
+
 // ghWords are gh's command group and the command within it, as gh reads them: past -R/--repo and
 // its value, which gh accepts between them. before is any other flag found there, which the policy
 // does not read past.
@@ -57,7 +69,7 @@ func ghWords(args []string) (group, sub, before string) {
 		case slices.Contains(ghRepoFlag, name):
 			i += btoi(!attached)
 		case strings.HasPrefix(a, "-R") && len(a) > 2:
-		case a == "-h" || a == "--help":
+		case a == "-h" || a == optHelp:
 			return group, a, ""
 		case strings.HasPrefix(a, "-"):
 			return group, "", a
@@ -76,6 +88,8 @@ func personOnly(group, sub string, args []string) Decision {
 		return deny("agents never merge: a person merges the pull request on GitHub")
 	case group == "pr" && sub == "review" && slices.ContainsFunc(args, approves):
 		return deny("agents never approve: a person reviews the pull request")
+	case group == "pr" && sub == "update-branch":
+		return deny(movesBranches)
 	}
 
 	return Allow
@@ -124,7 +138,8 @@ func (j *judge) ghAPI(args []string) Decision {
 		return deny("write the GraphQL query inline (-f query='…'): the policy reads it before it runs")
 	case call.graphql() && forgesEvidence(strings.ToLower(call.query), "mutation", "merge", "review", "checkrun", "checksuite", "status"):
 		return deny("statuses, checks, reviews and merges are what people rely on: nobody writes them from here")
-	case call.graphql() && forgesEvidence(strings.ToLower(call.query), "mutation", "updateref", "createref", "deleteref", "createcommitonbranch"):
+	case call.graphql() && forgesEvidence(strings.ToLower(call.query), "mutation", "updateref", "createref", "deleteref", "createcommitonbranch",
+		"updatepullrequestbranch"):
 		return deny(movesBranches)
 	}
 
@@ -133,7 +148,7 @@ func (j *judge) ghAPI(args []string) Decision {
 			return deny("statuses, checks, reviews and merges are what people rely on: nobody writes them from here")
 		}
 
-		if forgesEvidence(strings.ToLower(e), "", "/git/refs", "/contents/", "/branches/") {
+		if forgesEvidence(strings.ToLower(e), "", "/git/refs", "/contents/", "/branches/", "/update-branch") {
 			return deny(movesBranches)
 		}
 	}

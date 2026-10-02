@@ -58,7 +58,7 @@ func operandsBut(args []string, target string) []string {
 // is computed or a pattern whose matches do, is not on disk before the line runs, or is where an
 // earlier command of the line writes.
 func (j *judge) carriesCache(src string) bool {
-	if computed(src) {
+	if j.computed(src) {
 		return true
 	}
 
@@ -98,11 +98,11 @@ func (j *judge) linksGuarded(name string, args []string) Decision {
 
 	places := guardedPlaces(j.root)
 
-	for _, l := range j.newLinks(args) {
-		if computed(l.target) || computed(l.path) {
-			return deny("write the link's paths out: the policy reads where it points before it is made")
-		}
+	if slices.ContainsFunc(operandsBut(args, ""), j.computed) {
+		return deny("write the link's paths out: the policy reads where it points before it is made")
+	}
 
+	for _, l := range j.newLinks(args) {
 		// A symbolic link's target is text read from the link's own directory; a hard link's is a path.
 		target := j.abs(l.target)
 		if symbolic && !filepath.IsAbs(l.target) {

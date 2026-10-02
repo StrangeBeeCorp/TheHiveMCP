@@ -115,6 +115,19 @@ func Indexed(ctx context.Context, root, path string) ([]byte, error) {
 	return []byte(out), err
 }
 
+// Remote is the ref a remote-tracking name like origin/main names, written out
+// (refs/remotes/origin/main) when the remote has it: a tag or a branch spelt origin/main would
+// otherwise stand in for it, since git looks names up in refs/tags and refs/heads first. Any
+// other ref is returned as it is.
+func Remote(ctx context.Context, root, ref string) string {
+	full := "refs/remotes/" + ref
+	if strings.HasPrefix(ref, "refs/") || ref == "HEAD" || !HasRef(ctx, root, full) {
+		return ref
+	}
+
+	return full
+}
+
 // HasRef reports whether the ref resolves to a commit.
 func HasRef(ctx context.Context, root, ref string) bool {
 	_, err := run(ctx, root, "rev-parse", "--verify", "--quiet", ref+"^{commit}")

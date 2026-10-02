@@ -15,7 +15,7 @@ var gitReads = []string{
 // gitFlags are git's own options that take no value: any other option before the subcommand is
 // refused, since one that takes the next word would make the policy read it as the subcommand.
 var gitFlags = []string{
-	"--version", "-v", "--help", "-h", "-p", "--paginate", "-P", "--no-pager", "--no-replace-objects", "--no-lazy-fetch",
+	"--version", "-v", optHelp, "-h", "-p", "--paginate", "-P", "--no-pager", "--no-replace-objects", "--no-lazy-fetch",
 	"--no-optional-locks", "--no-advice", "--bare", "--literal-pathspecs", "--glob-pathspecs", "--noglob-pathspecs",
 	"--icase-pathspecs", "--html-path", "--man-path", "--info-path", "--exec-path",
 }
@@ -62,6 +62,14 @@ func (j *judge) gitOption(a string) (int, Decision) {
 }
 
 func (j *judge) gitSub(sub string, rest []string) Decision {
+	if !plainWord(sub) {
+		return deny("git's command is %s, filled in as the line runs (find's {}, parallel's :::): write it out", sub)
+	}
+
+	if d := j.gitWritten(sub, rest); d.Deny {
+		return d
+	}
+
 	if skipsHooks(sub, rest) {
 		return deny("the git hooks are gates: commit without bypassing them, and fix what they report")
 	}
@@ -153,7 +161,46 @@ func (j *judge) gitRuns(sub string, rest []string) Decision {
 		return deny("this git option runs a program the policy cannot read: fetch and clone as they are configured")
 	}
 
+	// The main session may name the program a transport runs: it is judged as the line it is.
+	if transports(sub, rest) {
+		for _, l := range flagValues(rest, "", "u", "--upload-pack", "--receive-pack", "--exec") {
+			if d := j.child(l, maxDepth); d.Deny {
+				return d
+			}
+		}
+	}
+
 	return Allow
+}
+
+// gitWritten judges the files a git command writes besides the checkout.
+func (j *judge) gitWritten(sub string, rest []string) Decision {
+	for _, target := range gitWrites(sub, rest) {
+		if d := j.write(target); d.Deny {
+			return d
+		}
+	}
+
+	return Allow
+}
+
+// gitWrites are the files a git command writes besides the checkout: --output of diff, show, log
+// and their kin, format-patch's directory, archive's file, bundle create's.
+func gitWrites(sub string, rest []string) []string {
+	switch sub {
+	case subDiff, subShow, "log", "whatchanged", "range-diff", "diff-tree", "diff-index", "diff-files":
+		return flagValues(rest, "", "", "--output")
+	case "format-patch":
+		return flagValues(rest, "", "o", "--output-directory", "--output")
+	case "archive":
+		return flagValues(rest, "", "o", "--output")
+	case "bundle":
+		if len(rest) > 1 && rest[0] == "create" {
+			return rest[1:2]
+		}
+	}
+
+	return nil
 }
 
 // gitLines are the shell lines a git command runs for its caller.
@@ -169,6 +216,11 @@ func gitLines(sub string, rest []string) []string {
 		return []string{strings.Join(skipOptions(rest[1:], nil), " ")}
 	case sub == "bisect" && len(rest) > 0 && rest[0] == "run":
 		return []string{strings.Join(rest[1:], " ")}
+	case sub == "filter-branch":
+		return flagValues(rest, "", "", "--setup", "--tree-filter", "--index-filter", "--parent-filter", "--msg-filter",
+			"--commit-filter", "--tag-name-filter", "--env-filter")
+	case sub == "send-email":
+		return flagValues(rest, "", "", "--to-cmd", "--cc-cmd", "--header-cmd", "--sendmail-cmd", "--smtp-server")
 	}
 
 	return nil
@@ -177,7 +229,7 @@ func gitLines(sub string, rest []string) []string {
 // transports reports whether a command that talks to a remote passes the program to run there or
 // here: --upload-pack, --receive-pack, --exec (or a prefix git accepts), clone -u.
 func transports(sub string, rest []string) bool {
-	if !slices.Contains([]string{"clone", "fetch", "pull", "ls-remote", "archive", subModule}, sub) {
+	if !slices.Contains([]string{"clone", subFetch, subPull, "ls-remote", "archive", subModule}, sub) {
 		return false
 	}
 
@@ -232,8 +284,10 @@ func optionValues(args []string, short byte, long string) []string {
 // gitAgent holds for the agents that may commit: history and configuration are not theirs.
 func (j *judge) gitAgent(sub string, rest []string) Decision {
 	switch sub {
-	case "update-ref", "replace", "filter-branch", "filter-repo", "fast-import", "pack-refs", "symbolic-ref":
+	case subUpdateRef, "replace", "filter-branch", "filter-repo", "fast-import", "pack-refs", "symbolic-ref":
 		return deny("refs and history are the record of the work: they are not rewritten by hand")
+	case "apply", "am", subTag, subFetch, subPull:
+		return agentRefs(sub, rest)
 	case "reflog":
 		if len(rest) > 0 && rest[0] != subShow {
 			return deny("refs and history are the record of the work: they are not rewritten by hand")
@@ -251,6 +305,30 @@ func (j *judge) gitAgent(sub string, rest []string) Decision {
 	case "remote":
 		if len(rest) > 0 && !slices.Contains([]string{"-v", subShow, "get-url"}, rest[0]) {
 			return deny("remotes are configured by people")
+		}
+	}
+
+	return Allow
+}
+
+// agentRefs holds for an agent's patches, tags and fetches: a patch names the files it writes
+// inside itself, tags are a person's, and a refspec of its own would move a ref the gates compare
+// with.
+func agentRefs(sub string, rest []string) Decision {
+	switch sub {
+	case "apply", "am":
+		if sub == "am" || !slices.ContainsFunc(rest, func(a string) bool {
+			return slices.Contains([]string{"--check", "--stat", "--numstat", "--summary"}, a)
+		}) {
+			return deny("a patch names the files it writes inside itself: make the change with the editor")
+		}
+	case subTag:
+		if len(rest) > 0 && !slices.ContainsFunc(rest, func(a string) bool { return a == "-l" || a == "--list" || a == "-v" || a == "--verify" }) {
+			return deny("tags are made by people, when they release")
+		}
+	default:
+		if slices.ContainsFunc(rest, func(a string) bool { return strings.Contains(a, ":") && !strings.Contains(a, "://") }) {
+			return deny("fetch as configured (git fetch origin): a refspec of your own moves a ref the gates compare with")
 		}
 	}
 
@@ -301,9 +379,28 @@ func movesMain(sub string, rest []string) bool {
 				return true
 			}
 		}
-	case "update-ref":
-		return slices.ContainsFunc(rest, func(a string) bool { return a == "refs/heads/"+mainBranch || a == mainBranch })
+	case subUpdateRef, subTag, subFetch, subPull:
+		return movesMainRef(sub, rest, isMain)
 	}
 
 	return false
+}
+
+// movesMainRef reports whether update-ref, tag or fetch would move main, or a ref that stands in for
+// the remote's main (refs/remotes/origin/main, a tag spelt origin/main).
+func movesMainRef(sub string, rest []string, isMain func(string) bool) bool {
+	switch sub {
+	case subUpdateRef:
+		return slices.ContainsFunc(rest, func(a string) bool {
+			return a == "refs/heads/"+mainBranch || a == mainBranch || (strings.HasPrefix(a, "refs/remotes/") && isMain(a))
+		})
+	case subTag:
+		return !slices.Contains(rest, "-l") && !slices.Contains(rest, "--list") &&
+			slices.ContainsFunc(rest, func(a string) bool { return !strings.HasPrefix(a, "-") && isMain(a) })
+	}
+
+	return slices.ContainsFunc(rest, func(a string) bool {
+		_, dest, refspec := strings.Cut(strings.TrimPrefix(a, "+"), ":")
+		return refspec && !strings.Contains(a, "://") && isMain(dest)
+	})
 }

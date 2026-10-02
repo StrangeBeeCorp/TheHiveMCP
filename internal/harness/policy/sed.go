@@ -1,11 +1,8 @@
 package policy
 
 import (
-	"regexp"
 	"slices"
 	"strings"
-
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/shell"
 )
 
 // sedCall is what a sed command does besides printing: the files it edits in place, those its
@@ -16,6 +13,9 @@ type sedCall struct {
 	files, writes    []string
 	runs, scripts    []string
 	exec, scriptFile bool
+	// ambiguous is set when -i stands alone before a word that cannot be a backup suffix: BSD's
+	// sed, this host's, takes the word as one, GNU's as the script.
+	ambiguous bool
 }
 
 // parseSed reads sed's arguments as GNU's sed and as BSD's (this host's) would, and keeps what
@@ -27,7 +27,7 @@ func parseSed(args []string) sedCall {
 	return sedCall{
 		inPlace: gnu.inPlace || bsd.inPlace, files: append(gnu.files, bsd.files...), writes: append(gnu.writes, bsd.writes...),
 		runs: append(gnu.runs, bsd.runs...), scripts: append(gnu.scripts, bsd.scripts...), exec: gnu.exec || bsd.exec,
-		scriptFile: gnu.scriptFile || bsd.scriptFile,
+		scriptFile: gnu.scriptFile || bsd.scriptFile, ambiguous: gnu.ambiguous || bsd.ambiguous,
 	}
 }
 
@@ -101,7 +101,7 @@ func suffixLike(args []string, i int) bool {
 // ends it, and what follows is that option's value, or the next word is. BSD's -i takes the next
 // word when nothing follows it. It returns the index of the last word it read.
 func (c *sedCall) cluster(cluster string, args []string, i int, scripts *[]string, bsd bool) int {
-	k := strings.IndexAny(cluster, "eifl")
+	k := strings.IndexAny(cluster, "eiIfl")
 	if k < 0 {
 		return i
 	}
@@ -109,8 +109,10 @@ func (c *sedCall) cluster(cluster string, args []string, i int, scripts *[]strin
 	rest := cluster[k+1:]
 
 	switch cluster[k] {
-	case 'i':
+	case 'i', 'I':
+		// BSD's -I edits in place as -i does.
 		c.inPlace = true
+		c.ambiguous = c.ambiguous || (rest == "" && i+1 < len(args) && !suffixLike(args, i+1))
 		i += btoi(rest == "" && i+1 < len(args) && (bsd || suffixLike(args, i+1)))
 	case 'e':
 		if rest != "" {
@@ -343,50 +345,6 @@ func textEnd(s string, i int) int {
 	}
 }
 
-var (
-	// awkOutput finds the file of print > "file" and printf … >> "file", past the strings printed.
-	awkOutput = regexp.MustCompile(`printf?\b(?:[^;{}"]|"[^"]*")*?>>?\s*"([^"]+)"`)
-	// awkRedirect finds any output redirection of print or printf: to a file (>, >>) or a command (|).
-	awkRedirect = regexp.MustCompile(`printf?\b(?:[^;{}"]|"[^"]*")*?(>|\|)`)
-	// awkCommand finds the command line of system("…"), print | "…" and "…" | getline.
-	awkCommand = regexp.MustCompile(`system\(\s*"([^"]*)"|\|\s*"([^"]*)"|"([^"]*)"\s*\|\s*getline`)
-)
-
-// awkProgram is the program of an awk command: its first operand, unless -f names a file, which
-// fromFile says.
-func awkProgram(args []string) (program string, fromFile bool) {
-	for i := 0; i < len(args); i++ {
-		switch a := args[i]; {
-		case a == "-f" || strings.HasPrefix(a, "-f") || strings.HasPrefix(a, optFile):
-			return "", true
-		case a == "-F" || a == "-v":
-			i++
-		case strings.HasPrefix(a, "-"):
-		default:
-			return a, false
-		}
-	}
-
-	return "", false
-}
-
-// awkWrites are the files an awk program writes by name.
-func awkWrites(args []string) []string {
-	var out []string
-
-	program, _ := awkProgram(args)
-	for _, m := range awkOutput.FindAllStringSubmatch(program, -1) {
-		out = append(out, m[1])
-	}
-
-	return out
-}
-
-// computed reports whether the shell builds part of a word as the line runs.
-func computed(word string) bool {
-	return strings.Contains(word, shell.Computed)
-}
-
 // recordPlaces are the text of the places the harness keeps what it trusts: git's own files, its
 // records, and git's and gh's configuration.
 var recordPlaces = []string{".git/", ".cache/harness", "gitconfig", ".config/git", ".config/gh", "sb-review"}
@@ -431,33 +389,15 @@ func (j *judge) sedLines(args []string) ([]string, Decision) {
 	call := parseSed(args)
 
 	switch {
-	case j.role.Agent() && (call.scriptFile || slices.ContainsFunc(call.scripts, computed)):
+	case call.ambiguous:
+		return nil, deny("this host's sed is BSD's, whose -i takes the next word as the backup suffix: write sed -i '' 's/…/…/' FILE, or -i.bak")
+	case j.role.Agent() && (call.scriptFile || slices.ContainsFunc(call.scripts, j.computed)):
 		return nil, deny("write the sed script inline: the policy reads it before it runs")
 	case j.role.Agent() && (call.exec || len(call.runs) > 0):
 		return nil, deny("sed's e command runs a shell command the policy cannot read")
 	}
 
 	return call.runs, Allow
-}
-
-// awkLines are the command lines an awk program runs (system, a pipe to or from a command), or why
-// it may not: an agent's runs none and writes no file, and its program is one the policy reads.
-func (j *judge) awkLines(args []string) ([]string, Decision) {
-	program, fromFile := awkProgram(args)
-
-	switch {
-	case j.role.Agent() && (fromFile || computed(program)):
-		return nil, deny("write the awk program inline: the policy reads it before it runs")
-	case j.role.Agent() && awkRedirect.MatchString(program):
-		return nil, deny("this awk program writes a file or runs a command: print, and redirect its output in the shell")
-	}
-
-	var lines []string
-	for _, m := range awkCommand.FindAllStringSubmatch(program, -1) {
-		lines = append(lines, m[1]+m[2]+m[3])
-	}
-
-	return lines, Allow
 }
 
 // writesNearRecords reports whether a sed or awk program may write (a w or W in sed's script, as

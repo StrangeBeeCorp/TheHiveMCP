@@ -381,6 +381,56 @@ func (j *judge) passedOn(name string, args []string, depth int) Decision {
 	return Allow
 }
 
+// xargsHands refuses a command xargs would complete from its input in a way the policy cannot
+// judge: one that runs others (a shell, an interpreter, a wrapper, env, eval, xargs) or make, git
+// without its subcommand, gh without its command (or gh api, whose endpoint would come from the
+// input), or any of them when -I puts the input inside its words.
+func xargsHands(options, rest []string) Decision {
+	if len(rest) == 0 || !guarded(rest[0]) {
+		return Allow
+	}
+
+	name := path.Base(rest[0])
+	replacing := slices.ContainsFunc(options, func(a string) bool {
+		return strings.HasPrefix(a, "-I") || strings.HasPrefix(a, "-i") || strings.HasPrefix(a, "-J") || strings.HasPrefix(a, "--replace")
+	})
+
+	fixed := false
+
+	switch name {
+	case cmdGit:
+		fixed = len(rest) > 1 && plainWord(rest[1])
+	case "gh":
+		fixed = len(rest) > 2 && plainWord(rest[1]) && plainWord(rest[2]) && rest[1] != "api"
+	}
+
+	if replacing || !fixed {
+		return deny("xargs adds words from its input to %s, which the policy cannot read: write the command with its arguments, or loop over them in the shell", name)
+	}
+
+	return Allow
+}
+
+// plainWord reports whether w can be a command's name as it is written: letters, digits, dots and
+// dashes, not a placeholder filled in as the line runs (find's {}, parallel's :::).
+func plainWord(w string) bool {
+	if w == "" || !isAlnum(w[0]) {
+		return false
+	}
+
+	for i := range len(w) {
+		if c := w[i]; !isAlnum(c) && c != '-' && c != '.' && c != '_' {
+			return false
+		}
+	}
+
+	return true
+}
+
+func isAlnum(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+}
+
 // handedOn judges one word a command the policy has no rule for is handed: as the command it names
 // with the rest of args after it, or as a line when it is one.
 func (j *judge) handedOn(name string, args []string, i int, a string, depth int) Decision {

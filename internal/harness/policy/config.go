@@ -3,8 +3,6 @@ package policy
 import (
 	"slices"
 	"strings"
-
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/shell"
 )
 
 // configNamesFile is why git and gh may not be pointed at configuration the policy cannot read.
@@ -23,7 +21,7 @@ func loadsFile(key string) bool {
 // those, wherever their option stands. A computed word is refused: the policy reads what git keeps.
 func (j *judge) gitConfig(rest []string) Decision {
 	switch {
-	case slices.ContainsFunc(rest, func(o string) bool { return strings.Contains(o, shell.Computed) }):
+	case slices.ContainsFunc(rest, j.computed):
 		return deny("write git config's key and value out: the policy reads them before git keeps them")
 	case (len(rest) > 0 && rest[0] == subEdit) || slices.ContainsFunc(rest, func(a string) bool { return a == "-e" || cuts(a, "--"+subEdit) }):
 		return deny("set git's configuration one key at a time (git config KEY VALUE): the policy reads what it sets")
@@ -108,7 +106,7 @@ func (j *judge) ghConfig(group string, rest []string) (Decision, bool) {
 	case group == subConfig && sub == subSet:
 		positional := skipOptions(rest[1:], []string{"-h", "--host"})
 		if len(positional) > 1 && slices.Contains([]string{keyEditor, keyPager, keyBrowser}, positional[0]) {
-			if strings.Contains(positional[1], shell.Computed) {
+			if j.computed(positional[1]) {
 				return deny("write gh's %s out: the policy reads it before gh keeps it", positional[0]), true
 			}
 
@@ -138,7 +136,7 @@ func (j *judge) ghAlias(args []string) Decision {
 		}
 	}
 
-	if len(positional) < 2 || positional[1] == "-" || strings.Contains(positional[1], shell.Computed) {
+	if len(positional) < 2 || positional[1] == "-" || j.computed(positional[1]) {
 		return deny("write the alias's expansion out: the policy reads it before gh keeps it")
 	}
 

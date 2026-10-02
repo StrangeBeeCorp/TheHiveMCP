@@ -69,6 +69,8 @@ type Stopper struct {
 	Check     Checker
 	// Fingerprint identifies the state of the checkout (gitx.Fingerprint).
 	Fingerprint func(ctx context.Context) (string, error)
+	// Now is the clock; nil is time.Now.
+	Now func() time.Time
 }
 
 // Stop runs check-fast when an agent stops (Stop, SubagentStop) and applies the red-round rule.
@@ -99,7 +101,7 @@ func (s Stopper) Stop(ctx context.Context, in Input) Output {
 
 	err = update(s.Root, func(st *State) error {
 		if ran {
-			st.Last = &Last{Fingerprint: fp, Static: static, Check: c, At: time.Now()}
+			st.Last = &Last{Fingerprint: fp, Static: static, Check: c, At: s.now()}
 		}
 
 		out = s.apply(st, in, c, static)
@@ -111,6 +113,14 @@ func (s Stopper) Stop(ctx context.Context, in Input) Output {
 	}
 
 	return out
+}
+
+func (s Stopper) now() time.Time {
+	if s.Now == nil {
+		return time.Now()
+	}
+
+	return s.Now()
 }
 
 // apply counts the red round of the agent and decides. A run that could not run every gate is
@@ -142,7 +152,7 @@ func (s Stopper) apply(st *State, in Input, c Check, static bool) Output {
 		st.Rounds[actor] = rounds
 
 		if rounds == 1 {
-			st.RedSince[actor] = time.Now()
+			st.RedSince[actor] = s.now()
 		}
 	}
 

@@ -152,7 +152,7 @@ func TestOrdinaryWorkIsNotInTheWay(t *testing.T) {
 		"grep -rn TrustedString internal/utils 2>/dev/null | head",
 		"cat > .cache/tmp/msg.txt <<'EOF'\ngit push --force\nEOF",
 		"echo x > internal/tools/manage/handler.go",
-		"sed -i s/a/b/ internal/tools/search/handler.go",
+		"sed -i '' s/a/b/ internal/tools/search/handler.go",
 		"docker ps",
 		"curl -s http://127.0.0.1:9000/api/status",
 		"cp /tmp/x.txt .cache/tmp/y.txt",

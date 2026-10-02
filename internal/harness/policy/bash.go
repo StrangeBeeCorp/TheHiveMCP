@@ -54,9 +54,21 @@ type judge struct {
 	// written are where the line's earlier commands write, as they land: what a later copy in it
 	// may carry was not on disk when the line was judged.
 	written []string
+	// inexact are the words of the command judged that the shell builds as the line runs: a $ in
+	// one of them is an expansion, in any other word a character.
+	inexact map[string]bool
+}
+
+// computed reports whether the shell builds part of a word of the command judged as the line runs:
+// a variable or a substitution, not a $ quoted as text (awk '{print $1}').
+func (j *judge) computed(word string) bool {
+	return strings.Contains(word, shell.Computed) && j.inexact[word]
 }
 
 func (j *judge) line(text string, depth int) Decision {
+	inexact := j.inexact
+	defer func() { j.inexact = inexact }()
+
 	if depth > maxDepth {
 		return deny("commands nested this deep are not read by the policy: write the command plainly")
 	}
@@ -80,6 +92,14 @@ func (j *judge) line(text string, depth int) Decision {
 }
 
 func (j *judge) command(c shell.Command, depth int) Decision {
+	j.inexact = map[string]bool{}
+
+	for i, w := range c.Words {
+		if i < len(c.Exact) && !c.Exact[i] {
+			j.inexact[w] = true
+		}
+	}
+
 	for _, a := range c.Assigns {
 		d := j.assign(a)
 		if d.Deny {
@@ -193,12 +213,7 @@ func (j *judge) unwrap(name string, args []string, depth int) (Decision, bool) {
 	case name == "env":
 		return j.env(args, depth), true
 	case name == "xargs":
-		rest := skipOptions(args, []string{"-n", "-I", "-i", "-L", "-l", "-P", "-d", "-s", "-E", "-e", "-a", "--max-args", "--delimiter"})
-		if len(rest) > 0 && harnessWord(rest[0]) {
-			return deny("run bin/harness itself, not through xargs: xargs adds arguments the policy cannot read"), true
-		}
-
-		return j.run(rest, depth+1), true
+		return j.xargs(args, depth), true
 	case name == "find":
 		return j.find(args, depth), true
 	case name == "harness":
@@ -216,6 +231,20 @@ func (j *judge) unwrap(name string, args []string, depth int) (Decision, bool) {
 	}
 
 	return j.run(rest, depth+1), true
+}
+
+// xargs judges the command xargs runs, which it completes from its input.
+func (j *judge) xargs(args []string, depth int) Decision {
+	rest := skipOptions(args, []string{"-n", "-I", "-i", "-L", "-l", "-P", "-d", "-s", "-E", "-e", "-a", "--max-args", "--delimiter"})
+	if len(rest) > 0 && harnessWord(rest[0]) {
+		return deny("run bin/harness itself, not through xargs: xargs adds arguments the policy cannot read")
+	}
+
+	if d := xargsHands(args[:len(args)-len(rest)], rest); d.Deny {
+		return d
+	}
+
+	return j.run(rest, depth+1)
 }
 
 // cd follows the directory cd or pushd moves to. One the policy cannot follow leaves it unknown,
@@ -252,28 +281,49 @@ func (j *judge) child(line string, depth int) Decision {
 // shell judges a shell's -c script. Options end at the first word that is not one, which names a
 // script: `bash gen.sh -c x` runs gen.sh, and -c x are its arguments.
 func (j *judge) shell(args []string, depth int) Decision {
-	for i := 0; i < len(args); i++ {
-		a := args[i]
+	script, at := shellScript(args)
 
-		switch {
-		case a == "--" || (!strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "+")):
-			i = len(args)
-		case a == "-o" || a == "+o" || a == "-O" || a == "+O":
-			i++
-		case strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && strings.Contains(a, "c"):
-			if i+1 < len(args) {
-				return j.child(args[i+1], depth+1)
-			}
-
-			return Allow
+	switch {
+	case script == "-c":
+		if at < len(args) {
+			return j.child(args[at], depth+1)
 		}
-	}
 
-	if j.role.Agent() {
+		return Allow
+	case script != "" && harnessWord(script):
+		return j.harness(args[at+1:])
+	case script != "" && slices.ContainsFunc(args[at+1:], personFlag):
+		return deny(personDenied)
+	case j.role.Agent():
 		return deny("a shell running a script or its input is opaque to the policy: run the commands, or the make target that runs them")
 	}
 
 	return Allow
+}
+
+// shellScript is what a shell's arguments ask it to run: "-c" and the index of the script after it,
+// or the script file it is given and its index, or "" when it reads its input.
+func shellScript(args []string) (string, int) {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+
+		switch {
+		case a == "--":
+			if i+1 < len(args) {
+				return args[i+1], i + 1
+			}
+
+			return "", len(args)
+		case !strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "+"):
+			return a, i
+		case a == "-o" || a == "+o" || a == "-O" || a == "+O":
+			i++
+		case strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && strings.Contains(a, "c"):
+			return "-c", i + 1
+		}
+	}
+
+	return "", len(args)
 }
 
 func (j *judge) env(args []string, depth int) Decision {

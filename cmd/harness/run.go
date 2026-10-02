@@ -63,6 +63,9 @@ func (s *scopeFlags) selection(ctx context.Context, e env) (registry.Selection, 
 		return registry.SelectAll(fmt.Sprintf("no %s to compare with", base)), nil
 	}
 
+	// origin/main is the remote's: a tag or a branch of that name does not stand in for it.
+	base = gitx.Remote(ctx, e.root, base)
+
 	paths, err := gitx.ChangedSince(ctx, e.root, base)
 	if err != nil {
 		return registry.Selection{}, fmt.Errorf("list the changes since %s: %w", base, err)

@@ -30,7 +30,7 @@ func TestTheHooksCannotBeSkippedHoweverTheOptionIsSpelled(t *testing.T) {
 	}
 
 	assert.True(t, bash(policy.Other, "git commit -pn -m x").Deny, "commit's -p is --patch: the n is an option")
-	assert.False(t, bash(policy.Other, "git am -p1n x.patch").Deny, "am's -p takes 1n as its value")
+	assert.False(t, bash(policy.Main, "git am -p1n x.patch").Deny, "am's -p takes 1n as its value")
 	assert.True(t, bash(policy.Other, "git fetch --up=x origin").Deny, "a prefix of --upload-pack, which git accepts")
 }
 

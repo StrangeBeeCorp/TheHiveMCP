@@ -308,6 +308,49 @@ func TestAGreenStopResetsTheRounds(t *testing.T) {
 		"the count started again after the green stop")
 }
 
+// A filesystem stamps a file from a coarser clock than the hook's: a report stamped within the
+// second the red streak began counts, one from the second before does not.
+func TestABlockedReportCountsFromTheSecondTheStreakBegan(t *testing.T) {
+	t.Parallel()
+
+	began := time.Date(2026, 10, 2, 10, 0, 0, 500_000_000, time.UTC)
+
+	for name, c := range map[string]struct {
+		stamped time.Time
+		counts  bool
+	}{
+		"within the same second, by a coarser clock": {began.Add(-300 * time.Millisecond), true},
+		"from the second before":                     {began.Add(-time.Second), false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			root := t.TempDir()
+			blocked := filepath.Join(root, policy.BlockedFile)
+			require.NoError(t, os.MkdirAll(filepath.Dir(blocked), 0o750))
+
+			check := &fakeCheck{result: hooks.Check{Red: true, Report: "x"}}
+			s := hooks.Stopper{
+				Root: root, MaxRounds: 2, Check: check.run, Now: func() time.Time { return began },
+				Fingerprint: func(context.Context) (string, error) { return "f", nil },
+			}
+			coder := hooks.Input{SessionID: "s", AgentType: coderType}
+
+			_ = s.Stop(context.Background(), coder)
+
+			require.NoError(t, os.WriteFile(blocked, []byte("this task: tried x\n"), 0o600))
+			require.NoError(t, os.Chtimes(blocked, c.stamped, c.stamped))
+
+			decision := decode(t, s.Stop(context.Background(), coder))["decision"]
+			if c.counts {
+				assert.Nil(t, decision, "the report counts: the agent may stop")
+			} else {
+				assert.Equal(t, "block", decision, "the report is older than the streak")
+			}
+		})
+	}
+}
+
 func TestABlockedReportFromEarlierDoesNotCount(t *testing.T) {
 	t.Parallel()
 

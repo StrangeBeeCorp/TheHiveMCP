@@ -174,5 +174,5 @@ func (e env) sameChange(ctx context.Context, r evidence.Review, head string) boo
 
 	judged := gitx.PatchID(ctx, e.root, r.MergeBase+".."+r.Head)
 
-	return judged != "" && judged == gitx.PatchID(ctx, e.root, r.Base+"..."+head)
+	return judged != "" && judged == gitx.PatchID(ctx, e.root, gitx.Remote(ctx, e.root, r.Base)+"..."+head)
 }

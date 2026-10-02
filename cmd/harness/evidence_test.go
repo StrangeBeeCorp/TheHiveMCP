@@ -148,6 +148,26 @@ func TestPrJudgesTheBranchAgainstOriginMainWhateverTheBase(t *testing.T) {
 	require.ErrorAs(t, err, &usageError{}, "make pr takes no base")
 }
 
+// A tag spelt origin/main does not stand in for the remote's: make pr still judges the whole change.
+//
+//nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory
+func TestATagNamedOriginMainDoesNotEmptyTheChange(t *testing.T) {
+	dir := shipRepo(t)
+	onMain := gittest.Git(t, dir, "rev-parse", "refs/remotes/origin/main")
+	gittest.Git(t, dir, "tag", "origin/main", "HEAD")
+
+	head := reviewed(t, dir, "ready")
+
+	_, err := harness(t, "pr", "--push=false")
+	require.NoError(t, err)
+
+	ev, err := evidence.Read(dir, head)
+	require.NoError(t, err)
+	require.NotNil(t, ev)
+	assert.Equal(t, onMain, ev.Base, "the remote's main, not the tag")
+	assert.Contains(t, ev.Changed, docA, "against the tag, the branch would change nothing")
+}
+
 // A person who passes --person ships without a ready review, and is told what is missing.
 //
 //nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory

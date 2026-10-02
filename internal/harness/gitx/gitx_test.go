@@ -172,6 +172,19 @@ func TestIndexedReadsTheStagedContent(t *testing.T) {
 }
 
 // A rebase keeps a change's patch id; an edit to the change does not.
+// origin/main is the remote's, written out, so that a tag or a branch of that name cannot stand in.
+func TestRemoteNamesTheRemoteTrackingRef(t *testing.T) {
+	t.Parallel()
+
+	dir, head := base(t)
+	assert.Equal(t, "origin/main", gitx.Remote(t.Context(), dir, "origin/main"), "no remote yet: the name as it is")
+
+	gittest.Git(t, dir, "update-ref", "refs/remotes/origin/main", head)
+	assert.Equal(t, "refs/remotes/origin/main", gitx.Remote(t.Context(), dir, "origin/main"))
+	assert.Equal(t, "HEAD", gitx.Remote(t.Context(), dir, "HEAD"))
+	assert.Equal(t, "refs/heads/main", gitx.Remote(t.Context(), dir, "refs/heads/main"))
+}
+
 // The evidence names the commit its base was, not the ref, which moves.
 func TestResolveNamesTheCommitARefNames(t *testing.T) {
 	t.Parallel()
