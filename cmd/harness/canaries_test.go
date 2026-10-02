@@ -47,7 +47,7 @@ func canaryCheckout(t *testing.T) string {
 	dir := gittest.Repo(t, map[string]string{
 		registryPath: `
 scopes: {edit: a, stop: a, commit: a, pr: a, ci: a, nightly: a}
-suites: [{id: everything, paths: ["**"]}]
+suites: [{id: everything, review: high, paths: ["**"]}]
 gates:
   - {id: unit, runs: "true", cadence: [nightly], suites: ["*"], budget_s: 10, blocks: x}
   - {id: red, runs: "true", cadence: [nightly], suites: ["*"], budget_s: 10, blocks: x}

@@ -16,9 +16,9 @@ const (
 	changelogRegistry = `
 scopes: {edit: a, stop: a, commit: a, pr: a, ci: a, nightly: a}
 suites:
-  - {id: everything, paths: [gates/**]}
-  - {id: surface, paths: [baselines/**]}
-  - {id: docs, paths: ["*.md"]}
+  - {id: everything, review: high, paths: [gates/**]}
+  - {id: surface, review: high, paths: [baselines/**]}
+  - {id: docs, review: low, paths: ["*.md"]}
 gates:
   - {id: changelog, builtin: changelog, cadence: [ci], suites: [surface], budget_s: 10, blocks: x}
 `
