@@ -12,31 +12,25 @@ var gitReads = []string{
 	subVersion, "check-ignore", "range-diff",
 }
 
+// gitFlags are git's own options that take no value: any other option before the subcommand is
+// refused, since one that takes the next word would make the policy read it as the subcommand.
+var gitFlags = []string{
+	"--version", "-v", "--help", "-h", "-p", "--paginate", "-P", "--no-pager", "--no-replace-objects", "--no-lazy-fetch",
+	"--no-optional-locks", "--no-advice", "--bare", "--literal-pathspecs", "--glob-pathspecs", "--noglob-pathspecs",
+	"--icase-pathspecs", "--html-path", "--man-path", "--info-path", "--exec-path",
+}
+
 // git judges a git command: its own options first, then the subcommand.
 func (j *judge) git(args []string) Decision {
 	i := 0
 
 	for i < len(args) && strings.HasPrefix(args[i], "-") {
-		a := args[i]
-
-		switch {
-		case a == "-c" || a == "--config-env" || strings.HasPrefix(a, "--config-env=") || strings.HasPrefix(a, "--exec-path="):
-			return deny("per-command git configuration is not allowed: the repository's configuration is policy")
-		case slices.Contains([]string{"-C", "--git-dir", "--work-tree", "--namespace", "--super-prefix"}, a):
-			if j.role.Agent() && a != "-C" {
-				return deny("git runs on this checkout as it is configured")
-			}
-
-			i += 2
-		case strings.HasPrefix(a, "--git-dir=") || strings.HasPrefix(a, "--work-tree=") || strings.HasPrefix(a, "--namespace="):
-			if j.role.Agent() {
-				return deny("git runs on this checkout as it is configured")
-			}
-
-			i++
-		default:
-			i++
+		step, d := j.gitOption(args[i])
+		if d.Deny {
+			return d
 		}
+
+		i += step
 	}
 
 	if i >= len(args) {
@@ -44,6 +38,27 @@ func (j *judge) git(args []string) Decision {
 	}
 
 	return j.gitSub(args[i], args[i+1:])
+}
+
+// gitOption judges one of git's own options, and says how many words it takes: two for one whose
+// value is the next word.
+func (j *judge) gitOption(a string) (int, Decision) {
+	switch {
+	case a == "-c" || a == "--config-env" || strings.HasPrefix(a, "--config-env=") || strings.HasPrefix(a, "--exec-path="):
+		return 0, deny("per-command git configuration is not allowed: the repository's configuration is policy")
+	case slices.Contains([]string{"-C", "--git-dir", "--work-tree", "--namespace", "--super-prefix", "--attr-source", "--list-cmds"}, a):
+		if j.role.Agent() && a != "-C" {
+			return 0, deny("git runs on this checkout as it is configured")
+		}
+
+		return 2, Allow
+	case !slices.Contains(gitFlags, a) && !strings.Contains(a, "="):
+		return 0, deny("git %s is an option the policy does not know: write the command without it", a)
+	case j.role.Agent() && (strings.HasPrefix(a, "--git-dir=") || strings.HasPrefix(a, "--work-tree=") || strings.HasPrefix(a, "--namespace=")):
+		return 0, deny("git runs on this checkout as it is configured")
+	}
+
+	return 1, Allow
 }
 
 func (j *judge) gitSub(sub string, rest []string) Decision {

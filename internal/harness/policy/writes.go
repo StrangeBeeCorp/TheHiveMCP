@@ -1,6 +1,7 @@
 package policy
 
 import (
+	"os"
 	"path"
 	"path/filepath"
 	"slices"
@@ -10,24 +11,71 @@ import (
 )
 
 // copyOverRecords refuses a directory copy, a move or an extraction into a directory that holds the
-// harness's records: it could drop a forged evidence file where make pr's goes. A recursive
-// delete or chmod writes no file there.
+// harness's records: it could drop a forged evidence file where make pr's goes. Into .cache or
+// .cache/harness, any is refused; into the checkout itself, an extraction (what an archive holds
+// is not known) and a copy or move of a source that carries a .cache. A recursive delete or
+// chmod writes no file there.
 func (j *judge) copyOverRecords(name string, args []string, target string) Decision {
-	whole := slices.Contains([]string{"mv", "rsync", cmdTar, cmdUnzip, "ditto"}, name) || (name == "cp" && recursive(args))
+	archive := name == cmdTar || name == cmdUnzip
+	whole := archive || slices.Contains([]string{"mv", "rsync", "ditto"}, name) || (name == "cp" && recursive(args))
+
 	if !whole || !filepath.IsAbs(j.cwd) {
 		return Allow
 	}
 
-	abs := target
-	if !filepath.IsAbs(abs) {
-		abs = filepath.Join(j.cwd, target)
-	}
+	rel, inside := j.landed(filepath.Clean(j.abs(target)))
 
-	if rel, inside := relative(j.root, filepath.Clean(abs)); inside && holdsRecords(rel) {
+	switch {
+	case !inside || !holdsRecords(rel):
+		return Allow
+	case archive || (rel != "." && rel != ""):
 		return deny("%s %s writes a whole tree into %s, which holds the harness's records: copy the files you need one by one", name, target, rel)
 	}
 
+	for _, src := range operandsBut(args, target) {
+		if j.carriesCache(src) {
+			return deny("%s %s brings a .cache into the checkout, where the harness keeps its records: copy the files you need one by one", name, src)
+		}
+	}
+
 	return Allow
+}
+
+// operandsBut are a command's operands other than target.
+func operandsBut(args []string, target string) []string {
+	var out []string
+
+	for _, a := range args {
+		if !strings.HasPrefix(a, "-") && a != target {
+			out = append(out, a)
+		}
+	}
+
+	return out
+}
+
+// carriesCache reports whether a source of a copy may bring a .cache with it: it is one, holds one,
+// or is computed or a pattern whose matches do.
+func (j *judge) carriesCache(src string) bool {
+	if computed(src) {
+		return true
+	}
+
+	paths := []string{j.abs(src)}
+	if strings.ContainsAny(src, "*?[") {
+		matches, _ := filepath.Glob(strings.ReplaceAll(j.abs(src), "[!", "[^"))
+		paths = append(paths, matches...)
+	}
+
+	return slices.ContainsFunc(paths, func(p string) bool {
+		if strings.EqualFold(filepath.Base(filepath.Clean(p)), ".cache") {
+			return true
+		}
+
+		_, err := os.Lstat(filepath.Join(p, ".cache"))
+
+		return err == nil
+	})
 }
 
 // recursive reports whether cp's options copy a whole tree: -r, -R or -a, alone or in a cluster
@@ -122,22 +170,32 @@ func yqWrites(args []string) []string {
 // tests, tar with x (or --extract, --get) in its mode.
 func extracts(name string, args []string) bool {
 	if name == cmdUnzip {
-		return !slices.ContainsFunc(args, func(a string) bool { return a == "-l" || a == "-t" || a == "-v" || a == "-Z" })
+		// -l, -t, -v and -Z list or test, -p and -c print, -z shows the comment.
+		return !slices.ContainsFunc(args, func(a string) bool {
+			return len(a) > 1 && a[0] == '-' && a[1] != '-' && strings.ContainsAny(cutAtValued(a[1:], "dPx"), "ltvZpcz")
+		})
 	}
+
+	extracting := false
 
 	for i, a := range args {
 		switch {
+		case a == "--to-stdout":
+			return false
 		case a == "--extract" || a == optGet:
-			return true
+			extracting = true
 		case strings.HasPrefix(a, "--"):
 		case strings.HasPrefix(a, "-") || i == 0:
-			if strings.Contains(a, "x") {
-				return true
+			cluster := cutAtValued(strings.TrimPrefix(a, "-"), "fbCFgHIKLNTVX")
+			if strings.Contains(cluster, "O") {
+				return false
 			}
+
+			extracting = extracting || strings.Contains(cluster, "x")
 		}
 	}
 
-	return false
+	return extracting
 }
 
 // moverValued are, per command that copies or moves, its short options that take a value.

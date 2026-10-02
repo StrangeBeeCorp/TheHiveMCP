@@ -176,58 +176,6 @@ func (j *judge) run(w []string, depth int) Decision {
 	return j.passedOn(name, args, depth)
 }
 
-// passedOn judges what a command the policy has no rule for may run on its caller's behalf:
-// script, setsid, flock, parallel, arch and many more take a command as their arguments. From each
-// argument that names a guarded command, the rest of the line is judged as that command, and an
-// argument that is a command line starting with one is judged as a line.
-func (j *judge) passedOn(name string, args []string, depth int) Decision {
-	if slices.Contains(readCommands, name) {
-		return Allow
-	}
-
-	for i, a := range args {
-		first, _, spaced := strings.Cut(strings.TrimSpace(a), " ")
-
-		var d Decision
-
-		switch {
-		case harnessWord(a) || (spaced && harnessWord(first)):
-			d = deny("run bin/harness itself, not through %s: a command that runs it may add arguments the policy cannot read", name)
-		case guarded(a):
-			d = j.run(args[i:], depth+1)
-		case spaced && guarded(first):
-			d = j.line(a, depth+1)
-		}
-
-		if d.Deny {
-			return d
-		}
-	}
-
-	return Allow
-}
-
-// guarded reports whether word names a command the policy has rules for, or one that runs others:
-// git, gh, make, the harness, env, eval, xargs, a shell, an interpreter or a wrapper. A path names
-// one only from a bin directory (/usr/bin/git), not a file of the checkout (.cache/tmp/git).
-func guarded(word string) bool {
-	if isHarness(word) {
-		return true
-	}
-
-	name := path.Base(word)
-	if strings.Contains(word, "/") && !slices.Contains([]string{"bin", "sbin"}, path.Base(path.Dir(word))) {
-		return false
-	}
-
-	if _, ok := wrappers[name]; ok {
-		return true
-	}
-
-	return slices.Contains([]string{cmdGit, "gh", cmdMake, "env", "eval", "xargs"}, name) || slices.Contains(shells, name) ||
-		(slices.Contains(interpreters, name) && name != "." && name != "source")
-}
-
 // unwrap judges the commands that run other commands: shells, eval, env, xargs, find -exec and
 // the wrappers. done is false for any other command.
 func (j *judge) unwrap(name string, args []string, depth int) (Decision, bool) {
@@ -400,7 +348,7 @@ func (j *judge) byPath(name string) Decision {
 		abs = filepath.Join(j.cwd, name)
 	}
 
-	if _, inside := relative(j.root, abs); inside || temporary(abs) {
+	if _, inside := j.landed(abs); inside || temporary(landing(abs)) {
 		return deny("%s is a script the policy cannot read: run the make target that wraps it (make help)", name)
 	}
 

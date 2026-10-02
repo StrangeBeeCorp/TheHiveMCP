@@ -122,3 +122,45 @@ func TestAReviewNotYetKeptCoversTheBranchRebased(t *testing.T) {
 	assert.Contains(t, out, "covers "+rebased[:7]+": the same change, rebased onto origin/main")
 	assert.Contains(t, pushed(t, dir), rebased)
 }
+
+// make pr judges the whole change: neither $HARNESS_BASE, which CI sets, nor a flag narrows what its
+// verdict covers.
+//
+
+func TestPrJudgesTheBranchAgainstOriginMainWhateverTheBase(t *testing.T) {
+	dir := shipRepo(t)
+	onMain := gittest.Git(t, dir, "rev-parse", "origin/main")
+	gittest.Git(t, dir, "branch", "below", "HEAD")
+	t.Setenv("HARNESS_BASE", "below")
+
+	head := reviewed(t, dir, "ready")
+
+	_, err := harness(t, "pr", "--push=false")
+	require.NoError(t, err)
+
+	ev, err := evidence.Read(dir, head)
+	require.NoError(t, err)
+	require.NotNil(t, ev)
+	assert.Equal(t, onMain, ev.Base, "origin/main, not $HARNESS_BASE")
+	assert.Contains(t, ev.Changed, docA, "against below, the branch would change nothing")
+
+	_, err = harness(t, "pr", "--base", "below")
+	require.ErrorAs(t, err, &usageError{}, "make pr takes no base")
+}
+
+// A person who passes --person ships without a ready review, and is told what is missing.
+//
+//nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory
+func TestPrForAPersonShipsWithAWarning(t *testing.T) {
+	dir := shipRepo(t)
+	head := reviewed(t, dir, "changes_needed")
+
+	_, err := harness(t, "pr")
+	require.ErrorIs(t, err, evidence.ErrNotShippable)
+	assert.Empty(t, pushed(t, dir))
+
+	out, err := harness(t, "pr", "--person")
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "warning:")
+	assert.Contains(t, pushed(t, dir), head)
+}

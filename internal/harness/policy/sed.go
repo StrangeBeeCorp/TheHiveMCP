@@ -476,7 +476,7 @@ func (j *judge) writesNearRecords(name string, args []string) bool {
 		return false
 	}
 
-	if rel, inside := relative(j.root, j.cwd); inside && (rel == ".git" || under(rel, ".git/") || under(rel, ".cache/")) {
+	if rel, inside := j.landed(j.cwd); inside && (rel == ".git" || under(rel, ".git/") || under(rel, ".cache/")) {
 		return true
 	}
 

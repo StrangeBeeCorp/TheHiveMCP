@@ -127,7 +127,7 @@ func (j *judge) reads(c shell.Command) Decision {
 		return Allow
 	}
 
-	if rel, inside := relative(j.root, j.cwd); j.cwd != "" && inside && underAny(rel, hidden) {
+	if rel, inside := j.landed(j.cwd); j.cwd != "" && inside && underAny(rel, hidden) {
 		return deny("%s is hidden from the %s: run the command from the checkout", rel, j.role)
 	}
 
@@ -220,7 +220,7 @@ func (j *judge) readPattern(w string, cut int, hidden []string) Decision {
 		return deny("%s may lead anywhere through its ..: name the file", w)
 	}
 
-	rel, inside := relative(j.root, j.abs(w[:cut]))
+	rel, inside := j.landed(j.abs(w[:cut]))
 	if !inside {
 		return Allow
 	}
@@ -236,6 +236,19 @@ func (j *judge) readPattern(w string, cut int, hidden []string) Decision {
 	}
 
 	return Allow
+}
+
+// landed is where abs lands in the checkout, as the refusals compare it: through its symlinks, in
+// lower case (the hidden directories and the records are named in lower case), and whether it is
+// inside the checkout at all.
+func (j *judge) landed(abs string) (string, bool) {
+	if !filepath.IsAbs(abs) {
+		return "", false
+	}
+
+	rel, inside := relative(landing(j.root), landing(abs))
+
+	return strings.ToLower(rel), inside
 }
 
 // abs is where a word of the command line points, from the directory the line has cd'ed to.
@@ -327,4 +340,77 @@ func (j *judge) harness(args []string) Decision {
 	}
 
 	return Allow
+}
+
+// passedOn judges what a command the policy has no rule for may run on its caller's behalf:
+// script, setsid, flock, parallel, arch and many more take a command as their arguments. From each
+// argument that names a guarded command, the rest of the line is judged as that command, and an
+// argument that is a command line starting with one is judged as a line.
+func (j *judge) passedOn(name string, args []string, depth int) Decision {
+	if slices.Contains(readCommands, name) {
+		return Allow
+	}
+
+	for i, a := range args {
+		if d := j.handedOn(name, args, i, a, depth); d.Deny {
+			return d
+		}
+
+		// An option may hand it a command after an = (tar --to-command=CMD, --checkpoint-action=exec=CMD).
+		for k := strings.IndexByte(a, '='); k >= 0; k = nextByte(a, '=', k) {
+			if d := j.handedOn(name, nil, 0, a[k+1:], depth); d.Deny {
+				return d
+			}
+		}
+	}
+
+	return Allow
+}
+
+// handedOn judges one word a command the policy has no rule for is handed: as the command it names
+// with the rest of args after it, or as a line when it is one.
+func (j *judge) handedOn(name string, args []string, i int, a string, depth int) Decision {
+	first, _, spaced := strings.Cut(strings.TrimSpace(a), " ")
+
+	switch {
+	case harnessWord(a) || (spaced && harnessWord(first)):
+		return deny("run bin/harness itself, not through %s: a command that runs it may add arguments the policy cannot read", name)
+	case guarded(a) && args != nil:
+		return j.run(args[i:], depth+1)
+	case spaced && guarded(first), guarded(a):
+		return j.line(a, depth+1)
+	}
+
+	return Allow
+}
+
+// nextByte is the index of the next c in s after k, or -1.
+func nextByte(s string, c byte, k int) int {
+	n := strings.IndexByte(s[k+1:], c)
+	if n < 0 {
+		return -1
+	}
+
+	return k + 1 + n
+}
+
+// guarded reports whether word names a command the policy has rules for, or one that runs others:
+// git, gh, make, the harness, env, eval, xargs, a shell, an interpreter or a wrapper. A path names
+// one only from a bin directory (/usr/bin/git), not a file of the checkout (.cache/tmp/git).
+func guarded(word string) bool {
+	if isHarness(word) {
+		return true
+	}
+
+	name := path.Base(word)
+	if strings.Contains(word, "/") && !slices.Contains([]string{"bin", "sbin"}, path.Base(path.Dir(word))) {
+		return false
+	}
+
+	if _, ok := wrappers[name]; ok {
+		return true
+	}
+
+	return slices.Contains([]string{cmdGit, "gh", cmdMake, "env", "eval", "xargs"}, name) || slices.Contains(shells, name) ||
+		(slices.Contains(interpreters, name) && name != "." && name != "source")
 }

@@ -9,14 +9,14 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/shell"
 )
 
-func (j *judge) gh(args []string) Decision {
-	group, sub := "", ""
-	if len(args) > 0 {
-		group = args[0]
-	}
+// ghRepoFlag is the flag of gh's command groups that may come before the command (gh pr -R o/r
+// merge): the only one the policy lets stand there.
+var ghRepoFlag = []string{"-R", "--repo"}
 
-	if len(args) > 1 {
-		sub = args[1]
+func (j *judge) gh(args []string) Decision {
+	group, sub, before := ghWords(args)
+	if group == "pr" && before != "" {
+		return deny("write gh's command before its flags (gh %s <command> %s …): the policy reads which command it is", group, before)
 	}
 
 	if d, judged := j.ghConfig(group, args[min(1, len(args)):]); judged && d.Deny {
@@ -39,16 +39,57 @@ func (j *judge) gh(args []string) Decision {
 	return deny("the %s may read GitHub with gh (view, list, diff, checks, status) but not change it", j.role)
 }
 
+// ghWords are gh's command group and the command within it, as gh reads them: past -R/--repo and
+// its value, which gh accepts between them. before is any other flag found there, which the policy
+// does not read past.
+func ghWords(args []string) (group, sub, before string) {
+	if len(args) == 0 {
+		return "", "", ""
+	}
+
+	group = args[0]
+
+	for i := 1; i < len(args); i++ {
+		a := args[i]
+		name, _, attached := strings.Cut(a, "=")
+
+		switch {
+		case slices.Contains(ghRepoFlag, name):
+			i += btoi(!attached)
+		case strings.HasPrefix(a, "-R") && len(a) > 2:
+		case a == "-h" || a == "--help":
+			return group, a, ""
+		case strings.HasPrefix(a, "-"):
+			return group, "", a
+		default:
+			return group, a, ""
+		}
+	}
+
+	return group, "", ""
+}
+
 // personOnly refuses what only a person does on GitHub: merge and approve a pull request.
 func personOnly(group, sub string, args []string) Decision {
 	switch {
 	case group == "pr" && sub == "merge":
 		return deny("agents never merge: a person merges the pull request on GitHub")
-	case group == "pr" && sub == "review" && slices.ContainsFunc(args, func(a string) bool { return a == "--approve" || a == "-a" }):
+	case group == "pr" && sub == "review" && slices.ContainsFunc(args, approves):
 		return deny("agents never approve: a person reviews the pull request")
 	}
 
 	return Allow
+}
+
+// approves reports whether a word of gh pr review asks to approve, in any form pflag reads:
+// --approve, --approve=…, or -a alone or in a cluster of short flags (-ab LGTM), before the value
+// of -b or -F.
+func approves(a string) bool {
+	if a == "--approve" || strings.HasPrefix(a, "--approve=") {
+		return true
+	}
+
+	return len(a) > 1 && a[0] == '-' && a[1] != '-' && strings.Contains(cutAtValued(a[1:], "bF"), "a")
 }
 
 func ghRead(group, sub string) bool {
@@ -83,16 +124,26 @@ func (j *judge) ghAPI(args []string) Decision {
 		return deny("write the GraphQL query inline (-f query='…'): the policy reads it before it runs")
 	case call.graphql() && forgesEvidence(strings.ToLower(call.query), "mutation", "merge", "review", "checkrun", "checksuite", "status"):
 		return deny("statuses, checks, reviews and merges are what people rely on: nobody writes them from here")
+	case call.graphql() && forgesEvidence(strings.ToLower(call.query), "mutation", "updateref", "createref", "deleteref", "createcommitonbranch"):
+		return deny(movesBranches)
 	}
 
 	for _, e := range call.endpoints {
 		if forgesEvidence(e, "", "/statuses/", "/check-runs", "/check-suites", "/merge", "/reviews") {
 			return deny("statuses, checks, reviews and merges are what people rely on: nobody writes them from here")
 		}
+
+		if forgesEvidence(strings.ToLower(e), "", "/git/refs", "/contents/", "/branches/") {
+			return deny(movesBranches)
+		}
 	}
 
 	return Allow
 }
+
+// movesBranches is why no Claude session writes refs, files or branches through the API: a branch,
+// main among them, moves only through make pr's push and a person's merge.
+const movesBranches = "refs, files and branches move through make pr's push and a person's merge, never through the API"
 
 // forgesEvidence reports whether text, once it holds marker (any text for ""), names one of words.
 func forgesEvidence(text, marker string, words ...string) bool {

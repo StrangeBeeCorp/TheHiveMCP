@@ -10,64 +10,10 @@ import (
 // configNamesFile is why git and gh may not be pointed at configuration the policy cannot read.
 const configNamesFile = "this configuration names a file of configuration the policy cannot read: set the keys one by one"
 
-// gitProgram names, in one section of git's configuration, the keys whose value git runs as a
-// command line: directly in the section ("" for any name), and under a subsection
-// (diff.<driver>.textconv).
-type gitProgram struct {
-	top, sub []string
-}
-
-// gitPrograms are the keys whose value git runs: an alias, a pager, an editor, a helper, a driver.
-var gitPrograms = map[string]gitProgram{
-	keyAlias:      {top: []string{""}, sub: []string{""}},
-	"core":        {top: []string{keyPager, keyEditor, "sshcommand", "askpass", "fsmonitor", "gitproxy"}},
-	"sequence":    {top: []string{keyEditor}},
-	keyPager:      {top: []string{""}, sub: []string{""}},
-	subDiff:       {top: []string{"external"}, sub: []string{"command", "textconv"}},
-	"difftool":    {sub: []string{keyCmd}},
-	"mergetool":   {sub: []string{keyCmd}},
-	"merge":       {sub: []string{"driver"}},
-	"filter":      {sub: []string{"clean", "smudge", "process"}},
-	"credential":  {top: []string{"helper"}, sub: []string{"helper"}},
-	"gpg":         {top: []string{"program"}, sub: []string{"program"}},
-	"uploadpack":  {top: []string{"packobjectshook"}},
-	"interactive": {top: []string{"difffilter"}},
-	"web":         {top: []string{keyBrowser}},
-	keyBrowser:    {sub: []string{keyCmd, "path"}},
-	"man":         {sub: []string{keyCmd, "path"}},
-	subModule:     {sub: []string{"update"}},
-}
-
-// runsAs reports whether git runs the value of key, in any case, as a command line.
-func runsAs(key string) bool {
-	key = strings.ToLower(key)
-	section, rest, _ := strings.Cut(key, ".")
-	name := rest[strings.LastIndex(rest, ".")+1:]
-
-	p, ok := gitPrograms[section]
-	names := p.top
-
-	if strings.Contains(rest, ".") {
-		names = p.sub
-	}
-
-	return ok && slices.ContainsFunc(names, func(n string) bool { return n == "" || n == name })
-}
-
-// programSection reports whether a section (with or without its subsection) holds keys git runs or
-// files it loads.
-func programSection(s string) bool {
-	section, _, _ := strings.Cut(strings.ToLower(s), ".")
-
-	_, ok := gitPrograms[section]
-
-	return ok || strings.HasPrefix(section, "include")
-}
-
 // loadsFile reports whether a key makes git read another file of configuration.
 func loadsFile(key string) bool {
 	key = strings.ToLower(key)
-	return key == "include.path" || (strings.HasPrefix(key, "includeif.") && strings.HasSuffix(key, ".path"))
+	return key == "include.path" || key == "init.templatedir" || (strings.HasPrefix(key, "includeif.") && strings.HasSuffix(key, ".path"))
 }
 
 // gitConfig judges git config for every role, without trusting a reading of its options (git
@@ -92,17 +38,27 @@ func (j *judge) gitConfig(rest []string) Decision {
 	return Allow
 }
 
-// configWord judges the word at k of git config's arguments with every word after it: a rename
-// into a section git runs values from, a key that loads a file, a key whose value git runs.
+// configWord judges the word at k of git config's arguments: a rename is refused (it would carry
+// values into a section that runs them), a key that loads a file is refused with any word after
+// it, and every word is judged as the command line git may run it as, whatever key it is the
+// value of: the table of keys git runs is never complete (trailer.<x>.cmd,
+// core.alternateRefsCommand). After an alias key, the words are judged as the git command they
+// expand to as well.
 func (j *judge) configWord(rest []string, k int) Decision {
 	w, after := rest[k], rest[k+1:]
 
 	switch {
-	case (w == renameSection || cuts(w, "--"+renameSection)) && slices.ContainsFunc(after, programSection):
-		return deny("a section renamed into one git runs values from would run values the policy never read: set those keys one by one")
+	case w == renameSection || cuts(w, "--"+renameSection):
+		return deny("renaming a section would carry its values into one that runs them: set the keys one by one")
 	case loadsFile(w) && len(after) > 0:
 		return deny(configNamesFile)
-	case !runsAs(w):
+	}
+
+	if d := j.child(strings.TrimPrefix(w, "!"), maxDepth); d.Deny {
+		return d
+	}
+
+	if !strings.HasPrefix(strings.ToLower(w), keyAlias+".") {
 		return Allow
 	}
 

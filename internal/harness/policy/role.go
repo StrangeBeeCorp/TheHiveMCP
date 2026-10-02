@@ -4,9 +4,11 @@
 // it never asks.
 //
 // It reads a command line as the shell will run it, with the files its paths and patterns name
-// now, the files its commands' options name (sed's w, curl -o, find -fprint…), and the command
-// lines configuration will run later (a git or gh alias, a pager, an editor); what it cannot read
-// there (a computed key, an agent's sed or awk script from a file) it refuses. What a program then
+// now (judged where they land, through symlinks and in any case), the files its commands' options
+// name (sed's w, curl -o, find -fprint…), and the command lines configuration will run later (every
+// value git config sets, a gh alias, a pager, an editor); what it cannot read there (a computed
+// key, an agent's sed or awk script from a file, an option it does not know before git's or gh's
+// command) it refuses. What a program then
 // does by its own logic is beyond it: a script, a recursive search of a directory above a hidden
 // one, a value read at run time into a variable the environment already exports, a program it has
 // no rule for that writes a file (a copy of the harness under another name among them), a sed or

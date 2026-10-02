@@ -85,6 +85,23 @@ func ClassOf(rel string) (Class, bool) {
 	return "", false
 }
 
+// classInAnyCase is the protected class of rel with its letters in any case: on a filesystem that
+// ignores case, CLAUDE.MD is CLAUDE.md.
+func classInAnyCase(rel string) (Class, bool) {
+	if class, ok := ClassOf(rel); ok {
+		return class, true
+	}
+
+	lower := strings.ToLower(rel)
+	for _, p := range protected {
+		if registry.Match(strings.ToLower(p.pattern), lower) {
+			return p.class, true
+		}
+	}
+
+	return "", false
+}
+
 // IsTest reports whether a repository-relative path is test code: the Tester's, never the Coder's.
 func IsTest(rel string) bool {
 	return strings.HasSuffix(rel, "_test.go") ||
@@ -100,9 +117,11 @@ func IsEnvFile(p string) bool {
 	return strings.HasPrefix(base, ".env") && base != ".env.template"
 }
 
-// Write decides whether the role may write the file at p (absolute, or relative to root).
+// Write decides whether the role may write the file at p (absolute, or relative to root), judged
+// where it lands: through the symlinks on its way, and with the names a refusal guards (.git, the
+// records, the protected classes) in any case, since this host's filesystem ignores it.
 func Write(role Role, root, p string) Decision {
-	abs := absolute(root, p)
+	root, abs := landing(root), landing(absolute(root, p))
 	if inGit(abs) {
 		return deny("never write inside .git: git's own files change through git commands")
 	}
@@ -113,7 +132,7 @@ func Write(role Role, root, p string) Decision {
 	}
 
 	rel, inside := relative(root, abs)
-	if inside && record(rel) {
+	if inside && record(strings.ToLower(rel)) {
 		return deny("%s is the harness's own record (make pr's evidence, the hooks' state): only the harness writes it", rel)
 	}
 
@@ -138,7 +157,7 @@ func writeInside(role Role, rel string) Decision {
 		return Allow
 	}
 
-	if class, ok := ClassOf(rel); ok {
+	if class, ok := classInAnyCase(rel); ok {
 		return deny("%s is %s and the %s may not change it. %s", rel, class, role, remedies[class])
 	}
 
@@ -179,16 +198,16 @@ func Read(role Role, root, p string) Decision {
 			"and internal/types/constants.go")
 	}
 
-	rel, inside := relative(root, absolute(root, p))
+	rel, inside := relative(landing(root), landing(absolute(root, p)))
 	if !inside || role == Main || role.ReadOnly() {
 		return Allow
 	}
 
-	if under(rel, CanaryDir) {
+	if rel = strings.ToLower(rel); under(rel, strings.ToLower(CanaryDir)) {
 		return deny("the canaries are the known-bad patches the gates must catch: implement from the spec, not from them")
 	}
 
-	if role == Coder && under(rel, SealedDir) {
+	if role == Coder && under(rel, strings.ToLower(SealedDir)) {
 		return deny("the sealed tests stay hidden from the Coder until the end: make the visible tests pass")
 	}
 
@@ -202,8 +221,10 @@ func record(rel string) bool {
 }
 
 // holdsRecords reports whether rel is a directory a record lies under: the checkout, .cache or
-// .cache/harness.
+// .cache/harness, in any case.
 func holdsRecords(rel string) bool {
+	rel = strings.ToLower(rel)
+
 	return rel == "." || rel == "" || rel == ".cache" || rel == ".cache/harness"
 }
 
@@ -211,7 +232,7 @@ func holdsRecords(rel string) bool {
 // ~/.gitconfig and the files it includes beside it (~/.gitconfig-work), and git's and gh's
 // directories under ~/.config, $XDG_CONFIG_HOME or $GH_CONFIG_DIR.
 func configFile(abs string) bool {
-	if base := filepath.Base(abs); strings.HasPrefix(base, ".gitconfig") {
+	if base := strings.ToLower(filepath.Base(abs)); strings.HasPrefix(base, ".gitconfig") {
 		return true
 	}
 
@@ -230,7 +251,12 @@ func configFile(abs string) bool {
 		dirs = append(dirs, filepath.Clean(g))
 	}
 
-	return slices.ContainsFunc(dirs, func(d string) bool { return abs == d || strings.HasPrefix(abs, d+"/") })
+	lower := strings.ToLower(abs)
+
+	return slices.ContainsFunc(dirs, func(d string) bool {
+		d = strings.ToLower(landing(d))
+		return lower == d || strings.HasPrefix(lower, d+"/")
+	})
 }
 
 // under reports whether rel is the directory dir (given with its trailing slash) or inside it.
@@ -264,7 +290,50 @@ func relative(root, abs string) (string, bool) {
 }
 
 func inGit(abs string) bool {
-	return slices.Contains(strings.Split(filepath.ToSlash(abs), "/"), ".git")
+	return slices.ContainsFunc(strings.Split(filepath.ToSlash(abs), "/"), func(part string) bool { return strings.EqualFold(part, ".git") })
+}
+
+// maxLinks bounds how many dangling symlinks landing follows by hand.
+const maxLinks = 16
+
+// landing is where a write or a read of p lands: the part of p that exists with its symlinks
+// resolved, a dangling one followed by hand, then the rest of p.
+func landing(p string) string {
+	for range maxLinks {
+		existing, rest := p, ""
+
+		for {
+			_, err := os.Lstat(existing)
+			if err == nil {
+				break
+			}
+
+			parent := filepath.Dir(existing)
+			if parent == existing {
+				return p
+			}
+
+			rest, existing = filepath.Join(filepath.Base(existing), rest), parent
+		}
+
+		resolved, err := filepath.EvalSymlinks(existing)
+		if err == nil {
+			return filepath.Join(resolved, rest)
+		}
+
+		target, err := os.Readlink(existing)
+		if err != nil {
+			return p
+		}
+
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(existing), target)
+		}
+
+		p = filepath.Join(target, rest)
+	}
+
+	return p
 }
 
 func temporary(abs string) bool {
