@@ -106,3 +106,70 @@ test('a blocked Coder, a Coder or an attacking Tester that fails to answer, and 
 test('a duel needs a task', async () => {
   await assert.rejects(duel({ ticket: 'DL-1' }, {}), /needs args.task/)
 })
+
+// Sealed tests: with a ticket key the Tester also writes tests the Coder never sees; once the duel
+// is over they move into the code and must pass.
+const sealedTest = { file: '.claude/sealed/DL-1/internal/tools/manage/sealed_test.go', name: 'TestSealedEmptyCreate' }
+const sealedDuel = (sealedAnswers, coderOnSealed) => {
+  let run = 0
+  return {
+    'tester: tests first': tests(['TestEmptyCreate'], { sealed: [sealedTest] }),
+    'coder: round 0': code(),
+    'tester: attack 1': tests([], { done: true }),
+    'tester: sealed tests': () => sealedAnswers[run++],
+    'coder: sealed tests': coderOnSealed,
+  }
+}
+
+test('with a ticket key the Tester seals tests, which the Coder never sees, and they run once the duel is over', async () => {
+  const { result, calls, labels } = await duel(task, sealedDuel([{ unsealed: ['internal/tools/manage/sealed_test.go'], failing: [] }]))
+
+  assert.deepEqual(labels, ['tester: tests first', 'coder: round 0', 'tester: attack 1', 'tester: sealed tests'])
+  assert.match(calls[0].prompt, /under \.claude\/sealed\/DL-1\//)
+  assert.match(calls[3].prompt, /bin\/harness unseal --ticket DL-1/)
+  for (const c of calls.filter((x) => x.role === 'coder')) assert.doesNotMatch(c.prompt, /sealed|TestSealedEmptyCreate/i)
+  assert.equal(result.outcome, 'passing')
+})
+
+test('a sealed test that fails gets the Coder one round, and runs again', async () => {
+  const failingSealed = { ...sealedTest, fails_because: 'an alert parent is not tried' }
+  const { result, calls, labels } = await duel(
+    task,
+    sealedDuel([{ unsealed: ['sealed_test.go'], failing: [failingSealed] }, { unsealed: ['sealed_test.go'], failing: [] }], code()),
+  )
+
+  assert.deepEqual(labels.slice(3), ['tester: sealed tests', 'coder: sealed tests', 'tester: sealed tests'])
+  assert.match(calls[4].prompt, /TestSealedEmptyCreate \(fails because an alert parent is not tried\)/)
+  assert.equal(result.outcome, 'passing')
+})
+
+test('sealed tests that did not move into the code, or still fail, leave the duel red', async () => {
+  let run = await duel(task, sealedDuel([{ unsealed: [], failing: [] }]))
+  assert.equal(run.result.outcome, 'unseal failed')
+
+  const failingSealed = { ...sealedTest, fails_because: 'still' }
+  const stillFailing = { unsealed: ['sealed_test.go'], failing: [failingSealed] }
+  run = await duel(task, sealedDuel([stillFailing, stillFailing], code()))
+  assert.equal(run.result.outcome, 'red')
+
+  run = await duel(task, sealedDuel([stillFailing], code({ passing: false })))
+  assert.equal(run.result.outcome, 'red', 'the Coder could not make them pass')
+  assert.equal(run.labels.filter((l) => l === 'tester: sealed tests').length, 1, 'nothing to run again')
+})
+
+test('without a ticket key nothing is sealed, and with the visible tests red nothing is unsealed', async () => {
+  let run = await duel({ task: task.task }, {
+    'tester: tests first': tests(['TestEmptyCreate'], { sealed: [sealedTest] }),
+    'coder: round 0': code(),
+    'tester: attack 1': tests([], { done: true }),
+  })
+  assert.doesNotMatch(run.calls[0].prompt, /\.claude\/sealed/)
+  assert.equal(run.result.outcome, 'passing', 'the sealed list is ignored without a ticket')
+
+  run = await duel({ ...task, rounds: 0 }, {
+    'tester: tests first': tests(['TestEmptyCreate'], { sealed: [sealedTest] }),
+    'coder: round 0': code({ passing: false }),
+  })
+  assert.deepEqual(run.labels, ['tester: tests first', 'coder: round 0'], 'no unseal while the visible tests fail')
+  assert.equal(run.result.outcome, 'red')
+})

@@ -7,22 +7,25 @@
 # internal/testutils) have no floor.
 
 floors:
-  bootstrap: 69
-  cmd/harness: 3
-  internal/analyzers: 91
-  internal/harness/checks: 90
+  bootstrap: 72
+  cmd/harness: 39
+  internal/analyzers: 94
+  internal/harness/bench: 96
+  internal/harness/checks: 91
   internal/harness/coverage: 91
   internal/harness/evidence: 89
   internal/harness/gatesdoc: 56
-  internal/harness/hooks: 64
-  internal/harness/policy: 88
+  internal/harness/gitx: 52
+  internal/harness/hooks: 67
+  internal/harness/mutation: 93
+  internal/harness/policy: 89
   internal/harness/registry: 94
   internal/harness/runner: 90
-  internal/harness/shell: 89
-  internal/permissions: 82
+  internal/harness/shell: 90
+  internal/permissions: 85
   internal/resources: 20
   internal/surface: 66
-  internal/tools: 42
+  internal/tools: 48
   internal/tools/execute_automation: 67
   internal/tools/search: 62
   internal/types: 10

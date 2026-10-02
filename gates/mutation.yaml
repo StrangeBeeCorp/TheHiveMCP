@@ -2,9 +2,9 @@
 # touches that has a floor here, runs its unit tests (-short), and the share of the mutants they
 # kill (the test efficacy) may not fall under the floor. Measured on 2026-10-02 with gremlins
 # v0.6.0 and this timeout coefficient; each floor sits a point, or one mutant's worth, under:
-#   internal/utils 83.0 % of 94 mutants, internal/harness/policy 71.6 % of 162,
-#   internal/permissions 92.7 % of 41, internal/harness/evidence 79.3 % of 29,
-#   internal/harness/checks 82.9 % of 117, internal/tools/execute_automation 87.0 % of 23.
+#   internal/utils 83.0 % of 94 mutants, internal/harness/policy 75.1 % of 189,
+#   internal/permissions 92.7 % of 41, internal/harness/evidence 84.6 % of 39,
+#   internal/harness/checks 84.6 % of 130, internal/tools/execute_automation 87.0 % of 23.
 # Packages with fewer than ten mutants have no floor (one mutant swings them by ten points or
 # more), nor does internal/tools/search, whose tests are integration tests. Lowering a floor is a
 # person's call.
@@ -18,8 +18,8 @@ timeout_coefficient: 30
 
 floors:
   internal/utils: 81
-  internal/harness/policy: 70
+  internal/harness/policy: 74
   internal/permissions: 90
-  internal/harness/evidence: 75
-  internal/harness/checks: 81
+  internal/harness/evidence: 82
+  internal/harness/checks: 83
   internal/tools/execute_automation: 82
