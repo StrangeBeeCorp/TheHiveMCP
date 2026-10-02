@@ -51,7 +51,7 @@ func TestAScratchCheckoutTakesAPatchAndGoesAway(t *testing.T) {
 	assert.Equal(t, "uncommitted\n", read(t, filepath.Join(dir, aFile)))
 }
 
-// HasPath and FileAt read a file at a revision, and say when it has none.
+// HasPath and At read a file at a revision, and say when it has none.
 func TestAFileIsReadAtARevision(t *testing.T) {
 	t.Parallel()
 
@@ -64,10 +64,10 @@ func TestAFileIsReadAtARevision(t *testing.T) {
 	assert.False(t, gitx.HasPath(t.Context(), dir, "HEAD~1", "b.txt"))
 	assert.True(t, gitx.HasPath(t.Context(), dir, "HEAD", "b.txt"))
 
-	data, err := gitx.FileAt(t.Context(), dir, "HEAD~1", aFile)
-	require.NoError(t, err)
+	data, ok := gitx.At(t.Context(), dir, "HEAD~1", aFile)
+	require.True(t, ok)
 	assert.Equal(t, "one\n", string(data))
 
-	_, err = gitx.FileAt(t.Context(), dir, "HEAD~1", "b.txt")
-	require.Error(t, err)
+	_, ok = gitx.At(t.Context(), dir, "HEAD~1", "b.txt")
+	assert.False(t, ok)
 }

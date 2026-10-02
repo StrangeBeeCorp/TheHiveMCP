@@ -37,14 +37,14 @@ func HasPath(ctx context.Context, root, rev, path string) bool {
 	return err == nil
 }
 
-// FileAt is the content of the file at the revision, or an error when it has none.
-func FileAt(ctx context.Context, root, rev, path string) ([]byte, error) {
+// At is a file's content at the revision, and whether it exists there.
+func At(ctx context.Context, root, rev, path string) ([]byte, bool) {
 	out, err := run(ctx, root, "show", rev+":"+path)
 	if err != nil {
-		return nil, err
+		return nil, false
 	}
 
-	return []byte(out), nil
+	return []byte(out), true
 }
 
 // Apply applies a patch file to the working tree at dir.

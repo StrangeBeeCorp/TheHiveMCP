@@ -23,7 +23,7 @@ func (e env) changelog(ctx context.Context) ([]checks.Finding, error) {
 
 	changed := e.changed
 	if slices.Contains(changed, checks.ChangelogPath) {
-		before, _ := gitx.FileAt(ctx, e.root, e.base, checks.ChangelogPath)
+		before, _ := gitx.At(ctx, e.root, e.base, checks.ChangelogPath)
 		after, _ := os.ReadFile(filepath.Join(e.root, checks.ChangelogPath)) // #nosec G304 -- this checkout's changelog
 
 		if !checks.UnreleasedAdded(string(before), string(after)) {
