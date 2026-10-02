@@ -26,6 +26,11 @@ func PreToolUse(root string, in Input) Output {
 		d = search(role, root, in)
 	}
 
+	if in.Unreadable {
+		d = policy.Decision{Deny: true, Reason: "harness: this tool call could not be read (its hook input is over 4 MiB, or " +
+			"not JSON), so it cannot be judged: split the call, or ask the person to look at the hook"}
+	}
+
 	if !d.Deny {
 		return Output{}
 	}

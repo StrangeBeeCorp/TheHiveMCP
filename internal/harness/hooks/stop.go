@@ -85,12 +85,21 @@ func (s Stopper) Stop(ctx context.Context, in Input) Output {
 		return note("harness: check-fast could not read the checkout: " + err.Error())
 	}
 
+	// check-fast runs outside the state lock, which a PreCompact or another agent's stop then never
+	// waits for; the lock only covers reading and writing the state. Two agents that stop together
+	// may both run it, and both results describe the same checkout.
+	static := role == policy.Tester
+
+	c, ran, err := cached(ctx, load(s.Root), fp, static, s.Check)
+	if err != nil {
+		return note("harness: check-fast could not run: " + err.Error())
+	}
+
 	var out Output
 
 	err = update(s.Root, func(st *State) error {
-		c, err := cached(ctx, st, fp, role == policy.Tester, s.Check)
-		if err != nil {
-			return err
+		if ran {
+			st.Last = &Last{Fingerprint: fp, Static: static, Check: c, At: time.Now()}
 		}
 
 		out = s.apply(st, in, c)
@@ -98,7 +107,7 @@ func (s Stopper) Stop(ctx context.Context, in Input) Output {
 		return nil
 	})
 	if err != nil {
-		return note("harness: check-fast could not run: " + err.Error())
+		return note("harness: check-fast could not record its result: " + err.Error())
 	}
 
 	return out
@@ -142,19 +151,19 @@ func (s Stopper) apply(st *State, in Input, c Check) Output {
 	return a.output()
 }
 
-func cached(ctx context.Context, st *State, fp string, static bool, check Checker) (Check, error) {
+// cached is check-fast's result for the checkout's fingerprint: the last run's when nothing changed
+// since, else a new run's, and whether it ran.
+func cached(ctx context.Context, st State, fp string, static bool, check Checker) (Check, bool, error) {
 	if st.Last != nil && st.Last.Fingerprint == fp && st.Last.Static == static {
-		return st.Last.Check, nil
+		return st.Last.Check, false, nil
 	}
 
 	c, err := check(ctx, static)
 	if err != nil {
-		return Check{}, err
+		return Check{}, false, err
 	}
 
-	st.Last = &Last{Fingerprint: fp, Static: static, Check: c, At: time.Now()}
-
-	return c, nil
+	return c, true, nil
 }
 
 // blockedSince reports whether BLOCKED.md was written during the current red streak: a report

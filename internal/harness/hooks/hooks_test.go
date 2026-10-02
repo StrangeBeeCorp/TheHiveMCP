@@ -54,6 +54,71 @@ func denied(t *testing.T, out hooks.Output) string {
 	return reason
 }
 
+// A hook input that does not decode never passes for the main session's: the call is refused,
+// and a stop is judged as an agent's.
+func TestAnUnreadableHookInputIsAnAgentsAndItsToolCallIsRefused(t *testing.T) {
+	t.Parallel()
+
+	for _, data := range []string{"{", `{"tool_name": "Bash", "tool_input": {"command": "git push`, "not json"} {
+		in := hooks.Parse([]byte(data))
+		require.True(t, in.Unreadable, data)
+		assert.Equal(t, policy.Other, in.Role(), data)
+
+		v := decode(t, hooks.PreToolUse(t.TempDir(), in))
+		spec, _ := v["hookSpecificOutput"].(map[string]any)
+		assert.Equal(t, "deny", spec["permissionDecision"], data)
+		assert.Contains(t, spec["permissionDecisionReason"], "could not be read", data)
+	}
+
+	assert.False(t, hooks.Parse([]byte(`{"tool_name": "Read"}`)).Unreadable)
+
+	root := t.TempDir()
+	s := hooks.Stopper{
+		Root: root, MaxRounds: 6, Check: (&fakeCheck{result: hooks.Check{Red: true, Report: "unit: FAIL"}}).run,
+		Fingerprint: func(context.Context) (string, error) { return "f", nil },
+	}
+	assert.Equal(t, "block", decode(t, s.Stop(context.Background(), hooks.Parse([]byte("{"))))["decision"],
+		"a red stop sends it back, as for an agent")
+}
+
+// check-fast runs outside the state lock: a PreCompact while it runs does not wait for it.
+func TestPreCompactDoesNotWaitForARunningCheckFast(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	running, release := make(chan struct{}), make(chan struct{})
+	s := hooks.Stopper{
+		Root: root, MaxRounds: 6,
+		Check: func(context.Context, bool) (hooks.Check, error) {
+			close(running)
+			<-release
+
+			return hooks.Check{}, nil
+		},
+		Fingerprint: func(context.Context) (string, error) { return "f", nil },
+	}
+
+	stopped := make(chan hooks.Output)
+
+	go func() { stopped <- s.Stop(context.Background(), hooks.Input{AgentType: coderType}) }()
+
+	<-running
+
+	compacted := make(chan hooks.Output)
+
+	go func() { compacted <- hooks.PreCompact(context.Background(), root) }()
+
+	select {
+	case out := <-compacted:
+		assert.Empty(t, out.Stdout, "the progress was saved")
+	case <-time.After(5 * time.Second):
+		t.Fatal("PreCompact waited for check-fast")
+	}
+
+	close(release)
+	assert.Empty(t, (<-stopped).Stdout, "a green stop says nothing")
+}
+
 func TestPreToolUseDeniesWithAReasonAndOtherwiseSaysNothing(t *testing.T) {
 	t.Parallel()
 

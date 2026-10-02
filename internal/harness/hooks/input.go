@@ -24,19 +24,29 @@ type Input struct {
 	AgentID        string         `json:"agent_id"`
 	AgentType      string         `json:"agent_type"`
 	Source         string         `json:"source"`
+	// Unreadable is true when the input is not the JSON Claude Code sends (too large, or
+	// garbled): it is judged as an agent's, and PreToolUse refuses the call.
+	Unreadable bool `json:"-"`
 }
 
-// Parse decodes a hook's input. An unreadable input is an empty one: the main session, no tool.
+// Parse decodes a hook's input. One that does not decode is Unreadable: it never passes for the
+// main session's, the role with the fewest limits.
 func Parse(data []byte) Input {
 	var in Input
 
-	_ = json.Unmarshal(data, &in)
+	if json.Unmarshal(data, &in) != nil {
+		return Input{Unreadable: true}
+	}
 
 	return in
 }
 
-// Role is who made the call.
+// Role is who made the call; an unreadable input is an agent's.
 func (in Input) Role() policy.Role {
+	if in.Unreadable {
+		return policy.Other
+	}
+
 	return policy.RoleOf(in.AgentType)
 }
 
