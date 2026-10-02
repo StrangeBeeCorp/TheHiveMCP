@@ -32,6 +32,12 @@ func MainCheckout(ctx context.Context, root string) string {
 	return filepath.Dir(strings.TrimSpace(out))
 }
 
+// Ignored reports whether git ignores the path (relative to root): it never reaches a commit.
+func Ignored(ctx context.Context, root, rel string) bool {
+	_, err := run(ctx, root, "check-ignore", "-q", "--", rel)
+	return err == nil
+}
+
 // Fingerprint identifies what the gates would read: HEAD, the diff from it (staged and not), and
 // the untracked files with their content. An equal fingerprint means nothing changed since.
 func Fingerprint(ctx context.Context, root string) (string, error) {

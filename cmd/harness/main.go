@@ -323,7 +323,7 @@ func (e env) docs(args []string, out io.Writer) error {
 func (e env) list(args []string, out io.Writer) error {
 	cadence := ""
 	if len(args) == 2 && args[0] == "--cadence" {
-		cadence = args[1]
+		cadence = args[len(args)-1]
 	}
 
 	for _, g := range e.reg.Gates {

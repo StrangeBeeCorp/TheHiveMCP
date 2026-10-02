@@ -102,7 +102,7 @@ func (s Stopper) Stop(ctx context.Context, in Input) Output {
 			st.Last = &Last{Fingerprint: fp, Static: static, Check: c, At: time.Now()}
 		}
 
-		out = s.apply(st, in, c)
+		out = s.apply(st, in, c, static)
 
 		return nil
 	})
@@ -113,18 +113,22 @@ func (s Stopper) Stop(ctx context.Context, in Input) Output {
 	return out
 }
 
-// apply counts the red round of the agent and decides.
-func (s Stopper) apply(st *State, in Input, c Check) Output {
+// apply counts the red round of the agent and decides. A run that could not run every gate is
+// neither red nor green: it counts no round and ends no block. A static run's green ends the
+// agent's red streak, not the task's block, which only the full gates can clear.
+func (s Stopper) apply(st *State, in Input, c Check, static bool) Output {
 	actor := in.Actor()
 
-	if !c.Red {
+	switch {
+	case c.Incomplete && !c.Red:
+		return note("check-fast could not run every gate, so this is not a pass:\n" + c.Report)
+	case !c.Red:
 		delete(st.Rounds, actor)
 		delete(st.RedSince, actor)
-		// Green: whatever blocked the task is over.
-		_ = os.Remove(filepath.Join(s.Root, policy.BlockedFile))
 
-		if c.Incomplete {
-			return note("check-fast could not run every gate, so this is not a pass:\n" + c.Report)
+		if !static {
+			// Green: whatever blocked the task is over.
+			_ = os.Remove(filepath.Join(s.Root, policy.BlockedFile))
 		}
 
 		return Output{}
@@ -152,9 +156,10 @@ func (s Stopper) apply(st *State, in Input, c Check) Output {
 }
 
 // cached is check-fast's result for the checkout's fingerprint: the last run's when nothing changed
-// since, else a new run's, and whether it ran.
+// since and that run judged every gate it had to, else a new run's, and whether it ran. A run
+// that could not run every gate (Docker down) is run again: what it missed may run now.
 func cached(ctx context.Context, st State, fp string, static bool, check Checker) (Check, bool, error) {
-	if st.Last != nil && st.Last.Fingerprint == fp && st.Last.Static == static {
+	if st.Last != nil && !st.Last.Incomplete && st.Last.Fingerprint == fp && st.Last.Static == static {
 		return st.Last.Check, false, nil
 	}
 

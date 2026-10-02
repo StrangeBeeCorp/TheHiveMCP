@@ -16,7 +16,7 @@ const Computed = "$"
 
 // Command is one simple command.
 type Command struct {
-	// Assigns are the NAME=value words before the command, and those of export or declare.
+	// Assigns are the NAME=value words before the command, and the words of export or declare.
 	Assigns []string
 	// Words are the command and its arguments, quotes removed and braces expanded. A part only
 	// known at run time reads as Computed.
@@ -26,8 +26,14 @@ type Command struct {
 	Exact []bool
 	// Writes are the files its redirections write (>, >>, >|, &>, <>, >&file).
 	Writes []string
+	// Reads are the files its redirections read (<, <>).
+	Reads []string
 	// Into is the command its standard output is piped into, if any.
 	Into []string
+	// Child is set when the command runs in a child shell of the line: in ( ), $( ), <( ), a
+	// pipeline or the background. What it changes in its shell (its directory) the rest of the
+	// line does not see.
+	Child bool
 }
 
 // Line is a parsed command line.
@@ -44,7 +50,7 @@ func Parse(line string) Line {
 		return Line{Opaque: []string{"a line the shell parser cannot read (" + err.Error() + ")"}}
 	}
 
-	p := parser{index: map[*syntax.CallExpr]int{}}
+	p := parser{index: map[*syntax.CallExpr]int{}, child: children(file)}
 	syntax.Walk(file, p.visit)
 	p.link()
 
@@ -55,6 +61,40 @@ type parser struct {
 	line  Line
 	index map[*syntax.CallExpr]int
 	pipes [][2]*syntax.CallExpr
+	child map[*syntax.Stmt]bool
+}
+
+// children are the statements that run in a child shell of the line.
+func children(file *syntax.File) map[*syntax.Stmt]bool {
+	child := map[*syntax.Stmt]bool{}
+	mark := func(n syntax.Node) {
+		syntax.Walk(n, func(m syntax.Node) bool {
+			if s, ok := m.(*syntax.Stmt); ok {
+				child[s] = true
+			}
+
+			return true
+		})
+	}
+
+	syntax.Walk(file, func(n syntax.Node) bool {
+		switch x := n.(type) {
+		case *syntax.Subshell, *syntax.CmdSubst, *syntax.ProcSubst:
+			mark(x)
+		case *syntax.BinaryCmd:
+			if x.Op == syntax.Pipe || x.Op == syntax.PipeAll {
+				mark(x)
+			}
+		case *syntax.Stmt:
+			if x.Background || x.Coprocess {
+				mark(x)
+			}
+		}
+
+		return true
+	})
+
+	return child
 }
 
 func (p *parser) visit(node syntax.Node) bool {
@@ -84,11 +124,16 @@ func (p *parser) visit(node syntax.Node) bool {
 
 // statement records the simple command of a statement with the files its redirections write.
 func (p *parser) statement(s *syntax.Stmt) {
-	var c Command
+	c := Command{Child: p.child[s]}
 
 	for _, r := range s.Redirs {
 		if target, ok := written(r); ok {
 			c.Writes = append(c.Writes, target)
+		}
+
+		if r.Word != nil && (r.Op == syntax.RdrIn || r.Op == syntax.RdrInOut) {
+			target, _ := literal(r.Word.Parts, false)
+			c.Reads = append(c.Reads, target)
 		}
 	}
 
@@ -97,7 +142,7 @@ func (p *parser) statement(s *syntax.Stmt) {
 		p.call(call, &c)
 	}
 
-	if len(c.Words) == 0 && len(c.Assigns) == 0 && len(c.Writes) == 0 {
+	if len(c.Words) == 0 && len(c.Assigns) == 0 && len(c.Writes) == 0 && len(c.Reads) == 0 {
 		return
 	}
 
@@ -170,12 +215,18 @@ func lastCall(s *syntax.Stmt) *syntax.CallExpr {
 	return nil
 }
 
+// assignment is NAME=value, or a word of export or declare that assigns nothing: a bare NAME, an
+// option (-x), or a name computed at run time (Computed).
 func assignment(a *syntax.Assign) string {
-	if a.Name == nil {
+	switch {
+	case a.Name == nil && a.Value != nil:
+		text, _ := literal(a.Value.Parts, false)
+		return text
+	case a.Name == nil:
 		return ""
-	}
-
-	if a.Value == nil {
+	case a.Naked:
+		return a.Name.Value
+	case a.Value == nil:
 		return a.Name.Value + "="
 	}
 
@@ -238,6 +289,16 @@ func literal(parts []syntax.WordPart, quoted bool) (string, bool) {
 			b.WriteString(text)
 
 			exact = exact && ok
+		case *syntax.ParamExp:
+			// A plain $NAME or ${NAME} keeps its name, so a check that knows the variable can
+			// resolve it; anything else ($1, ${X:-y}, ${#X}) reads as Computed.
+			if name := plainParam(p); name != "" {
+				b.WriteString("${" + name + "}")
+			} else {
+				b.WriteString(Computed)
+			}
+
+			exact = false
 		default:
 			b.WriteString(Computed)
 
@@ -246,6 +307,28 @@ func literal(parts []syntax.WordPart, quoted bool) (string, bool) {
 	}
 
 	return b.String(), exact
+}
+
+// plainParam is the name of a plain $NAME or ${NAME} expansion, or "" for any other.
+func plainParam(p *syntax.ParamExp) string {
+	operated := p.Excl || p.Length || p.Width || p.Index != nil || p.Slice != nil || p.Repl != nil || p.Names != 0 || p.Exp != nil
+	if p.Param == nil || operated || !isName(p.Param.Value) {
+		return ""
+	}
+
+	return p.Param.Value
+}
+
+// isName reports whether s is a variable name: a letter or _, then letters, digits or _.
+func isName(s string) bool {
+	for i, r := range s {
+		letter := r == '_' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z'
+		if !letter && (i == 0 || r < '0' || r > '9') {
+			return false
+		}
+	}
+
+	return s != ""
 }
 
 // unescape removes the backslashes the shell removes: before any character outside quotes, and

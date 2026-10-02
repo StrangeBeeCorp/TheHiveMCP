@@ -12,7 +12,8 @@ import (
 const (
 	// BlockedFile is where an agent that stopped red too many times says why.
 	BlockedFile = ".cache/harness/BLOCKED.md"
-	// SealedDir holds the Tester's sealed tests, which the Coder never reads before the end.
+	// SealedDir holds the Tester's sealed tests: the policy refuses the Coder the commands that
+	// read them before the end of the duel (see the read check of the Bash judge).
 	SealedDir = ".claude/sealed/"
 	// CanaryDir holds the known-bad patches the gates must catch; no implementing role reads them.
 	CanaryDir  = "gates/canaries/"
@@ -139,6 +140,23 @@ func writeInside(role Role, rel string) Decision {
 	}
 
 	return Allow
+}
+
+// hiddenFrom are the directories the role may not read: the canaries for an agent that writes,
+// and the sealed tests too for the Coder.
+func hiddenFrom(role Role) []string {
+	switch {
+	case role == Main || role.ReadOnly():
+		return nil
+	case role == Coder:
+		return []string{CanaryDir, SealedDir}
+	}
+
+	return []string{CanaryDir}
+}
+
+func underAny(rel string, dirs []string) bool {
+	return slices.ContainsFunc(dirs, func(d string) bool { return under(rel, d) })
 }
 
 // Read decides whether the role may read the file at p.

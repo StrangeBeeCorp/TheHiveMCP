@@ -1,8 +1,13 @@
 package policy
 
 import (
+	"os"
+	"path"
+	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/shell"
 )
 
 // rawTools run pinned in Docker through the Makefile; the hint says which target.
@@ -72,7 +77,144 @@ func (j *judge) rules(name string, args []string) Decision {
 		}
 	}
 
+	return j.trees(name, args)
+}
+
+// noFiles are commands that read no file their arguments name.
+var noFiles = []string{"echo", cmdPrintf, "true", "false", "test", "[", "cd", "pwd", "date", "which", "sleep", "basename", "dirname", "export"}
+
+// reads refuses a command that may read what the role may not (Read): the canaries for an agent,
+// the sealed tests too for the Coder. A word that names a path, from the directory the line is
+// in, is judged as it is; one the shell will expand (an unquoted glob, a variable, a substitution)
+// is refused when what it could expand to reaches a hidden directory, and so is a command run from
+// inside one. It is a deny-list over the parsed line: a recursive read or copy of a directory
+// above them (grep -r x ., tar -cf - .claude), or a program that finds files by its own logic, is
+// not caught. It keeps an agent that follows its instructions away from them, not one set on
+// reading them.
+func (j *judge) reads(c shell.Command) Decision {
+	hidden := hiddenFrom(j.role)
+	if len(hidden) == 0 {
+		return Allow
+	}
+
+	if rel, inside := relative(j.root, j.cwd); j.cwd != "" && inside && underAny(rel, hidden) {
+		return deny("%s is hidden from the %s: run the command from the checkout", rel, j.role)
+	}
+
+	for _, w := range readWords(c) {
+		text, ok := optionValue(w.text)
+		if !ok {
+			continue
+		}
+
+		if d := j.readWord(text, w.exact, hidden); d.Deny {
+			return d
+		}
+	}
+
 	return Allow
+}
+
+// optionValue is the path a word may name: itself, the value of --opt=value or -ovalue, or none
+// for a bare option.
+func optionValue(w string) (string, bool) {
+	switch {
+	case !strings.HasPrefix(w, "-"):
+		return w, true
+	case strings.Contains(w, "="):
+		_, value, _ := strings.Cut(w, "=")
+		return value, true
+	case !strings.HasPrefix(w, "--") && len(w) > len("-o"):
+		return w[len("-o"):], true
+	}
+
+	return "", false
+}
+
+// word is a word of a command line, and whether it is known before the line runs.
+type word struct {
+	text  string
+	exact bool
+}
+
+// readWords are the words a command may read: its input redirections, and its arguments unless
+// it reads no file.
+func readWords(c shell.Command) []word {
+	words := make([]word, 0, len(c.Reads)+len(c.Words))
+	for _, r := range c.Reads {
+		words = append(words, word{text: r, exact: !strings.ContainsAny(r, "*?["+shell.Computed)})
+	}
+
+	if len(c.Words) == 0 || slices.Contains(noFiles, path.Base(c.Words[0])) {
+		return words
+	}
+
+	for i, w := range c.Words[1:] {
+		words = append(words, word{text: w, exact: i+1 < len(c.Exact) && c.Exact[i+1]})
+	}
+
+	return words
+}
+
+// readWord judges one word a command may read: a path as it is, a pattern by where it may lead.
+func (j *judge) readWord(w string, exact bool, hidden []string) Decision {
+	w, exact = j.resolveTemp(w, exact)
+
+	if j.cwd == "" && !filepath.IsAbs(w) && strings.ContainsAny(w, "/.*?["+shell.Computed) {
+		return deny("after a cd the policy could not follow, the %s names a file by its full path: %s", j.role, w)
+	}
+
+	if cut := strings.IndexAny(w, "*?["+shell.Computed); !exact && cut >= 0 {
+		return j.readPattern(w, cut, hidden)
+	}
+
+	return Read(j.role, j.root, j.abs(w))
+}
+
+// resolveTemp reads ${TMPDIR} as the temporary directory, unless the line may rebind it.
+func (j *judge) resolveTemp(w string, exact bool) (string, bool) {
+	rest, ok := strings.CutPrefix(w, "${"+tmpdir+"}")
+	if !ok || j.tmpdirRebound {
+		return w, exact
+	}
+
+	w = filepath.Clean(os.TempDir()) + rest
+
+	return w, !strings.ContainsAny(w, "*?["+shell.Computed)
+}
+
+// readPattern judges a word the shell will expand, from its text up to the first wildcard or
+// variable: refused when it may expand into a hidden directory, or anywhere through a later ..
+func (j *judge) readPattern(w string, cut int, hidden []string) Decision {
+	if strings.Contains(w[cut:], "..") {
+		return deny("%s may lead anywhere through its ..: name the file", w)
+	}
+
+	rel, inside := relative(j.root, j.abs(w[:cut]))
+	if !inside {
+		return Allow
+	}
+
+	if rel == "." {
+		rel = ""
+	}
+
+	for _, h := range hidden {
+		if strings.HasPrefix(h, rel) || under(rel, h) {
+			return deny("%s may expand into %s, which is hidden from the %s: name the files you need", w, h, j.role)
+		}
+	}
+
+	return Allow
+}
+
+// abs is where a word of the command line points, from the directory the line has cd'ed to.
+func (j *judge) abs(w string) string {
+	if filepath.IsAbs(w) || j.cwd == "" {
+		return w
+	}
+
+	return filepath.Join(j.cwd, w)
 }
 
 // everyone holds for the main session too.
@@ -195,39 +337,6 @@ func (j *judge) harness(args []string) Decision {
 		return deny("the %s does not push: the session that runs the duel ships the change", j.role)
 	case j.role.ReadOnly() && !slices.Contains([]string{"select", subList, "check", "hook"}, sub):
 		return deny("the %s reads and reports; it does not run gates", j.role)
-	}
-
-	return Allow
-}
-
-func (j *judge) make(args []string) Decision {
-	for _, a := range args {
-		if _, value, ok := strings.Cut(a, "="); ok && strings.ContainsAny(value, ";|&$`<>()\n") {
-			return deny("make variables are expanded into shell lines: keep their values plain (no ; | & $ ` < > or parentheses)")
-		}
-	}
-
-	if !j.role.Agent() {
-		return Allow
-	}
-
-	return j.makeAgent(args)
-}
-
-func (j *judge) makeAgent(args []string) Decision {
-	has := func(targets ...string) bool {
-		return slices.ContainsFunc(args, func(a string) bool { return slices.Contains(targets, a) })
-	}
-
-	switch {
-	case has("-f", "--file", "-C", "--directory", "-E", "--eval", "-e") || slices.ContainsFunc(args, func(a string) bool { return strings.HasPrefix(a, "--eval=") }):
-		return deny("make runs this repository's Makefile as it is: no other makefile, directory or evaluated text")
-	case j.role.ReadOnly() && !has(subHelp, "help-xml", "test"):
-		return deny("the %s reads and reports: only make help and make test", j.role)
-	case has("dev-setup", "updatedep"):
-		return deny("make dev-setup and make updatedep change the setup or the dependencies: ask the person")
-	case j.role.Duel() && has(subPush, "pr"):
-		return deny("the %s does not ship: the session that runs the duel does", j.role)
 	}
 
 	return Allow

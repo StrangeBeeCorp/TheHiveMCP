@@ -66,6 +66,8 @@ if (!tests || tests.tests.length === 0) {
 
 const history = [{ round: 0, tests: tests.tests }]
 let code = null
+// Who spoke last: the Coder at the last round, or the Tester when an attack found nothing more.
+let testerLast = false
 
 for (let round = 0; round <= rounds; round++) {
   phase('Implement')
@@ -83,15 +85,24 @@ for (let round = 0; round <= rounds; round++) {
     `${header}\nThe Coder changed: ${code.changed.join(', ') || 'nothing'}; tests passing: ${code.passing}.${relay("The Coder's questions for you", code.questions)}${relay("The Coder's answers to your questions", code.answers)}\nAttack the implementation: write the failing tests for what still breaks it. Set done when you find nothing more.`,
     { agentType: 'tester', label: `tester: attack ${round + 1}`, schema: TESTS },
   )
+  if (!tests) return { ticket, outcome: 'tester failed', note: 'the attacking Tester gave no answer: the code was not attacked', history }
   // New failing tests go to the Coder even when the Tester says it is done looking.
-  if (!tests || tests.tests.length === 0) break
+  if (tests.tests.length === 0) {
+    testerLast = true
+    break
+  }
   history.push({ round: round + 1, tests: tests.tests })
 }
 
-log(`duel over: ${history.length} round(s), tests passing: ${code ? code.passing : false}`)
+// The last one to speak sent questions and answers the other never got. The other's questions
+// reached it, and count as answered when it gave answers.
+const lastAnswers = (testerLast ? tests.answers : code.answers) || []
+const answered = lastAnswers.length > 0
+log(`duel over: ${history.length} round(s), tests passing: ${code.passing}`)
 return {
   ticket,
-  outcome: code && code.passing ? 'passing' : 'red',
-  open_questions: [...((tests && tests.questions) || []), ...((code && code.questions) || [])],
+  outcome: code.passing ? 'passing' : 'red',
+  open_questions: [...(testerLast || !answered ? tests.questions : []), ...(!testerLast || !answered ? code.questions : [])],
+  last_answers: lastAnswers,
   history,
 }

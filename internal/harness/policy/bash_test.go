@@ -162,12 +162,64 @@ func TestTheDuelKeepsEachSideToItsFiles(t *testing.T) {
 		"git commit -am x",
 		"bin/harness push",
 		"gh pr create --title x",
+		"{ cat; } < .claude/sealed/DL-1234/x_test.go",
+		`echo "$(< .claude/sealed/DL-1234/x_test.go)"`,
+		"cd .claude && grep -r DL sealed",
+		"cd .claude && cp -r sealed /tmp/s",
+		"grep -f.claude/sealed/DL-1234/x_test.go internal/x.go",
+		"cat .claude/sealed/DL-1234/internal/x_test.go",
+		"cat .claude/s?aled/DL-1234/internal/x_test.go",
+		"cat .claude/seal*/DL-1234/x_test.go",
+		"T=DL-1234; cat .claude/sealed/$T/x_test.go",
+		"P=.claude/sealed/DL-1234/x_test.go; cat $P",
+		"cat < .claude/sealed/DL-1234/x_test.go",
+		"cd .claude/sealed/DL-1234 && cat x_test.go",
+		"cd .claude && cat sealed/DL-1234/x_test.go",
+		"find .claude/sealed -type f -exec cat {} +",
+		"grep --file=.claude/sealed/DL-1234/x_test.go internal/x.go",
+		"ls *",
+		"cat b*/../.claude/sealed/DL-1234/x_test.go",
+		"cat internal$X/../.claude/sealed/DL-1234/x_test.go",
+		`cd "$PWD" && cat .claude/s?aled/DL-1234/x_test.go`,
+		`cd "$PWD" && cat .claude/sealed/DL-1234/x_test.go`,
+		"TMPDIR=.claude/sealed/DL-1234; cat $TMPDIR/x_test.go",
+		"read TMPDIR < /tmp/where; cat $TMPDIR/x_test.go",
+		"for TMPDIR in .claude/sealed/DL-1234; do cat $TMPDIR/x_test.go; done",
+		"select TMPDIR in .claude/sealed/DL-1234; do cat $TMPDIR/x_test.go; done",
+		"declare -n r=TMPDIR; r=.claude/sealed/DL-1234; cat $TMPDIR/x_test.go",
+		`declare -n r=TMP"DIR"; r=.claude/sealed/DL-1234; cat $TMPDIR/x_test.go`,
+		`read TMP"DIR" < /tmp/where; cat $TMPDIR/x_test.go`,
+		`V=TMPDIR; printf -v "$V" .claude/sealed; cat $TMPDIR/x_test.go`,
 	} {
 		assert.True(t, bash(policy.Coder, line).Deny, "Coder: %s", line)
 	}
 
+	for _, line := range []string{
+		"cat gates/canaries/weaken-test.patch",
+		"cat gates/can*/weaken-test.patch",
+		"cd gates/canaries && cat weaken-test.patch",
+		"cd gates && tar cf - canaries",
+	} {
+		for _, role := range []policy.Role{policy.Coder, policy.Tester, policy.Other} {
+			assert.True(t, bash(role, line).Deny, "%s: %s", role, line)
+		}
+	}
+
+	for _, line := range []string{
+		"echo $HOME",
+		`grep -n FAIL "$TMPDIR/it.log"`,
+		"cat ${TMPDIR}/it.log",
+		"find . -name '*_test.go' -newer go.mod",
+		"make test RUN=TestSearch*",
+		"ls internal/tools/*",
+		"cat internal/tools/search/handler.go",
+	} {
+		assert.False(t, bash(policy.Coder, line).Deny, "Coder: %s: %v", line, bash(policy.Coder, line).Reason)
+	}
+
 	assert.True(t, bash(policy.Tester, "echo x > internal/tools/search/handler.go").Deny)
 	assert.False(t, bash(policy.Tester, "echo x > internal/tools/search/search_test.go").Deny)
+	assert.False(t, bash(policy.Tester, "echo x > .claude/sealed/DL-1234/internal/x_test.go").Deny, "the Tester seals tests")
 }
 
 func TestReadOnlyRolesOnlyRead(t *testing.T) {

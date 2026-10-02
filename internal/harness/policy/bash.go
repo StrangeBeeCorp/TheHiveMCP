@@ -1,8 +1,10 @@
 package policy
 
 import (
+	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -25,7 +27,7 @@ var (
 		"watch": {"-n", "-d"}, "caffeinate": {"-t", "-w"}, "chronic": nil, "unbuffer": nil,
 	}
 	readCommands = []string{
-		"ls", "cat", "head", "tail", "wc", "grep", "rg", "find", "file", "stat", "pwd", "echo", "printf", "sort",
+		"ls", "cat", "head", "tail", "wc", "grep", "rg", "find", "file", "stat", "pwd", "echo", cmdPrintf, "sort",
 		"uniq", subDiff, "tree", "jq", "yq", "true", "false", cmdSed, "awk", "cut", "tr", "basename", "dirname",
 		"realpath", "cd", "test", "[", "date", "which", "column", "less", "comm", "nl", "xxd", "od", "sha256sum",
 		"shasum", "md5", cmdGit, "gh", cmdMake, "sleep",
@@ -44,6 +46,12 @@ type judge struct {
 	root string
 	// cwd is where relative paths land; empty after a cd the policy could not follow.
 	cwd string
+	// tmpdirRebound is true once a line may set TMPDIR, which ${TMPDIR} then no longer names.
+	tmpdirRebound bool
+	// inChild is set while the command judged runs in a child shell of its line.
+	inChild bool
+	// passed is what the line may put in the environment of the commands it runs (passedBy).
+	passed environment
 }
 
 func (j *judge) line(text string, depth int) Decision {
@@ -55,6 +63,9 @@ func (j *judge) line(text string, depth int) Decision {
 	if len(parsed.Opaque) > 0 && j.role.Agent() {
 		return deny("the policy cannot read this command line (%s): write it plainly, or use a make target", parsed.Opaque[0])
 	}
+
+	j.tmpdirRebound = j.tmpdirRebound || rebinds(text, parsed, tmpdir)
+	j.passed.add(passedBy(parsed, depth))
 
 	for _, c := range parsed.Commands {
 		d := j.command(c, depth)
@@ -81,10 +92,16 @@ func (j *judge) command(c shell.Command, depth int) Decision {
 		}
 	}
 
+	if d := j.reads(c); d.Deny {
+		return d
+	}
+
 	if truncatesIntegration(c) {
 		return deny("redirect the integration suite to a file (make test-integration > \"$TMPDIR/it.log\" 2>&1) " +
 			"and grep it: cutting its output means running the slow suite again")
 	}
+
+	j.inChild = c.Child
 
 	return j.run(c.Words, depth)
 }
@@ -111,7 +128,34 @@ func (j *judge) assign(a string) Decision {
 		return deny("git runs on this checkout as it is configured")
 	}
 
+	if j.role.Agent() && runsCode(a) {
+		return deny("%s makes the next program run a command or load code the policy cannot read: run the commands themselves", name)
+	}
+
+	if _, value, _ := strings.Cut(a, "="); j.role.Agent() && name == "CDPATH" && value != "" {
+		return deny("CDPATH sends cd where the policy cannot follow: cd by path")
+	}
+
 	return Allow
+}
+
+// codeRunners are the variables that make a program run another command or load code: git's
+// pager, editor, diff and transport, the dynamic loader's, a shell's start-up file, PATH.
+var codeRunners = []string{
+	"GIT_EXTERNAL_DIFF", "GIT_PAGER", "PAGER", "GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "EDITOR", "VISUAL", "GIT_SSH",
+	"GIT_SSH_COMMAND", "GIT_ASKPASS", "SSH_ASKPASS", "GIT_PROXY_COMMAND", "LESSOPEN", "LESSCLOSE", "BASH_ENV", "ENV",
+	"PROMPT_COMMAND", "LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT", "PATH", "SHELL",
+}
+
+// runsCode reports whether NAME=value sets a code runner to anything but a no-op (GIT_PAGER=cat,
+// GIT_EDITOR=true).
+func runsCode(a string) bool {
+	name, value, _ := strings.Cut(a, "=")
+	if !slices.Contains(codeRunners, name) && !strings.HasPrefix(name, "DYLD_") {
+		return false
+	}
+
+	return !slices.Contains([]string{"", "cat", cmdTrue, ":"}, value)
 }
 
 // run judges one command and its arguments, after unwrapping the wrappers.
@@ -146,8 +190,8 @@ func (j *judge) run(w []string, depth int) Decision {
 // the wrappers. done is false for any other command.
 func (j *judge) unwrap(name string, args []string, depth int) (Decision, bool) {
 	switch {
-	case name == "cd":
-		j.cd(args)
+	case name == "cd" || name == "pushd" || name == "popd":
+		j.cd(name, args)
 		return Allow, true
 	case slices.Contains(shells, name):
 		return j.shell(args, depth), true
@@ -177,15 +221,35 @@ func (j *judge) unwrap(name string, args []string, depth int) (Decision, bool) {
 	return j.run(rest, depth+1), true
 }
 
-func (j *judge) cd(args []string) {
-	switch {
-	case len(args) == 0 || j.cwd == "" || strings.Contains(args[0], shell.Computed) || strings.HasPrefix(args[0], "~"):
-		j.cwd = ""
-	case filepath.IsAbs(args[0]):
-		j.cwd = filepath.Clean(args[0])
-	default:
-		j.cwd = filepath.Join(j.cwd, args[0])
+// cd follows the directory cd or pushd moves to. One the policy cannot follow leaves it unknown,
+// and relative paths are then refused to agents: popd, cd -, an option, a computed or ~ path, a
+// CDPATH lookup, or a cd in a child shell, which leaves the rest of the line where it was.
+func (j *judge) cd(name string, args []string) {
+	dir := ""
+	if len(args) > 0 {
+		dir = args[0]
 	}
+
+	first := strings.SplitN(dir, "/", 2)[0]
+	lookedUp := os.Getenv("CDPATH") != "" && !filepath.IsAbs(dir) && first != "." && first != ".."
+
+	switch {
+	case j.inChild || name == "popd" || dir == "" || j.cwd == "" || lookedUp || strings.HasPrefix(dir, "-") ||
+		strings.HasPrefix(dir, "+") || strings.HasPrefix(dir, "~") || strings.Contains(dir, shell.Computed):
+		j.cwd = ""
+	case filepath.IsAbs(dir):
+		j.cwd = filepath.Clean(dir)
+	default:
+		j.cwd = filepath.Join(j.cwd, dir)
+	}
+}
+
+// child judges a line a child shell runs (sh -c, git rebase --exec): where it cds stays in it.
+func (j *judge) child(line string, depth int) Decision {
+	cwd, inChild := j.cwd, j.inChild
+	defer func() { j.cwd, j.inChild = cwd, inChild }()
+
+	return j.line(line, depth)
 }
 
 // shell judges a shell's -c script. Options end at the first word that is not one, which names a
@@ -201,7 +265,7 @@ func (j *judge) shell(args []string, depth int) Decision {
 			i++
 		case strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && strings.Contains(a, "c"):
 			if i+1 < len(args) {
-				return j.line(args[i+1], depth+1)
+				return j.child(args[i+1], depth+1)
 			}
 
 			return Allow
@@ -227,6 +291,7 @@ func (j *judge) env(args []string, depth int) Decision {
 			return d
 		}
 
+		j.passed.assigns = append(j.passed.assigns, rest[0])
 		rest = rest[1:]
 	}
 
@@ -258,6 +323,44 @@ func (j *judge) find(args []string, depth int) Decision {
 	return Allow
 }
 
+// tmpdir is the variable that names the temporary directory, where agents write their logs.
+const tmpdir = "TMPDIR"
+
+// varWriters are the builtins that set a variable they are given by name.
+var varWriters = []string{"read", cmdPrintf, "mapfile", "readarray", "getopts", "export", "unset"}
+
+// declarers are the builtins that declare variables, namerefs (-n) among them.
+var declarers = regexp.MustCompile(`(^|[^A-Za-z0-9_])(declare|local|typeset|readonly)([^A-Za-z0-9_]|$)`)
+
+// rebinds reports whether a line may set the variable, judged wide: any mention of its name but
+// its own expansions ($NAME, ${NAME}) in the text or in the words once quotes are joined (an
+// assignment, a for or select loop, read, export, printf -v, unset, a nameref's target), any
+// declaration (a nameref may point at it), and a builtin that sets a variable named at run time.
+func rebinds(text string, line shell.Line, name string) bool {
+	if mentions(text, name) || declarers.MatchString(text) {
+		return true
+	}
+
+	for _, c := range line.Commands {
+		if slices.ContainsFunc(c.Assigns, func(a string) bool { return mentions(a, name) }) ||
+			slices.ContainsFunc(c.Words, func(w string) bool { return mentions(w, name) }) {
+			return true
+		}
+
+		writer := len(c.Words) > 0 && slices.Contains(varWriters, path.Base(c.Words[0]))
+		if writer && slices.ContainsFunc(c.Words[1:], func(w string) bool { return strings.Contains(w, shell.Computed) }) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// mentions reports whether s names the variable other than by expanding it.
+func mentions(s, name string) bool {
+	return strings.Count(s, name) > strings.Count(s, "$"+name)+strings.Count(s, "${"+name+"}")
+}
+
 // byPath judges a command named by its path: a script in the checkout or in a temporary
 // directory is code the policy cannot read, except bin/harness.
 func (j *judge) byPath(name string) Decision {
@@ -285,9 +388,21 @@ func isHarness(name string) bool {
 	return name == "bin/harness" || name == "./bin/harness" || strings.HasSuffix(name, "/bin/harness")
 }
 
-// write judges a file the command line writes, relative to where the line has cd'ed.
+// write judges a file the command line writes, relative to where the line has cd'ed. A path the
+// shell computes as the line runs is judged only as ${TMPDIR}/…: an agent writes nowhere else the
+// policy cannot read. A pattern is judged by the files it matches now, and by its own text, which
+// the shell passes on when nothing matches.
 func (j *judge) write(target string) Decision {
 	if strings.HasPrefix(target, "/dev/") {
+		return Allow
+	}
+
+	target, _ = j.resolveTemp(target, false)
+	if strings.Contains(target, shell.Computed) {
+		if j.role.Agent() {
+			return deny("%s is computed as the line runs, so the policy cannot judge it: name the file, or write under \"$TMPDIR\"", target)
+		}
+
 		return Allow
 	}
 
@@ -303,7 +418,18 @@ func (j *judge) write(target string) Decision {
 		target = filepath.Join(j.cwd, target)
 	}
 
-	return Write(j.role, j.root, target)
+	if !strings.ContainsAny(target, "*?[") {
+		return Write(j.role, j.root, target)
+	}
+
+	matches, _ := filepath.Glob(strings.ReplaceAll(target, "[!", "[^"))
+	for _, m := range append(matches, target) {
+		if d := Write(j.role, j.root, m); d.Deny {
+			return d
+		}
+	}
+
+	return Allow
 }
 
 // skipOptions returns the arguments after a command's options; valued options take the next word.

@@ -54,6 +54,11 @@ func SessionStart(ctx context.Context, root string, in Input) Output {
 		b.WriteString("No check-fast has run in this checkout yet.\n")
 	case st.Last.Red:
 		fmt.Fprintf(&b, "The last check-fast (%s) was red:\n%s\n", st.Last.At.Format(time.DateTime), firstLines(st.Last.Report, reportLines))
+	case st.Last.Incomplete:
+		fmt.Fprintf(&b, "The last check-fast (%s) could not run every gate, so it is not a pass:\n%s\n",
+			st.Last.At.Format(time.DateTime), firstLines(st.Last.Report, reportLines))
+	case st.Last.Static:
+		fmt.Fprintf(&b, "The last check-fast (%s) ran the static gates only, the Tester's, and they were green.\n", st.Last.At.Format(time.DateTime))
 	default:
 		fmt.Fprintf(&b, "The last check-fast (%s) was green.\n", st.Last.At.Format(time.DateTime))
 	}

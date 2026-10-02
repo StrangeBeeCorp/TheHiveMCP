@@ -2,6 +2,13 @@
 // write or read, and which shell commands anyone may run. The Claude Code hooks ask it before
 // every tool call (cmd/harness hook pre-tool-use). It allows or denies, with what to do instead;
 // it never asks.
+//
+// It reads a command line as the shell will run it, with the files its paths and patterns name
+// now. What a program then does by its own logic is beyond it: a script, a recursive search of a
+// directory above a hidden one, a value read at run time into a variable the environment already
+// exports. The main session's scripts and computed paths are its own. The policy keeps an agent
+// that follows its instructions in its lane; CI runs every gate again, and the person who merges
+// is the last check.
 package policy
 
 import (

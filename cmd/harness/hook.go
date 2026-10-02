@@ -41,7 +41,7 @@ func (e env) hook(ctx context.Context, args []string, stdin io.Reader, out io.Wr
 	case "pre-tool-use":
 		o = hooks.PreToolUse(e.root, in)
 	case "post-tool-use":
-		o = hooks.PostToolUse(e.root, in, e.fileCheck)
+		o = hooks.PostToolUse(e.root, in, func(rel string, content []byte) ([]string, error) { return e.fileCheck(ctx, rel, content) })
 	case "stop", "subagent-stop":
 		o = hooks.Stopper{
 			Root: e.root, MaxRounds: e.limits.Hooks.MaxRedRounds, Check: e.stopCheck,
@@ -60,8 +60,14 @@ func (e env) hook(ctx context.Context, args []string, stdin io.Reader, out io.Wr
 	return nil
 }
 
-// fileCheck runs the edit cadence's built-in gates on one edited file.
-func (e env) fileCheck(rel string, content []byte) ([]string, error) {
+// fileCheck runs the edit cadence's built-in gates on one edited file. A file git ignores is not
+// checked: it never reaches the repository, which is what the gates judge (BLOCKED.md, scratch
+// files, the Tester's sealed tests).
+func (e env) fileCheck(ctx context.Context, rel string, content []byte) ([]string, error) {
+	if gitx.Ignored(ctx, e.root, rel) {
+		return nil, nil
+	}
+
 	var out []string
 
 	for _, g := range e.reg.At("edit") {

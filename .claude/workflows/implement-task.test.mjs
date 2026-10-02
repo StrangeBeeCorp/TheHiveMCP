@@ -43,19 +43,22 @@ test('the tests come first, and each role gets the questions and answers of the 
   assert.match(calls[2].prompt, /The Coder's questions for you:\n- Which hint\?/)
   assert.match(calls[2].prompt, /The Coder's answers to your questions:\n- A 204 is empty too\./)
   assert.equal(result.outcome, 'passing')
+  assert.deepEqual(result.open_questions, [], "the Tester answered the Coder's question")
+  assert.deepEqual(result.last_answers, ['Say where the value goes.'], 'the answer no Coder got is returned')
 })
 
 test("an attack's new failing tests go back to the Coder, even when the Tester is done looking", async () => {
   const { result, calls, labels } = await duel(task, {
     'tester: tests first': tests(['TestEmptyCreate']),
     'coder: round 0': code(),
-    'tester: attack 1': tests(['TestEmptyCreateInAnAlert'], { done: true }),
+    'tester: attack 1': tests(['TestEmptyCreateInAnAlert'], { done: true, answers: ['Yes, an alert too.'] }),
     'coder: round 1': code(),
     'tester: attack 2': tests([], { done: true }),
   })
 
   assert.deepEqual(labels, ['tester: tests first', 'coder: round 0', 'tester: attack 1', 'coder: round 1', 'tester: attack 2'])
   assert.match(calls[3].prompt, /TestEmptyCreateInAnAlert/)
+  assert.match(calls[3].prompt, /The Tester's answers to your questions:\n- Yes, an alert too\./)
   assert.equal(result.outcome, 'passing')
   assert.equal(result.history.length, 2)
 })
@@ -83,7 +86,7 @@ test('rounds are capped at four attacks', async () => {
   assert.equal(labels.at(-1), 'coder: round 4')
 })
 
-test('a blocked Coder, a Coder that fails to answer and a Tester with no test each end the duel', async () => {
+test('a blocked Coder, a Coder or an attacking Tester that fails to answer, and a Tester with no test each end the duel', async () => {
   let run = await duel(task, { 'tester: tests first': tests(['TestA']), 'coder: round 0': code({ blocked: true }) })
   assert.equal(run.result.outcome, 'blocked')
   assert.deepEqual(run.labels, ['tester: tests first', 'coder: round 0'])
@@ -94,6 +97,10 @@ test('a blocked Coder, a Coder that fails to answer and a Tester with no test ea
   run = await duel(task, { 'tester: tests first': tests([]) })
   assert.equal(run.result.outcome, 'no tests')
   assert.deepEqual(run.labels, ['tester: tests first'], 'no Coder without a failing test')
+
+  run = await duel(task, { 'tester: tests first': tests(['TestA']), 'coder: round 0': code(), 'tester: attack 1': null })
+  assert.equal(run.result.outcome, 'tester failed', 'an attack that never ran is no pass')
+  assert.equal(run.result.history.length, 1)
 })
 
 test('a duel needs a task', async () => {

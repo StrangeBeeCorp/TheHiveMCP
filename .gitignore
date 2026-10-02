@@ -57,7 +57,7 @@ key.md
 .claude/logs/
 .claude/last-prompt-ts
 .claude/.lint-verified
-# The Tester's sealed tests of the task in progress: moved into the code at the end of the duel.
+# The Tester's sealed tests of the task in progress, which the Coder may not read: never committed.
 .claude/sealed/
 CLAUDE.local.md
 

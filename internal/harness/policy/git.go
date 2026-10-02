@@ -7,7 +7,7 @@ import (
 
 // gitReads are the git subcommands that only read; they are all the duel's agents may run.
 var gitReads = []string{
-	subStatus, subDiff, "log", subShow, "blame", "grep", "ls-files", "ls-tree", "rev-parse", "rev-list",
+	subStatus, subDiff, "log", subShow, "blame", subGrep, "ls-files", "ls-tree", "rev-parse", "rev-list",
 	"merge-base", "describe", "cat-file", "shortlog", "whatchanged", "name-rev", "for-each-ref", subHelp,
 	subVersion, "check-ignore", "range-diff",
 }
@@ -47,11 +47,12 @@ func (j *judge) git(args []string) Decision {
 }
 
 func (j *judge) gitSub(sub string, rest []string) Decision {
-	has := func(flag string) bool { return slices.Contains(rest, flag) }
-
-	if slices.ContainsFunc(rest, func(a string) bool { return strings.Contains(a, "core.hooksPath") || a == "--no-verify" }) ||
-		(sub == "commit" && has("-n")) {
+	if skipsHooks(sub, rest) {
 		return deny("the git hooks are gates: commit without bypassing them, and fix what they report")
+	}
+
+	if d := j.gitRuns(sub, rest); d.Deny {
+		return d
 	}
 
 	if sub == subPush || sub == "send-pack" {
@@ -77,6 +78,131 @@ func (j *judge) gitSub(sub string, rest []string) Decision {
 	}
 
 	return j.gitAgent(sub, rest)
+}
+
+// shortValued are, for commit and am, the short options that take the rest of their word or the
+// next word as their value, or an attached one: commit's -m -F -C -c -t and -u -S, am's -C -p -S.
+var shortValued = map[string]string{"commit": "mFCctuS", "am": "CpS"}
+
+// skipsHooks reports whether a git command skips the hooks: --no-verify or a prefix of it, which
+// git accepts (--no-veri); -n among the short options of commit or am, alone or in a cluster
+// (-nm, -anm, but not -mn, whose n is the message); core.hooksPath, in any case, in git config.
+func skipsHooks(sub string, rest []string) bool {
+	for _, a := range rest {
+		if a == "--" {
+			return false
+		}
+
+		name, _, _ := strings.Cut(a, "=")
+
+		switch {
+		case sub == "config" && strings.Contains(strings.ToLower(a), "core.hookspath"):
+			return true
+		case abbreviates(name, "--no-verify", len("--no-v")):
+			return true
+		case shortValued[sub] != "" && len(a) > 1 && a[0] == '-' && a[1] != '-':
+			flags := a[1:]
+			if cut := strings.IndexAny(flags, shortValued[sub]); cut >= 0 {
+				flags = flags[:cut]
+			}
+
+			if strings.Contains(flags, "n") {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// gitRuns judges what a git command runs on its caller's behalf: the shell lines of rebase --exec,
+// submodule foreach, bisect run, difftool --extcmd and grep --open-files-in-pager, judged as lines,
+// and for an agent the transport options, which run a program.
+func (j *judge) gitRuns(sub string, rest []string) Decision {
+	for _, l := range gitLines(sub, rest) {
+		if d := j.child(l, maxDepth); d.Deny {
+			return d
+		}
+	}
+
+	if j.role.Agent() && transports(sub, rest) {
+		return deny("this git option runs a program the policy cannot read: fetch and clone as they are configured")
+	}
+
+	return Allow
+}
+
+// gitLines are the shell lines a git command runs for its caller.
+func gitLines(sub string, rest []string) []string {
+	switch {
+	case sub == "rebase":
+		return optionValues(rest, 'x', "--exec")
+	case sub == "difftool":
+		return optionValues(rest, 'x', "--extcmd")
+	case sub == subGrep:
+		return optionValues(rest, 'O', "--open-files-in-pager")
+	case sub == "submodule" && len(rest) > 0 && rest[0] == "foreach":
+		return []string{strings.Join(skipOptions(rest[1:], nil), " ")}
+	case sub == "bisect" && len(rest) > 0 && rest[0] == "run":
+		return []string{strings.Join(rest[1:], " ")}
+	}
+
+	return nil
+}
+
+// transports reports whether a command that talks to a remote passes the program to run there or
+// here: --upload-pack, --receive-pack, --exec (or a prefix git accepts), clone -u.
+func transports(sub string, rest []string) bool {
+	if !slices.Contains([]string{"clone", "fetch", "pull", "ls-remote", "archive", "submodule"}, sub) {
+		return false
+	}
+
+	return slices.ContainsFunc(rest, func(a string) bool {
+		name, _, _ := strings.Cut(a, "=")
+
+		return (sub == "clone" && strings.HasPrefix(a, "-u")) ||
+			slices.ContainsFunc([]string{"--upload-pack", "--receive-pack", "--exec"}, func(o string) bool { return abbreviates(name, o, len("--u")) })
+	})
+}
+
+// abbreviates reports whether word is option, or a prefix of it no shorter than least, as git and
+// make accept a long option cut short (--no-veri for --no-verify).
+func abbreviates(word, option string, least int) bool {
+	return len(word) >= least && strings.HasPrefix(option, word)
+}
+
+// optionValues are the values of a git option given as -xVALUE, -x VALUE (alone or ending a
+// cluster), --long VALUE, --long=VALUE, or a prefix of --long that git accepts (--exe=VALUE).
+func optionValues(args []string, short byte, long string) []string {
+	var out []string
+
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		name, value, attached := strings.Cut(a, "=")
+
+		switch {
+		case a == "--":
+			return out
+		case strings.HasPrefix(name, "--"):
+			if !abbreviates(name, long, len("--ex")) {
+				continue
+			}
+		case strings.HasPrefix(a, "-") && strings.IndexByte(a[1:], short) >= 0:
+			value = a[strings.IndexByte(a, short)+1:]
+			attached = value != ""
+		default:
+			continue
+		}
+
+		if !attached && i+1 < len(args) {
+			i++
+			value = args[i]
+		}
+
+		out = append(out, value)
+	}
+
+	return out
 }
 
 // gitAgent holds for the agents that may commit: history and configuration are not theirs.
