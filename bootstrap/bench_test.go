@@ -16,7 +16,7 @@ import (
 
 // The time the server adds to a TheHive call: a search through the in-process MCP client, against
 // a TheHive stub that answers at once with a page of alerts. The bench gate holds it to
-// gates/budgets.yaml.
+// gates/bench.yaml.
 
 // benchAlerts is the stub's answer: n alerts with the free text and dates the server wraps and
 // converts.

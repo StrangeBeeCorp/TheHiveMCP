@@ -12,6 +12,7 @@
 /internal/harness/                                       @jean-collette_stb @antoine-salesse_stb
 /cmd/surface/                                            @jean-collette_stb @antoine-salesse_stb
 /cmd/analyzers/                                          @jean-collette_stb @antoine-salesse_stb
+/cmd/coverage/                                           @jean-collette_stb @antoine-salesse_stb
 /internal/surface/                                       @jean-collette_stb @antoine-salesse_stb
 /internal/analyzers/                                     @jean-collette_stb @antoine-salesse_stb
 /bin/                                                    @jean-collette_stb @antoine-salesse_stb

@@ -8,7 +8,7 @@ import (
 )
 
 // The hot paths every search result and every filter go through. The bench gate compares them
-// with the base and holds them to gates/budgets.yaml.
+// with the base and holds them to gates/bench.yaml.
 
 // benchAlert is one alert as TheHive returns it, with free text to wrap and dates to convert.
 const benchAlert = `{"_id": "~%[1]d", "_createdAt": %[2]d, "_createdBy": "analyst@example.com",

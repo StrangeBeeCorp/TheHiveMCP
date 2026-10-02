@@ -84,9 +84,13 @@ func unsealPlan(dir, root string) ([]move, error) {
 		rel = filepath.ToSlash(rel)
 		to := filepath.Join(root, filepath.FromSlash(rel))
 
+		class, protected := policy.ClassOf(rel)
+
 		switch {
 		case !policy.IsTest(rel):
 			return fmt.Errorf("%w: %s is not a test file (*_test.go, testdata/, internal/testutils/)", errUnseal, rel)
+		case protected:
+			return fmt.Errorf("%w: %s is %s, which the Tester may not change", errUnseal, rel, class)
 		case exists(to):
 			return fmt.Errorf("%w: %s already exists: a sealed test is a new file, give it its own name", errUnseal, rel)
 		}

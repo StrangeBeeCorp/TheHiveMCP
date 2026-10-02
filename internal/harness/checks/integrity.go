@@ -8,6 +8,7 @@ import (
 	"go/token"
 	"io/fs"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -17,13 +18,15 @@ type IntegrityLimits struct {
 	Allow map[string]string `yaml:"allow"`
 }
 
-// testShape is what a test function checks: its assertions, its skips and its table cases.
+// testShape is what a test function checks: its assertions, its skips, its table cases and fuzz
+// seeds, and the returns that can end it before its checks.
 type testShape struct {
-	path   string
-	line   int
-	checks int
-	skips  int
-	cases  int
+	path    string
+	line    int
+	checks  int
+	skips   int
+	cases   int
+	returns int
 }
 
 // allowHint says how a person accepts a weaker test.
@@ -83,6 +86,8 @@ func weaker(name string, was, now testShape, kept bool) string {
 		return name + " is gone"
 	case now.skips > was.skips:
 		return fmt.Sprintf("%s now skips (%d skips, was %d)", name, now.skips, was.skips)
+	case now.returns > was.returns:
+		return fmt.Sprintf("%s can now return before its checks (%d returns, was %d)", name, now.returns, was.returns)
 	case now.checks < was.checks:
 		return fmt.Sprintf("%s checks less: %d assertions, was %d", name, now.checks, was.checks)
 	case now.cases < was.cases:
@@ -120,6 +125,8 @@ func addShapes(shapes map[string]testShape, p string, src []byte) {
 
 			return true
 		})
+
+		shape.returns = returns(fn.Body)
 		shapes[path.Join(path.Dir(p), fn.Name.Name)] = shape
 	}
 }
@@ -128,22 +135,32 @@ func isTestName(name string) bool {
 	return strings.HasPrefix(name, "Test") || strings.HasPrefix(name, "Fuzz")
 }
 
-// countCall counts a call that checks or skips.
-func countCall(shape *testShape, call *ast.CallExpr, testers map[string]bool) {
-	if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
-		switch sel.Sel.Name {
-		case "Skip", "Skipf", "SkipNow":
-			shape.skips++
-			return
-		case "Error", "Errorf", "Fatal", "Fatalf", "Fail", "FailNow":
-			shape.checks++
-			return
+// returns counts the return statements of a test body, outside its function literals (a subtest
+// returns on its own): a return there can end the test before its checks run.
+func returns(body *ast.BlockStmt) int {
+	n := 0
+
+	ast.Inspect(body, func(node ast.Node) bool {
+		switch node.(type) {
+		case *ast.FuncLit:
+			return false
+		case *ast.ReturnStmt:
+			n++
 		}
 
-		if pkg, ok := sel.X.(*ast.Ident); ok && (pkg.Name == "assert" || pkg.Name == "require") {
-			shape.checks++
-			return
-		}
+		return true
+	})
+
+	return n
+}
+
+// testerFails are the methods of *testing.T that fail the test.
+var testerFails = []string{"Error", "Errorf", "Fatal", "Fatalf", "Fail", "FailNow"}
+
+// countCall counts a call that checks, skips or adds a fuzz seed.
+func countCall(shape *testShape, call *ast.CallExpr, testers map[string]bool) {
+	if sel, ok := call.Fun.(*ast.SelectorExpr); ok && countMethod(shape, sel, testers) {
+		return
 	}
 
 	if len(call.Args) > 0 {
@@ -151,6 +168,29 @@ func countCall(shape *testShape, call *ast.CallExpr, testers map[string]bool) {
 			shape.checks++
 		}
 	}
+}
+
+// countMethod counts a method call that skips, checks or adds a fuzz seed, and reports whether it
+// was one. t.Error and its kind count on the test's own t, not on another value (fmt.Errorf,
+// err.Error).
+func countMethod(shape *testShape, sel *ast.SelectorExpr, testers map[string]bool) bool {
+	recv, _ := sel.X.(*ast.Ident)
+	onTester := recv != nil && testers[recv.Name]
+
+	switch {
+	case sel.Sel.Name == "Skip" || sel.Sel.Name == "Skipf" || sel.Sel.Name == "SkipNow":
+		shape.skips++
+	case onTester && slices.Contains(testerFails, sel.Sel.Name):
+		shape.checks++
+	case onTester && sel.Sel.Name == "Add":
+		shape.cases++
+	case recv != nil && (recv.Name == "assert" || recv.Name == "require"):
+		shape.checks++
+	default:
+		return false
+	}
+
+	return true
 }
 
 // addTesters adds the names of a function's *testing.T and *testing.F parameters.

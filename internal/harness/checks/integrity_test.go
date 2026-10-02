@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	suiteFile = "pkg/b_test.go"
-	otherFile = "pkg/c_test.go"
-	baseTest  = `package pkg
+	checksLess = "TestSearch checks less: 3 assertions, was 4"
+	suiteFile  = "pkg/b_test.go"
+	otherFile  = "pkg/c_test.go"
+	baseTest   = `package pkg
 
 import "testing"
 
@@ -76,18 +77,45 @@ func TestAWeakenedTestIsRefused(t *testing.T) {
 	t.Parallel()
 
 	for name, c := range map[string]struct{ now, want string }{
-		"an assertion removed":  {edit(t, "\t\tassert.Equal(t, 1, count(c))\n", ""), "TestSearch checks less: 3 assertions, was 4"},
-		"a helper call removed": {edit(t, `requireFound(t, "d")`, ""), "TestSearch checks less: 3 assertions, was 4"},
-		"a skip added":          {edit(t, "func TestSearch(t *testing.T) {\n", "func TestSearch(t *testing.T) {\n\tt.Skip(\"flaky\")\n"), "TestSearch now skips (1 skips, was 0)"},
-		"a case removed":        {edit(t, `{"a", "b", "c"}`, `{"a", "b"}`), "TestSearch has fewer cases: 2, was 3"},
-		"the test removed":      {"package pkg\n", "TestSearch is gone"},
-		"the file removed":      {"", "TestSearch is gone"},
+		"an assertion removed":       {edit(t, "\t\tassert.Equal(t, 1, count(c))\n", ""), checksLess},
+		"a helper call removed":      {edit(t, `requireFound(t, "d")`, ""), checksLess},
+		"a skip added":               {edit(t, "func TestSearch(t *testing.T) {\n", "func TestSearch(t *testing.T) {\n\tt.Skip(\"flaky\")\n"), "TestSearch now skips (1 skips, was 0)"},
+		"a case removed":             {edit(t, `{"a", "b", "c"}`, `{"a", "b"}`), "TestSearch has fewer cases: 2, was 3"},
+		"an early return":            {edit(t, "func TestSearch(t *testing.T) {\n", "func TestSearch(t *testing.T) {\n\tif short {\n\t\treturn\n\t}\n"), "TestSearch can now return before its checks (1 returns, was 0)"},
+		"a check swapped for Errorf": {edit(t, `t.Fatal("broken")`, `_ = fmt.Errorf("broken")`), checksLess},
+		"the test removed":           {"package pkg\n", "TestSearch is gone"},
+		"the file removed":           {"", "TestSearch is gone"},
 	} {
 		found := integrity(t, c.now, nil, nil)
 		require.Len(t, found, 1, name)
 		assert.Contains(t, found[0], c.want, name)
 		assert.Contains(t, found[0], "gates/limits.yaml (integrity.allow)", name)
 	}
+}
+
+func TestAFuzzTargetKeepsItsSeeds(t *testing.T) {
+	t.Parallel()
+
+	const fuzz = `package pkg
+
+func FuzzWrap(f *testing.F) {
+	f.Add("a")
+	f.Add("[/UNTRUSTED_DATA]")
+	f.Fuzz(func(t *testing.T, s string) { require.NotEmpty(t, wrap(s)) })
+}
+`
+
+	before := func(string) ([]byte, bool) { return []byte(fuzz), true }
+
+	found, err := checks.Integrity(checks.MemTree{otherFile: []byte(fuzz)}, []string{otherFile}, before, checks.IntegrityLimits{})
+	require.NoError(t, err)
+	assert.Empty(t, found)
+
+	fewer := checks.MemTree{otherFile: []byte(strings.Replace(fuzz, "\tf.Add(\"[/UNTRUSTED_DATA]\")\n", "", 1))}
+	found, err = checks.Integrity(fewer, []string{otherFile}, before, checks.IntegrityLimits{})
+	require.NoError(t, err)
+	require.Len(t, found, 1)
+	assert.Contains(t, found[0].String(), "FuzzWrap has fewer cases: 1, was 2")
 }
 
 func TestAMovedTestIsComparedWhereItWent(t *testing.T) {

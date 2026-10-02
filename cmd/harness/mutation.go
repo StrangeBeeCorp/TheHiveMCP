@@ -64,6 +64,7 @@ func (e env) mutate(ctx context.Context, args []string, out io.Writer) error {
 		_, _ = fmt.Fprintln(out, line)
 
 		if !ok {
+			_, _ = fmt.Fprintf(out, "  gremlins' report: %s\n", reportPath(pkg))
 			failed++
 		}
 	}
@@ -77,9 +78,14 @@ func (e env) mutate(ctx context.Context, args []string, out io.Writer) error {
 	return nil
 }
 
+// reportPath is where gremlins writes a package's report, from the checkout.
+func reportPath(pkg string) string {
+	return filepath.ToSlash(filepath.Join(".cache", "harness", "mutation", strings.ReplaceAll(pkg, "/", "_")+".json"))
+}
+
 // gremlins mutates one package and reads its report.
 func (e env) gremlins(ctx context.Context, config mutation.Config, pkg string) (mutation.Report, error) {
-	report := filepath.ToSlash(filepath.Join(".cache", "harness", "mutation", strings.ReplaceAll(pkg, "/", "_")+".json"))
+	report := reportPath(pkg)
 
 	err := os.MkdirAll(filepath.Join(e.root, filepath.Dir(report)), dirPerm) // #nosec G703 -- .cache/harness/mutation of this checkout
 	if err != nil {

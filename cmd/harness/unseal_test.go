@@ -58,6 +58,11 @@ func TestUnsealMovesNothingUnlessEveryFileIsANewTest(t *testing.T) {
 	require.ErrorIs(t, err, errUnseal)
 	assert.Contains(t, err.Error(), "already exists")
 
+	harness := sealed(t, "DL-5", "internal/harness/policy/zz_test.go")
+	err = harness.unseal([]string{ticketFlag, "DL-5"}, &strings.Builder{})
+	require.ErrorIs(t, err, errUnseal)
+	assert.Contains(t, err.Error(), "internal/harness/policy/zz_test.go is harness policy, which the Tester may not change")
+
 	empty := sealed(t, "DL-3")
 	require.ErrorIs(t, empty.unseal([]string{ticketFlag, "DL-3"}, &strings.Builder{}), errUnseal)
 }

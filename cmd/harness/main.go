@@ -319,13 +319,19 @@ func (e env) builtin(ctx context.Context, name string) ([]string, error) {
 	return lines, nil
 }
 
-// integrity compares the changed tests with the base's; with no base there is nothing to compare.
+// integrity compares the changed tests with those at the merge base, where the changed paths are
+// counted from; with no base there is nothing to compare.
 func (e env) integrity(ctx context.Context, tree checks.Tree, limits checks.IntegrityLimits) ([]checks.Finding, error) {
 	if e.base == "" {
 		return nil, nil
 	}
 
-	before := func(p string) ([]byte, bool) { return gitx.At(ctx, e.root, e.base, p) }
+	base := gitx.MergeBase(ctx, e.root, e.base)
+	if base == "" {
+		base = e.base
+	}
+
+	before := func(p string) ([]byte, bool) { return gitx.At(ctx, e.root, base, p) }
 
 	found, err := checks.Integrity(tree, e.changed, before, limits)
 	if err != nil {

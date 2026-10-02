@@ -101,6 +101,38 @@ type Report struct {
 	NotViable  int     `json:"mutants_not_viable"`
 	// Statistics counts the mutants found, per mutator.
 	Statistics map[string]int `json:"mutator_statistics"`
+	Files      []struct {
+		Name      string `json:"file_name"`
+		Mutations []struct {
+			Type   string `json:"type"`
+			Status string `json:"status"`
+			Line   int    `json:"line"`
+		} `json:"mutations"`
+	} `json:"files"`
+}
+
+// shownLived is how many of the mutants that lived a failure names.
+const shownLived = 8
+
+// LivedAt names the mutants that lived, file:line and mutator, at most n of them.
+func (r Report) LivedAt(n int) []string {
+	var lived []string
+
+	for _, f := range r.Files {
+		for _, m := range f.Mutations {
+			if m.Status == "LIVED" {
+				lived = append(lived, fmt.Sprintf("%s:%d %s", f.Name, m.Line, m.Type))
+			}
+		}
+	}
+
+	sort.Strings(lived)
+
+	if len(lived) > n {
+		lived = append(lived[:n], fmt.Sprintf("and %d more", len(lived)-n))
+	}
+
+	return lived
 }
 
 // TimedOut is how many mutants timed out: found, but neither killed, lived, uncovered nor unviable.
@@ -140,7 +172,7 @@ func (c Config) Check(pkg string, r Report) (string, bool) {
 	}
 
 	if r.Killed+r.Lived > 0 && r.Efficacy < floor {
-		return line + ": add the tests that kill the mutants that lived (gremlins' log names them)", false
+		return line + ": add the tests that kill the mutants that lived: " + strings.Join(r.LivedAt(shownLived), ", "), false
 	}
 
 	return line, true

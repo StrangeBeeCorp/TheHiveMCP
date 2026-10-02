@@ -123,28 +123,41 @@ const answered = lastAnswers.length > 0
 const openQuestions = [...(testerLast || !answered ? tests.questions : []), ...(!testerLast || !answered ? code.questions : [])]
 const duelCode = code
 
+// The sealed tests must have moved into the code and pass: a sealed test that never ran is no pass.
+let sealedPass = sealed.length === 0
 if (sealed.length > 0 && code && code.passing) {
   phase('Unseal')
-  const unsealed = await agent(
-    `${header}\nThe duel is over and the visible tests pass. Run \`bin/harness unseal --ticket ${ticket}\`, which moves your sealed tests into the code, then run them (make test RUN=<their names>, or make test-integration RUN=… for those that need TheHive). List what you unsealed, and every sealed test that fails, with why.`,
-    { agentType: 'tester', label: 'tester: unseal', schema: UNSEALED },
+  const runSealed = (what) =>
+    agent(
+      `${header}\n${what} Run them (make test RUN=<their names>, or make test-integration RUN=… for those that need TheHive). List the sealed test files in the code, and every sealed test that fails, with why.`,
+      { agentType: 'tester', label: 'tester: sealed tests', schema: UNSEALED },
+    )
+  let unsealed = await runSealed(
+    `The duel is over and the visible tests pass. Run \`bin/harness unseal --ticket ${ticket}\`, which moves your sealed tests into the code.`,
   )
   history.push({ round: 'unseal', unsealed })
 
-  if (unsealed && unsealed.failing.length > 0) {
-    phase('Unseal')
+  if (!unsealed || unsealed.unsealed.length === 0) {
+    return { ticket, outcome: 'unseal failed', note: `the sealed tests are not in the code: run bin/harness unseal --ticket ${ticket}`, history }
+  }
+
+  if (unsealed.failing.length > 0) {
     code = await agent(
       `${header}\nThe Tester's sealed tests are now in the code, and these fail:\n${listTests({ tests: unsealed.failing })}\nMake them pass with the smallest change that does what the task asks: they test the task, not your code.`,
       { agentType: 'coder', label: 'coder: sealed tests', schema: CODE },
     )
     history[history.length - 1].code = code
+    unsealed = code && code.passing ? await runSealed('The Coder answered your sealed tests, which are in the code.') : null
+    history.push({ round: 'sealed again', unsealed })
   }
+
+  sealedPass = Boolean(unsealed && unsealed.failing.length === 0)
 }
 
-log(`duel over: ${history.length} round(s), tests passing: ${code ? code.passing : false}`)
+log(`duel over: ${history.length} round(s), tests passing: ${code ? code.passing : false}, sealed tests passing: ${sealedPass}`)
 return {
   ticket,
-  outcome: code && code.passing ? 'passing' : 'red',
+  outcome: code && code.passing && sealedPass ? 'passing' : 'red',
   open_questions: [...openQuestions, ...(code && code !== duelCode ? code.questions : [])],
   last_answers: lastAnswers,
   history,
