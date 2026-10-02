@@ -1,5 +1,6 @@
 // Package surface takes a snapshot of what the model reads from this server: the tools/list
-// entries, the resource list and the static resource texts, each with its token count. The
+// entries, the prompts/list entries, the resource list and the static resource texts, each with
+// its token count. The
 // snapshot lives in baselines/surface/ (make surface-propose writes it); the surface gate fails
 // when the server and the snapshot differ, so a change to the model's interface is always a
 // reviewed diff.
@@ -16,6 +17,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/bootstrap"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/resources"
@@ -36,12 +38,14 @@ var volatile = map[string]bool{"hive://config/server-time": true}
 
 // Snapshot is the surface at one revision.
 type Snapshot struct {
-	Tools     []Tool     `json:"-"`
+	Tools []Tool `json:"-"`
+	// Prompts are listed only when the server advertises them; it advertises none today.
+	Prompts   []Tool     `json:"-"`
 	Resources []Resource `json:"resources"`
 	Templates []Template `json:"templates"`
 }
 
-// Tool is one tools/list entry as the model receives it.
+// Tool is one tools/list entry, or one prompts/list entry, as the model receives it.
 type Tool struct {
 	Name   string
 	JSON   json.RawMessage
@@ -75,7 +79,12 @@ func Tokens(text []byte) int {
 
 // Take builds the server as cmd/server does and reads its surface through an in-process client.
 func Take(ctx context.Context) (Snapshot, error) {
-	c, err := client.NewInProcessClient(bootstrap.GetMCPServerAndRegisterTools())
+	return TakeFrom(ctx, bootstrap.GetMCPServerAndRegisterTools())
+}
+
+// TakeFrom reads the surface of a server through an in-process client.
+func TakeFrom(ctx context.Context, srv *server.MCPServer) (Snapshot, error) {
+	c, err := client.NewInProcessClient(srv)
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("in-process client: %w", err)
 	}
@@ -87,7 +96,7 @@ func Take(ctx context.Context) (Snapshot, error) {
 		return Snapshot{}, fmt.Errorf("start the client: %w", err)
 	}
 
-	_, err = c.Initialize(ctx, mcp.InitializeRequest{Params: mcp.InitializeParams{
+	info, err := c.Initialize(ctx, mcp.InitializeRequest{Params: mcp.InitializeParams{
 		ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
 		ClientInfo:      mcp.Implementation{Name: "surface", Version: "1"},
 	}})
@@ -97,9 +106,23 @@ func Take(ctx context.Context) (Snapshot, error) {
 
 	var snap Snapshot
 
-	snap.Tools, err = tools(ctx, c)
-	if err != nil {
-		return Snapshot{}, err
+	// Each kind is read when the server advertises it: listing one it does not offer is an error.
+	if info.Capabilities.Tools != nil {
+		snap.Tools, err = tools(ctx, c)
+		if err != nil {
+			return Snapshot{}, err
+		}
+	}
+
+	if info.Capabilities.Prompts != nil {
+		snap.Prompts, err = prompts(ctx, c)
+		if err != nil {
+			return Snapshot{}, err
+		}
+	}
+
+	if info.Capabilities.Resources == nil {
+		return snap, nil
 	}
 
 	snap.Resources, err = resourceList(ctx, c)
@@ -127,6 +150,28 @@ func tools(ctx context.Context, c *client.Client) ([]Tool, error) {
 		}
 
 		out = append(out, Tool{Name: t.Name, JSON: data, Tokens: Tokens(data)})
+	}
+
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+
+	return out, nil
+}
+
+func prompts(ctx context.Context, c *client.Client) ([]Tool, error) {
+	list, err := c.ListPrompts(ctx, mcp.ListPromptsRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("prompts/list: %w", err)
+	}
+
+	out := make([]Tool, 0, len(list.Prompts))
+
+	for _, p := range list.Prompts {
+		data, err := compact(p)
+		if err != nil {
+			return nil, fmt.Errorf("encode prompt %s: %w", p.Name, err)
+		}
+
+		out = append(out, Tool{Name: p.Name, JSON: data, Tokens: Tokens(data)})
 	}
 
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })

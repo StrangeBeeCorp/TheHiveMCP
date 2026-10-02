@@ -25,6 +25,7 @@ const (
 type Summary struct {
 	Tools          map[string]int `json:"tools"`
 	ToolsTotal     int            `json:"tools_total"`
+	PromptsTotal   int            `json:"prompts_total"`
 	ResourcesTotal int            `json:"resources_total"`
 }
 
@@ -37,6 +38,10 @@ func (s Snapshot) Summary() Summary {
 		sum.ToolsTotal += t.Tokens
 	}
 
+	for _, p := range s.Prompts {
+		sum.PromptsTotal += p.Tokens
+	}
+
 	for _, r := range s.Resources {
 		sum.ResourcesTotal += r.Tokens
 	}
@@ -45,19 +50,21 @@ func (s Snapshot) Summary() Summary {
 }
 
 // Files renders the snapshot as the files of baselines/surface/, keyed by their path in it: one
-// file per tool, the resource list, and the token summary.
+// file per tool and per prompt, the resource list, and the token summary.
 func (s Snapshot) Files() (map[string][]byte, error) {
 	files := map[string][]byte{}
 
-	for _, t := range s.Tools {
-		var b bytes.Buffer
+	for dir, entries := range map[string][]Tool{"tools": s.Tools, "prompts": s.Prompts} {
+		for _, t := range entries {
+			var b bytes.Buffer
 
-		err := json.Indent(&b, t.JSON, "", "  ")
-		if err != nil {
-			return nil, fmt.Errorf("indent tool %s: %w", t.Name, err)
+			err := json.Indent(&b, t.JSON, "", "  ")
+			if err != nil {
+				return nil, fmt.Errorf("indent %s %s: %w", dir, t.Name, err)
+			}
+
+			files[dir+"/"+t.Name+".json"] = append(b.Bytes(), '\n')
 		}
-
-		files["tools/"+t.Name+".json"] = append(b.Bytes(), '\n')
 	}
 
 	for name, v := range map[string]any{"resources.json": s, summaryFile: s.Summary()} {
@@ -208,6 +215,9 @@ type Budgets struct {
 	Tool int `yaml:"tool"`
 	// ResourcesTotal bounds the static resource texts together.
 	ResourcesTotal int `yaml:"resources_total"`
+	// PromptsTotal bounds every prompts/list entry together: 0 while the server has none, so the
+	// first prompt comes with a reviewed budget.
+	PromptsTotal int `yaml:"prompts_total"`
 }
 
 // LoadBudgets reads the surface section of gates/budgets.yaml, rejecting unknown keys.
@@ -263,6 +273,10 @@ func (b Budgets) Over(sum Summary) []string {
 			sum.ResourcesTotal, b.ResourcesTotal))
 	}
 
+	if sum.PromptsTotal > b.PromptsTotal {
+		out = append(out, fmt.Sprintf("the prompts cost %d tokens together, over the budget of %d", sum.PromptsTotal, b.PromptsTotal))
+	}
+
 	return out
 }
 
@@ -275,5 +289,6 @@ func (sum Summary) Describe() string {
 
 	sort.Strings(parts)
 
-	return fmt.Sprintf("tools %d tokens (%s), static resources %d tokens", sum.ToolsTotal, strings.Join(parts, ", "), sum.ResourcesTotal)
+	return fmt.Sprintf("tools %d tokens (%s), prompts %d tokens, static resources %d tokens", sum.ToolsTotal, strings.Join(parts, ", "),
+		sum.PromptsTotal, sum.ResourcesTotal)
 }

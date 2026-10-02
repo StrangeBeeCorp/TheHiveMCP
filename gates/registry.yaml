@@ -216,7 +216,7 @@ gates:
     suites: [surface, tools]
     budget_s: 300
     blocks: >-
-      a tool, a description, a schema or a resource text that differs from baselines/surface/
+      a tool, a prompt, a description, a schema or a resource text that differs from baselines/surface/
       (make surface-propose rewrites it, for review)
 
   - id: tokens
@@ -225,7 +225,7 @@ gates:
     cadence: [pr, ci]
     suites: [surface, tools]
     budget_s: 300
-    blocks: the tools or the static resources costing more tokens than gates/budgets.yaml allows
+    blocks: the tools, the prompts or the static resources costing more tokens than gates/budgets.yaml allows
 
   - id: analyzers
     runs: make go CMD="run ./cmd/analyzers ./..."

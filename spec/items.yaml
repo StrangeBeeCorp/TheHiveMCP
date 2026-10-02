@@ -121,7 +121,7 @@ items:
     title: A change to what the model reads is reviewed and announced
     status: active
     rule: >-
-      Tools, descriptions, schemas and resource texts match the committed snapshot of
+      Tools, prompts, descriptions, schemas and resource texts match the committed snapshot of
       baselines/surface/, stay within the token budgets of gates/budgets.yaml, and every change to
       them has an entry under ## [Unreleased] in CHANGELOG.md.
     tests:
