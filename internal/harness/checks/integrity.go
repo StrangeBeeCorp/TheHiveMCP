@@ -40,32 +40,26 @@ func Integrity(tree Tree, changed []string, before func(string) ([]byte, bool), 
 	was := map[string]testShape{}
 	now := map[string]testShape{}
 
+	var found []Finding
+
 	for _, p := range changed {
 		if !strings.HasSuffix(p, "_test.go") {
 			continue
 		}
 
-		if old, ok := before(p); ok {
-			addShapes(was, p, old)
-		}
-
-		data, err := tree.Read(p)
-		if errors.Is(err, fs.ErrNotExist) {
-			continue
-		}
-
+		f, err := compareFile(tree, p, before, limits, was, now)
 		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", p, err)
+			return nil, err
 		}
 
-		addShapes(now, p, data)
+		found = append(found, f...)
 	}
 
-	var found []Finding
+	found = append(found, newTestMains(was, now, limits)...)
 
 	for key, w := range was {
 		name := path.Base(key)
-		if _, ok := limits.Allow[w.path+":"+name]; ok {
+		if allowed(limits, w.path, name) {
 			continue
 		}
 
@@ -77,6 +71,68 @@ func Integrity(tree Tree, changed []string, before func(string) ([]byte, bool), 
 	sort.Slice(found, func(i, j int) bool { return found[i].String() < found[j].String() })
 
 	return found, nil
+}
+
+// compareFile adds a changed test file's shapes, at the base and now, and refuses a build
+// constraint it gained or changed: one can take its tests out of the build.
+func compareFile(tree Tree, p string, before func(string) ([]byte, bool), limits IntegrityLimits, was, now map[string]testShape) ([]Finding, error) {
+	old, existed := before(p)
+	if existed {
+		addShapes(was, p, old)
+	}
+
+	data, err := tree.Read(p)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", p, err)
+	}
+
+	addShapes(now, p, data)
+
+	if c := constraint(data); c != "" && (!existed || c != constraint(old)) && !allowed(limits, p, "build") {
+		return []Finding{{Path: p, Msg: "its build constraint is now `" + c + "`, which can take its tests out of the build: " + allowHint}}, nil
+	}
+
+	return nil, nil
+}
+
+// newTestMains refuses a TestMain the base did not have: it decides whether the package's tests run.
+func newTestMains(was, now map[string]testShape, limits IntegrityLimits) []Finding {
+	var found []Finding
+
+	for key, n := range now {
+		if _, existed := was[key]; !existed && path.Base(key) == "TestMain" && !allowed(limits, n.path, "TestMain") {
+			found = append(found, Finding{Path: n.path, Line: n.line, Msg: "a new TestMain decides whether the package's tests run: " + allowHint})
+		}
+	}
+
+	return found
+}
+
+// allowed reports whether a person accepted what changed in a test file: a test by name, "build"
+// for its build constraint, "TestMain".
+func allowed(limits IntegrityLimits, file, what string) bool {
+	_, ok := limits.Allow[file+":"+what]
+	return ok
+}
+
+// constraint is a Go file's build constraint (//go:build), or "".
+func constraint(src []byte) string {
+	for line := range strings.SplitSeq(string(src), "\n") {
+		line = strings.TrimSpace(line)
+
+		switch {
+		case strings.HasPrefix(line, "//go:build "), strings.HasPrefix(line, "// +build "):
+			return line
+		case strings.HasPrefix(line, "package "):
+			return ""
+		}
+	}
+
+	return ""
 }
 
 // weaker says how a test got weaker, or nothing.
@@ -135,15 +191,19 @@ func isTestName(name string) bool {
 	return strings.HasPrefix(name, "Test") || strings.HasPrefix(name, "Fuzz")
 }
 
-// returns counts the return statements of a test body, outside its function literals (a subtest
-// returns on its own): a return there can end the test before its checks run.
+// returns counts the return statements of a test body and of its subtests (the function literals
+// given a *testing.T), not of other function literals: a return there can end the test, or the
+// subtest, before its checks run.
 func returns(body *ast.BlockStmt) int {
 	n := 0
 
 	ast.Inspect(body, func(node ast.Node) bool {
-		switch node.(type) {
+		switch node := node.(type) {
 		case *ast.FuncLit:
-			return false
+			testers := map[string]bool{}
+			addTesters(testers, node.Type)
+
+			return len(testers) > 0
 		case *ast.ReturnStmt:
 			n++
 		}

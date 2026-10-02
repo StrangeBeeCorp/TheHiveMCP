@@ -122,10 +122,10 @@ func ran(results []runner.Result) int {
 	return n
 }
 
-// cell makes a summary fit a table cell: one line, no pipe, at most 120 characters.
 // colours are a terminal's colour and style codes, which a gate's summary may carry.
 var colours = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
 
+// cell makes a summary fit a table cell: one line, no colour code, no pipe, at most 120 characters.
 func cell(s string) string {
 	const width = 120
 

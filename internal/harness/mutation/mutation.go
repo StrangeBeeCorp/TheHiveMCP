@@ -145,8 +145,8 @@ func (r Report) TimedOut() int {
 	return max(0, found-r.Killed-r.Lived-r.NotCovered-r.NotViable)
 }
 
-// maxTimedOut is the share of the covered mutants that may time out before the efficacy no longer
-// says much.
+// maxTimedOut is the share of the covered mutants that may time out, past two, before the
+// efficacy no longer says much.
 const maxTimedOut = 0.1
 
 // ParseReport reads gremlins' report.
@@ -169,6 +169,10 @@ func (c Config) Check(pkg string, r Report) (string, bool) {
 
 	if covered := r.Killed + r.Lived + r.TimedOut(); r.TimedOut() > max(2, int(maxTimedOut*float64(covered))) {
 		return line + ": too many mutants timed out for the efficacy to mean much: raise timeout_coefficient in gates/mutation.yaml", false
+	}
+
+	if r.Killed+r.Lived == 0 && r.TimedOut() == 0 && r.NotCovered > 0 {
+		return line + ": no unit test reaches its code, so its tests kill none of its mutants", false
 	}
 
 	if r.Killed+r.Lived > 0 && r.Efficacy < floor {

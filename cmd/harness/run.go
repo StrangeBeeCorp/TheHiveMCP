@@ -216,7 +216,7 @@ func (e env) runGates(ctx context.Context, cadence string, gates []registry.Gate
 	logDir := filepath.Join(e.root, ".cache", "harness", "runs", cadence+"-"+started.Format("20060102-150405"))
 
 	results, err := runner.Run(ctx, e.reg, run, runner.Options{
-		Root: e.root, Cadence: cadence, LogDir: logDir, Stream: f.stream, Out: out,
+		Root: e.root, Cadence: cadence, Base: sel.Base, LogDir: logDir, Stream: f.stream, Out: out,
 		Builtin: e.builtin, DockerUp: dockerUp,
 	})
 	if err != nil {

@@ -272,3 +272,30 @@ func TestPatchIDNamesAChangeWhateverItSitsOn(t *testing.T) {
 	assert.Empty(t, gitx.PatchID(t.Context(), dir, "0123456789012345678901234567890123456789..HEAD"), "an unknown commit")
 	assert.Empty(t, gitx.PatchID(t.Context(), dir, "--output=/tmp/x"), "an option is not a range")
 }
+
+// The integrity gate compares a renamed test file with the one the base had: both paths must be
+// in what changed, staged or committed.
+func TestARenameListsBothPaths(t *testing.T) {
+	t.Parallel()
+
+	dir := gittest.Repo(t, map[string]string{"a_test.go": "package x\n"})
+	base := gitx.Head(t.Context(), dir)
+
+	gittest.Git(t, dir, "mv", "a_test.go", "b_test.go")
+
+	staged, err := gitx.Staged(t.Context(), dir)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"a_test.go", "b_test.go"}, staged, "staged")
+
+	gittest.Commit(t, dir)
+
+	changed, err := gitx.ChangedSince(t.Context(), dir, base)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"a_test.go", "b_test.go"}, changed, "committed")
+
+	assert.Equal(t, base, gitx.MergeBase(t.Context(), dir, base))
+
+	old, ok := gitx.At(t.Context(), dir, base, "a_test.go")
+	require.True(t, ok)
+	assert.Equal(t, "package x\n", string(old))
+}

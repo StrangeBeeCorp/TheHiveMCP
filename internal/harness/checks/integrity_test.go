@@ -82,6 +82,7 @@ func TestAWeakenedTestIsRefused(t *testing.T) {
 		"a skip added":               {edit(t, "func TestSearch(t *testing.T) {\n", "func TestSearch(t *testing.T) {\n\tt.Skip(\"flaky\")\n"), "TestSearch now skips (1 skips, was 0)"},
 		"a case removed":             {edit(t, `{"a", "b", "c"}`, `{"a", "b"}`), "TestSearch has fewer cases: 2, was 3"},
 		"an early return":            {edit(t, "func TestSearch(t *testing.T) {\n", "func TestSearch(t *testing.T) {\n\tif short {\n\t\treturn\n\t}\n"), "TestSearch can now return before its checks (1 returns, was 0)"},
+		"a return in a subtest":      {edit(t, `func(t *testing.T) { requireFound(t, "d") }`, `func(t *testing.T) { if short { return }; requireFound(t, "d") }`), "TestSearch can now return before its checks (1 returns, was 0)"},
 		"a check swapped for Errorf": {edit(t, `t.Fatal("broken")`, `_ = fmt.Errorf("broken")`), checksLess},
 		"the test removed":           {"package pkg\n", "TestSearch is gone"},
 		"the file removed":           {"", "TestSearch is gone"},
@@ -91,6 +92,24 @@ func TestAWeakenedTestIsRefused(t *testing.T) {
 		assert.Contains(t, found[0], c.want, name)
 		assert.Contains(t, found[0], "gates/limits.yaml (integrity.allow)", name)
 	}
+}
+
+func TestATestFileLeftOutOfTheBuildIsRefused(t *testing.T) {
+	t.Parallel()
+
+	found := integrity(t, "//go:build ignore\n\n"+baseTest, nil, nil)
+	require.Len(t, found, 1)
+	assert.Contains(t, found[0], "its build constraint is now `//go:build ignore`")
+
+	assert.Empty(t, integrity(t, "//go:build ignore\n\n"+baseTest, nil, map[string]string{suiteFile + ":build": "a tool, not a test"}))
+}
+
+func TestANewTestMainIsRefused(t *testing.T) {
+	t.Parallel()
+
+	found := integrity(t, baseTest+"\nfunc TestMain(m *testing.M) { os.Exit(0) }\n", nil, nil)
+	require.Len(t, found, 1)
+	assert.Contains(t, found[0], "a new TestMain decides whether the package's tests run")
 }
 
 func TestAFuzzTargetKeepsItsSeeds(t *testing.T) {

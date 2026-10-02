@@ -50,8 +50,11 @@ type Builtin func(ctx context.Context, name string) ([]string, error)
 
 // Options configure a run.
 type Options struct {
-	Root     string
-	Cadence  string
+	Root    string
+	Cadence string
+	// Base is the ref the change is counted from, given to each gate as $HARNESS_BASE so a gate
+	// that compares with it (bench, mutation) compares with the same base as the verdict.
+	Base     string
 	LogDir   string
 	Stream   bool // copy each command's output to Out as it runs
 	Out      io.Writer
@@ -158,7 +161,7 @@ func runCommand(ctx context.Context, command string, g registry.Gate, opts Optio
 	cmd.Dir = opts.Root
 	killGroupOnCancel(cmd)
 
-	cmd.Env = append(os.Environ(), "HARNESS_CADENCE="+opts.Cadence, "HARNESS_GATE="+g.ID)
+	cmd.Env = append(os.Environ(), "HARNESS_CADENCE="+opts.Cadence, "HARNESS_GATE="+g.ID, "HARNESS_BASE="+opts.Base)
 
 	var out io.Writer = logFile
 	if opts.Stream {

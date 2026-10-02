@@ -82,6 +82,19 @@ func TestRunGivesEachGateItsVerdict(t *testing.T) {
 	assert.Contains(t, out.String(), "broken")
 }
 
+func TestAGateComparesWithTheBaseOfTheRun(t *testing.T) {
+	t.Setenv("HARNESS_BASE", "HEAD")
+
+	logDir := t.TempDir()
+	_, err := runner.Run(context.Background(), &registry.Registry{}, []registry.Gate{gate("base", "echo base=$HARNESS_BASE", 10)},
+		runner.Options{Root: t.TempDir(), Cadence: stop, Base: "origin/main", LogDir: logDir})
+	require.NoError(t, err)
+
+	log, err := os.ReadFile(filepath.Join(logDir, "base.log")) // #nosec G304 -- a log the test just wrote
+	require.NoError(t, err)
+	assert.Contains(t, string(log), "base=origin/main", "the run's base wins over one the caller exported")
+}
+
 func TestStreamedRunsStillPrintBuiltinFindings(t *testing.T) {
 	t.Parallel()
 

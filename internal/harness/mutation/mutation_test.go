@@ -56,6 +56,10 @@ func TestAPackageUnderItsFloorFails(t *testing.T) {
 	_, ok = config.Check(policy, mutation.Report{})
 	assert.True(t, ok, "no mutant to kill: nothing to hold the package to")
 
+	line, ok = config.Check(policy, mutation.Report{NotCovered: 12, Statistics: map[string]int{"conditionals_negation": 12}})
+	assert.False(t, ok, "mutants, and no test reaching them")
+	assert.Contains(t, line, "no unit test reaches its code")
+
 	timedOut := mutation.Report{Efficacy: 90.9, Killed: 10, Lived: 1, NotCovered: 26, Statistics: map[string]int{"conditionals_negation": 121}}
 	line, ok = config.Check(utils, timedOut)
 	assert.False(t, ok, "84 of 95 covered mutants timed out: 90.9 % of the 11 left says little")

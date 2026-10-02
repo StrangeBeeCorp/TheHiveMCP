@@ -13,7 +13,7 @@ tool: github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0
 
 # A mutant's tests may take this many times the unmutated run. Unit tests take milliseconds and
 # each mutant is rebuilt first: at gremlins' default most mutants time out, and the efficacy then
-# rests on the few left (the gate refuses a run where more than 10 % time out).
+# rests on the few left (the gate refuses a run where more than two, and more than 10 %, time out).
 timeout_coefficient: 30
 
 floors:
