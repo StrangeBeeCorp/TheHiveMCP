@@ -46,6 +46,7 @@ var protected = []struct {
 	{".claude/skills/**", HarnessPolicy},
 	{"CLAUDE.md", HarnessPolicy},
 	{"Makefile", HarnessPolicy},
+	{"scripts/harness.mk", HarnessPolicy},
 	{"scripts/lint.sh", HarnessPolicy},
 	{"scripts/fmt.sh", HarnessPolicy},
 	{"scripts/lint-makefile.sh", HarnessPolicy},

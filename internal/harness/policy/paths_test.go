@@ -63,7 +63,7 @@ func TestProtectedClassesAreTheMainSessions(t *testing.T) {
 
 	for _, p := range []string{
 		"gates/limits.yaml", ".claude/settings.json", ".claude/agents/coder.md", "spec/items/SIL-001.yaml",
-		"baselines/surface/tools.json", "internal/permissions/embedded/default_permissions.yaml", "Makefile",
+		"baselines/surface/tools.json", "internal/permissions/embedded/default_permissions.yaml", "Makefile", "scripts/harness.mk",
 		".github/workflows/ci.yml", "cmd/harness/main.go",
 	} {
 		d := policy.Write(policy.Other, root, p)
