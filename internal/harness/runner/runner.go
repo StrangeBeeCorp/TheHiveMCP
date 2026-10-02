@@ -63,6 +63,9 @@ type Result struct {
 	Log     string  `json:"log,omitempty"`
 	// Streamed is true when the gate's output was copied to Out as it ran.
 	Streamed bool `json:"-"`
+	// Listing is true when the log is a built-in gate's findings, one per line: Print shows them
+	// all, since nothing streamed them.
+	Listing bool `json:"-"`
 }
 
 // Run runs the gates in order and returns one result per gate.
@@ -106,6 +109,12 @@ func runGate(ctx context.Context, reg *registry.Registry, g registry.Gate, opts 
 		r.Streamed = opts.Stream
 	}
 
+	// A run interrupted (Ctrl-C, a hook's timeout) stops its gates: an unfinished one is a limit,
+	// not a failure of the change.
+	if r.Verdict != Pass && errors.Is(ctx.Err(), context.Canceled) {
+		r.Verdict, r.Summary = Unavailable, "interrupted before it finished"
+	}
+
 	r.Gate, r.Seconds = g.ID, time.Since(start).Seconds()
 
 	return r
@@ -126,7 +135,7 @@ func runBuiltin(ctx context.Context, g registry.Gate, opts Options, logPath stri
 		return Result{Verdict: Fail, Summary: fmt.Sprintf("%d finding(s); the log could not be written: %v", len(findings), err)}
 	}
 
-	return Result{Verdict: Fail, Summary: fmt.Sprintf("%d finding(s): %s", len(findings), findings[0]), Log: logPath}
+	return Result{Verdict: Fail, Summary: fmt.Sprintf("%d finding(s): %s", len(findings), findings[0]), Log: logPath, Listing: true}
 }
 
 func runCommand(ctx context.Context, command string, g registry.Gate, opts Options, logPath string) Result {
@@ -174,7 +183,7 @@ func lastLine(logPath string) string {
 	return lines[0]
 }
 
-// Tail returns the last n non-empty lines of a log.
+// Tail returns the last n non-empty lines of a log, all of them when n is negative.
 func Tail(logPath string, n int) []string {
 	data, err := os.ReadFile(logPath) // #nosec G304 -- the path is a log this package wrote
 	if err != nil {
@@ -189,7 +198,7 @@ func Tail(logPath string, n int) []string {
 		}
 	}
 
-	if len(lines) > n {
+	if n >= 0 && len(lines) > n {
 		lines = lines[len(lines)-n:]
 	}
 
@@ -252,8 +261,8 @@ func (rec Record) Write(logDir string) (string, error) {
 	return p, nil
 }
 
-// Print writes the human summary: one line per gate, then the tail of each failed gate's log,
-// unless that output was already streamed (built-in gates never are, so CI sees their findings).
+// Print writes the human summary: one line per gate, then each failed gate's log, unless that
+// output was already streamed: a built-in gate's findings in full, a command's last 40 lines.
 func Print(w io.Writer, results []Result) {
 	for _, r := range results {
 		_, _ = fmt.Fprintf(w, "  %-11s %-14s %6.1f s  %s\n", r.Verdict, r.Gate, r.Seconds, r.Summary)
@@ -261,6 +270,15 @@ func Print(w io.Writer, results []Result) {
 
 	for _, r := range results {
 		if r.Verdict != Fail || r.Log == "" || r.Streamed {
+			continue
+		}
+
+		if r.Listing {
+			_, _ = fmt.Fprintf(w, "\n--- %s (%s) ---\n", r.Gate, r.Log)
+			for _, l := range Tail(r.Log, -1) {
+				_, _ = fmt.Fprintln(w, l)
+			}
+
 			continue
 		}
 

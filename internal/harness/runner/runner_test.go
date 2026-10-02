@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -101,7 +102,7 @@ func TestStreamedRunsStillPrintBuiltinFindings(t *testing.T) {
 	var out bytes.Buffer
 	runner.Print(&out, results)
 	assert.NotContains(t, out.String(), "--- bad", "streamed output is not printed twice")
-	assert.Contains(t, out.String(), "b.go: too long", "a builtin's findings after the first reach the CI log (its last 40 lines)")
+	assert.Contains(t, out.String(), "b.go: too long", "a builtin's findings after the first reach the CI log")
 }
 
 func TestRecordIsWrittenAsJSON(t *testing.T) {
@@ -116,4 +117,28 @@ func TestRecordIsWrittenAsJSON(t *testing.T) {
 	var back runner.Record
 	require.NoError(t, json.Unmarshal(data, &back))
 	assert.Equal(t, rec.Results, back.Results)
+}
+
+// A built-in gate's findings are printed whole, a command's output only to its last 40 lines.
+func TestPrintShowsEveryFindingOfABuiltin(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	findings := make([]string, 60)
+	for i := range findings {
+		findings[i] = fmt.Sprintf("file%02d.go: too long", i)
+	}
+
+	results, err := runner.Run(context.Background(), &registry.Registry{}, []registry.Gate{{ID: dirty, Builtin: dirty, BudgetS: 10}},
+		runner.Options{Root: dir, Cadence: stop, LogDir: dir, Builtin: func(context.Context, string) ([]string, error) { return findings, nil }})
+	require.NoError(t, err)
+
+	var out bytes.Buffer
+	runner.Print(&out, results)
+	assert.Contains(t, out.String(), "file00.go: too long", "the first of 60")
+	assert.Contains(t, out.String(), "file59.go: too long")
+
+	assert.Len(t, runner.Tail(results[0].Log, -1), 60)
+	assert.Len(t, runner.Tail(results[0].Log, 40), 40)
 }

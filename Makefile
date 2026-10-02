@@ -3,8 +3,8 @@ GIT_COMMIT=$(shell git rev-parse HEAD)
 VERSION=$(shell git describe --tags 2> /dev/null || echo "v0.0.0-${GIT_COMMIT}")
 GO_IMAGE := golang:1.26.8-alpine
 # GO_IMAGE_CGO is the Debian-based image: gcc for `make test-race` (-race needs cgo,
-# which the Alpine GO_IMAGE lacks) and git, which the harness's tests run. The unit
-# tests run there with CGO_ENABLED=0, so they build as they do in GO_IMAGE.
+# which the Alpine GO_IMAGE lacks) and git, which the harness's tests run. The unit and
+# integration tests run there with CGO_ENABLED=0, so they build as in GO_IMAGE.
 GO_IMAGE_CGO := golang:1.26.8
 # jq and yq run the help-xml pipeline (JSON assembly + JSON→XML). Pinned by digest
 # so `make help-xml` needs no host jq/yq — everything stays in Docker.
@@ -362,7 +362,7 @@ test-integration: pre ## Full suite vs a live TheHive stack; slow, leaves stack 
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Running Integration Tests --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
-	@LICENSE_FILE="$(LICENSE_FILE)" MOUNT_APP="$(MOUNT_APP)" GO_IMAGE="$(GO_IMAGE)" \
+	@LICENSE_FILE="$(LICENSE_FILE)" MOUNT_APP="$(MOUNT_APP)" GO_IMAGE="$(GO_IMAGE_CGO)" \
 		GO_RUN_AS_HOST_UID="$(GO_RUN_AS_HOST_UID)" DOCKER_CACHE_MOUNTS="$(DOCKER_CACHE_MOUNTS)" \
 		GO_TOOLS_CACHE="$(GO_TOOLS_CACHE)" GO_TEST_COVER="$(GO_TEST_COVER)" GO_TEST_RUN="$(GO_TEST_RUN)" \
 		./scripts/run-integration-tests.sh

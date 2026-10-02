@@ -136,3 +136,37 @@ func TestRootHeadAndHasRef(t *testing.T) {
 	gittest.Git(t, fresh, "init", "-q")
 	assert.Empty(t, gitx.Head(t.Context(), fresh), "before the first commit")
 }
+
+// A rename lists both paths, staged or committed, so the suite that owned the old one is selected.
+func TestARenameListsBothPaths(t *testing.T) {
+	t.Parallel()
+
+	dir, _ := base(t)
+	gittest.Git(t, dir, "mv", docA, "internal/a.md")
+
+	staged, err := gitx.Staged(t.Context(), dir)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{docA, "internal/a.md"}, staged, "staged")
+
+	gittest.Commit(t, dir)
+
+	changed, err := gitx.ChangedSince(t.Context(), dir, "main")
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{docA, "internal/a.md"}, changed, "committed")
+}
+
+func TestIndexedReadsTheStagedContent(t *testing.T) {
+	t.Parallel()
+
+	dir, _ := base(t)
+	gittest.Write(t, dir, map[string]string{docA: "# staged\n"})
+	gittest.Git(t, dir, "add", docA)
+	gittest.Write(t, dir, map[string]string{docA: "# on disk\n"})
+
+	got, err := gitx.Indexed(t.Context(), dir, docA)
+	require.NoError(t, err)
+	assert.Equal(t, "# staged\n", string(got))
+
+	_, err = gitx.Indexed(t.Context(), dir, "nowhere.md")
+	require.Error(t, err)
+}

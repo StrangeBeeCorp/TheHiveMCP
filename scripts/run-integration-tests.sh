@@ -54,6 +54,6 @@ fi
 
 # shellcheck disable=SC2086 # cache/uid var groups are intentionally word-split into flags
 docker run -i --rm --network host -v "$MOUNT_APP" -w /app \
-  -e THEHIVE_TEST_URL -e LOG_LEVEL -e THEHIVE_TEST_IMAGE -e THEHIVE_TEST_LICENSE="$LIC" \
+  -e THEHIVE_TEST_URL -e LOG_LEVEL -e THEHIVE_TEST_IMAGE -e THEHIVE_TEST_LICENSE="$LIC" -e CGO_ENABLED=0 \
   ${GO_RUN_AS_HOST_UID:-} ${DOCKER_CACHE_MOUNTS:-} ${GO_TOOLS_CACHE:-} "$GO_IMAGE" \
   sh -c "command -v gotestsum >/dev/null 2>&1 || go install gotest.tools/gotestsum@v1.13.0 ; gotestsum --format pkgname --hide-summary=skipped -- ${GO_TEST_COVER:-} ${GO_TEST_RUN:-} $PARALLELISM -timeout 20m ./..."

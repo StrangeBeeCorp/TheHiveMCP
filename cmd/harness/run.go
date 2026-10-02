@@ -136,7 +136,9 @@ func (e env) run(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 
-	e.staged = scope.staged
+	if scope.staged != e.staged {
+		return usageError{"--staged takes no value"}
+	}
 
 	return e.execute(ctx, *cadence, gates, sel, runFlags{force: *force && len(only) > 0, stream: *stream}, out)
 }

@@ -16,12 +16,15 @@
 # ("*" means whatever changed). A path that no suite claims selects every suite, and so does
 # the `everything` suite. `implies` selects other suites too.
 #
-# {scope} in `runs` becomes the file scope of the cadence (see `scopes`). A docker gate when Docker
-# is down, or a command that exits 75, reports UNAVAILABLE: a stated limit, never a pass. A run
-# with one ends INCOMPLETE and exits 3.
+# {scope} in `runs` becomes the file scope of the cadence (see `scopes`): at edit and stop, the
+# uncommitted files and those of the last commit (the commits before it passed the commit hook);
+# at pr, ci and nightly, every file. The gates themselves are selected from the whole branch. A
+# docker gate when Docker is down, a command that exits 75, or a gate an interrupted run stopped
+# reports UNAVAILABLE: a stated limit, never a pass. A run with one ends INCOMPLETE and exits 3.
 #
-# At the commit cadence the built-in gates read the index, so a commit is judged on exactly what
-# it carries; elsewhere they read the working tree and its untracked files.
+# With --staged (the pre-commit hook) this registry, gates/limits.yaml and every file a built-in
+# gate reads come from the index, so a commit is judged on exactly what it carries; otherwise they
+# come from the working tree and its untracked files.
 
 scopes:
   edit: --changed HEAD

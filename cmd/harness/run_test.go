@@ -23,7 +23,8 @@ const (
 )
 
 // glueRegistry has a docs suite and a tools suite, and a gate for each: the docs gate passes and
-// the tools gate fails, so a run shows which gates the change selected.
+// the tools gate fails, so a run shows which gates the change selected. The commit cadence has the
+// public-safety builtin, and the nightly one a gate that cannot run.
 const glueRegistry = `
 scopes: {edit: a, stop: a, commit: a, pr: a, ci: a, nightly: a}
 suites:
@@ -33,7 +34,12 @@ suites:
 gates:
   - {id: docs-check, runs: "true", cadence: [ci], suites: [docs], budget_s: 10, blocks: x}
   - {id: tool-tests, runs: "echo tool tests broken; exit 1", cadence: [ci], suites: [tools], budget_s: 10, blocks: x}
+  - {id: safety, builtin: public-safety, cadence: [commit], suites: ["*"], budget_s: 10, blocks: x}
+  - {id: no-docker, runs: "echo no docker here; exit 75", cadence: [nightly], suites: ["*"], budget_s: 10, blocks: x}
 `
+
+// glueLimits refuses a *.local file in the repository: the safety gate's one rule.
+const glueLimits = "public_safety: {forbidden_paths: [\"*.local\"]}\n"
 
 // checkout is a repository whose main branch has the registry above, a doc and a Go file, with
 // a work branch checked out. It becomes the working directory, where the harness finds its
@@ -42,7 +48,7 @@ func checkout(t *testing.T) string {
 	t.Helper()
 
 	dir := gittest.Repo(t, map[string]string{
-		registryPath: glueRegistry, limitsPath: "{}\n", ".gitignore": ".cache/\n",
+		registryPath: glueRegistry, limitsPath: glueLimits, ".gitignore": ".cache/\n",
 		docA: "# a\n", goFile: "package x\n",
 	})
 	gittest.Git(t, dir, "checkout", "-q", "-b", "work")
@@ -201,4 +207,63 @@ func TestANamedGateRunsWhenSelectedOrForced(t *testing.T) {
 
 	_, err = harness(t, "run", "--cadence", "weekly")
 	require.ErrorAs(t, err, &usageError{})
+}
+
+// The pre-commit hook judges exactly what the commit carries: the staged files, and the staged
+// registry and limits, whatever the working tree holds.
+//
+//nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory
+func TestThePreCommitHookJudgesTheIndex(t *testing.T) {
+	dir := checkout(t)
+	commitRun := []string{"run", "--cadence", "commit", "--staged"}
+
+	gittest.Write(t, dir, map[string]string{"draft.local": "not for the repository\n", docA: editedA})
+	gittest.Git(t, dir, "add", docA)
+
+	out, err := harness(t, commitRun...)
+	require.NoError(t, err, "a forbidden file that is not staged is not in the commit: %s", out)
+
+	gittest.Git(t, dir, "add", "draft.local")
+	require.NoError(t, os.Remove(filepath.Join(dir, "draft.local")))
+	require.NoError(t, os.RemoveAll(filepath.Join(dir, ".cache")))
+
+	out, err = harness(t, commitRun...)
+	require.ErrorIs(t, err, errFailed, "a staged forbidden file is in the commit, gone from disk or not: %s", out)
+	assert.Contains(t, out, "draft.local")
+
+	gittest.Write(t, dir, map[string]string{registryPath: "gates: [not, a, registry\n", limitsPath: "{}\n"})
+	require.NoError(t, os.RemoveAll(filepath.Join(dir, ".cache")))
+
+	out, err = harness(t, commitRun...)
+	require.ErrorIs(t, err, errFailed, "the staged registry and limits judge it, not the edits on disk: %s", out)
+
+	_, err = harness(t, cmdRun, "--cadence", "commit", "--staged=false")
+	require.Error(t, err, "without --staged the broken registry on disk is read")
+}
+
+// --force runs a named gate the change does not select; alone, it changes nothing.
+//
+//nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory
+func TestABareForceRunsNothingTheChangeDoesNotSelect(t *testing.T) {
+	dir := checkout(t)
+	gittest.Write(t, dir, map[string]string{docA: editedA})
+
+	out, err := harness(t, "run", "--cadence", "ci", "--base", "main", "--force")
+	require.NoError(t, err, out)
+	assert.Equal(t, runner.Skipped, verdicts(lastRun(t, dir))[toolGate])
+}
+
+// A gate that could not run is a stated limit: the run is INCOMPLETE, never a pass.
+//
+//nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory
+func TestAGateThatCannotRunLeavesTheRunIncomplete(t *testing.T) {
+	dir := checkout(t)
+	gittest.Write(t, dir, map[string]string{docA: editedA})
+
+	out, err := harness(t, "run", "--cadence", "nightly", "--base", "main")
+	require.ErrorIs(t, err, errIncomplete, out)
+
+	rec := lastRun(t, dir)
+	assert.Equal(t, runner.Incomplete, rec.Verdict)
+	assert.Equal(t, map[string]runner.Verdict{"no-docker": runner.Unavailable}, verdicts(rec))
 }

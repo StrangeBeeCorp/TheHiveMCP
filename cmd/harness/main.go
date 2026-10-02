@@ -15,8 +15,11 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/checks"
@@ -43,7 +46,11 @@ var (
 )
 
 func main() {
-	err := dispatch(context.Background(), os.Args[1:], os.Stdout)
+	// Ctrl-C, or a hook's timeout, cancels the run: each running gate's process group is stopped.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	err := dispatch(ctx, os.Args[1:], os.Stdout)
+
+	stop()
 
 	var usage usageError
 	switch {
@@ -78,7 +85,10 @@ type env struct {
 	staged bool
 }
 
-func load(ctx context.Context) (env, error) {
+// load reads the registry and the limits: from the index when staged (the pre-commit hook), so
+// that what the commit carries decides which gates run, what they run and what they hold to,
+// whatever the working tree holds.
+func load(ctx context.Context, staged bool) (env, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return env{}, fmt.Errorf("working directory: %w", err)
@@ -89,12 +99,29 @@ func load(ctx context.Context) (env, error) {
 		return env{}, fmt.Errorf("find the repository: %w", err)
 	}
 
-	reg, err := registry.Load(filepath.Join(root, registryPath))
+	read := func(p string) ([]byte, error) {
+		return os.ReadFile(filepath.Join(root, p)) // #nosec G304 -- the repository's own registry and limits
+	}
+	if staged {
+		read = func(p string) ([]byte, error) { return gitx.Indexed(ctx, root, p) }
+	}
+
+	data, err := read(registryPath)
 	if err != nil {
 		return env{}, fmt.Errorf("load the gates: %w", err)
 	}
 
-	limits, err := checks.LoadLimits(filepath.Join(root, limitsPath))
+	reg, err := registry.Parse(data, registryPath)
+	if err != nil {
+		return env{}, fmt.Errorf("load the gates: %w", err)
+	}
+
+	data, err = read(limitsPath)
+	if err != nil {
+		return env{}, fmt.Errorf("load the limits: %w", err)
+	}
+
+	limits, err := checks.ParseLimits(data, limitsPath)
 	if err != nil {
 		return env{}, fmt.Errorf("load the limits: %w", err)
 	}
@@ -105,7 +132,16 @@ func load(ctx context.Context) (env, error) {
 		}
 	}
 
-	return env{root: root, reg: reg, limits: limits}, nil
+	return env{root: root, reg: reg, limits: limits, staged: staged}, nil
+}
+
+// stagedRun reports whether the command judges the index: run or select with --staged.
+func stagedRun(args []string) bool {
+	if len(args) == 0 || (args[0] != cmdRun && args[0] != cmdSelect) {
+		return false
+	}
+
+	return slices.Contains(args[1:], "--staged") || slices.Contains(args[1:], "-staged")
 }
 
 func dispatch(ctx context.Context, args []string, out io.Writer) error {
@@ -113,15 +149,15 @@ func dispatch(ctx context.Context, args []string, out io.Writer) error {
 		return usageError{"usage: harness run|select|list|check|docs (see cmd/harness/main.go)"}
 	}
 
-	e, err := load(ctx)
+	e, err := load(ctx, stagedRun(args))
 	if err != nil {
 		return err
 	}
 
 	switch args[0] {
-	case "run":
+	case cmdRun:
 		return e.run(ctx, args[1:], out)
-	case "select":
+	case cmdSelect:
 		return e.selectCmd(ctx, args[1:], out)
 	case "list":
 		return e.list(args[1:], out)
@@ -133,6 +169,12 @@ func dispatch(ctx context.Context, args []string, out io.Writer) error {
 		return usageError{fmt.Sprintf("unknown command %q", args[0])}
 	}
 }
+
+// The commands that select gates from the changed paths.
+const (
+	cmdRun    = "run"
+	cmdSelect = "select"
+)
 
 // The checks built into the harness, named by a gate's builtin field.
 const (
@@ -170,44 +212,9 @@ func (e env) tree(ctx context.Context) (checks.Tree, error) {
 	return checks.DirTree{Root: e.root, Names: files}, nil
 }
 
-// rules are the registry and the limits of the tree being judged: for a commit, the staged ones,
-// so that an edit on disk that is not staged cannot change the verdict.
-func (e env) rules(tree checks.Tree) (*registry.Registry, checks.Limits, error) {
-	if !e.staged {
-		return e.reg, e.limits, nil
-	}
-
-	data, err := tree.Read(registryPath)
-	if err != nil {
-		return nil, checks.Limits{}, fmt.Errorf("staged registry: %w", err)
-	}
-
-	reg, err := registry.Parse(data, registryPath)
-	if err != nil {
-		return nil, checks.Limits{}, fmt.Errorf("staged registry: %w", err)
-	}
-
-	data, err = tree.Read(limitsPath)
-	if err != nil {
-		return nil, checks.Limits{}, fmt.Errorf("staged limits: %w", err)
-	}
-
-	limits, err := checks.ParseLimits(data, limitsPath)
-	if err != nil {
-		return nil, checks.Limits{}, fmt.Errorf("staged limits: %w", err)
-	}
-
-	return reg, limits, nil
-}
-
 // builtin runs a check built into the harness over every file of the tree.
 func (e env) builtin(ctx context.Context, name string) ([]string, error) {
 	tree, err := e.tree(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	reg, limits, err := e.rules(tree)
 	if err != nil {
 		return nil, err
 	}
@@ -216,11 +223,11 @@ func (e env) builtin(ctx context.Context, name string) ([]string, error) {
 
 	switch name {
 	case builtinStructure:
-		found, err = checks.Structure(tree, limits.Structure)
+		found, err = checks.Structure(tree, e.limits.Structure)
 	case builtinSafety:
-		found, err = checks.PublicSafety(tree, limits.PublicSafety)
+		found, err = checks.PublicSafety(tree, e.limits.PublicSafety)
 	case builtinDocs:
-		found, err = checks.Docs(tree, reg)
+		found, err = checks.Docs(tree, e.reg)
 	default:
 		return nil, fmt.Errorf("unknown builtin %q", name)
 	}

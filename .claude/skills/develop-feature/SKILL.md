@@ -31,8 +31,9 @@ description:
    - adding a tool, an operation or a parameter → `references/tool-anatomy.md`
    - a new response field, an error that quotes entity data, or any edit to `internal/utils/parsers.go` → `references/untrusted-data.md`
    - any test → `references/testing.md`
-4. **Test.** Use `make check-fast` while you iterate: it runs the gates the changed paths select (`docs/reference/gates.md`), unit tests included. Run
-   `make test-integration RUN=<regexp>` for anything that calls TheHive. It must pass on 5.5 and on 5.6: CI runs both.
+4. **Test.** Use `make check-fast` while you iterate: it runs the gates your branch's changed paths select (`docs/reference/gates.md`); lint and the unit tests
+   cover the uncommitted files and the last commit's, and `make pr` and CI run them on everything. Run `make test-integration RUN=<regexp>` for anything that
+   calls TheHive. It must pass on 5.5 and on 5.6: CI runs both.
 5. **Update the docs in the same PR:**
    - a tool's behaviour or parameters → `docs/reference/tools/<tool>.md`, plus its summary under "MCP Tools" in `README.md`
    - a permission key → `docs/reference/permissions.md` and the example profiles

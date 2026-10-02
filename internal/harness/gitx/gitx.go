@@ -77,9 +77,9 @@ func Files(ctx context.Context, root string) ([]string, error) {
 	return split(out), nil
 }
 
-// Staged lists the paths the next commit changes, deletions included.
+// Staged lists the paths the next commit changes, deletions included, and both paths of a rename.
 func Staged(ctx context.Context, root string) ([]string, error) {
-	out, err := run(ctx, root, "diff", "-z", "--cached", "--name-only")
+	out, err := run(ctx, root, "diff", "-z", "--cached", "--name-only", "--no-renames")
 	if err != nil {
 		return nil, err
 	}
@@ -89,13 +89,14 @@ func Staged(ctx context.Context, root string) ([]string, error) {
 
 // ChangedSince lists the paths that differ between the merge base of base and HEAD and the
 // working tree: what the branch has changed so far, committed or not, untracked files included.
+// A rename lists both paths, so the suite that owned the old one is selected too.
 func ChangedSince(ctx context.Context, root, base string) ([]string, error) {
 	mb, err := run(ctx, root, "merge-base", base, "HEAD")
 	if err != nil {
 		return nil, err
 	}
 
-	diff, err := run(ctx, root, "diff", "-z", "--name-only", strings.TrimSpace(mb))
+	diff, err := run(ctx, root, "diff", "-z", "--name-only", "--no-renames", strings.TrimSpace(mb))
 	if err != nil {
 		return nil, err
 	}
@@ -106,6 +107,12 @@ func ChangedSince(ctx context.Context, root, base string) ([]string, error) {
 	}
 
 	return split(diff, untracked), nil
+}
+
+// Indexed is a file as the index holds it: what the next commit carries.
+func Indexed(ctx context.Context, root, path string) ([]byte, error) {
+	out, err := run(ctx, root, "show", ":"+path)
+	return []byte(out), err
 }
 
 // HasRef reports whether the ref resolves to a commit.
