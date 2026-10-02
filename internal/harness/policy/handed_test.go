@@ -83,6 +83,17 @@ func TestGitWritesAndRefsAreJudged(t *testing.T) {
 	assert.True(t, bash(policy.Other, "git tag v1.2.3").Deny, "tags are a person's, at release")
 	assert.False(t, bash(policy.Other, "git tag -l").Deny)
 	assert.False(t, bash(policy.Main, "git tag v1.2.3").Deny)
+	assert.True(t, bash(policy.Other, "git apply --stat --apply x.patch").Deny, "--apply applies after --stat")
+	assert.True(t, bash(policy.Other, "git apply --check --ap x.patch").Deny, "git takes --apply cut short")
+
+	for _, line := range []string{"git tag --merged origin/main", "git tag --contains main", "git tag -n5"} {
+		for _, role := range []policy.Role{policy.Main, policy.Other} {
+			d := bash(role, line)
+			assert.False(t, d.Deny, "%s: %s: %v", role, line, d.Reason)
+		}
+	}
+
+	assert.False(t, bash(policy.Main, "git tag -a v1.2.3 -m 'main release' main").Deny, "a tag of main is not a move of main")
 	assert.False(t, bash(policy.Other, "git fetch origin").Deny)
 }
 
@@ -106,6 +117,8 @@ func TestALiteralDollarIsText(t *testing.T) {
 	assert.False(t, bash(policy.Main, `gh alias set epics 'issue list --author="$1" --label=epic'`).Deny)
 	assert.False(t, bash(policy.Main, `git config --get-regexp '^remote\..*\.url$'`).Deny)
 	assert.True(t, bash(policy.Coder, `S='{print}'; awk "$S" docs/a.md`).Deny, "a program the shell builds is not read")
+	assert.True(t, bash(policy.Coder, `S='w x'; sed -n "-e$S" docs/a.md`).Deny, "nor one glued to -e")
+	assert.True(t, bash(policy.Coder, `sed "--expression=$(cat s)" docs/a.md`).Deny, "nor one given to --expression=")
 }
 
 // BSD's sed (this host's) edits in place with -I as with -i, and takes a lone -i's next word as

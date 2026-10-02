@@ -1,5 +1,7 @@
 package policy
 
+import "strings"
+
 // The command words the rules name in more than one place.
 const (
 	cmdGit       = "git"
@@ -22,6 +24,8 @@ const (
 	subSet       = "set"
 	optFile      = "--file"
 	optGet       = "--get"
+	optContains  = "--contains"
+	optMerged    = "--merged"
 	optHelp      = "--help"
 	subFetch     = "fetch"
 	subPull      = "pull"
@@ -45,3 +49,12 @@ const (
 	hintFmt      = "make fmt"
 	hintLint     = "make lint"
 )
+
+func isHarness(name string) bool {
+	return name == "bin/harness" || name == "./bin/harness" || strings.HasSuffix(name, "/bin/harness")
+}
+
+// harnessWord reports whether word runs the harness: bin/harness by any path, or harness itself.
+func harnessWord(word string) bool {
+	return isHarness(word) || word == "harness"
+}

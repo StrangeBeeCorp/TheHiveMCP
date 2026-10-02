@@ -60,9 +60,24 @@ type judge struct {
 }
 
 // computed reports whether the shell builds part of a word of the command judged as the line runs:
-// a variable or a substitution, not a $ quoted as text (awk '{print $1}').
+// a variable or a substitution, not a $ quoted as text (awk '{print $1}'). A part a reader cuts out
+// of a computed word (sed's -e"$S") is computed too.
 func (j *judge) computed(word string) bool {
-	return strings.Contains(word, shell.Computed) && j.inexact[word]
+	if !strings.Contains(word, shell.Computed) {
+		return false
+	}
+
+	if j.inexact[word] {
+		return true
+	}
+
+	for w := range j.inexact {
+		if strings.Contains(w, word) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (j *judge) line(text string, depth int) Decision {
@@ -406,15 +421,6 @@ func (j *judge) byPath(name string) Decision {
 	}
 
 	return Allow
-}
-
-func isHarness(name string) bool {
-	return name == "bin/harness" || name == "./bin/harness" || strings.HasSuffix(name, "/bin/harness")
-}
-
-// harnessWord reports whether word runs the harness: bin/harness by any path, or harness itself.
-func harnessWord(word string) bool {
-	return isHarness(word) || word == "harness"
 }
 
 // write judges a file the command line writes, relative to where the line has cd'ed. A path the

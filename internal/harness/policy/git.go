@@ -317,13 +317,17 @@ func (j *judge) gitAgent(sub string, rest []string) Decision {
 func agentRefs(sub string, rest []string) Decision {
 	switch sub {
 	case "apply", "am":
-		if sub == "am" || !slices.ContainsFunc(rest, func(a string) bool {
+		// --stat and its kin turn applying off, and --apply (git takes it cut short) turns it back on.
+		inspects := slices.ContainsFunc(rest, func(a string) bool {
 			return slices.Contains([]string{"--check", "--stat", "--numstat", "--summary"}, a)
-		}) {
+		})
+		applies := slices.ContainsFunc(rest, func(a string) bool { return abbreviates(a, "--apply", len("--ap")) })
+
+		if sub == "am" || !inspects || applies {
 			return deny("a patch names the files it writes inside itself: make the change with the editor")
 		}
 	case subTag:
-		if len(rest) > 0 && !slices.ContainsFunc(rest, func(a string) bool { return a == "-l" || a == "--list" || a == "-v" || a == "--verify" }) {
+		if len(rest) > 0 && !tagLists(rest) {
 			return deny("tags are made by people, when they release")
 		}
 	default:
@@ -340,7 +344,7 @@ func readOnlyGit(sub string, rest []string) bool {
 	switch sub {
 	case "branch":
 		return len(rest) == 0 || slices.ContainsFunc(rest, func(a string) bool {
-			return slices.Contains([]string{"--show-current", "--" + subList, "-l", "-a", "-r", "-v", "-vv", "--contains", "--merged"}, a)
+			return slices.Contains([]string{"--show-current", "--" + subList, "-l", "-a", "-r", "-v", "-vv", optContains, optMerged}, a)
 		})
 	case "remote":
 		return len(rest) == 0 || rest[0] == "-v" || rest[0] == subShow || rest[0] == "get-url"
@@ -362,7 +366,7 @@ func movesMain(sub string, rest []string) bool {
 
 		for k := 0; k < len(rest); k++ {
 			switch {
-			case slices.Contains([]string{"--contains", "--no-contains", "--merged", "--no-merged", "--points-at",
+			case slices.Contains([]string{optContains, "--no-contains", optMerged, "--no-merged", "--points-at",
 				"--sort", "--format", "-u", "--set-upstream-to"}, rest[k]):
 				k++
 			case !strings.HasPrefix(rest[k], "-"):
@@ -395,12 +399,47 @@ func movesMainRef(sub string, rest []string, isMain func(string) bool) bool {
 			return a == "refs/heads/"+mainBranch || a == mainBranch || (strings.HasPrefix(a, "refs/remotes/") && isMain(a))
 		})
 	case subTag:
-		return !slices.Contains(rest, "-l") && !slices.Contains(rest, "--list") &&
-			slices.ContainsFunc(rest, func(a string) bool { return !strings.HasPrefix(a, "-") && isMain(a) })
+		name := tagName(rest)
+		return !tagLists(rest) && name != "" && isMain(name)
 	}
 
 	return slices.ContainsFunc(rest, func(a string) bool {
 		_, dest, refspec := strings.Cut(strings.TrimPrefix(a, "+"), ":")
 		return refspec && !strings.Contains(a, "://") && isMain(dest)
 	})
+}
+
+// tagLists reports whether git tag lists tags: -l or --list, or one of the options that imply it
+// (-n, --contains, --merged, --points-at, --sort, --format and their kin), or -v, which verifies.
+func tagLists(rest []string) bool {
+	listing := []string{"-l", "--list", "-v", "--verify", optContains, "--no-contains", optMerged, "--no-merged", "--points-at",
+		"--sort", "--format", "--column", "--no-column", "-i", "--ignore-case"}
+
+	return slices.ContainsFunc(rest, func(a string) bool {
+		name, _, _ := strings.Cut(a, "=")
+		return slices.Contains(listing, name) || strings.HasPrefix(a, "-n")
+	})
+}
+
+// tagName is the name git tag would give a tag: its first operand, past the values of -m, -F, -u
+// and their long forms.
+func tagName(rest []string) string {
+	valued := []string{"-m", "-F", "-u", "--message", "--file", "--local-user", "--cleanup"}
+
+	for i := 0; i < len(rest); i++ {
+		switch a := rest[i]; {
+		case a == "--":
+			if i+1 < len(rest) {
+				return rest[i+1]
+			}
+
+			return ""
+		case slices.Contains(valued, a):
+			i++
+		case !strings.HasPrefix(a, "-"):
+			return a
+		}
+	}
+
+	return ""
 }
