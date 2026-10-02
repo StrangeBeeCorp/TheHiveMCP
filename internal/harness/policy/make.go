@@ -98,7 +98,7 @@ func (j *judge) make(args []string) Decision {
 		return deny("%s gives make an environment the policy cannot read: pass make's variables on its command line (make gate ID=x)", j.passed.hidden)
 	}
 
-	if d := j.harnessByGo(args); d.Deny {
+	if d := goByMake(append(slices.Clone(args), j.passed.assigns...)); d.Deny {
 		return d
 	}
 
@@ -109,18 +109,29 @@ func (j *judge) make(args []string) Decision {
 	return j.makeAgent(args)
 }
 
-// harnessByGo judges a make variable that runs the harness from its sources (make go CMD="run
-// ./cmd/harness push") as the harness command it is.
-func (j *judge) harnessByGo(args []string) Decision {
-	for _, a := range append(slices.Clone(args), j.passed.assigns...) {
+// goRunners are go's flags that make it run another program: the test binary's runner, the
+// toolchain's wrapper, vet's tool.
+var goRunners = []string{"-exec", "-toolexec", "-vettool"}
+
+// goByMake refuses the make variables that would have make go run what the policy cannot read: go's
+// flags that run another program, and a go run that is not one of the gates' programs: one that
+// names the harness in any spelling (bin/harness runs it, make pr pushes), changes directory
+// first (-C), or leaves the shell a pattern to expand.
+func goByMake(args []string) Decision {
+	for _, a := range args {
 		_, value, _ := strings.Cut(a, "=")
 		fields := strings.Fields(value)
 
-		for k, f := range fields {
-			f = strings.TrimSuffix(strings.TrimPrefix(f, "./"), "/")
-			if (f == "cmd/harness" || strings.HasSuffix(f, "/cmd/harness")) && slices.Contains(fields[:k], "run") {
-				return j.harness(fields[k+1:])
-			}
+		if slices.ContainsFunc(fields, func(f string) bool {
+			return slices.ContainsFunc(goRunners, func(r string) bool { return strings.HasPrefix(f, r) || strings.HasPrefix(f, "-"+r) })
+		}) {
+			return deny("go's -exec, -toolexec and -vettool run another program: make go runs go as it is")
+		}
+
+		if slices.Contains(fields, "run") && slices.ContainsFunc(fields, func(f string) bool {
+			return f == "-C" || strings.HasPrefix(f, "-C=") || strings.Contains(strings.ToLower(f), "harness") || strings.ContainsAny(f, "*?[")
+		}) {
+			return deny("make go runs the gates' Go programs (./cmd/surface, ./cmd/analyzers): run the harness with bin/harness, and push with make pr")
 		}
 	}
 
