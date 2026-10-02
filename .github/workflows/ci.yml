@@ -3,9 +3,10 @@ name: CI
 on:
   push:
     branches: [ "main" ]
+  # Every pull request runs CI, whatever its base: one stacked on another branch too. HARNESS_BASE
+  # below is the base it targets, so the gates judge only its own change.
   pull_request:
-    branches: [ "main" ]
-    # Every pull request runs CI, docs-only ones included. The gates run through
+    # Docs-only pull requests run CI too. The gates run through
     # bin/harness, which skips those the changed paths don't select
     # (gates/registry.yaml): a docs-only change runs the static checks and boots no
     # TheHive, and every job still reports a result, so these jobs can become
@@ -78,15 +79,35 @@ jobs:
     # Smoke-test that the production image still builds from deployment/Dockerfile
     # (a broken COPY, a renamed cmd/ path, or a bad base digest is not caught by
     # go build / golangci-lint alone). Runs in parallel with the other jobs and
-    # does not push — it only proves the image assembles.
+    # does not push — it only proves the image assembles. A change that selects only the docs and
+    # meta suites cannot reach the image: the build is skipped, and the job still reports a pass.
     runs-on: ubuntu-latest
+    env:
+      HARNESS_BASE: ${{ github.event.pull_request.base.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The merge base with the pull request's base, for gate selection.
+          fetch-depth: 0
+
+      - name: Does the change reach the image?
+        id: changes
+        run: |
+          suites="$(bin/harness select)"
+          echo "$suites"
+          if grep -qvE '^(docs|meta) ' <<<"$suites"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Only docs and metadata changed; skipping the image build."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Set up Docker Buildx
+        if: steps.changes.outputs.run == 'true'
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Build production image
+        if: steps.changes.outputs.run == 'true'
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
