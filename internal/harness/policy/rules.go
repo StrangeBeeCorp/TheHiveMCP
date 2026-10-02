@@ -200,6 +200,10 @@ func readWords(c shell.Command) []word {
 func (j *judge) readWord(w string, exact bool, hidden []string) Decision {
 	w, exact = j.resolveTemp(w, exact)
 
+	if foldsToASCII(w) {
+		return deny(lookAlike, w)
+	}
+
 	if j.cwd == "" && !filepath.IsAbs(w) && strings.ContainsAny(w, "/.*?["+shell.Computed) {
 		return deny("after a cd the policy could not follow, the %s names a file by its full path: %s", j.role, w)
 	}

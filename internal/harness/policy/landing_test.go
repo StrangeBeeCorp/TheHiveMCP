@@ -149,6 +149,9 @@ func TestALineIsJudgedWithWhatItWritesBeforeACopy(t *testing.T) {
 		"ln " + root + "/.cache/harness/state.json " + link,
 		"cp -l " + root + "/.cache/harness/state.json " + link,
 		"echo '{}' > " + mixed + "/.cache/harness/evidence/review-x.json",
+		"ln -s ../.cache docs/c && echo '{}' > docs/c/harness/evidence/review-x.json",
+		"echo '{}' > .cache/harneſſ/evidence/review-x.json",
+		"echo x > docs/ﬁle.md",
 	} {
 		assert.True(t, policy.Bash(policy.Main, root, root, line).Deny, line)
 	}
@@ -157,8 +160,14 @@ func TestALineIsJudgedWithWhatItWritesBeforeACopy(t *testing.T) {
 		"mv " + notes + " .",
 		"cp -R " + tmp + " docs",
 		"ln -s " + notes + " docs/notes.md",
+		"ln -s " + notes + " .",
+		"ln -sf ../shared/tool .",
+		"echo x > docs/café.md",
 	} {
 		d := policy.Bash(policy.Main, root, root, line)
 		assert.False(t, d.Deny, "%s: %v", line, d.Reason)
 	}
+
+	assert.True(t, policy.Bash(policy.Other, root, root, "ln -s "+notes+" docs/notes.md").Deny, "an agent makes no link")
+	assert.True(t, policy.Read(policy.Coder, root, "gates/canarieſ/x.patch").Deny, "a look-alike letter names no hidden file")
 }

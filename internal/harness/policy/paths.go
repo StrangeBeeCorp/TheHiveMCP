@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/registry"
 )
@@ -85,6 +87,32 @@ func ClassOf(rel string) (Class, bool) {
 	return "", false
 }
 
+// lookAlike is why a path with a letter the filesystem reads as a plain one is refused.
+const lookAlike = "%s holds a letter this filesystem reads as a plain one (ſ as s, the Kelvin sign as k, ß as ss): write the path in plain letters"
+
+// foldsToASCII reports whether p holds a letter that a filesystem ignoring case reads as a plain
+// one: a letter whose case folds to ASCII (ſ, the Kelvin sign), ß and ẞ, the Latin ligatures (ﬁ).
+// The refusals compare names in ASCII case only, so such a path could name a guarded file.
+func foldsToASCII(p string) bool {
+	for _, r := range p {
+		if r < utf8.RuneSelf {
+			continue
+		}
+
+		if r == 'ß' || r == 'ẞ' || (r >= 0xFB00 && r <= 0xFB06) {
+			return true
+		}
+
+		for f := unicode.SimpleFold(r); f != r; f = unicode.SimpleFold(f) {
+			if f < utf8.RuneSelf {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 // classInAnyCase is the protected class of rel with its letters in any case: on a filesystem that
 // ignores case, CLAUDE.MD is CLAUDE.md.
 func classInAnyCase(rel string) (Class, bool) {
@@ -121,6 +149,10 @@ func IsEnvFile(p string) bool {
 // where it lands: through the symlinks on its way, and with the names a refusal guards (.git, the
 // records, the protected classes) in any case, since this host's filesystem ignores it.
 func Write(role Role, root, p string) Decision {
+	if foldsToASCII(p) {
+		return deny(lookAlike, p)
+	}
+
 	root, abs := landing(root), landing(absolute(root, p))
 	if inGit(abs) {
 		return deny("never write inside .git: git's own files change through git commands")
@@ -201,6 +233,10 @@ func Read(role Role, root, p string) Decision {
 	rel, inside := relative(landing(root), landing(absolute(root, p)))
 	if !inside || role == Main || role.ReadOnly() {
 		return Allow
+	}
+
+	if foldsToASCII(rel) {
+		return deny(lookAlike, rel)
 	}
 
 	if rel = strings.ToLower(rel); under(rel, strings.ToLower(CanaryDir)) {

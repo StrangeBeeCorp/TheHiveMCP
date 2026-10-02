@@ -8,14 +8,18 @@
 // name (sed's w, curl -o, find -fprint…), and the command lines configuration will run later (every
 // value git config sets, a gh alias, a pager, an editor); what it cannot read there (a computed
 // key, an agent's sed or awk script from a file, an option it does not know before git's or gh's
-// command) it refuses. What a program then
-// does by its own logic is beyond it: a script, a recursive search of a directory above a hidden
-// one, a value read at run time into a variable the environment already exports, a program it has
-// no rule for that writes a file (a copy of the harness under another name among them), a sed or
-// awk program of the main session that builds a file name as it runs. The main session's scripts
-// and computed paths are its own. The policy keeps an agent
-// that follows its instructions in its lane; CI runs every gate again, and the person who merges
-// is the last check.
+// command) it refuses. What a program then does by its own logic is beyond it: a script, a
+// recursive search of a directory above a hidden one, a value read at run time into a variable the
+// environment already exports, a program it has no rule for that writes a file (a copy of the
+// harness under another name among them), a sed or awk program of the main session that builds a
+// file name as it runs.
+//
+// What it holds against differs by role. Against an agent, which runs only what it allows, every
+// rule holds for the commands it reads. The main session can run python3, so against it the rules
+// stop mistakes and shortcuts (an alias, another spelling of a flag, a wrapper, --person smuggled
+// in), not a construction built to defeat them (a link made in the same line to reach the records,
+// a path spelt to look like another): its scripts and computed paths are its own. CI runs every
+// gate again, and the person who merges is the last check.
 package policy
 
 import (

@@ -85,27 +85,90 @@ func (j *judge) carriesCache(src string) bool {
 // linksGuarded refuses a link, symbolic or hard (ln, cp -l or -s), to a place the harness guards,
 // into it or above it: a later write in the same line would reach it through the link, under a
 // name the policy does not know when it judges the line.
+// An agent makes no link: it copies a file or names it where it is.
 func (j *judge) linksGuarded(name string, args []string) Decision {
-	if name != "ln" && (name != "cp" || !slices.ContainsFunc(args, func(a string) bool {
-		return a == "--link" || a == "--symbolic-link" || (len(a) > 1 && a[0] == '-' && a[1] != '-' && strings.ContainsAny(a[1:], "ls"))
-	})) {
+	symbolic, linking := links(name, args)
+	if !linking {
 		return Allow
+	}
+
+	if j.role.Agent() {
+		return deny("agents make no links: copy the file, or name it where it is")
 	}
 
 	places := guardedPlaces(j.root)
 
-	for _, op := range operandsBut(args, "") {
-		if computed(op) {
+	for _, l := range j.newLinks(args) {
+		if computed(l.target) || computed(l.path) {
 			return deny("write the link's paths out: the policy reads where it points before it is made")
 		}
 
-		at := landing(j.abs(op))
-		if slices.ContainsFunc(places, func(p string) bool { return related(at, p) }) {
-			return deny("a link to %s would let a later write reach the harness's records or git's configuration through it: name the files you need", op)
+		// A symbolic link's target is text read from the link's own directory; a hard link's is a path.
+		target := j.abs(l.target)
+		if symbolic && !filepath.IsAbs(l.target) {
+			target = filepath.Join(filepath.Dir(l.path), l.target)
+		}
+
+		at := landing(target)
+		if slices.ContainsFunc(places, func(p string) bool { return related(at, p) || related(landing(l.path), p) }) {
+			return deny("a link to %s would let a later write reach the harness's records or git's configuration through it: name the files you need", l.target)
 		}
 	}
 
 	return Allow
+}
+
+// links reports whether a command makes links, and whether they are symbolic: ln, or cp -l or -s.
+func links(name string, args []string) (symbolic, linking bool) {
+	short := func(a, letters string) bool {
+		return len(a) > 1 && a[0] == '-' && a[1] != '-' && strings.ContainsAny(a[1:], letters)
+	}
+
+	switch name {
+	case "ln":
+		return slices.ContainsFunc(args, func(a string) bool { return a == "--symbolic" || short(a, "s") }), true
+	case "cp":
+		symbolic = slices.ContainsFunc(args, func(a string) bool { return a == "--symbolic-link" || short(a, "s") })
+		return symbolic, symbolic || slices.ContainsFunc(args, func(a string) bool { return a == "--link" || short(a, "l") })
+	}
+
+	return false, false
+}
+
+// link is one link a command makes: where it is made, and the text it points at.
+type link struct {
+	path, target string
+}
+
+// newLinks are the links ln or cp makes, as they do: into the -t directory, into the last operand
+// when it is a directory or there are several targets, else at the last operand, or named after
+// the target in the current directory when it is alone.
+func (j *judge) newLinks(args []string) []link {
+	ops := operandsBut(args, "")
+
+	dir := firstOf(flagValues(args, "S", "t", "--target-directory"))
+	if dir == "" && len(ops) > 1 {
+		info, err := os.Stat(landing(j.abs(ops[len(ops)-1])))
+		if len(ops) > 2 || (err == nil && info.IsDir()) {
+			dir, ops = ops[len(ops)-1], ops[:len(ops)-1]
+		}
+	}
+
+	switch {
+	case dir == "" && len(ops) == 2:
+		return []link{{path: j.abs(ops[1]), target: ops[0]}}
+	case dir == "":
+		dir = "."
+	}
+
+	out := make([]link, 0, len(ops))
+	for _, t := range ops {
+		if t != dir {
+			out = append(out, link{path: filepath.Join(j.abs(dir), filepath.Base(t)), target: t})
+		}
+	}
+
+	return out
 }
 
 // recursive reports whether cp's options copy a whole tree: -r, -R or -a, alone or in a cluster
