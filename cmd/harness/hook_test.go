@@ -18,7 +18,7 @@ const (
 	editRegistry = `
 scopes: {edit: a, stop: a, commit: a, pr: a, ci: a, nightly: a}
 suites:
-  - {id: everything, paths: ["**"]}
+  - {id: everything, review: high, paths: ["**"]}
 gates:
   - {id: layout, builtin: structure, cadence: [edit], suites: ["*"], budget_s: 10, blocks: x}
   - {id: safety, builtin: public-safety, cadence: [edit], suites: ["*"], budget_s: 10, blocks: x}
@@ -28,6 +28,8 @@ public_safety: {forbidden_paths: [".claude/sealed/**"]}
 hooks: {max_red_rounds: 6}
 `
 )
+
+const gitignore = ".gitignore"
 
 // hook runs bin/harness hook <event> with the input as JSON on stdin, and decodes its answer.
 func hook(t *testing.T, event string, input map[string]any) map[string]any {
@@ -55,7 +57,7 @@ func hook(t *testing.T, event string, input map[string]any) map[string]any {
 //nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory
 func TestTheEditCheckSkipsWhatGitIgnores(t *testing.T) {
 	dir := gittest.Repo(t, map[string]string{
-		registryPath: editRegistry, limitsPath: editLimits, ".gitignore": ".cache/\n.claude/sealed/\n", "docs/a.md": "# a\n",
+		registryPath: editRegistry, limitsPath: editLimits, gitignore: ".cache/\n.claude/sealed/\n", "docs/a.md": "# notes\n",
 	})
 	t.Chdir(dir)
 

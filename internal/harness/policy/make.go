@@ -11,6 +11,9 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/shell"
 )
 
+// evalBuiltin runs its arguments as a line of the same shell.
+const evalBuiltin = "eval"
+
 // environment is what a command line may put in the environment of the commands it runs, where
 // make reads its variables too: every assignment the line makes (before a command, through env,
 // export or declare, or plain, which an exported name or set -a passes on), and the first export
@@ -57,7 +60,7 @@ func passedBy(line shell.Line, depth int) environment {
 			if e.hidden == "" && allexport(c.Words[1:]) {
 				e.hidden = "set -a"
 			}
-		case "eval":
+		case evalBuiltin:
 			if depth < maxDepth {
 				e.add(passedBy(shell.Parse(strings.Join(c.Words[1:], " ")), depth+1))
 			}

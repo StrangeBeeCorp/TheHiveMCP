@@ -10,8 +10,11 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx/gittest"
 )
 
-// onMain is the branch a person's merge moves.
-const onMain = "main"
+// onMain is the branch a person's merge moves, and onRelease one of the release branches.
+const (
+	onMain    = "main"
+	onRelease = "release/1.2"
+)
 
 // withRemotes gives the checkout an origin and a public mirror, both bare, and returns them.
 func withRemotes(t *testing.T, dir string) (string, string) {
@@ -35,10 +38,10 @@ func TestPushRefusesMainAReleaseBranchAndADetachedHEAD(t *testing.T) {
 
 	for _, c := range []struct{ checkout, refusal string }{
 		{onMain, "main changes only when a person merges a pull request"},
-		{"release/1.2", "release/1.2 changes only when a person merges a pull request"},
+		{onRelease, onRelease + " changes only when a person merges a pull request"},
 		{"--detach", "HEAD is detached"},
 	} {
-		if c.checkout == "release/1.2" {
+		if c.checkout == onRelease {
 			gittest.Git(t, dir, "checkout", "-q", "-b", c.checkout)
 		} else {
 			gittest.Git(t, dir, "checkout", "-q", c.checkout)
@@ -54,7 +57,8 @@ func TestPushRefusesMainAReleaseBranchAndADetachedHEAD(t *testing.T) {
 	assert.Empty(t, gittest.Git(t, origin, "for-each-ref"), "nothing reached origin")
 }
 
-// make push sends the branch checked out to origin under its own name, and nowhere else.
+// A push sends the branch checked out to origin under its own name, and nowhere else. A person
+// pushes here (--person): make pr's evidence is tested in pr_test.go.
 //
 //nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory
 func TestPushSendsTheBranchToOriginUnderItsName(t *testing.T) {
@@ -62,7 +66,7 @@ func TestPushSendsTheBranchToOriginUnderItsName(t *testing.T) {
 	origin, public := withRemotes(t, dir)
 	head := strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD"))
 
-	_, err := harness(t, "push")
+	_, err := harness(t, "push", "--person")
 	require.NoError(t, err)
 	assert.Equal(t, head, strings.TrimSpace(gittest.Git(t, origin, "rev-parse", "refs/heads/work")))
 	assert.Equal(t, "origin", strings.TrimSpace(gittest.Git(t, dir, "config", "branch.work.remote")), "-u: the branch tracks origin")
@@ -70,10 +74,10 @@ func TestPushSendsTheBranchToOriginUnderItsName(t *testing.T) {
 	gittest.Git(t, dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false",
 		"commit", "-q", "--amend", "--allow-empty", "-m", "rewritten")
 
-	_, err = harness(t, "push")
+	_, err = harness(t, "push", "--person")
 	require.Error(t, err, "a rewritten branch needs --force")
 
-	_, err = harness(t, "push", "--force")
+	_, err = harness(t, "push", "--person", "--force")
 	require.NoError(t, err)
 	assert.Equal(t, strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD")), strings.TrimSpace(gittest.Git(t, origin, "rev-parse", "refs/heads/work")))
 	assert.Empty(t, gittest.Git(t, public, "for-each-ref"), "the public mirror is a person's")

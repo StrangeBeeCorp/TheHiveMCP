@@ -11,7 +11,10 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/shell"
 )
 
-const cmdRsync = "rsync"
+const (
+	cmdRsync = "rsync"
+	cmdDitto = "ditto"
+)
 
 // maxTreeFiles bounds the files the policy judges under one directory a command writes whole.
 const maxTreeFiles = 20000
@@ -20,7 +23,7 @@ var (
 	// targeted are the copiers that take -t DIR.
 	targeted = []string{"cp", "mv", "install", "ln"}
 	// copiers write a copy of their sources at their last argument, or in the directory -t names.
-	copiers = append(slices.Clone(targeted), cmdRsync, "ditto")
+	copiers = append(slices.Clone(targeted), cmdRsync, cmdDitto)
 )
 
 var errTooMany = errors.New("too many files")
@@ -56,7 +59,7 @@ func (j *judge) trees(name string, args []string) Decision {
 func (j *judge) copies(name string, args []string) Decision {
 	sources, dir, into := j.copyArgs(name, args)
 	removes := name == "mv" || (name == cmdRsync && slices.Contains(args, "--remove-source-files"))
-	whole := name == "mv" || name == "ditto" || recursiveFlag(args, "rRa", "--recursive", "--archive")
+	whole := name == "mv" || name == cmdDitto || recursiveFlag(args, "rRa", "--recursive", "--archive")
 
 	for _, src := range j.expand(sources) {
 		if removes {
