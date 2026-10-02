@@ -249,7 +249,7 @@ func (e env) builtin(ctx context.Context, name string) ([]string, error) {
 	case builtinBranch:
 		found = onBranch(gitx.Branch(ctx, e.root))
 	case builtinSpec:
-		found, err = checks.SpecTraces(tree, reg)
+		found, err = checks.SpecTraces(tree, e.reg)
 	case builtinChangelog:
 		found = checks.Changelog(e.changed, e.base == "" || gitx.HasPath(ctx, e.root, e.base, checks.SurfaceSummary))
 	default:
