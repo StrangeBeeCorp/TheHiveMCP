@@ -1,6 +1,7 @@
 package evidence_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -211,4 +212,15 @@ func TestTheEvidenceOfAStackedPullRequestNamesBothBases(t *testing.T) {
 	ev.Against = "origin/feat/below"
 	assert.Contains(t, evidence.Markdown(ev, nil), "The gates were selected against `2222222`; the files and the model-facing "+
 		"note below are this pull request's own change, against `origin/feat/below`.")
+
+	// make pr found no origin/main and ran every suite; the pull request's base still says what it changes.
+	ev.Base, ev.Changed = "", []string{"docs/a.md"}
+	md := evidence.Markdown(ev, nil)
+	assert.Contains(t, md, "The gates ran every suite, with no base to select against; the files and the model-facing note "+
+		"below are this pull request's own change, against `origin/feat/below`.")
+	assert.Contains(t, md, "**Model-facing: no.** `baselines/surface/` did not change.")
+
+	data, err := json.Marshal(ev)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), `"against":"origin/feat/below"`, "the JSON says what its changed paths are against")
 }

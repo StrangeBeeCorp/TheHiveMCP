@@ -19,20 +19,36 @@ func (j *judge) gh(args []string) Decision {
 		sub = args[1]
 	}
 
+	if d, judged := j.ghConfig(group, args[min(1, len(args)):]); judged && d.Deny {
+		return d
+	}
+
+	if d := personOnly(group, sub, args); d.Deny {
+		return d
+	}
+
+	switch {
+	case group == "api":
+		return j.ghAPI(args[1:])
+	case !j.role.Agent() || ghRead(group, sub):
+		return Allow
+	case j.role == Other && group == "pr" && slices.Contains([]string{"create", subEdit, "comment"}, sub):
+		return Allow
+	}
+
+	return deny("the %s may read GitHub with gh (view, list, diff, checks, status) but not change it", j.role)
+}
+
+// personOnly refuses what only a person does on GitHub: merge and approve a pull request.
+func personOnly(group, sub string, args []string) Decision {
 	switch {
 	case group == "pr" && sub == "merge":
 		return deny("agents never merge: a person merges the pull request on GitHub")
 	case group == "pr" && sub == "review" && slices.ContainsFunc(args, func(a string) bool { return a == "--approve" || a == "-a" }):
 		return deny("agents never approve: a person reviews the pull request")
-	case group == "api":
-		return j.ghAPI(args[1:])
-	case !j.role.Agent() || ghRead(group, sub):
-		return Allow
-	case j.role == Other && group == "pr" && slices.Contains([]string{"create", "edit", "comment"}, sub):
-		return Allow
 	}
 
-	return deny("the %s may read GitHub with gh (view, list, diff, checks, status) but not change it", j.role)
+	return Allow
 }
 
 func ghRead(group, sub string) bool {

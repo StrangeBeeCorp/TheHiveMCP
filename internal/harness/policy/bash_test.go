@@ -178,7 +178,7 @@ func TestOrdinaryWorkIsNotInTheWay(t *testing.T) {
 		"git switch -c feat/DL-1-x",
 		"git commit -m 'x'",
 		"git rebase origin/main",
-		"bin/harness push",
+		"make pr FORCE=1",
 		"bin/harness pr",
 		"gh pr create --title x --body-file body.md",
 		"gh api -X PATCH repos/o/r -f allow_merge_commit=true",

@@ -81,54 +81,30 @@ func (j *judge) rules(name string, args []string) Decision {
 		}
 	}
 
+	if d := j.embedded(name, args); d.Deny {
+		return d
+	}
+
 	return j.trees(name, args)
-}
-
-// copyOverRecords refuses a directory copy, a move or an extraction into a directory that holds the
-// harness's records: it could drop a forged evidence file where make pr's goes.
-func (j *judge) copyOverRecords(name string, args []string, target string) Decision {
-	whole := slices.Contains([]string{"mv", "rsync", "tar", cmdUnzip, "ditto"}, name) || recursive(args)
-	if !whole || !filepath.IsAbs(j.cwd) {
-		return Allow
-	}
-
-	abs := target
-	if !filepath.IsAbs(abs) {
-		abs = filepath.Join(j.cwd, target)
-	}
-
-	if rel, inside := relative(j.root, filepath.Clean(abs)); inside && holdsRecords(rel) {
-		return deny("%s %s writes a whole tree into %s, which holds the harness's records: copy the files you need one by one", name, target, rel)
-	}
-
-	return Allow
-}
-
-// recursive reports whether cp's options copy a whole tree: -r, -R or -a, alone or in a cluster
-// (-rf, -Rp), or their long forms.
-func recursive(args []string) bool {
-	return slices.ContainsFunc(args, func(a string) bool {
-		if a == "--recursive" || a == "--archive" {
-			return true
-		}
-
-		return len(a) > 1 && a[0] == '-' && a[1] != '-' && strings.ContainsAny(a[1:], "rRa")
-	})
 }
 
 // personDenied is why no Claude role passes --person, the harness flag only a person types.
 const personDenied = "--person is a person's own word at their terminal: from a Claude session the push needs make pr's evidence and a ready review of HEAD"
 
+// printers print or search the words they are given and run nothing: a --person among them is
+// text (grep -rn -- --person cmd), not the harness's flag.
+var printers = []string{cmdEcho, cmdPrintf, "grep", "rg", cmdCat, cmdHead, cmdTail, "wc", "less", "ls", subDiff, "comm", "nl", "column", "cut", "tr"}
+
 // personFlag reports whether a word passes the harness's --person, alone or inside a value
 // (make go CMD="run ./cmd/harness push --person").
 func personFlag(word string) bool {
-	fields := strings.FieldsFunc(word, func(r rune) bool { return r == ' ' || r == '=' })
+	fields := strings.FieldsFunc(word, func(r rune) bool { return strings.ContainsRune(" \t\n=\"'`(){};,|&", r) })
 
 	return slices.ContainsFunc(fields, func(f string) bool { return f == "--person" || f == "-person" })
 }
 
 // noFiles are commands that read no file their arguments name.
-var noFiles = []string{"echo", cmdPrintf, "true", "false", "test", "[", "cd", "pwd", "date", "which", "sleep", "basename", "dirname", "export"}
+var noFiles = []string{cmdEcho, cmdPrintf, "true", "false", "test", "[", "cd", "pwd", "date", "which", "sleep", "basename", "dirname", "export"}
 
 // reads refuses a command that may read what the role may not (Read): the canaries for an agent,
 // the sealed tests too for the Coder. A word that names a path, from the directory the line is
@@ -270,7 +246,7 @@ func (j *judge) everyone(name string, args []string) Decision {
 		return deny("no sudo here: everything runs as the user, in containers")
 	}
 
-	if name != cmdGit && name != "gh" && slices.ContainsFunc(args, personFlag) {
+	if !slices.Contains(append([]string{cmdGit, "gh"}, printers...), name) && slices.ContainsFunc(args, personFlag) {
 		return deny(personDenied)
 	}
 
@@ -300,7 +276,7 @@ func agentOnly(name string, args []string) Decision {
 	switch {
 	case slices.Contains(interpreters, name):
 		return deny("%s runs code the policy cannot read: use the editor for files and the make targets for the rest", name)
-	case name == "awk" && slices.ContainsFunc(args, awkRuns):
+	case name == cmdAwk && slices.ContainsFunc(args, awkRuns):
 		return deny("this awk program runs commands or writes files, which the policy cannot read")
 	case name == "docker" && (len(args) == 0 || !slices.Contains(dockerReads, args[0])):
 		return deny("containers are run by the make targets (make help): agents only read docker's state")
@@ -320,124 +296,8 @@ func local(url string) bool {
 	return strings.Contains(url, "localhost") || strings.Contains(url, "127.0.0.1")
 }
 
-// inPlace reports whether a read command is used to write: sed -i, sort -o.
-func inPlace(name string, args []string) bool {
-	switch name {
-	case cmdSed:
-		return slices.ContainsFunc(args, func(a string) bool {
-			return strings.HasPrefix(a, "-i") || strings.HasPrefix(a, "--in-place")
-		})
-	case cmdSort:
-		return sortOutput(args) != nil
-	}
-
-	return false
-}
-
-// sortOutput is the file sort -o writes.
-func sortOutput(args []string) []string {
-	for _, a := range args {
-		if out, ok := strings.CutPrefix(a, "--output="); ok {
-			return []string{out}
-		}
-	}
-
-	return valueOf(args, "-o", "--output")
-}
-
-// extracts reports whether tar or unzip writes the archive's files: unzip unless it only lists or
-// tests, tar with x (or --extract, --get) in its mode.
-func extracts(name string, args []string) bool {
-	if name == cmdUnzip {
-		return !slices.ContainsFunc(args, func(a string) bool { return a == "-l" || a == "-t" || a == "-v" || a == "-Z" })
-	}
-
-	for i, a := range args {
-		switch {
-		case a == "--extract" || a == "--get":
-			return true
-		case strings.HasPrefix(a, "--"):
-		case strings.HasPrefix(a, "-") || i == 0:
-			if strings.Contains(a, "x") {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-// targets are the files a writing command names.
-func targets(name string, args []string) []string {
-	var positional []string
-
-	for _, a := range args {
-		if !strings.HasPrefix(a, "-") {
-			positional = append(positional, a)
-		}
-	}
-
-	switch name {
-	case "tee", "rm", "rmdir", "touch", "chmod", "chown", "truncate", "mkdir", "unlink", "shred", "ln":
-		return positional
-	case "cp", "mv", "install", "rsync", "ditto":
-		if dir := valueOf(args, "-t", "--target-directory"); dir != nil {
-			return dir
-		}
-
-		if len(positional) > 0 {
-			return positional[len(positional)-1:]
-		}
-	case cmdSed:
-		if inPlace(name, args) && len(positional) > 1 {
-			return positional[1:]
-		}
-	case "dd":
-		for _, a := range args {
-			if out, ok := strings.CutPrefix(a, "of="); ok {
-				return []string{out}
-			}
-		}
-	}
-
-	return outputs(name, args)
-}
-
-// outputs are what the commands that write besides their main job name: sort -o, curl -o,
-// wget -O, and the directory tar or unzip extracts into.
-func outputs(name string, args []string) []string {
-	switch name {
-	case cmdSort:
-		return sortOutput(args)
-	case "curl":
-		return valueOf(args, "-o", "--output")
-	case "wget":
-		return valueOf(args, "-O", "--output-document")
-	case "tar", cmdUnzip:
-		if dir := valueOf(args, "-C", "-d", "--directory"); dir != nil {
-			return dir
-		}
-
-		if extracts(name, args) {
-			return []string{"."}
-		}
-	}
-
-	return nil
-}
-
-// valueOf is the word after the first of the flags, if any.
-func valueOf(args []string, flags ...string) []string {
-	for i, a := range args {
-		if slices.Contains(flags, a) && i+1 < len(args) {
-			return []string{args[i+1]}
-		}
-	}
-
-	return nil
-}
-
-// harness judges bin/harness: pushing is for the sessions that ship, gates for those that edit.
+// harness judges bin/harness: make pr is how the sessions that ship push, and gates are for those
+// that edit. bin/harness push, which trusts a recorded verdict, is a person's.
 func (j *judge) harness(args []string) Decision {
 	sub := ""
 	if len(args) > 0 {
@@ -451,7 +311,9 @@ func (j *judge) harness(args []string) Decision {
 		return strings.Contains(a, shell.Computed) || strings.ContainsAny(a, "*?[") || a == "{}"
 	}):
 		return deny("write the harness's arguments out: the policy reads them before it runs, and cannot read a variable, a substitution, a glob or find's {}")
-	case (sub == subPush || sub == "pr") && (j.role.Duel() || j.role.ReadOnly()):
+	case sub == subPush:
+		return deny("push with make pr: it runs the pr gates at HEAD and pushes in the same run, so no earlier record stands in for them")
+	case sub == "pr" && (j.role.Duel() || j.role.ReadOnly()):
 		return deny("the %s does not push: the session that runs the duel ships the change", j.role)
 	case j.role.ReadOnly() && !slices.Contains([]string{"select", subList, "check", "hook"}, sub):
 		return deny("the %s reads and reports; it does not run gates", j.role)

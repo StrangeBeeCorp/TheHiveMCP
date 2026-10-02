@@ -71,7 +71,11 @@ func Markdown(ev Evidence, flags []Flag) string {
 	fmt.Fprintf(&b, "### Gate evidence\n\n`make pr` at `%s` (`%s`, compared with `%s`): **%s**, %d gates in %s.\n\n",
 		short(ev.Head), ev.Branch, short(ev.Base), ev.Verdict, ran(ev.Results), took)
 
-	if ev.Against != "" {
+	switch {
+	case ev.Against != "" && ev.Base == "":
+		fmt.Fprintf(&b, "The gates ran every suite, with no base to select against; the files and the model-facing note "+
+			"below are this pull request's own change, against `%s`.\n\n", ev.Against)
+	case ev.Against != "":
 		fmt.Fprintf(&b, "The gates were selected against `%s`; the files and the model-facing note below are this pull "+
 			"request's own change, against `%s`.\n\n", short(ev.Base), ev.Against)
 	}
@@ -91,7 +95,7 @@ func Markdown(ev Evidence, flags []Flag) string {
 	}
 
 	switch {
-	case ev.Base == "":
+	case ev.Base == "" && ev.Against == "":
 		b.WriteString("\n**Model-facing: unknown.** There was no base to compare with, so the changed paths are not known: " +
 			"check `baselines/surface/` and the protected parts by hand.\n")
 	case ev.ModelFacing():

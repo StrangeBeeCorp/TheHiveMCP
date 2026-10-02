@@ -64,6 +64,12 @@ func (j *judge) gitSub(sub string, rest []string) Decision {
 		return deny("main moves only when a person merges a pull request on GitHub")
 	}
 
+	if sub == subConfig {
+		if d := j.gitConfig(rest); d.Deny {
+			return d
+		}
+	}
+
 	switch {
 	case slices.Contains(gitReads, sub) || readOnlyGit(sub, rest):
 		return Allow
@@ -89,7 +95,7 @@ var shortValued = map[string]string{"commit": "mFCctuS", "am": "CpS"}
 // (-nm, -anm, but not -mn, whose n is the message); core.hooksPath, in any case, in git config.
 func skipsHooks(sub string, rest []string) bool {
 	// git config reads its key after a -- too.
-	if sub == "config" && slices.ContainsFunc(rest, func(a string) bool { return strings.Contains(strings.ToLower(a), "core.hookspath") }) {
+	if sub == subConfig && slices.ContainsFunc(rest, func(a string) bool { return strings.Contains(strings.ToLower(a), "core.hookspath") }) {
 		return true
 	}
 
@@ -221,7 +227,7 @@ func (j *judge) gitAgent(sub string, rest []string) Decision {
 		if len(rest) > 0 && !slices.Contains([]string{subList, subShow}, rest[0]) {
 			return deny("notes are written by the harness only")
 		}
-	case "config":
+	case subConfig:
 		if !slices.ContainsFunc(rest, func(a string) bool {
 			return slices.Contains([]string{"--get", "--get-all", "--get-regexp", "--" + subList, "-l"}, a)
 		}) {
@@ -253,7 +259,7 @@ func readOnlyGit(sub string, rest []string) bool {
 }
 
 // movesMain reports whether a git command would rewrite the local main by hand. Main itself
-// changes on GitHub only: no one pushes it from here (bin/harness push refuses).
+// changes on GitHub only: no one pushes it from here (make pr refuses).
 func movesMain(sub string, rest []string) bool {
 	isMain := func(a string) bool { return a == mainBranch || strings.HasSuffix(a, "/"+mainBranch) }
 

@@ -56,7 +56,7 @@ func passedBy(line shell.Line, depth int) environment {
 		}
 
 		switch path.Base(c.Words[0]) {
-		case "set":
+		case subSet:
 			if e.hidden == "" && allexport(c.Words[1:]) {
 				e.hidden = "set -a"
 			}
@@ -130,7 +130,7 @@ func (j *judge) makeAgent(args []string) Decision {
 // long one may be cut short (--dir=x), as make accepts them.
 func makeOption(a string) bool {
 	if name, _, _ := strings.Cut(a, "="); strings.HasPrefix(name, "--") {
-		return slices.ContainsFunc([]string{"--file", "--makefile", "--directory", "--eval", "--environment-overrides"},
+		return slices.ContainsFunc([]string{optFile, "--makefile", "--directory", "--eval", "--environment-overrides"},
 			func(option string) bool { return abbreviates(name, option, len("--f")) })
 	}
 

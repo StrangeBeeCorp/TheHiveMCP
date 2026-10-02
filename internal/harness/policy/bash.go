@@ -4,7 +4,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -27,8 +26,8 @@ var (
 		"watch": {"-n", "-d"}, "caffeinate": {"-t", "-w"}, "chronic": nil, "unbuffer": nil,
 	}
 	readCommands = []string{
-		"ls", "cat", "head", "tail", "wc", "grep", "rg", "find", "file", "stat", "pwd", "echo", cmdPrintf, cmdSort,
-		"uniq", subDiff, "tree", "jq", "yq", "true", "false", cmdSed, "awk", "cut", "tr", "basename", "dirname",
+		"ls", cmdCat, cmdHead, cmdTail, "wc", "grep", "rg", "find", "file", "stat", "pwd", cmdEcho, cmdPrintf, cmdSort,
+		"uniq", subDiff, "tree", "jq", "yq", "true", "false", cmdSed, cmdAwk, "cut", "tr", "basename", "dirname",
 		"realpath", "cd", "test", "[", "date", "which", "column", "less", "comm", "nl", "xxd", "od", "sha256sum",
 		"shasum", "md5", cmdGit, "gh", cmdMake, "sleep",
 	}
@@ -113,15 +112,16 @@ func truncatesIntegration(c shell.Command) bool {
 
 	reader := path.Base(c.Into[0])
 
-	return slices.Contains(c.Words[1:], "test-integration") && (reader == "head" || reader == "tail")
+	return slices.Contains(c.Words[1:], "test-integration") && (reader == cmdHead || reader == cmdTail)
 }
 
 // assign judges NAME=value before a command or in export: git and make are configured by the
 // repository, not per command.
 func (j *judge) assign(a string) Decision {
 	name, _, _ := strings.Cut(a, "=")
-	if strings.HasPrefix(name, "GIT_CONFIG") || name == "GIT_EXEC_PATH" || name == "MAKEFLAGS" || name == "MAKEFILES" {
-		return deny("environment that reconfigures git or make for one command is not allowed: the repository's configuration is policy")
+	if strings.HasPrefix(name, "GIT_CONFIG") || name == "GIT_EXEC_PATH" || name == "MAKEFLAGS" || name == "MAKEFILES" ||
+		slices.Contains(configHomes, name) {
+		return deny("environment that reconfigures git, gh or make for one command is not allowed: the repository's configuration is policy")
 	}
 
 	if j.role.Agent() && slices.Contains([]string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE"}, name) {
@@ -132,30 +132,16 @@ func (j *judge) assign(a string) Decision {
 		return deny("%s makes the next program run a command or load code the policy cannot read: run the commands themselves", name)
 	}
 
+	// The main session may set them: the command line it names is judged as the one it is.
+	if _, value, _ := strings.Cut(a, "="); runsCode(a) && slices.Contains(commandRunners, name) {
+		return j.child(value, maxDepth)
+	}
+
 	if _, value, _ := strings.Cut(a, "="); j.role.Agent() && name == "CDPATH" && value != "" {
 		return deny("CDPATH sends cd where the policy cannot follow: cd by path")
 	}
 
 	return Allow
-}
-
-// codeRunners are the variables that make a program run another command or load code: git's
-// pager, editor, diff and transport, the dynamic loader's, a shell's start-up file, PATH.
-var codeRunners = []string{
-	"GIT_EXTERNAL_DIFF", "GIT_PAGER", "PAGER", "GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "EDITOR", "VISUAL", "GIT_SSH",
-	"GIT_SSH_COMMAND", "GIT_ASKPASS", "SSH_ASKPASS", "GIT_PROXY_COMMAND", "LESSOPEN", "LESSCLOSE", "BASH_ENV", "ENV",
-	"PROMPT_COMMAND", "LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT", "PATH", "SHELL",
-}
-
-// runsCode reports whether NAME=value sets a code runner to anything but a no-op (GIT_PAGER=cat,
-// GIT_EDITOR=true).
-func runsCode(a string) bool {
-	name, value, _ := strings.Cut(a, "=")
-	if !slices.Contains(codeRunners, name) && !strings.HasPrefix(name, "DYLD_") {
-		return false
-	}
-
-	return !slices.Contains([]string{"", "cat", cmdTrue, ":"}, value)
 }
 
 // run judges one command and its arguments, after unwrapping the wrappers.
@@ -358,8 +344,11 @@ func (j *judge) env(args []string, depth int) Decision {
 	return j.run(rest, depth+1)
 }
 
+// find judges the commands find -exec runs, and the files its actions delete or write.
 func (j *judge) find(args []string, depth int) Decision {
 	for i := 0; i < len(args); i++ {
+		var d Decision
+
 		switch args[i] {
 		case "-exec", "-execdir", "-ok", "-okdir":
 			end := i + 1
@@ -367,58 +356,32 @@ func (j *judge) find(args []string, depth int) Decision {
 				end++
 			}
 
-			d := j.run(args[i+1:end], depth+1)
-			if d.Deny {
-				return d
-			}
-
+			d = j.run(args[i+1:end], depth+1)
 			i = end
-		case "-delete", "-fprint", "-fprintf", "-fls":
-			if j.role.ReadOnly() || j.role.Duel() {
-				return deny("find %s changes files: the %s may not", args[i], j.role)
-			}
+		case "-delete", "-fprint", "-fprint0", "-fprintf", "-fls":
+			d = j.findWrite(args, i)
+		}
+
+		if d.Deny {
+			return d
 		}
 	}
 
 	return Allow
 }
 
-// tmpdir is the variable that names the temporary directory, where agents write their logs.
-const tmpdir = "TMPDIR"
-
-// varWriters are the builtins that set a variable they are given by name.
-var varWriters = []string{"read", cmdPrintf, "mapfile", "readarray", "getopts", "export", "unset"}
-
-// declarers are the builtins that declare variables, namerefs (-n) among them.
-var declarers = regexp.MustCompile(`(^|[^A-Za-z0-9_])(declare|local|typeset|readonly)([^A-Za-z0-9_]|$)`)
-
-// rebinds reports whether a line may set the variable, judged wide: any mention of its name but
-// its own expansions ($NAME, ${NAME}) in the text or in the words once quotes are joined (an
-// assignment, a for or select loop, read, export, printf -v, unset, a nameref's target), any
-// declaration (a nameref may point at it), and a builtin that sets a variable named at run time.
-func rebinds(text string, line shell.Line, name string) bool {
-	if mentions(text, name) || declarers.MatchString(text) {
-		return true
+// findWrite judges the action of find at i that changes files: -delete, or the file -fprint,
+// -fprintf or -fls writes.
+func (j *judge) findWrite(args []string, i int) Decision {
+	if j.role.ReadOnly() || j.role.Duel() {
+		return deny("find %s changes files: the %s may not", args[i], j.role)
 	}
 
-	for _, c := range line.Commands {
-		if slices.ContainsFunc(c.Assigns, func(a string) bool { return mentions(a, name) }) ||
-			slices.ContainsFunc(c.Words, func(w string) bool { return mentions(w, name) }) {
-			return true
-		}
-
-		writer := len(c.Words) > 0 && slices.Contains(varWriters, path.Base(c.Words[0]))
-		if writer && slices.ContainsFunc(c.Words[1:], func(w string) bool { return strings.Contains(w, shell.Computed) }) {
-			return true
-		}
+	if args[i] == "-delete" || i+1 >= len(args) {
+		return Allow
 	}
 
-	return false
-}
-
-// mentions reports whether s names the variable other than by expanding it.
-func mentions(s, name string) bool {
-	return strings.Count(s, name) > strings.Count(s, "$"+name)+strings.Count(s, "${"+name+"}")
+	return j.write(args[i+1])
 }
 
 // byPath judges a command named by its path: a script in the checkout or in a temporary

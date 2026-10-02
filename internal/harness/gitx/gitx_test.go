@@ -172,6 +172,18 @@ func TestIndexedReadsTheStagedContent(t *testing.T) {
 }
 
 // A rebase keeps a change's patch id; an edit to the change does not.
+// The evidence names the commit its base was, not the ref, which moves.
+func TestResolveNamesTheCommitARefNames(t *testing.T) {
+	t.Parallel()
+
+	dir, head := base(t)
+	assert.Equal(t, head, gitx.Resolve(t.Context(), dir, "main"))
+	assert.Equal(t, head, gitx.Resolve(t.Context(), dir, "HEAD"))
+	assert.Empty(t, gitx.Resolve(t.Context(), dir, "nowhere"), "no such ref")
+	assert.Empty(t, gitx.Resolve(t.Context(), dir, ""), "no base")
+	assert.Empty(t, gitx.Resolve(t.Context(), dir, "HEAD^{tree}"), "a tree is not a commit")
+}
+
 func TestPatchIDNamesAChangeWhateverItSitsOn(t *testing.T) {
 	t.Parallel()
 
@@ -197,6 +209,12 @@ func TestPatchIDNamesAChangeWhateverItSitsOn(t *testing.T) {
 	gittest.Git(t, dir, "add", "-A")
 	gittest.Commit(t, dir)
 	assert.NotEqual(t, before, gitx.PatchID(t.Context(), dir, "main...HEAD"), "edited")
+
+	edited := gitx.PatchID(t.Context(), dir, "main...HEAD")
+	gittest.Write(t, dir, map[string]string{docA: "#  a, edited twice\n"})
+	gittest.Git(t, dir, "add", "-A")
+	gittest.Commit(t, dir)
+	assert.NotEqual(t, edited, gitx.PatchID(t.Context(), dir, "main...HEAD"), "a space is an edit: an indent changes YAML")
 
 	assert.Empty(t, gitx.PatchID(t.Context(), dir, "HEAD..HEAD"), "nothing changed")
 	assert.Empty(t, gitx.PatchID(t.Context(), dir, "0123456789012345678901234567890123456789..HEAD"), "an unknown commit")

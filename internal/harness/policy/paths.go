@@ -107,6 +107,11 @@ func Write(role Role, root, p string) Decision {
 		return deny("never write inside .git: git's own files change through git commands")
 	}
 
+	if configFile(abs) {
+		return deny("%s is git's or gh's configuration, which a person sets: an alias or a program named there runs "+
+			"commands the policy never reads", p)
+	}
+
 	rel, inside := relative(root, abs)
 	if inside && record(rel) {
 		return deny("%s is the harness's own record (make pr's evidence, the hooks' state): only the harness writes it", rel)
@@ -200,6 +205,32 @@ func record(rel string) bool {
 // .cache/harness.
 func holdsRecords(rel string) bool {
 	return rel == "." || rel == "" || rel == ".cache" || rel == ".cache/harness"
+}
+
+// configFile reports whether abs is where git or gh reads the configuration a person sets:
+// ~/.gitconfig and the files it includes beside it (~/.gitconfig-work), and git's and gh's
+// directories under ~/.config, $XDG_CONFIG_HOME or $GH_CONFIG_DIR.
+func configFile(abs string) bool {
+	if base := filepath.Base(abs); strings.HasPrefix(base, ".gitconfig") {
+		return true
+	}
+
+	var dirs []string
+
+	home, err := os.UserHomeDir()
+	if err == nil {
+		dirs = append(dirs, filepath.Join(home, ".config", "git"), filepath.Join(home, ".config", "gh"))
+	}
+
+	if x := os.Getenv("XDG_CONFIG_HOME"); x != "" {
+		dirs = append(dirs, filepath.Join(x, "git"), filepath.Join(x, "gh"))
+	}
+
+	if g := os.Getenv("GH_CONFIG_DIR"); g != "" {
+		dirs = append(dirs, filepath.Clean(g))
+	}
+
+	return slices.ContainsFunc(dirs, func(d string) bool { return abs == d || strings.HasPrefix(abs, d+"/") })
 }
 
 // under reports whether rel is the directory dir (given with its trailing slash) or inside it.

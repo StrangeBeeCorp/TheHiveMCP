@@ -21,7 +21,7 @@ const maxTreeFiles = 20000
 
 var (
 	// targeted are the copiers that take -t DIR.
-	targeted = []string{"cp", "mv", "install", "ln"}
+	targeted = []string{"cp", "mv", cmdInstall, "ln"}
 	// copiers write a copy of their sources at their last argument, or in the directory -t names.
 	copiers = append(slices.Clone(targeted), cmdRsync, cmdDitto)
 )

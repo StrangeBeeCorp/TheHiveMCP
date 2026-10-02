@@ -37,8 +37,9 @@ type Evidence struct {
 	// creates it, which changes nothing a model reads.
 	FirstSnapshot bool `json:"first_snapshot,omitempty"`
 	// Against, when set, is the pull request's base: Changed and FirstSnapshot then describe the
-	// change against it, while Base is what selected the gates. Only the rendering sets it.
-	Against string `json:"-"`
+	// change against it, while Base is what selected the gates. Only bin/harness evidence --base
+	// sets it: make pr's record never holds it.
+	Against string `json:"against,omitempty"`
 }
 
 func path(root, head string) string {
