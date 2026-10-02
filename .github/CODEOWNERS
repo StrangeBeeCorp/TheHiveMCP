@@ -23,6 +23,7 @@
 /.claude/skills/                                         @jean-collette_stb @antoine-salesse_stb
 /CLAUDE.md                                               @jean-collette_stb @antoine-salesse_stb
 /Makefile                                                @jean-collette_stb @antoine-salesse_stb
+/scripts/harness.mk                                      @jean-collette_stb @antoine-salesse_stb
 /scripts/lint.sh                                         @jean-collette_stb @antoine-salesse_stb
 /scripts/fmt.sh                                          @jean-collette_stb @antoine-salesse_stb
 /scripts/lint-makefile.sh                                @jean-collette_stb @antoine-salesse_stb
