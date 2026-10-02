@@ -18,7 +18,7 @@ func TestTheHooksCannotBeSkippedHoweverTheOptionIsSpelled(t *testing.T) {
 	for _, line := range []string{
 		"git commit -nm x", "git commit -anm x", "git commit -vn -m x", "git commit --no-veri -m x", "git commit --no-verif -m x",
 		"git am -n x.patch", "git rebase --no-verify origin/main", "git merge --no-verify feat/x",
-		"git config core.hookspath /dev/null", "git config --local CORE.HOOKSPATH x",
+		"git config core.hookspath /dev/null", "git config --local CORE.HOOKSPATH x", "git config -- core.hooksPath /dev/null",
 	} {
 		for _, role := range everyRole {
 			assert.True(t, bash(role, line).Deny, "%s: %s", role, line)

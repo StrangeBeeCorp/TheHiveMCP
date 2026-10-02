@@ -88,6 +88,11 @@ var shortValued = map[string]string{"commit": "mFCctuS", "am": "CpS"}
 // git accepts (--no-veri); -n among the short options of commit or am, alone or in a cluster
 // (-nm, -anm, but not -mn, whose n is the message); core.hooksPath, in any case, in git config.
 func skipsHooks(sub string, rest []string) bool {
+	// git config reads its key after a -- too.
+	if sub == "config" && slices.ContainsFunc(rest, func(a string) bool { return strings.Contains(strings.ToLower(a), "core.hookspath") }) {
+		return true
+	}
+
 	for _, a := range rest {
 		if a == "--" {
 			return false
@@ -96,8 +101,6 @@ func skipsHooks(sub string, rest []string) bool {
 		name, _, _ := strings.Cut(a, "=")
 
 		switch {
-		case sub == "config" && strings.Contains(strings.ToLower(a), "core.hookspath"):
-			return true
 		case abbreviates(name, "--no-verify", len("--no-v")):
 			return true
 		case shortValued[sub] != "" && len(a) > 1 && a[0] == '-' && a[1] != '-':
