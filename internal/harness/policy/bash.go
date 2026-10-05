@@ -17,7 +17,7 @@ var (
 	shells       = []string{"sh", "bash", "zsh", "dash", "ksh", "fish"}
 	interpreters = []string{
 		"python", "python3", "perl", "ruby", "php", "lua", "node", "deno", "bun", "osascript", "expect",
-		"tclsh", "source", ".", "uv", "uvx", "npx",
+		"tclsh", cmdSource, ".", "uv", "uvx", "npx",
 	}
 	// wrappers run the command that follows their options; the listed options take a value.
 	wrappers = map[string][]string{

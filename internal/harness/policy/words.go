@@ -36,6 +36,7 @@ const (
 	keyCmd       = "cmd"
 	keyBrowser   = "browser"
 	cmdTrue      = "true"
+	cmdSource    = "source"
 	subGrep      = "grep"
 	subPush      = "push"
 	subDiff      = "diff"

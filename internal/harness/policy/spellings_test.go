@@ -45,6 +45,10 @@ func TestAnAwkProgramIsReadWhereverItsOptionsPutIt(t *testing.T) {
 		`gawk '@include ".cache/tmp/p.awk"'`,
 		"gawk --dump-variables=x '{print}' f",
 		"gawk -o '{print}' f",
+		`gawk -W source 'BEGIN{print "x" > "spec/a.md"}'`,
+		`gawk -Wsource 'BEGIN{print "x" > "spec/a.md"}'`,
+		`gawk -W assign a=1 'BEGIN{print "x" > "spec/a.md"}'`,
+		`gawk --a a=1 'BEGIN{print "x" > "spec/a.md"}'`,
 	} {
 		assert.True(t, bash(policy.Other, line).Deny, line)
 	}
@@ -55,8 +59,16 @@ func TestAnAwkProgramIsReadWhereverItsOptionsPutIt(t *testing.T) {
 
 	assert.True(t, bash(policy.Main, `gawk -e 'BEGIN{system("git push")}'`).Deny, "the command an -e program runs is judged")
 	assert.True(t, bash(policy.Main, `gawk --assign a=1 'BEGIN{system("git push")}'`).Deny, "--assign takes the next word, not the program")
+	assert.True(t, bash(policy.Main, `gawk --a a=1 'BEGIN{system("git push")}'`).Deny, "--a is --assign cut short")
 	assert.True(t, bash(policy.Main, "gawk -i inplace '{print}' .git/config").Deny, "inplace rewrites its operands")
+	assert.True(t, bash(policy.Main, "gawk --i inplace '{print}' .git/config").Deny, "--i is --include cut short")
 	assert.False(t, bash(policy.Main, "gawk -i inplace '{print}' notes.md").Deny)
+
+	// The coarse check reads the program as written; the record's name in another case is caught
+	// only by judging the file the parser finds, as the main session's write.
+	assert.True(t, bash(policy.Main, `awk 'BEGIN{print 1 > ".cache/HARNESS/state.json"}'`).Deny, "print > is a write")
+	assert.True(t, bash(policy.Main, `awk 'BEGIN{printf "%s", 1 >> ".cache/HARNESS/state.json"}'`).Deny, "printf >> is a write")
+	assert.False(t, bash(policy.Main, `awk 'BEGIN{print 1 > "notes.txt"}'`).Deny)
 }
 
 // What sed writes with w and s///w is judged as a write of the role: only the target tells these

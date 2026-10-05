@@ -476,5 +476,5 @@ func guarded(word string) bool {
 	}
 
 	return slices.Contains([]string{cmdGit, "gh", cmdMake, "env", "eval", "xargs"}, name) || slices.Contains(shells, name) ||
-		(slices.Contains(interpreters, name) && name != "." && name != "source")
+		(slices.Contains(interpreters, name) && name != "." && name != cmdSource)
 }

@@ -2,6 +2,7 @@ package policy
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -64,19 +65,42 @@ func parseAwk(args []string) awkCall {
 	return call
 }
 
-// option reads one of awk's options, and returns how many words after it the option took: a
-// short one takes the rest of its word or the next word, a long one (cut short, as gawk accepts)
-// its =VALUE or the next word, and -W names a long one with its value attached (-W exec=FILE).
-func (c *awkCall) option(a string, args []string, i int) int {
-	next := ""
-	if i+1 < len(args) {
-		next = args[i+1]
+// gawkLong are gawk's long options. It accepts any prefix that names one of them alone.
+var gawkLong = strings.Fields(`assign bignum characters-as-bytes copyright csv debug dump-variables exec
+field-separator file gen-pot help include lint load no-optimize non-decimal-data optimize persist posix
+pretty-print profile re-interval sandbox source traditional use-lc-numeric version`)
+
+// gawkOption is the long option a word names as gawk reads it: whole, or cut to a prefix of one
+// option only. "" when it names none or several.
+func gawkOption(name string) string {
+	name = strings.TrimPrefix(name, "--")
+	if slices.Contains(gawkLong, name) {
+		return name
 	}
 
+	var found []string
+
+	for _, o := range gawkLong {
+		if name != "" && strings.HasPrefix(o, name) {
+			found = append(found, o)
+		}
+	}
+
+	if len(found) == 1 {
+		return found[0]
+	}
+
+	return ""
+}
+
+// option reads one of awk's options, and returns how many words after it the option took: a
+// short one takes the rest of its word or the next word, a long one its =VALUE or the next word,
+// and -W NAME is --NAME, its value attached (-W exec=FILE) or the word after NAME.
+func (c *awkCall) option(a string, args []string, i int) int {
 	if strings.HasPrefix(a, "--") {
 		name, value, attached := strings.Cut(a, "=")
 		if !attached {
-			value = next
+			value = wordAt(args, i+1)
 		}
 
 		return btoi(c.long(name, value) && !attached)
@@ -86,7 +110,7 @@ func (c *awkCall) option(a string, args []string, i int) int {
 	attached := value != ""
 
 	if !attached {
-		value = next
+		value = wordAt(args, i+1)
 	}
 
 	switch flag {
@@ -97,8 +121,12 @@ func (c *awkCall) option(a string, args []string, i int) int {
 	case "i", "l":
 		c.load(value)
 	case "W":
-		name, v, _ := strings.Cut(value, "=")
-		c.long("--"+name, v)
+		name, v, has := strings.Cut(value, "=")
+		if !has {
+			v = wordAt(args, i+2-btoi(attached))
+		}
+
+		return btoi(!attached) + btoi(c.long(name, v) && !has)
 	case "F", "v":
 	default:
 		c.unread = append(c.unread, a)
@@ -108,18 +136,25 @@ func (c *awkCall) option(a string, args []string, i int) int {
 	return btoi(!attached)
 }
 
+// wordAt is the word at k, or "" past the last one.
+func wordAt(args []string, k int) string {
+	if k < len(args) {
+		return args[k]
+	}
+
+	return ""
+}
+
 // long reads one of gawk's long options, cut short or not, and reports whether it takes a value.
 func (c *awkCall) long(name, value string) bool {
-	is := func(option, least string) bool { return abbreviates(name, option, len(least)) }
-
-	switch {
-	case is(optFile, "--fil"), is("--exec", "--ex"):
+	switch gawkOption(name) {
+	case "file", "exec":
 		c.fromFile = true
-	case is("--source", "--so"):
+	case cmdSource:
 		c.sources = append(c.sources, value)
-	case is("--include", "--in"), is("--load", "--lo"):
+	case "include", "load":
 		c.load(value)
-	case is("--assign", "--as"), is("--field-separator", "--fie"):
+	case "assign", "field-separator":
 	default:
 		c.unread = append(c.unread, name)
 		return false
