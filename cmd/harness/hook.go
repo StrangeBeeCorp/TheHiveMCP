@@ -39,6 +39,7 @@ func (e env) hook(ctx context.Context, args []string, stdin io.Reader, out io.Wr
 
 	switch args[0] {
 	case "pre-tool-use":
+		hooks.Remember(ctx, e.root, in, e.snapshot)
 		o = hooks.PreToolUse(e.root, in)
 	case "post-tool-use":
 		o = hooks.PostToolUse(e.root, in, func(rel string, content []byte) ([]string, error) { return e.fileCheck(ctx, rel, content) })
@@ -46,6 +47,7 @@ func (e env) hook(ctx context.Context, args []string, stdin io.Reader, out io.Wr
 		o = hooks.Stopper{
 			Root: e.root, MaxRounds: e.limits.Hooks.MaxRedRounds, Check: e.stopCheck,
 			Fingerprint: func(ctx context.Context) (string, error) { return gitx.Fingerprint(ctx, e.root) },
+			List:        e.snapshot,
 		}.Stop(ctx, in)
 	case "session-start":
 		o = hooks.SessionStart(ctx, e.root, in)
@@ -129,4 +131,15 @@ func lastLines(s string, n int) string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+// snapshot is the checkout as it is now, for what an agent changed since its first tool call
+// (hooks.Changes).
+func (e env) snapshot(ctx context.Context) (hooks.Snapshot, error) {
+	files, err := gitx.Contents(ctx, e.root)
+	if err != nil {
+		return hooks.Snapshot{}, fmt.Errorf("list the checkout's files: %w", err)
+	}
+
+	return hooks.Snapshot{Head: gitx.Head(ctx, e.root), Files: files}, nil
 }

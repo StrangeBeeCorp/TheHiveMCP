@@ -1,25 +1,14 @@
-// Package policy decides what an agent may do in this repository: which files each role may
-// write or read, and which shell commands anyone may run. The Claude Code hooks ask it before
-// every tool call (cmd/harness hook pre-tool-use). It allows or denies, with what to do instead;
-// it never asks.
+// Package policy decides which files each role may write or read in this repository. The Claude
+// Code hooks ask it before an edit or a read (cmd/harness hook pre-tool-use), and the Stop hook
+// asks it again about every file an agent changed, however it changed it (hooks.Changes). It
+// allows or denies, with what to do instead; it never asks.
 //
-// It reads a command line as the shell will run it, with the files its paths and patterns name
-// now (judged where they land, through symlinks and in any case), the files its commands' options
-// name (sed's w, curl -o, find -fprint…), and the command lines configuration will run later (every
-// value git config sets, a gh alias, a pager, an editor); what it cannot read there (a computed
-// key, an agent's sed or awk script from a file, an option it does not know before git's or gh's
-// command) it refuses. What a program then does by its own logic is beyond it: a script, a
-// recursive search of a directory above a hidden one, a value read at run time into a variable the
-// environment already exports, a program it has no rule for that writes a file (a copy of the
-// harness under another name among them), a sed or awk program of the main session that builds a
-// file name as it runs.
-//
-// What it holds against differs by role. Against an agent, which runs only what it allows, every
-// rule holds for the commands it reads. The main session can run python3, so against it the rules
-// stop mistakes and shortcuts (an alias, another spelling of a flag, a wrapper, --person smuggled
-// in), not a construction built to defeat them (a link made in the same line to reach the records,
-// a path spelt to look like another): its scripts and computed paths are its own. CI runs every
-// gate again, and the person who merges is the last check.
+// It reads no shell command beyond refusing an environment file named on the line: parsing every
+// spelling of every tool never ends, and it refused ordinary work. What a command does is judged
+// by Claude Code: its permission rules (.claude/settings.json) refuse the plain forms of what only
+// a person does (a push, a merge, an approval), and auto mode's classifier blocks what is
+// destructive or reaches outside the repository. CI runs every gate again on the pull request, and
+// the person who merges is the last check.
 package policy
 
 import (
@@ -48,7 +37,7 @@ func RoleOf(agentType string) Role {
 	t := strings.TrimSpace(agentType)
 
 	switch {
-	case t == "" || t == mainBranch:
+	case t == "" || t == "main":
 		return Main
 	case t == "tester":
 		return Tester

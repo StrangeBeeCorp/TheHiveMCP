@@ -1,5 +1,18 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Bash(git push *)",
+      "Bash(git send-pack *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh pr review --approve*)",
+      "Bash(gh pr review * --approve*)",
+      "Bash(gh pr update-branch *)",
+      "Bash(bin/harness push *)",
+      "Bash(./bin/harness push *)",
+      "Bash(bin/harness * --person*)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {

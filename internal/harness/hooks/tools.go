@@ -8,8 +8,9 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/policy"
 )
 
-// PreToolUse asks the policy about a tool call: shell commands, edits and reads. A denial goes
-// back to the agent with its reason; anything else is allowed without a word.
+// PreToolUse asks the policy about a tool call: edits and reads by path, a shell command only for
+// an environment file it names. A denial goes back to the agent with its reason; anything else is
+// allowed without a word.
 func PreToolUse(root string, in Input) Output {
 	role := in.Role()
 
@@ -17,7 +18,7 @@ func PreToolUse(root string, in Input) Output {
 
 	switch in.ToolName {
 	case "Bash":
-		d = policy.Bash(role, root, cwdIn(root, in.Cwd), in.str("command"))
+		d = policy.Bash(in.str("command"))
 	case "Edit", "Write", "MultiEdit", "NotebookEdit":
 		d = policy.Write(role, root, in.str("file_path", "notebook_path"))
 	case "Read", "NotebookRead":
@@ -58,20 +59,6 @@ func search(role policy.Role, root string, in Input) policy.Decision {
 	}
 
 	return policy.Allow
-}
-
-// cwdIn is the shell's directory when it is inside the checkout, else the checkout's root.
-func cwdIn(root, cwd string) string {
-	if cwd == "" {
-		return root
-	}
-
-	rel, err := filepath.Rel(root, cwd)
-	if err != nil || outside(rel) {
-		return root
-	}
-
-	return cwd
 }
 
 // outside reports whether a path relative to the checkout leaves it: "..", or under it. A name

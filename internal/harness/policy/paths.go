@@ -14,8 +14,7 @@ import (
 const (
 	// BlockedFile is where an agent that stopped red too many times says why.
 	BlockedFile = ".cache/harness/BLOCKED.md"
-	// SealedDir holds the Tester's sealed tests: the policy refuses the Coder the commands that
-	// read them before the end of the duel (see the read check of the Bash judge).
+	// SealedDir holds the Tester's sealed tests: the Coder may not read them before the end of the duel.
 	SealedDir = ".claude/sealed/"
 	// CanaryDir holds the known-bad patches the gates must catch; no implementing role reads them.
 	CanaryDir  = "gates/canaries/"
@@ -148,6 +147,10 @@ func IsTest(rel string) bool {
 		strings.HasPrefix(rel, SealedDir)
 }
 
+// envSecrets is why an environment file is refused, to a read and to a command alike.
+const envSecrets = "environment files hold secrets and nobody reads them: the keys are listed in .env.template " +
+	"and internal/types/constants.go"
+
 // IsEnvFile reports whether a path names an environment file, which holds secrets. The template
 // lists the keys and is the only one anyone reads.
 func IsEnvFile(p string) bool {
@@ -216,28 +219,10 @@ func writeInside(role Role, rel string) Decision {
 	return Allow
 }
 
-// hiddenFrom are the directories the role may not read: the canaries for an agent that writes,
-// and the sealed tests too for the Coder.
-func hiddenFrom(role Role) []string {
-	switch {
-	case role == Main || role.ReadOnly():
-		return nil
-	case role == Coder:
-		return []string{CanaryDir, SealedDir}
-	}
-
-	return []string{CanaryDir}
-}
-
-func underAny(rel string, dirs []string) bool {
-	return slices.ContainsFunc(dirs, func(d string) bool { return under(rel, d) })
-}
-
 // Read decides whether the role may read the file at p.
 func Read(role Role, root, p string) Decision {
 	if IsEnvFile(p) {
-		return deny("environment files hold secrets and nobody reads them: the keys are listed in .env.template " +
-			"and internal/types/constants.go")
+		return deny(envSecrets)
 	}
 
 	rel, inside := relative(landing(root), landing(absolute(root, p)))
@@ -275,30 +260,11 @@ func namesRecord(abs string) bool {
 		strings.HasSuffix(lower, "/.cache/harness/state.json")
 }
 
-// guardedPlaces are the places a link may not point at, into or above: where the harness keeps its
-// records, and where git and gh read the configuration a person sets. A link to one of them, or
-// to a directory above it, would let a later write in the same line reach it under a name the
-// policy does not know yet.
-func guardedPlaces(root string) []string {
-	root = landing(root)
-	places := []string{filepath.Join(root, ".cache", "harness", "evidence"), filepath.Join(root, ".cache", "harness", "state.json")}
-
-	return append(places, configDirs()...)
-}
-
 // related reports whether a and b are the same place, or one is inside the other, in any case.
 func related(a, b string) bool {
 	a, b = strings.ToLower(a), strings.ToLower(b)
 
 	return a == b || strings.HasPrefix(a, b+"/") || strings.HasPrefix(b, a+"/")
-}
-
-// holdsRecords reports whether rel is a directory a record lies under: the checkout, .cache or
-// .cache/harness, in any case.
-func holdsRecords(rel string) bool {
-	rel = strings.ToLower(rel)
-
-	return rel == "." || rel == "" || rel == ".cache" || rel == ".cache/harness"
 }
 
 // configFile reports whether abs is where git or gh reads the configuration a person sets:

@@ -17,11 +17,13 @@ import (
 )
 
 const (
-	coderType = "coder"
-	filePath  = "file_path"
-	grepTool  = "Grep"
-	pathKey   = "path"
-	patternK  = "pattern"
+	coderType  = "coder"
+	bashTool   = "Bash"
+	commandKey = "command"
+	filePath   = "file_path"
+	grepTool   = "Grep"
+	pathKey    = "path"
+	patternK   = "pattern"
 )
 
 func decode(t *testing.T, out hooks.Output) map[string]any {
@@ -129,13 +131,16 @@ func TestPreToolUseDeniesWithAReasonAndOtherwiseSaysNothing(t *testing.T) {
 	tester := hooks.Input{AgentType: "tester", ToolName: "Write", ToolInput: map[string]any{filePath: "internal/x/handler.go"}}
 	assert.Contains(t, denied(t, hooks.PreToolUse(root, tester)), "only tests")
 
-	push := hooks.Input{ToolName: "Bash", ToolInput: map[string]any{"command": "git push public main"}}
-	assert.Contains(t, denied(t, hooks.PreToolUse(root, push)), "make pr")
-
 	env := hooks.Input{ToolName: "Read", ToolInput: map[string]any{filePath: filepath.Join(root, ".env")}}
 	assert.NotEmpty(t, denied(t, hooks.PreToolUse(root, env)))
 
-	ok := hooks.Input{AgentType: coderType, ToolName: "Bash", ToolInput: map[string]any{"command": "make check-fast"}}
+	cat := hooks.Input{AgentType: coderType, ToolName: bashTool, ToolInput: map[string]any{commandKey: "grep KEY .env.local"}}
+	assert.Contains(t, denied(t, hooks.PreToolUse(root, cat)), ".env.template")
+
+	push := hooks.Input{ToolName: bashTool, ToolInput: map[string]any{commandKey: "git push public main"}}
+	assert.Empty(t, hooks.PreToolUse(root, push).Stdout, "a push is Claude Code's permission rules' to refuse, not the hook's")
+
+	ok := hooks.Input{AgentType: coderType, ToolName: bashTool, ToolInput: map[string]any{commandKey: "make check-fast"}}
 	assert.Empty(t, hooks.PreToolUse(root, ok).Stdout)
 }
 

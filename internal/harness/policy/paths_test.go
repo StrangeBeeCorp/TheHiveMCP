@@ -1,12 +1,134 @@
 package policy_test
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/policy"
 )
+
+const root = "/r/thehivemcp"
+
+// repoFile is a file of this repository, read from the package's directory.
+func repoFile(t *testing.T, rel string) []byte {
+	t.Helper()
+
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", rel)) // #nosec G304 -- a file of this repository the test names
+	require.NoError(t, err)
+
+	return data
+}
+
+// A command line is refused only for naming an environment file: what it does is Claude Code's
+// to judge, and what it changed the Stop hook's. The commands the shell parser refused for
+// spellings it could not read run.
+func TestACommandIsRefusedOnlyForAnEnvironmentFile(t *testing.T) {
+	t.Parallel()
+
+	for _, line := range []string{
+		"cat .env", "source .env", "grep KEY .env.local", "cp .env /tmp/x", "git show HEAD:.env",
+		"docker run --env-file=.env x", "cat $HOME/app/.env.prod",
+	} {
+		d := policy.Bash(line)
+		assert.True(t, d.Deny, line)
+		assert.Contains(t, d.Reason, ".env.template", "the denial names where the keys are")
+	}
+
+	for _, line := range []string{
+		"cat .env.template", "sed -i '' 's/a/b/' notes.md", `awk '{print $1 > "out.txt"}' in.txt`, "tar -xf /tmp/e.tar -C /tmp/x",
+		"git lg", "python3 -c 'print(1)'", "make check-fast",
+	} {
+		assert.False(t, policy.Bash(line).Deny, line)
+	}
+}
+
+// What only a person does is refused to Claude Code itself, in the plain forms Claude writes, by
+// the project's permission rules; make pr pushes from inside the harness, not as a command line.
+func TestClaudeCodeRefusesWhatOnlyAPersonDoes(t *testing.T) {
+	t.Parallel()
+
+	var settings struct {
+		Permissions struct {
+			Deny []string `json:"deny"`
+		} `json:"permissions"`
+	}
+
+	require.NoError(t, json.Unmarshal(repoFile(t, ".claude/settings.json"), &settings))
+
+	for _, rule := range []string{
+		"Bash(git push *)", "Bash(gh pr merge *)", "Bash(gh pr review * --approve*)", "Bash(gh pr update-branch *)",
+		"Bash(bin/harness push *)", "Bash(bin/harness * --person*)",
+	} {
+		assert.Contains(t, settings.Permissions.Deny, rule)
+	}
+
+	assert.NotContains(t, settings.Permissions.Deny, "Bash(make pr *)", "make pr is how a Claude session ships")
+}
+
+// GitHub asks for a person's review of what only a person may change: .github/CODEOWNERS names
+// exactly the protected classes of the policy.
+func TestCodeOwnersNameTheProtectedClasses(t *testing.T) {
+	t.Parallel()
+
+	var owned []string
+
+	for line := range strings.SplitSeq(string(repoFile(t, ".github/CODEOWNERS")), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 || strings.HasPrefix(fields[0], "#") {
+			continue
+		}
+
+		p := strings.TrimPrefix(fields[0], "/")
+		if strings.HasSuffix(p, "/") {
+			p += "**"
+		}
+
+		owned = append(owned, p)
+	}
+
+	assert.ElementsMatch(t, policy.ProtectedPatterns(), owned)
+}
+
+// A path is judged where it lands: through a symlink on its way or at its end, dangling or not,
+// and with the names a refusal guards in any case, since this host's filesystem ignores it.
+func TestAPathIsJudgedWhereItLands(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".cache", "harness", "evidence"), 0o750))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "gates", "canaries"), 0o750))
+
+	elsewhere := t.TempDir()
+	cache := filepath.Join(elsewhere, "c")
+	require.NoError(t, os.Symlink(filepath.Join(dir, ".cache"), cache))
+
+	dangling := filepath.Join(elsewhere, "new.json")
+	require.NoError(t, os.Symlink(filepath.Join(dir, ".cache", "harness", "evidence", "review-x.json"), dangling))
+
+	canaries := filepath.Join(elsewhere, "k")
+	require.NoError(t, os.Symlink(filepath.Join(dir, "gates", "canaries"), canaries))
+
+	for _, p := range []string{
+		filepath.Join(cache, "harness", "evidence", "review-x.json"),
+		dangling,
+		".CACHE/harness/evidence/review-x.json",
+		".cache/Harness/STATE.json",
+		".GIT/config",
+	} {
+		assert.True(t, policy.Write(policy.Main, dir, p).Deny, p)
+	}
+
+	assert.True(t, policy.Read(policy.Coder, dir, filepath.Join(canaries, "x.patch")).Deny, "a canary through a link")
+	assert.True(t, policy.Write(policy.Coder, dir, "CLAUDE.MD").Deny, "CLAUDE.md, spelt in another case")
+	assert.True(t, policy.Write(policy.Tester, dir, "internal/x_TEST.go").Deny, "go builds it: it is code, not a test")
+	assert.False(t, policy.Write(policy.Main, dir, filepath.Join(elsewhere, "notes.md")).Deny)
+}
 
 func TestRolesComeFromAgentTypes(t *testing.T) {
 	t.Parallel()

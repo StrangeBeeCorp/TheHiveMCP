@@ -38,6 +38,29 @@ func Ignored(ctx context.Context, root, rel string) bool {
 	return err == nil
 }
 
+// Contents are the checkout's Files, each with the sha256 of its content. A tracked file deleted
+// from the tree is not among them.
+func Contents(ctx context.Context, root string) (map[string]string, error) {
+	paths, err := Files(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+
+	files := map[string]string{}
+
+	for _, p := range paths {
+		content, err := os.ReadFile(filepath.Join(root, p)) // #nosec G304 -- a file of this checkout
+		if err != nil {
+			continue
+		}
+
+		sum := sha256.Sum256(content)
+		files[p] = hex.EncodeToString(sum[:])
+	}
+
+	return files, nil
+}
+
 // Fingerprint identifies what the gates would read: HEAD, the diff from it (staged and not), and
 // the untracked files with their content. An equal fingerprint means nothing changed since.
 func Fingerprint(ctx context.Context, root string) (string, error) {

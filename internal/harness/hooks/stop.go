@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/policy"
@@ -71,15 +72,30 @@ type Stopper struct {
 	Fingerprint func(ctx context.Context) (string, error)
 	// Now is the clock; nil is time.Now.
 	Now func() time.Time
+	// List reads the checkout for the changes an agent's role may not make (Changes); nil skips them.
+	List Lister
 }
 
 // Stop runs check-fast when an agent stops (Stop, SubagentStop) and applies the red-round rule.
 // A checkout that has not changed since the last run reuses its result, so stopping again without
-// a change is another red round, not another wait.
+// a change is another red round, not another wait. A change the agent's role may not make counts
+// as red, whatever check-fast says; a reviewer runs no gate, and is held only to that.
 func (s Stopper) Stop(ctx context.Context, in Input) Output {
 	role := in.Role()
+
+	var changes []string
+
+	if role.Agent() && s.List != nil {
+		var err error
+
+		changes, err = Changes(ctx, s.Root, in, s.List)
+		if err != nil {
+			return note("harness: what the agent changed could not be read: " + err.Error())
+		}
+	}
+
 	if role.ReadOnly() {
-		return Output{}
+		return s.readOnly(in, changes)
 	}
 
 	fp, err := s.Fingerprint(ctx)
@@ -104,7 +120,12 @@ func (s Stopper) Stop(ctx context.Context, in Input) Output {
 			st.Last = &Last{Fingerprint: fp, Static: static, Check: c, At: s.now()}
 		}
 
-		out = s.apply(st, in, c, static)
+		judged := withChanges(c, changes)
+		out = s.apply(st, in, judged, static)
+
+		if !judged.Red {
+			Forget(s.Root, in)
+		}
 
 		return nil
 	})
@@ -113,6 +134,39 @@ func (s Stopper) Stop(ctx context.Context, in Input) Output {
 	}
 
 	return out
+}
+
+// readOnly holds a reviewer to the one rule it has: it changes nothing. Its rounds count like an
+// implementer's; as for a static run, its stop never clears the task's block.
+func (s Stopper) readOnly(in Input, changes []string) Output {
+	if len(changes) == 0 {
+		Forget(s.Root, in)
+		return Output{}
+	}
+
+	var out Output
+
+	err := update(s.Root, func(st *State) error {
+		out = s.apply(st, in, withChanges(Check{}, changes), true)
+		return nil
+	})
+	if err != nil {
+		return note("harness: the stop could not be recorded: " + err.Error())
+	}
+
+	return out
+}
+
+// withChanges is check-fast's result with the changes the agent's role may not make: any is red.
+func withChanges(c Check, changes []string) Check {
+	if len(changes) == 0 {
+		return c
+	}
+
+	c.Red = true
+	c.Report = strings.TrimSpace(changesReport(changes) + "\n\n" + c.Report)
+
+	return c
 }
 
 func (s Stopper) now() time.Time {
