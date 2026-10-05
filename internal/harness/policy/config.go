@@ -61,6 +61,12 @@ func (j *judge) configWord(rest []string, k int) Decision {
 	}
 
 	for _, value := range after {
+		// A word that is not a git command expands to nothing git runs, and the policy refuses an
+		// alias where it is used (gitSub): only an expansion git would run is judged here.
+		if words := strings.Fields(value); !strings.HasPrefix(value, "!") && (len(words) == 0 || !slices.Contains(gitCommands, words[0])) {
+			continue
+		}
+
 		if d := j.child(configLine(w, value), maxDepth); d.Deny {
 			return d
 		}

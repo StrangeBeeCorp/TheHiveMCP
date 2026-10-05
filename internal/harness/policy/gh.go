@@ -13,10 +13,23 @@ import (
 // merge): the only one the policy lets stand there.
 var ghRepoFlag = []string{"-R", "--repo"}
 
+// ghCommand refuses a gh command the policy cannot read as written: a word filled in as the line
+// runs, or a group that is not gh's own (an alias, an extension).
+func ghCommand(group, sub string) Decision {
+	switch {
+	case filledIn(group, sub):
+		return deny("gh's command is filled in as the line runs (find's {}, parallel's :::): write it out")
+	case group != "" && !strings.HasPrefix(group, "-") && !slices.Contains(ghCommands, group):
+		return deny("gh %s is not one of gh's commands: an alias or an extension runs words the policy does not read as theirs, so run the command it stands for", group)
+	}
+
+	return Allow
+}
+
 func (j *judge) gh(args []string) Decision {
 	group, sub, before := ghWords(args)
-	if filledIn(group, sub) {
-		return deny("gh's command is filled in as the line runs (find's {}, parallel's :::): write it out")
+	if d := ghCommand(group, sub); d.Deny {
+		return d
 	}
 
 	if group == "pr" && before != "" {

@@ -2,7 +2,6 @@ package policy
 
 import (
 	"regexp"
-	"slices"
 	"strings"
 )
 
@@ -13,61 +12,126 @@ var (
 	awkRedirect = regexp.MustCompile(`printf?\b(?:[^;{}"]|"[^"]*")*?(>|\|)`)
 	// awkCommand finds the command line of system("…"), print | "…" and "…" | getline.
 	awkCommand = regexp.MustCompile(`system\(\s*"([^"]*)"|\|\s*"([^"]*)"|"([^"]*)"\s*\|\s*getline`)
+	// awkIncludes finds gawk's @include and @load, which read code from a file.
+	awkIncludes = regexp.MustCompile(`@(include|load)\b`)
 )
 
-// awkProgram is the program of an awk command: its first operand, unless -f names a file, which
-// fromFile says.
+// awkProgram is the program of an awk command, and whether -f or -E names a file instead.
 func awkProgram(args []string) (program string, fromFile bool) {
 	call := parseAwk(args)
 	return call.program, call.fromFile
 }
 
-// awkCall is what an awk command's arguments say: its program (unless -f names a file), whether
-// gawk's extensions are loaded (-i, -l, --include, --load: code the policy cannot read), whether
-// the inplace one is among them, and the operands after the program, which inplace rewrites.
+// awkCall is what an awk command's arguments say: its program (every -e or --source, else its
+// first operand, unless -f or -E names a file, which fromFile says), whether gawk's extensions are
+// loaded (-i, -l, --include, --load: code the policy cannot read), whether the inplace one is among
+// them, the operands after the program, which inplace rewrites, and the options the policy does
+// not read (gawk's dump, profile and pretty-print write files): an agent gives none.
 type awkCall struct {
 	program                  string
 	fromFile, loads, inplace bool
-	operands                 []string
+	sources, operands        []string
+	unread                   []string
 }
 
 func parseAwk(args []string) awkCall {
-	var call awkCall
+	var (
+		call  awkCall
+		words []string
+	)
 
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 
 		switch {
-		case strings.HasPrefix(a, "-"):
+		case a == "--":
+			words = append(words, args[i+1:]...)
+			i = len(args)
+		case strings.HasPrefix(a, "-") && a != "-":
 			i += call.option(a, args, i)
-		case call.program == "" && !call.fromFile:
-			call.program = a
 		default:
-			call.operands = append(call.operands, a)
+			words = append(words, a)
 		}
+	}
+
+	switch {
+	case len(call.sources) > 0 || call.fromFile:
+		call.program, call.operands = strings.Join(call.sources, "\n"), words
+	case len(words) > 0:
+		call.program, call.operands = words[0], words[1:]
 	}
 
 	return call
 }
 
-// option reads one of awk's options, and returns how many words after it the option took.
+// option reads one of awk's options, and returns how many words after it the option took: a
+// short one takes the rest of its word or the next word, a long one (cut short, as gawk accepts)
+// its =VALUE or the next word, and -W names a long one with its value attached (-W exec=FILE).
 func (c *awkCall) option(a string, args []string, i int) int {
-	switch {
-	case a == "-f" || strings.HasPrefix(a, "-f") || strings.HasPrefix(a, optFile):
-		c.fromFile = true
-	case slices.Contains([]string{"-i", "-l", "--include", "--load"}, a):
-		c.loads = true
-		c.inplace = c.inplace || (i+1 < len(args) && strings.HasPrefix(args[i+1], "inplace"))
-
-		return 1
-	case slices.ContainsFunc([]string{"--include=", "--load=", "-i", "-l"}, func(p string) bool { return strings.HasPrefix(a, p) }):
-		c.loads = true
-		c.inplace = c.inplace || strings.Contains(a, "inplace")
-	case a == "-F" || a == "-v":
-		return 1
+	next := ""
+	if i+1 < len(args) {
+		next = args[i+1]
 	}
 
-	return 0
+	if strings.HasPrefix(a, "--") {
+		name, value, attached := strings.Cut(a, "=")
+		if !attached {
+			value = next
+		}
+
+		return btoi(c.long(name, value) && !attached)
+	}
+
+	flag, value := a[1:2], a[2:]
+	attached := value != ""
+
+	if !attached {
+		value = next
+	}
+
+	switch flag {
+	case "f", "E":
+		c.fromFile = true
+	case "e":
+		c.sources = append(c.sources, value)
+	case "i", "l":
+		c.load(value)
+	case "W":
+		name, v, _ := strings.Cut(value, "=")
+		c.long("--"+name, v)
+	case "F", "v":
+	default:
+		c.unread = append(c.unread, a)
+		return 0
+	}
+
+	return btoi(!attached)
+}
+
+// long reads one of gawk's long options, cut short or not, and reports whether it takes a value.
+func (c *awkCall) long(name, value string) bool {
+	is := func(option, least string) bool { return abbreviates(name, option, len(least)) }
+
+	switch {
+	case is(optFile, "--fil"), is("--exec", "--ex"):
+		c.fromFile = true
+	case is("--source", "--so"):
+		c.sources = append(c.sources, value)
+	case is("--include", "--in"), is("--load", "--lo"):
+		c.load(value)
+	case is("--assign", "--as"), is("--field-separator", "--fie"):
+	default:
+		c.unread = append(c.unread, name)
+		return false
+	}
+
+	return true
+}
+
+// load records an extension gawk loads, and whether it is the one that rewrites the operands.
+func (c *awkCall) load(name string) {
+	c.loads = true
+	c.inplace = c.inplace || strings.Contains(name, "inplace")
 }
 
 // awkWrites are the files an awk program writes by name.
@@ -95,7 +159,9 @@ func (j *judge) awkLines(args []string) ([]string, Decision) {
 	switch {
 	case j.role.Agent() && call.loads:
 		return nil, deny("gawk's -i and -l load code the policy cannot read: write the program inline")
-	case j.role.Agent() && (fromFile || j.computed(program)):
+	case j.role.Agent() && len(call.unread) > 0:
+		return nil, deny("awk takes only -F, -v and -e from an agent: %s may read or write files the policy does not read", call.unread[0])
+	case j.role.Agent() && (fromFile || j.computed(program) || awkIncludes.MatchString(program)):
 		return nil, deny("write the awk program inline: the policy reads it before it runs")
 	case j.role.Agent() && awkRedirect.MatchString(program):
 		return nil, deny("this awk program writes a file or runs a command: print, and redirect its output in the shell")

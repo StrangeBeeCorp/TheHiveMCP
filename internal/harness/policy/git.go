@@ -61,9 +61,27 @@ func (j *judge) gitOption(a string) (int, Decision) {
 	return 1, Allow
 }
 
-func (j *judge) gitSub(sub string, rest []string) Decision {
-	if !plainWord(sub) {
+// gitCommand refuses a git command the policy cannot read as written: a word filled in as the line
+// runs, or one that is not git's own (an alias, a git-<name> program).
+func gitCommand(sub string) Decision {
+	switch {
+	case !plainWord(sub):
 		return deny("git's command is %s, filled in as the line runs (find's {}, parallel's :::): write it out", sub)
+	case !slices.Contains(gitCommands, sub):
+		return deny("git %s is not one of git's own commands: an alias or a git-%s program runs words the policy does not read as theirs, so run the command it stands for", sub, sub)
+	}
+
+	return Allow
+}
+
+// pushes reports whether a git command pushes to a remote: push, send-pack, http-push, subtree's push.
+func pushes(sub string, rest []string) bool {
+	return slices.Contains([]string{subPush, "send-pack", "http-push"}, sub) || (sub == "subtree" && slices.Contains(rest, subPush))
+}
+
+func (j *judge) gitSub(sub string, rest []string) Decision {
+	if d := gitCommand(sub); d.Deny {
+		return d
 	}
 
 	if d := j.gitWritten(sub, rest); d.Deny {
@@ -78,7 +96,7 @@ func (j *judge) gitSub(sub string, rest []string) Decision {
 		return d
 	}
 
-	if sub == subPush || sub == "send-pack" {
+	if pushes(sub, rest) {
 		return deny("push with make pr: it runs the pr gates at HEAD, records the evidence and pushes this branch to " +
 			"origin, never main and never the public mirror")
 	}
@@ -284,7 +302,7 @@ func optionValues(args []string, short byte, long string) []string {
 // gitAgent holds for the agents that may commit: history and configuration are not theirs.
 func (j *judge) gitAgent(sub string, rest []string) Decision {
 	switch sub {
-	case subUpdateRef, "replace", "filter-branch", "filter-repo", "fast-import", "pack-refs", "symbolic-ref":
+	case subUpdateRef, "replace", "filter-branch", "filter-repo", "fast-import", "pack-refs", "symbolic-ref", "subtree":
 		return deny("refs and history are the record of the work: they are not rewritten by hand")
 	case "apply", "am", subTag, subFetch, subPull:
 		return agentRefs(sub, rest)

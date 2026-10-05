@@ -19,7 +19,8 @@ func (j *judge) copyOverRecords(name string, args []string, target string) Decis
 	archive := name == cmdTar || name == cmdUnzip
 	whole := archive || slices.Contains([]string{"mv", "rsync", "ditto"}, name) || (name == "cp" && recursive(args))
 
-	if !whole || !filepath.IsAbs(j.cwd) {
+	// A relative target after a cd the policy could not follow is write's to judge: an agent's is refused.
+	if !whole || !filepath.IsAbs(j.abs(target)) {
 		return Allow
 	}
 
@@ -58,7 +59,7 @@ func operandsBut(args []string, target string) []string {
 // is computed or a pattern whose matches do, is not on disk before the line runs, or is where an
 // earlier command of the line writes.
 func (j *judge) carriesCache(src string) bool {
-	if j.computed(src) {
+	if j.computed(src) || !filepath.IsAbs(j.abs(src)) {
 		return true
 	}
 

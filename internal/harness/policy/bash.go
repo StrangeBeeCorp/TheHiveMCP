@@ -428,7 +428,7 @@ func (j *judge) byPath(name string) Decision {
 // policy cannot read. A pattern is judged by the files it matches now, and by its own text, which
 // the shell passes on when nothing matches.
 func (j *judge) write(target string) Decision {
-	if strings.HasPrefix(target, "/dev/") {
+	if strings.HasPrefix(filepath.Clean(target), "/dev/") {
 		return Allow
 	}
 

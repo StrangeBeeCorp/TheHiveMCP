@@ -64,18 +64,29 @@ func TestTheFingerprintChangesWithWhatTheGatesRead(t *testing.T) {
 }
 
 // Branch is empty on a detached HEAD, MainCheckout names the main working tree from a linked
-// one, Ignored follows .gitignore, and Summary lists the changes and the last commits.
+// one, GitDir the linked one's own git files under the main .git (where its review state is),
+// Ignored follows .gitignore, and Summary lists the changes and the last commits.
 func TestTheCheckoutIsDescribed(t *testing.T) {
 	t.Parallel()
+
+	resolved := func(p string) string {
+		r, err := filepath.EvalSymlinks(p)
+		require.NoError(t, err)
+
+		return r
+	}
 
 	dir := gittest.Repo(t, map[string]string{goFile: pkgSource, ignoreRules: ".cache/\n"})
 	assert.Equal(t, "main", gitx.Branch(t.Context(), dir))
 	assert.Equal(t, dir, filepath.Clean(gitx.MainCheckout(t.Context(), dir)))
+	assert.Equal(t, resolved(filepath.Join(dir, ".git")), resolved(gitx.GitDir(t.Context(), dir)))
 
 	linked := filepath.Join(t.TempDir(), "linked")
 	gittest.Git(t, dir, "worktree", "add", "-q", "-b", "feat/x", linked)
 	assert.Equal(t, "feat/x", gitx.Branch(t.Context(), linked))
 	assert.Equal(t, filepath.Clean(dir), filepath.Clean(gitx.MainCheckout(t.Context(), linked)))
+	assert.Equal(t, resolved(filepath.Join(dir, ".git", "worktrees", "linked")), resolved(gitx.GitDir(t.Context(), linked)),
+		"a linked worktree's .git is a file: its git files are under the main checkout's")
 
 	gittest.Git(t, dir, "checkout", "-q", "--detach")
 	assert.Empty(t, gitx.Branch(t.Context(), dir))
