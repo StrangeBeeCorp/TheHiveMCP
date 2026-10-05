@@ -68,3 +68,12 @@ func TestLimitsNeedARedRoundBound(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 6, lim.Hooks.MaxRedRounds)
 }
+
+// A negative max_kb would switch the size check off without a word: it is refused.
+func TestLimitsRefuseANegativeFileSize(t *testing.T) {
+	t.Parallel()
+
+	_, err := checks.ParseLimits([]byte("structure:\n  max_kb: -1\nhooks:\n  max_red_rounds: 6\n"), "limits.yaml")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "max_kb")
+}

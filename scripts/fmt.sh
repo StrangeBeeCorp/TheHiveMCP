@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Single source of truth for repo *formatting* (mutation only — no linters, no
 # tests). All formatters run from pinned Docker images — no local toolchain
-# required (this is a Go repo with no host Go install; see the Makefile's
-# install-dev-deps).
+# required (this is a Go repo with no host Go install).
 #
 # This script owns every formatter the repo runs. lint.sh calls it for the fix
 # pass (`lint.sh --fix` → `fmt.sh --fix`), then layers the read-only checkers on
@@ -14,7 +13,6 @@
 # The CLI signature MIRRORS lint.sh's scope/mode flags so the two are
 # interchangeable at the call site:
 #   • `make fmt`             → --all --fix           (whole repo, rewrite)
-#   • `make fmt-changed`     → --changed --fix        (working-tree files only)
 #   • a --check pass          → report files that WOULD be reformatted, exit 1
 #
 # Formatters, by file type:

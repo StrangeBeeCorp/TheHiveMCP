@@ -100,7 +100,7 @@ func cleanFindings(f string, content []byte, lim StructureLimits) []Finding {
 	}
 
 	if line := trailingSpace(content); line > 0 {
-		out = append(out, Finding{Path: f, Line: line, Msg: "trailing whitespace: run make fmt, or remove it"})
+		out = append(out, Finding{Path: f, Line: line, Msg: "trailing whitespace: remove it"})
 	}
 
 	if content[len(content)-1] != '\n' {

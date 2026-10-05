@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Single source of truth for repo lint/format CHECKS. All check tools run from
 # pinned Docker images — no local toolchain required (this is a Go repo with no
-# host Go install; see the Makefile's install-dev-deps).
+# host Go install).
 #
 # FORMATTING lives in a sibling script, scripts/fmt.sh (gofmt, golangci fmt,
 # shfmt, markdownlint --fix, prettier). In --fix mode this script delegates the
@@ -25,12 +25,10 @@
 #
 # Consumers call this script:
 #   • `make lint`             → --all --check         (whole repo, no mutation)
-#   • `make lint-changed`     → --changed --check      (working-tree files only)
 #   • `make lint-fix`         → --all --fix            (whole repo, auto-fix)
-#   • `make lint-fix-changed` → --changed --fix        (working-tree, auto-fix)
-#   • a Stop hook             → --changed HEAD --fix --hook (auto-fix + JSON)
-#   • .githooks/pre-commit    → --staged                  (what the commit carries)
-#   • .githooks/pre-push      → --all                     (full gate before push)
+#   • the lint gate           → {scope} --check       (gates/registry.yaml scopes: --changed
+#                                                       HEAD at a stop, --staged at a commit,
+#                                                       --all at pr and ci)
 #
 # In --hook mode the script speaks the Stop-hook JSON contract on exit 0:
 #   - No blocking issue (clean stop) → {systemMessage (for the user)} ONLY. The

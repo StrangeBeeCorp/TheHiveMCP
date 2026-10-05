@@ -12,6 +12,7 @@
 //	harness evidence [--markdown] [--base REF]
 //	harness review-effort [--base REF]
 //	harness canaries [--id ID]... [--integration]
+//	harness structure [--top N] [--json]  (the largest files and fullest directories against the limits)
 package main
 
 import (

@@ -57,15 +57,15 @@ func TestTextFilesAreCleanAndSmall(t *testing.T) {
 	assert.Equal(t, strings.Join([]string{
 		"pkg/big.bin: 2 KB, over the limit of 1 KB: keep large files out of the repository",
 		"pkg/big.json: 2 KB, over the limit of 1 KB: keep large files out of the repository",
-		"pkg/crlf.txt:2: trailing whitespace: run make fmt, or remove it",
+		"pkg/crlf.txt:2: trailing whitespace: remove it",
 		"pkg/no-newline.txt: does not end with a newline",
-		"pkg/spaces.md:2: trailing whitespace: run make fmt, or remove it",
-		"pkg/tab.yaml:1: trailing whitespace: run make fmt, or remove it",
+		"pkg/spaces.md:2: trailing whitespace: remove it",
+		"pkg/tab.yaml:1: trailing whitespace: remove it",
 	}, "\n"), messages(found[1:]))
 
 	edit, err := checks.OneFile("structure", "pkg/spaces.md", tree["pkg/spaces.md"], checks.Limits{Structure: lim})
 	require.NoError(t, err)
-	assert.Equal(t, "pkg/spaces.md:2: trailing whitespace: run make fmt, or remove it", messages(edit))
+	assert.Equal(t, "pkg/spaces.md:2: trailing whitespace: remove it", messages(edit))
 }
 
 // The dashboard lists every code file by length, the furthest over the limit first with its cap,
