@@ -161,6 +161,10 @@ items:
       unless a person accepted it in gates/limits.yaml (integrity.allow).
     tests:
       - internal/harness/checks/integrity_test.go:TestAWeakenedTestIsRefused
+      - internal/harness/checks/integrity_test.go:TestATestFileLeftOutOfTheBuildIsRefused
+      - internal/harness/checks/integrity_test.go:TestAWeakenedHelperIsRefused
+      - internal/harness/checks/integrity_test.go:TestAMovedTestIsComparedWhereItWent
+      - internal/harness/checks/integrity_test.go:TestAPersonMayAcceptAWeakerTest
     gates: [integrity]
 
   - id: PRF-001
@@ -171,4 +175,6 @@ items:
       transforms stay within gates/bench.yaml, against the base and in absolute terms.
     tests:
       - internal/harness/bench/bench_test.go:TestAHeadSlowerOrAllocatingMoreThanTheBaseFails
+      - internal/harness/bench/bench_test.go:TestAbsoluteBudgetsHoldWithoutABase
+      - cmd/harness/bench_test.go:TestWithoutABaseToRunOnlyTheAbsoluteBudgetsHold
     gates: [bench]

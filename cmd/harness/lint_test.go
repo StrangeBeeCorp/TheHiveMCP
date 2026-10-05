@@ -65,7 +65,7 @@ func lintRepo(t *testing.T) string {
 	t.Helper()
 
 	dir := gittest.Repo(t, map[string]string{
-		registryPath: editRegistry, limitsPath: editLimits, gitignore: ignoreCache, "Makefile": lintMakefile,
+		registryPath: editRegistry, limitsPath: editLimits, gitignore: ignoreCache, makefile: lintMakefile,
 		xGo: pkgX, yGo: "package y\n",
 	})
 	t.Chdir(dir)
