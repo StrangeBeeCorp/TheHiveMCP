@@ -17,8 +17,7 @@ import (
 
 const (
 	lintMakefile = "GO_IMAGE := golang:1.26.8-alpine\nGO_IMAGE_CGO := golang:1.26.8\n"
-	xGo          = "internal/x/x.go"
-	yGo          = "internal/y/y.go"
+	yGo          = "internal/y/y.go" // and xGo, hook_test.go's
 	npmNotice    = "npm notice New major version of npm available!\n"
 )
 
