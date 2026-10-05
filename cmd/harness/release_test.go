@@ -24,7 +24,9 @@ func releaseRepo(t *testing.T) string {
 	t.Helper()
 
 	dir := gittest.Repo(t, map[string]string{gitignore: "build/\ndist/\n", "docs/images/theHivelogo.png": "png"})
-	gittest.Write(t, dir, map[string]string{"build/thehivemcp-linux-amd64": "elf", "build/thehivemcp-" + hostTarget: "elf"})
+	// Two writes: on linux/amd64, CI's platform, the host binary is the linux-amd64 one.
+	gittest.Write(t, dir, map[string]string{"build/thehivemcp-linux-amd64": "elf"})
+	gittest.Write(t, dir, map[string]string{"build/thehivemcp-" + hostTarget: "elf"})
 	t.Chdir(dir)
 
 	return dir

@@ -62,9 +62,12 @@ const (
 )
 
 // The named volumes of the Makefile's Go targets: the module and build caches, and golangci-lint's.
+// golangci-lint type-checks the code as CI builds it, linux/amd64: on another machine a constant
+// that depends on the platform (runtime.GOARCH in a test's map key) reads otherwise.
 var (
 	goCaches       = []string{"-v", "thehivemcp-gomod:/go/pkg/mod", "-v", "thehivemcp-gobuild:/root/.cache/go-build"}
-	golangciCaches = append(goCaches[:len(goCaches):len(goCaches)], "-v", "thehivemcp-golangci-cache:/root/.cache/golangci-lint")
+	golangciCaches = append(goCaches[:len(goCaches):len(goCaches)],
+		"-v", "thehivemcp-golangci-cache:/root/.cache/golangci-lint", "-e", "GOOS=linux", "-e", "GOARCH=amd64")
 )
 
 // docker is a docker run of image with the root mounted at /app as the working directory.

@@ -195,7 +195,8 @@ func TestRunPullsOnlyTheMissingImages(t *testing.T) {
 	assert.Equal(t, 1, fake.ran(dockerCmd, "pull", "-q", goTestImage), "go test's image")
 	assert.Equal(t, 1, fake.ran(dockerCmd, "pull", "-q", goImage), "gofmt's image")
 	assert.Equal(t, 1, fake.ran(dockerCmd, runCmd, rm, "-v", mount, "-w", appDir, "-v", "thehivemcp-gomod:/go/pkg/mod",
-		"-v", "thehivemcp-gobuild:/root/.cache/go-build", "-v", "thehivemcp-golangci-cache:/root/.cache/golangci-lint", golangci),
+		"-v", "thehivemcp-gobuild:/root/.cache/go-build", "-v", "thehivemcp-golangci-cache:/root/.cache/golangci-lint",
+		"-e", "GOOS=linux", "-e", "GOARCH=amd64", golangci),
 		"golangci-lint ran once")
 }
 

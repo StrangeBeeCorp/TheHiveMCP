@@ -77,6 +77,7 @@ func TestLintStepsCheckEveryKindOfFile(t *testing.T) {
 	assert.Equal(t, []string{
 		dockerCmd, runCmd, rm, "-v", mount, "-w", appDir,
 		"-v", "thehivemcp-gomod:/go/pkg/mod", "-v", "thehivemcp-gobuild:/root/.cache/go-build", "-v", "thehivemcp-golangci-cache:/root/.cache/golangci-lint",
+		"-e", "GOOS=linux", "-e", "GOARCH=amd64", // type-checked as CI builds it, whatever this machine is
 		golangci, stepGolangci, "run", module,
 	}, byName(t, steps, stepGolangci).Argv, "the whole module: cross-file findings")
 	assert.Equal(t, []string{
