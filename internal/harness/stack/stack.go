@@ -118,7 +118,7 @@ func (s Stack) up(ctx context.Context, mode Mode, image, license string) (string
 		args []string
 	}{
 		{"drop the keyspace", []string{"exec", "-T", "cassandra", "cqlsh", "-e", "DROP KEYSPACE IF EXISTS thehive;"}},
-		{"delete the indices", []string{"exec", "-T", "elasticsearch", "sh", "-c", `curl -s -o /dev/null -X DELETE "http://localhost:9200/thehive*"`}},
+		{"delete the indices", []string{"exec", "-T", "elasticsearch", "sh", "-c", `curl -s -o /dev/null -X DELETE "http://localhost:9200/thehive*"`}}, // NOSONAR: the dev stack's Elasticsearch serves http only, inside its container
 		{"restart TheHive", []string{"restart", "thehive"}},
 	} {
 		err = s.step(ctx, step.what, s.compose(mode, step.args...))
