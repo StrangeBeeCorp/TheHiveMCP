@@ -360,7 +360,7 @@ func dockerUp(ctx context.Context) bool {
 
 func (e env) check(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) == 0 || !isBuiltin(args[0]) || (len(args) > 1 && args[0] != builtinChangelog) {
-		return usageError{"usage: harness check structure|public-safety|docs|go-source|branch|spec|changelog [--base REF]"}
+		return usageError{"usage: harness check structure|public-safety|docs|go-source|branch|spec|changelog|integrity [--base REF]"}
 	}
 
 	if args[0] == builtinChangelog {
