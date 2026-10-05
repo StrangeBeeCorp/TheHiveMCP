@@ -1,8 +1,10 @@
 package analyzers_test
 
 import (
+	"slices"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/tools/go/analysis/analysistest"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/analyzers"
@@ -16,6 +18,23 @@ func TestUntrustedFindsEntityTextInServerStrings(t *testing.T) {
 	t.Parallel()
 
 	analysistest.Run(t, analysistest.TestData(), analyzers.Untrusted, "github.com/StrangeBeeCorp/TheHiveMCP/internal/tools/handler")
+}
+
+// The names the analyzer trusts come sorted, for internal/utils to compare with the wrapper's, and
+// they are identifiers and statuses, never free text.
+func TestTrustedFieldsAreSortedIdentifiers(t *testing.T) {
+	t.Parallel()
+
+	names := analyzers.TrustedFields()
+	assert.True(t, slices.IsSorted(names), "sorted")
+
+	for _, name := range []string{"_id", "_createdBy", "status"} {
+		assert.Contains(t, names, name)
+	}
+
+	for _, name := range []string{"title", "description", "message"} {
+		assert.NotContains(t, names, name)
+	}
 }
 
 func TestCutFlagFindsResultsThatHideACut(t *testing.T) {
