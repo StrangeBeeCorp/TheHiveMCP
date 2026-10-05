@@ -9,8 +9,8 @@ Use `internal/tools/manage/` as the model to copy.
   pass, because tests build their own arguments and never read the schema.
   - Put enums and defaults in the tool's `map[string]tools.SchemaConstraint`, next to its definition (for example `manage.EntityParamConstraints`). Apply it
     with `tools.WithInputSchemaConstraints[Params](...)`.
-  - `bootstrap/tool_schema_test.go` checks every schema: parameters present, descriptions kept, enums survive, required fields, constraints match the struct.
-    Extend it when you add a parameter or an enum value.
+  - `bootstrap/tool_schema_test.go` checks every schema: parameters present, descriptions kept, enums survive, required fields. `tool_constraints_test.go`
+    checks that the constraints and defaults match the struct and reach the wire. Extend them when you add a parameter or an enum value.
 - **The output schema is a union.** `tools.WithUnionOutputSchema[Result]()` builds the schema from every shape the handler returns. A new result shape must be
   one of those shapes:
   - `bootstrap/tool_output_schema_test.go` checks the schema;

@@ -26,7 +26,7 @@ returns true. The rules are in `internal/utils/parsers.go`, and the comments the
 
 ## Tests
 
-`internal/utils/parsers_test.go`, `internal/tools/*/models_test.go` and `internal/tools/search/handler_test.go` pin the wrap/no-wrap decision for each field.
-Add a case for every field you trust or stop trusting.
+`internal/utils/parsers_test.go`, `internal/utils/trusted_test.go` (trusted strings and subtrees), `internal/tools/*/models_test.go` and
+`internal/tools/search/handler_test.go` pin the wrap/no-wrap decision for each field. Add a case for every field you trust or stop trusting.
 
 After a TheHive or thehive4go upgrade, check `trustedFields` again against TheHive's OpenAPI schema.
