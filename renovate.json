@@ -81,6 +81,14 @@
     },
     {
       "customType": "regex",
+      "description": "Track the prettier version bin/harness fmt runs through npx (internal/harness/lint/images.go)",
+      "managerFilePatterns": ["/^internal/harness/lint/images\\.go$/"],
+      "matchStrings": ["prettierVersion\\s*=\\s*\"(?<currentValue>[0-9][^\"]*)\""],
+      "depNameTemplate": "prettier",
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
       "description": "Track the Docker build image pinned in the Makefile (e.g. GO_IMAGE := golang:1.26.x-alpine)",
       "managerFilePatterns": ["/^Makefile$/"],
       "matchStrings": [

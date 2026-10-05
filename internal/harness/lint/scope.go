@@ -20,7 +20,7 @@ type Scope struct {
 	// Changed is the work not committed yet, and the files of Commit when it is set.
 	Changed bool
 	Commit  string
-	// Paths, when set, are the files read, whatever git says.
+	// Paths, when set, are the files read, whatever git says: each must be a file.
 	Paths []string
 }
 
@@ -74,8 +74,9 @@ func ParseArgs(args []string, fixByDefault bool) (Options, error) {
 	return o, nil
 }
 
-// Select lists the scope's files that exist in the working tree, relative to root and sorted:
-// a deleted file reaches no tool.
+// Select lists the scope's files that exist in the working tree, relative to root and sorted: a
+// file git lists but the working tree deleted reaches no tool, and a path named that is not a
+// file is an error.
 func (s Scope) Select(ctx context.Context, root string) ([]string, error) {
 	var (
 		paths []string
@@ -99,11 +100,20 @@ func (s Scope) Select(ctx context.Context, root string) ([]string, error) {
 
 	existing := make([]string, 0, len(paths))
 
+	var missing []string
+
 	for _, p := range paths {
 		info, statErr := os.Stat(filepath.Join(root, filepath.FromSlash(p)))
 		if statErr == nil && info.Mode().IsRegular() {
 			existing = append(existing, p)
+		} else {
+			missing = append(missing, p)
 		}
+	}
+
+	if len(s.Paths) > 0 && len(missing) > 0 {
+		slices.Sort(missing)
+		return nil, fmt.Errorf("not a file of the checkout: %s", strings.Join(missing, ", "))
 	}
 
 	slices.Sort(existing)

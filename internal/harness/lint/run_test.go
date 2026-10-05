@@ -147,6 +147,24 @@ func TestRunReportsTheFilesEachFixChanged(t *testing.T) {
 	assert.Equal(t, []string{"y.go"}, rep.Fixed[lint.LintFix], "a safe fix outside the scope is reported too")
 }
 
+// A fix that docker could not run (its own exit codes, 125 and up) or that could not start is a
+// failure; one that ran and left something unfixed is not, since the checks after it report that.
+func TestRunFailsAFixThatCouldNotRun(t *testing.T) {
+	t.Parallel()
+
+	fake := newFake()
+	fake.answers["markdownlint-cli2 --fix"] = answer{out: "MD013 cannot be fixed\n", code: 1}
+	fake.answers["prettier@"] = answer{stderr: "docker: Error response from daemon: pull access denied\n", code: 125}
+	fake.answers["shfmt"] = answer{err: errors.New("exec: docker: not found")}
+
+	rep := lint.Runner{Root: t.TempDir(), Exec: fake.exec}.Run(t.Context(), lint.FormatSteps(lint.Classify([]string{shFile, mdFile}), repo, true))
+
+	assert.Equal(t, []lint.Failure{
+		{Name: stepShfmt, Output: "shfmt could not run: exec: docker: not found"},
+		{Name: stepPrettie, Output: "docker: Error response from daemon: pull access denied"},
+	}, rep.Failures)
+}
+
 // An image docker has is not pulled again; one it lacks is pulled quietly, once, before the
 // steps run, so its progress never reads as a finding.
 func TestRunPullsOnlyTheMissingImages(t *testing.T) {
@@ -159,7 +177,7 @@ func TestRunPullsOnlyTheMissingImages(t *testing.T) {
 
 	assert.Equal(t, 0, fake.ran(dockerCmd, "pull", "-q", golangci))
 	assert.Equal(t, 1, fake.ran(dockerCmd, "pull", "-q", goTestImage), "go test's image")
-	assert.Equal(t, 1, fake.ran(dockerCmd, "pull", "-q", "golang:1.26.8-alpine"), "gofmt's image")
+	assert.Equal(t, 1, fake.ran(dockerCmd, "pull", "-q", goImage), "gofmt's image")
 	assert.Equal(t, 1, fake.ran(dockerCmd, runCmd, rm, "-v", mount, "-w", appDir, "-v", "thehivemcp-gomod:/go/pkg/mod",
 		"-v", "thehivemcp-gobuild:/root/.cache/go-build", "-v", "thehivemcp-golangci-cache:/root/.cache/golangci-lint", golangci),
 		"golangci-lint ran once")

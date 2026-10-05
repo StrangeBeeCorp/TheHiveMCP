@@ -52,6 +52,21 @@ func runTool(ctx context.Context, argv []string, stdin io.Reader) (lint.Output, 
 	return out, nil
 }
 
+// tools runs bin/harness lint or fmt in the repository of the working directory.
+func tools(ctx context.Context, args []string, out io.Writer) error {
+	root, err := repositoryRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	e := env{root: root}
+	if args[0] == cmdFmt {
+		return e.fmtCmd(ctx, args[1:], out)
+	}
+
+	return e.lint(ctx, args[1:], out)
+}
+
 // toolRun is what a run of the linters or the formatters did.
 type toolRun struct {
 	opts  lint.Options
@@ -91,6 +106,11 @@ func (e env) fmtCmd(ctx context.Context, args []string, out io.Writer) error {
 	files, rep := run.files, run.rep
 
 	switch formatted := rep.Fixed[lint.Format]; {
+	case run.opts.Fix && len(rep.Failures) > 0:
+		_, _ = io.WriteString(out, fixedBlock("Formatted", formatted)+failureBlocks(rep.Failures))
+		_, _ = fmt.Fprintf(out, "✗ fmt: a formatter could not run: %s\n", failureNames(rep.Failures))
+
+		return errFailed
 	case run.opts.Fix && len(formatted) > 0:
 		_, _ = io.WriteString(out, fixedBlock("Formatted", formatted))
 		_, _ = fmt.Fprintf(out, "✓ formatted %d of %s\n", len(formatted), files.Summary())

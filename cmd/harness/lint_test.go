@@ -18,11 +18,13 @@ import (
 const (
 	lintMakefile = "GO_IMAGE := golang:1.26.8-alpine\nGO_IMAGE_CGO := golang:1.26.8\n"
 	xGo          = "internal/x/x.go"
+	yGo          = "internal/y/y.go"
+	npmNotice    = "npm notice New major version of npm available!\n"
 )
 
-// fakeTools stands in for docker: each command line is recorded, and the tool named by fail
-// exits 1 with its output; the tool named by rewrite changes the file instead.
-func fakeTools(t *testing.T, fail, rewrite string, file string) *[][]string {
+// fakeTools stands in for docker: every command line is recorded and answered by respond, given
+// the line; nil answers a clean run, with an npm notice on stderr as noise.
+func fakeTools(t *testing.T, respond func(line string) *lint.Output) *[][]string {
 	t.Helper()
 
 	var calls [][]string
@@ -31,16 +33,14 @@ func fakeTools(t *testing.T, fail, rewrite string, file string) *[][]string {
 
 	toolExec = func(_ context.Context, argv []string, _ io.Reader) (lint.Output, error) {
 		calls = append(calls, argv)
-		line := strings.Join(argv, " ")
 
-		switch {
-		case fail != "" && strings.Contains(line, fail):
-			return lint.Output{Stdout: []byte("scripts/bad.sh:1: SC2086 (info): Double quote to prevent globbing.\n"), Code: 1}, nil
-		case rewrite != "" && strings.Contains(line, rewrite):
-			require.NoError(t, os.WriteFile(file, []byte("package x\n"), 0o600))
+		if respond != nil {
+			if out := respond(strings.Join(argv, " ")); out != nil {
+				return *out, nil
+			}
 		}
 
-		return lint.Output{Stderr: []byte("npm notice New major version of npm available!\n")}, nil
+		return lint.Output{Stderr: []byte(npmNotice)}, nil
 	}
 	dockerRunning = func(context.Context) bool { return true }
 
@@ -49,12 +49,25 @@ func fakeTools(t *testing.T, fail, rewrite string, file string) *[][]string {
 	return &calls
 }
 
+// rewrites answers the line naming tool by writing content to file.
+func rewrites(t *testing.T, tool, file, content string) func(string) *lint.Output {
+	t.Helper()
+
+	return func(line string) *lint.Output {
+		if strings.Contains(line, tool) {
+			require.NoError(t, os.WriteFile(file, []byte(content), 0o600))
+		}
+
+		return nil
+	}
+}
+
 func lintRepo(t *testing.T) string {
 	t.Helper()
 
 	dir := gittest.Repo(t, map[string]string{
 		registryPath: editRegistry, limitsPath: editLimits, gitignore: ignoreCache, "Makefile": lintMakefile,
-		xGo: pkgX,
+		xGo: pkgX, yGo: "package y\n",
 	})
 	t.Chdir(dir)
 
@@ -70,54 +83,133 @@ func TestLintFailsOnAFindingAndNamesIt(t *testing.T) {
 	gittest.Write(t, dir, map[string]string{"scripts/bad.sh": "echo $1\n", "scripts/unstaged.sh": "echo $2\n"})
 	gittest.Git(t, dir, "add", "scripts/bad.sh")
 
-	calls := fakeTools(t, "shellcheck", "", "")
+	calls := fakeTools(t, func(line string) *lint.Output {
+		if strings.Contains(line, "shellcheck") {
+			return &lint.Output{Stdout: []byte("scripts/bad.sh:1: SC2086 (info): Double quote to prevent globbing.\n"), Code: 1}
+		}
 
-	var out strings.Builder
+		return nil
+	})
 
-	err := dispatch(t.Context(), []string{cmdLint, "--staged"}, strings.NewReader(""), &out)
+	out, err := harness(t, cmdLint, "--staged")
 	require.ErrorIs(t, err, errFailed)
-	assert.Contains(t, out.String(), "=== shellcheck ===\nscripts/bad.sh:1: SC2086")
-	assert.True(t, strings.HasSuffix(out.String(), "✗ lint failed (1 sh): shellcheck\n"), out.String())
+	assert.Contains(t, out, "=== shellcheck ===\nscripts/bad.sh:1: SC2086")
+	assert.True(t, strings.HasSuffix(out, "✗ lint failed (1 sh): shellcheck\n"), out)
 
 	for _, c := range *calls {
 		assert.NotContains(t, strings.Join(c, " "), "unstaged.sh", "only what the commit carries")
 	}
 }
 
-// bin/harness fmt rewrites by default and lists what it changed; with --check it only reports.
+// lint --fix reports what the formatters rewrote and, apart, what golangci-lint's safe fixes
+// changed: those rewrite the whole module, so a Go file outside the scope is reported too.
 //
 //nolint:paralleltest // t.Chdir, and the tools are replaced for the test
-func TestFmtRewritesAndSaysWhat(t *testing.T) {
+func TestLintFixReportsEveryFileItChanged(t *testing.T) {
 	dir := lintRepo(t)
-	gofile := filepath.Join(dir, filepath.FromSlash(xGo))
-	require.NoError(t, os.WriteFile(gofile, []byte("package  x\n"), 0o600))
+	gittest.Write(t, dir, map[string]string{xGo: "package  x\n"})
 
-	fakeTools(t, "", "gofmt -l -w", gofile)
+	formatX, fixY := rewrites(t, "gofmt -l -w", filepath.Join(dir, xGo), pkgX), rewrites(t, "run --fix", filepath.Join(dir, yGo), "package y // fixed\n")
+	fakeTools(t, func(line string) *lint.Output {
+		formatX(line)
+		fixY(line)
 
-	var out strings.Builder
+		return nil
+	})
 
-	require.NoError(t, dispatch(t.Context(), []string{cmdFmt, "--changed"}, strings.NewReader(""), &out))
-	assert.Equal(t, "Formatted:\n  internal/x/x.go\n✓ formatted 1 of 1 go\n", out.String())
+	out, err := harness(t, cmdLint, "--changed", "--fix")
+	require.NoError(t, err)
+	assert.Equal(t, "Auto-fixed:\n  "+xGo+"\nAuto-fixed (lint):\n  "+yGo+"\n✓ lint passed (1 go)\n", out, "y.go is out of the scope")
+}
 
-	out.Reset()
-	require.NoError(t, dispatch(t.Context(), []string{cmdFmt}, strings.NewReader(""), &out))
-	assert.Equal(t, "✓ already formatted (1 go)\n", out.String(), "nothing left to rewrite, and only the kinds fmt formats counted")
+// bin/harness fmt rewrites by default and lists what it changed; with --check, the fmt gate, a
+// file a formatter lists fails it.
+//
+//nolint:paralleltest // t.Chdir, and the tools are replaced for the test
+func TestFmtRewritesOrFailsTheCheck(t *testing.T) {
+	dir := lintRepo(t)
+	gittest.Write(t, dir, map[string]string{xGo: "package  x\n"})
 
-	fakeTools(t, "", "", "")
-	out.Reset()
-	require.NoError(t, dispatch(t.Context(), []string{cmdFmt, "--all", "--check"}, strings.NewReader(""), &out))
-	assert.Equal(t, "✓ fmt check passed (1 go)\n", out.String())
+	fakeTools(t, rewrites(t, "gofmt -l -w", filepath.Join(dir, xGo), pkgX))
+
+	out, err := harness(t, cmdFmt, "--changed")
+	require.NoError(t, err)
+	assert.Equal(t, "Formatted:\n  "+xGo+"\n✓ formatted 1 of 1 go\n", out)
+
+	out, err = harness(t, cmdFmt)
+	require.NoError(t, err)
+	assert.Equal(t, "✓ already formatted (2 go)\n", out, "nothing left to rewrite, and only the kinds fmt formats counted")
+
+	fakeTools(t, nil)
+
+	out, err = harness(t, cmdFmt, "--all", "--check")
+	require.NoError(t, err)
+	assert.Equal(t, "✓ fmt check passed (2 go)\n", out, "npm's notice on stderr lists no file")
+
+	fakeTools(t, func(line string) *lint.Output {
+		if strings.Contains(line, "gofmt -l /app/") {
+			return &lint.Output{Stdout: []byte("/app/" + yGo + "\n"), Stderr: []byte(npmNotice)}
+		}
+
+		return nil
+	})
+
+	out, err = harness(t, cmdFmt, "--all", "--check")
+	require.ErrorIs(t, err, errFailed)
+	assert.Equal(t, "=== gofmt (would reformat) ===\n"+yGo+"\n\n✗ fmt: files need formatting (run make fmt): gofmt (would reformat)\n", out)
+}
+
+// A formatter that could not run fails make fmt instead of reading as "already formatted".
+//
+//nolint:paralleltest // t.Chdir, and the tools are replaced for the test
+func TestFmtFailsWhenAFormatterCannotRun(t *testing.T) {
+	lintRepo(t)
+	fakeTools(t, func(line string) *lint.Output {
+		if strings.Contains(line, "golangci-lint fmt") {
+			return &lint.Output{Stderr: []byte("Unable to find image locally\n"), Code: 125}
+		}
+
+		return nil
+	})
+
+	out, err := harness(t, cmdFmt)
+	require.ErrorIs(t, err, errFailed)
+	assert.Contains(t, out, "=== golangci-lint fmt ===\nUnable to find image locally\n")
+	assert.True(t, strings.HasSuffix(out, "✗ fmt: a formatter could not run: golangci-lint fmt\n"), out)
+}
+
+// lint and fmt read the repository alone: a registry or limits file being edited does not stop
+// them, as it did not stop the scripts they replace.
+//
+//nolint:paralleltest // t.Chdir, and the tools are replaced for the test
+func TestLintAndFmtNeedNoRegistry(t *testing.T) {
+	dir := lintRepo(t)
+	gittest.Write(t, dir, map[string]string{registryPath: "gates: [half edited\n", limitsPath: "structure: {max_lines: -\n"})
+	gittest.Git(t, dir, "add", xGo)
+	fakeTools(t, nil)
+
+	_, err := harness(t, cmdLint, "--staged")
+	require.NoError(t, err)
+
+	_, err = harness(t, cmdFmt, "--check")
+	require.NoError(t, err)
 }
 
 //nolint:paralleltest // t.Chdir, and the tools are replaced for the test
-func TestLintNeedsDockerAndKnownArguments(t *testing.T) {
+func TestLintNeedsDockerKnownArgumentsAndRealPaths(t *testing.T) {
 	lintRepo(t)
-	fakeTools(t, "", "", "")
+	fakeTools(t, nil)
 
 	var usage usageError
-	require.ErrorAs(t, dispatch(t.Context(), []string{cmdLint, "--hook"}, strings.NewReader(""), io.Discard), &usage)
+
+	_, err := harness(t, cmdLint, "--hook")
+	require.ErrorAs(t, err, &usage)
+
+	_, err = harness(t, cmdLint, "Makefile", "scripts/harnes.mk", "internal")
+	require.ErrorContains(t, err, "not a file of the checkout: internal, scripts/harnes.mk", "a typo, and a directory")
 
 	dockerRunning = func(context.Context) bool { return false }
 
-	require.ErrorContains(t, dispatch(t.Context(), []string{cmdFmt}, strings.NewReader(""), io.Discard), "docker is not running")
+	_, err = harness(t, cmdFmt)
+	require.ErrorContains(t, err, "docker is not running")
 }

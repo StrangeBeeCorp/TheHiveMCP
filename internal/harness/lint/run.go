@@ -59,7 +59,11 @@ func (r Runner) Run(ctx context.Context, steps []Step) Report {
 	for _, s := range steps {
 		if s.Fix != Check {
 			before := r.hashes()
-			_, _ = r.execOut(ctx, s) // a fix never fails a run: the checks after it judge the result
+
+			if f, failed := r.fix(ctx, s); failed {
+				rep.Failures = append(rep.Failures, f)
+			}
+
 			rep.Fixed[s.Fix] = append(rep.Fixed[s.Fix], changed(before, r.hashes())...)
 
 			continue
@@ -98,6 +102,25 @@ func (r Runner) pull(ctx context.Context, steps []Step) {
 		// A failed pull is left to docker run, whose error then says why.
 		_, _ = r.Exec(ctx, []string{dockerCmd, "pull", "-q", im}, nil)
 	}
+}
+
+// cannotRun is the first exit code of docker's own errors: 125 when docker run fails, 126 and
+// 127 when the command cannot run in the container.
+const cannotRun = 125
+
+// fix runs one fix. What a tool could not fix is not a failure: lint's checks after it report
+// it, and the fmt gate checks the files. A fix that could not run at all is one.
+func (r Runner) fix(ctx context.Context, s Step) (Failure, bool) {
+	out, err := r.execOut(ctx, s)
+	if err != nil {
+		return Failure{Name: s.Name, Output: err.Error()}, true
+	}
+
+	if out.Code >= cannotRun {
+		return Failure{Name: s.Name, Output: strings.TrimRight(string(out.Stdout)+string(out.Stderr), "\n")}, true
+	}
+
+	return Failure{}, false
 }
 
 // check runs one check and reads its result: a failure is a non-zero exit, or, from a tool that

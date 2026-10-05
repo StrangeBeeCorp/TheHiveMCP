@@ -5,7 +5,8 @@ import (
 	"regexp"
 )
 
-// The pinned images of the linters and formatters. renovate.json tracks this file.
+// The pinned images of the linters and formatters. renovate.json tracks the tagged images and
+// the prettier version; a digest-only pin stays as it is.
 const (
 	golangciImage   = "golangci/golangci-lint:v2.12.2"
 	shellcheckImage = "koalaman/shellcheck:v0.11.0"

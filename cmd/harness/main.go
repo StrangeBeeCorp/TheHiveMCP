@@ -102,14 +102,9 @@ type env struct {
 // that what the commit carries decides which gates run, what they run and what they hold to,
 // whatever the working tree holds.
 func load(ctx context.Context, staged bool) (env, error) {
-	wd, err := os.Getwd()
+	root, err := repositoryRoot(ctx)
 	if err != nil {
-		return env{}, fmt.Errorf("working directory: %w", err)
-	}
-
-	root, err := gitx.Root(ctx, wd)
-	if err != nil {
-		return env{}, fmt.Errorf("find the repository: %w", err)
+		return env{}, err
 	}
 
 	read := func(p string) ([]byte, error) {
@@ -148,6 +143,21 @@ func load(ctx context.Context, staged bool) (env, error) {
 	return env{root: root, reg: reg, limits: limits, staged: staged}, nil
 }
 
+// repositoryRoot is the top of the working tree the harness runs in.
+func repositoryRoot(ctx context.Context) (string, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("working directory: %w", err)
+	}
+
+	root, err := gitx.Root(ctx, wd)
+	if err != nil {
+		return "", fmt.Errorf("find the repository: %w", err)
+	}
+
+	return root, nil
+}
+
 // stagedRun reports whether the command judges the index: run or select with --staged.
 func stagedRun(args []string) bool {
 	if len(args) == 0 || (args[0] != cmdRun && args[0] != cmdSelect) {
@@ -160,6 +170,12 @@ func stagedRun(args []string) bool {
 func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer) error {
 	if len(args) == 0 {
 		return usageError{"usage: harness run|select|list|check|docs|hook|pr|push|evidence|review-effort|canaries|structure|lint|fmt (see cmd/harness/main.go)"}
+	}
+
+	if args[0] == cmdLint || args[0] == cmdFmt {
+		// The tools read the repository alone: a registry or limits file half edited, or staged in
+		// part, cannot stop a lint or a commit.
+		return tools(ctx, args, out)
 	}
 
 	e, err := load(ctx, stagedRun(args))
@@ -179,8 +195,6 @@ func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer
 		"pr":             e.pr,
 		"evidence":       e.showEvidence,
 		builtinStructure: e.structure,
-		cmdLint:          e.lint,
-		cmdFmt:           e.fmtCmd,
 		"review-effort":  e.reviewEffort,
 	}
 

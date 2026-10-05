@@ -49,7 +49,7 @@ func TestParseArgsReadsTheScopeAndTheMode(t *testing.T) {
 	}
 }
 
-// Each scope lists the files it names that still exist: a deleted file reaches no tool.
+// Each git scope lists its files that still exist: a deleted file reaches no tool.
 func TestSelectListsTheScopesFilesThatExist(t *testing.T) {
 	t.Parallel()
 
@@ -77,8 +77,11 @@ func TestSelectListsTheScopesFilesThatExist(t *testing.T) {
 	assert.Equal(t, []string{goFile, newMD, stagedYAML}, selected(lint.Scope{Changed: true}))
 	assert.Equal(t, []string{committedMD, goFile, newMD, stagedYAML}, selected(lint.Scope{Changed: true, Commit: head}),
 		"the last commit's files join, as they do at an agent's stop")
-	assert.Equal(t, []string{goFile}, selected(lint.Scope{Paths: []string{goFile, "missing.go"}}))
+	assert.Equal(t, []string{goFile, newMD}, selected(lint.Scope{Paths: []string{newMD, goFile}}))
 
-	_, err := lint.Scope{Changed: true, Commit: "no-such-commit"}.Select(t.Context(), dir)
+	_, err := lint.Scope{Paths: []string{goFile, "missing.go", "internal"}}.Select(t.Context(), dir)
+	require.ErrorContains(t, err, "not a file of the checkout: internal, missing.go", "a path named is no git scope: a typo or a directory is said")
+
+	_, err = lint.Scope{Changed: true, Commit: "no-such-commit"}.Select(t.Context(), dir)
 	require.ErrorContains(t, err, `"no-such-commit" is not a commit`)
 }

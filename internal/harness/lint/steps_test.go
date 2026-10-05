@@ -13,6 +13,9 @@ const (
 	root         = "/repo"
 	golangci     = "golangci/golangci-lint:v2.12.2"
 	goTestImage  = "golang:1.26.8"
+	goImage      = "golang:1.26.8-alpine"
+	module       = "./..."
+	appMD        = "/app/" + mdFile
 	stepShfmt    = "shfmt"
 	stepGofmt    = "gofmt"
 	stepPrettie  = "prettier"
@@ -27,7 +30,7 @@ const (
 )
 
 var (
-	repo = lint.Repo{Root: root, Images: lint.Images{Go: "golang:1.26.8-alpine", GoTest: goTestImage}, CheckmakeINI: []byte("[maxbodylength]\nmaxBodyLength = 20\n")}
+	repo = lint.Repo{Root: root, Images: lint.Images{Go: goImage, GoTest: goTestImage}, CheckmakeINI: []byte("[maxbodylength]\nmaxBodyLength = 20\n")}
 	// every kind of file once, a fragment included
 	everyKind = lint.Classify([]string{goFile, shFile, mdFile, ciFile, dockerf, makefile, mkFile})
 )
@@ -74,12 +77,12 @@ func TestLintStepsCheckEveryKindOfFile(t *testing.T) {
 	assert.Equal(t, []string{
 		dockerCmd, runCmd, rm, "-v", mount, "-w", appDir,
 		"-v", "thehivemcp-gomod:/go/pkg/mod", "-v", "thehivemcp-gobuild:/root/.cache/go-build", "-v", "thehivemcp-golangci-cache:/root/.cache/golangci-lint",
-		golangci, stepGolangci, "run", "./...",
+		golangci, stepGolangci, "run", module,
 	}, byName(t, steps, stepGolangci).Argv, "the whole module: cross-file findings")
 	assert.Equal(t, []string{
 		dockerCmd, runCmd, rm, "-v", mount, "-w", appDir,
 		"-v", "thehivemcp-gomod:/go/pkg/mod", "-v", "thehivemcp-gobuild:/root/.cache/go-build", "-e", "CGO_ENABLED=0",
-		goTestImage, "go", "test", "-short", "./...",
+		goTestImage, "go", "test", "-short", module,
 	}, byName(t, steps, "go test -short").Argv, "make test's image, which has git")
 
 	gofmt := byName(t, steps, "gofmt -l (needs formatting; run make fmt)")
@@ -88,7 +91,10 @@ func TestLintStepsCheckEveryKindOfFile(t *testing.T) {
 	assert.Equal(t, []string{"--offline", mdFile}, tail(byName(t, steps, "lychee").Argv, 2), "local links only")
 	assert.Contains(t, byName(t, steps, "lychee").Argv, "--init")
 	assert.Equal(t, []string{"-no-color", ciFile}, tail(byName(t, steps, "actionlint").Argv, 2))
-	assert.Equal(t, []string{stepMarkdown, "/app/docs/a.md"}, tail(byName(t, steps, stepMarkdown).Argv, 2))
+	assert.Equal(t, []string{stepMarkdown, appMD}, tail(byName(t, steps, stepMarkdown).Argv, 2))
+
+	assert.Equal(t, []string{"koalaman/shellcheck:v0.11.0", shFile}, tail(byName(t, steps, stepShell).Argv, 2))
+	assert.Equal(t, []string{"mvdan/shfmt:v3.13.1", "-i", "2", "-ci", "-l", shFile}, tail(byName(t, steps, "shfmt (needs formatting; run make fmt)").Argv, 6))
 
 	yl := byName(t, steps, "yamllint").Argv
 	assert.Equal(t, ciFile, yl[len(yl)-1])
@@ -147,6 +153,7 @@ func TestLintFixFormatsThenFixesThenChecks(t *testing.T) {
 	}, names(steps))
 	assert.Equal(t, lint.Format, byName(t, steps, stepPrettie).Fix)
 	assert.Equal(t, lint.LintFix, byName(t, steps, "golangci-lint run --fix").Fix)
+	assert.Equal(t, []string{golangci, stepGolangci, "run", "--fix", module}, tail(byName(t, steps, "golangci-lint run --fix").Argv, 5))
 	assert.Equal(t, lint.Check, byName(t, steps, stepGolangci).Fix)
 }
 
@@ -160,12 +167,16 @@ func TestFormatStepsRewriteOrList(t *testing.T) {
 		assert.True(t, s.Lists, s.Name)
 	}
 
-	assert.Equal(t, []string{"npx", "--yes", "prettier@3.9.5", "--list-different", "/app/docs/a.md"}, tail(byName(t, check, "prettier (would reformat)").Argv, 5),
+	assert.Equal(t, []string{"npx", "--yes", "prettier@3.9.5", "--list-different", appMD}, tail(byName(t, check, "prettier (would reformat)").Argv, 5),
 		"one prettier version on every host")
 
 	fix := lint.FormatSteps(everyKind, repo, true)
-	assert.Equal(t, []string{"-i", "2", "-ci", "-l", "-w", shFile}, tail(byName(t, fix, stepShfmt).Argv, 6))
-	assert.Equal(t, []string{"gofmt", "-l", "-w", "/app/internal/x/x.go"}, tail(byName(t, fix, stepGofmt).Argv, 4))
+	assert.Equal(t, []string{"mvdan/shfmt:v3.13.1", "-i", "2", "-ci", "-l", "-w", shFile}, tail(byName(t, fix, stepShfmt).Argv, 7))
+	assert.Equal(t, []string{goImage, "gofmt", "-l", "-w", "/app/internal/x/x.go"}, tail(byName(t, fix, stepGofmt).Argv, 5))
+	assert.Equal(t, []string{golangci, stepGolangci, "fmt", module}, tail(byName(t, fix, "golangci-lint fmt").Argv, 4), "the whole module, as golangci-lint fmt sees it")
+	assert.Equal(t, []string{"davidanson/markdownlint-cli2:v0.23.0", stepMarkdown, "--fix", appMD}, tail(byName(t, fix, "markdownlint-cli2 --fix").Argv, 4))
+	assert.Equal(t, []string{"-e", "npm_config_update_notifier=false", "node:22-alpine", "npx", "--yes", "prettier@3.9.5", "--write", appMD},
+		tail(byName(t, fix, stepPrettie).Argv, 8))
 
 	assert.Empty(t, lint.FormatSteps(lint.Files{}, repo, true), "no file, no tool")
 	assert.Empty(t, lint.Steps(lint.Files{}, repo, false))
@@ -176,7 +187,7 @@ func TestMakefileImagesReadsTheGoPins(t *testing.T) {
 
 	im, err := lint.MakefileImages([]byte("GO_IMAGE := golang:1.26.8-alpine\nGO_IMAGE_CGO := golang:1.26.8\nOTHER_IMAGE := x:1\n"))
 	require.NoError(t, err)
-	assert.Equal(t, lint.Images{Go: "golang:1.26.8-alpine", GoTest: goTestImage}, im)
+	assert.Equal(t, lint.Images{Go: goImage, GoTest: goTestImage}, im)
 
 	_, err = lint.MakefileImages([]byte("GO_IMAGE := golang:1.26.8-alpine\n"))
 	require.Error(t, err)
