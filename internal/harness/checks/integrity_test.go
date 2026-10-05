@@ -1,6 +1,7 @@
 package checks_test
 
 import (
+	"path"
 	"strings"
 	"testing"
 
@@ -174,7 +175,74 @@ func TestAMovedTestIsComparedWhereItWent(t *testing.T) {
 	assert.Empty(t, integrity(t, "package pkg\n", moved, nil))
 
 	weakened := checks.MemTree{otherFile: []byte(edit(t, "\t\tassert.Equal(t, 1, count(c))\n", ""))}
-	assert.Len(t, integrity(t, "package pkg\n", weakened, nil), 1, "moved and weakened")
+	found := integrity(t, "package pkg\n", weakened, nil)
+	require.Len(t, found, 1, "moved and weakened")
+	assert.True(t, strings.HasPrefix(found[0], otherFile+":5: "), "reported where the test is now: %s", found[0])
+	assert.Contains(t, found[0], "(moved from "+suiteFile+")")
+}
+
+// A file's name is a build constraint too: a _GOOS or _GOARCH suffix CI does not match, or a
+// leading _ or ., leaves the file out of CI's build. A test file renamed so is refused, and one
+// renamed for linux/amd64, or for unix (no file-name suffix), is not.
+func TestATestFileNamedOutOfCIsBuildIsRefused(t *testing.T) {
+	t.Parallel()
+
+	for name, refused := range map[string]bool{
+		"pkg/b_windows_test.go":      true,
+		"pkg/b_arm64_test.go":        true,
+		"pkg/b_darwin_amd64_test.go": true,
+		"pkg/_b_test.go":             true,
+		"pkg/.b_test.go":             true,
+		"pkg/b_linux_test.go":        false,
+		"pkg/b_amd64_test.go":        false,
+		"pkg/b_linux_amd64_test.go":  false,
+		"pkg/b_unix_test.go":         false,
+	} {
+		found := integrity(t, "", checks.MemTree{name: []byte(baseTest)}, nil)
+		if !refused {
+			assert.Empty(t, found, "%s is a rename CI still builds", name)
+			continue
+		}
+
+		require.Len(t, found, 1, name)
+		assert.Contains(t, found[0], "its name, "+path.Base(name)+", takes its tests out of CI's build", name)
+	}
+}
+
+// A helper that takes the test's t is compared like a test while it is kept: its callers count a
+// call to it as one assertion, so a helper that stops checking would weaken them all unseen. A
+// helper that is gone is not reported: its callers are, if they check less.
+func TestAWeakenedHelperIsRefused(t *testing.T) {
+	t.Parallel()
+
+	const check = "\tif !found(name) {\n\t\tt.Fatalf(\"%s not found\", name)\n\t}\n"
+
+	helper := "\nfunc requireFound(t *testing.T, name string) {\n\tt.Helper()\n" + check + "}\n"
+	tb := "\nfunc requireFound(t testing.TB, name string) {\n\tt.Helper()\n" + check + "}\n"
+
+	for name, c := range map[string]struct {
+		base, now, want string
+	}{
+		"its check removed":   {helper, strings.Replace(helper, check, "", 1), "requireFound checks less: 0 assertions, was 1"},
+		"a skip added":        {helper, strings.Replace(helper, "\tt.Helper()\n", "\tt.Helper()\n\tt.Skip()\n", 1), "requireFound now skips"},
+		"a testing.TB helper": {tb, strings.Replace(tb, check, "", 1), "requireFound checks less: 0 assertions, was 1"},
+		"kept as it was":      {helper, helper, ""},
+		"gone":                {helper, "", ""},
+	} {
+		before := func(p string) ([]byte, bool) { return []byte(baseTest + c.base), p == suiteFile }
+		tree := checks.MemTree{suiteFile: []byte(baseTest + c.now)}
+
+		found, err := checks.Integrity(tree, []string{suiteFile}, before, checks.IntegrityLimits{})
+		require.NoError(t, err)
+
+		if c.want == "" {
+			assert.Empty(t, found, name)
+			continue
+		}
+
+		require.Len(t, found, 1, name)
+		assert.Contains(t, found[0].String(), c.want, name)
+	}
 }
 
 func TestAPersonMayAcceptAWeakerTest(t *testing.T) {

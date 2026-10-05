@@ -14,7 +14,7 @@ const workflow = new AsyncFunction('args', 'agent', 'phase', 'log', source.repla
 async function duel(args, script) {
   const calls = []
   const agent = async (prompt, opts) => {
-    calls.push({ label: opts.label, role: opts.agentType, prompt })
+    calls.push({ label: opts.label, role: opts.agentType, prompt, schema: opts.schema })
     assert.ok(opts.label in script, `no scripted answer for "${opts.label}"`)
     const answer = script[opts.label]
     return typeof answer === 'function' ? answer(prompt) : answer
@@ -157,6 +157,17 @@ test('sealed tests that did not move into the code, or still fail, leave the due
   assert.equal(run.labels.filter((l) => l === 'tester: sealed tests').length, 1, 'nothing to run again')
 })
 
+test('with a ticket key the first tests must list the sealed ones, even none; an attack need not', async () => {
+  const { calls, result } = await duel(task, {
+    'tester: tests first': tests(['TestEmptyCreate'], { sealed: [] }),
+    'coder: round 0': code(),
+    'tester: attack 1': tests([], { done: true }),
+  })
+  assert.ok(calls[0].schema.required.includes('sealed'), 'an unlisted sealed test would never run')
+  assert.ok(!calls[2].schema.required.includes('sealed'))
+  assert.equal(result.outcome, 'passing', 'a Tester that sealed nothing says so')
+})
+
 test('without a ticket key nothing is sealed, and with the visible tests red nothing is unsealed', async () => {
   let run = await duel({ task: task.task }, {
     'tester: tests first': tests(['TestEmptyCreate'], { sealed: [sealedTest] }),
@@ -165,6 +176,7 @@ test('without a ticket key nothing is sealed, and with the visible tests red not
   })
   assert.doesNotMatch(run.calls[0].prompt, /\.claude\/sealed/)
   assert.equal(run.result.outcome, 'passing', 'the sealed list is ignored without a ticket')
+  assert.ok(!run.calls[0].schema.required.includes('sealed'), 'nor asked for')
 
   run = await duel({ ...task, rounds: 0 }, {
     'tester: tests first': tests(['TestEmptyCreate'], { sealed: [sealedTest] }),

@@ -67,6 +67,30 @@ func TestUnsealMovesNothingUnlessEveryFileIsANewTest(t *testing.T) {
 	require.ErrorIs(t, empty.unseal([]string{ticketFlag, "DL-3"}, &strings.Builder{}), errUnseal)
 }
 
+// A move that fails half way puts back the tests moved before it: the sealed directory is whole
+// again, and running unseal once the cause is fixed finishes the job.
+func TestUnsealPutsBackWhatItMovedWhenAMoveFails(t *testing.T) {
+	t.Parallel()
+
+	e := sealed(t, "DL-6", "a/x_test.go", "b/y_test.go")
+	require.NoError(t, os.WriteFile(filepath.Join(e.root, "b"), []byte("a file where b/ should be\n"), 0o600))
+
+	var out strings.Builder
+
+	err := e.unseal([]string{ticketFlag, "DL-6"}, &out)
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "stayed in the code", "everything went back")
+	assert.NoFileExists(t, filepath.Join(e.root, "a/x_test.go"))
+	assert.FileExists(t, filepath.Join(e.root, policy.SealedDir, "DL-6", "a/x_test.go"))
+	assert.FileExists(t, filepath.Join(e.root, policy.SealedDir, "DL-6", "b/y_test.go"))
+	assert.Empty(t, out.String(), "nothing is reported unsealed")
+
+	require.NoError(t, os.Remove(filepath.Join(e.root, "b")))
+	require.NoError(t, e.unseal([]string{ticketFlag, "DL-6"}, &out))
+	assert.FileExists(t, filepath.Join(e.root, "a/x_test.go"))
+	assert.FileExists(t, filepath.Join(e.root, "b/y_test.go"))
+}
+
 func TestUnsealTakesOnlyATicketKey(t *testing.T) {
 	t.Parallel()
 

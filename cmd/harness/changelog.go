@@ -34,10 +34,10 @@ func (e env) changelog(ctx context.Context) ([]checks.Finding, error) {
 	return checks.Changelog(changed, gitx.HasPath(ctx, e.root, e.base, checks.SurfaceSummary)), nil
 }
 
-// changeSet gives `check changelog` the change it judges, as a run would: since the merge base of
-// --base (default $HARNESS_BASE, then origin/main) and HEAD.
+// changeSet gives `check changelog` and `check integrity` the change they judge, as a run would:
+// since the merge base of --base (default $HARNESS_BASE, then origin/main) and HEAD.
 func (e env) changeSet(ctx context.Context, args []string) (env, error) {
-	fs := flag.NewFlagSet("check changelog", flag.ContinueOnError)
+	fs := flag.NewFlagSet("check", flag.ContinueOnError)
 
 	var scope scopeFlags
 

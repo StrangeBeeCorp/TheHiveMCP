@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/json"
 	"slices"
 	"strings"
@@ -57,8 +58,9 @@ func requireBoundary(t *testing.T, s string, v any) {
 	}
 }
 
-// FuzzFilterDSL: the filter transforms never fail on what a model may send, and normalizing the
-// keys never brings in a field the unfilterable-field check did not see.
+// FuzzFilterDSL: the filter transforms never fail on what a model may send, normalizing the keys
+// never brings in a field the unfilterable-field check did not see, and the operation built from
+// a filter's JSON is sent to TheHive as that filter.
 func FuzzFilterDSL(f *testing.F) {
 	for _, seed := range []string{
 		`{"_field": "title", "_value": "phishing"}`,
@@ -90,9 +92,16 @@ func FuzzFilterDSL(f *testing.F) {
 			t.Fatalf("the translated filter of %s does not encode: %v", data, err)
 		}
 
-		_, err = CreateFilterFromJSONString(string(data))
+		op, err := CreateFilterFromJSONString(string(data))
 		if err != nil {
 			t.Fatalf("a JSON object %s is refused: %v", data, err)
+		}
+
+		sent, err := json.Marshal(op)
+		written, _ := json.Marshal(filter)
+
+		if err != nil || !bytes.Equal(sent, written) {
+			t.Fatalf("the operation built from %s is sent as %s, not as the filter written, %s (%v)", data, sent, written, err)
 		}
 	})
 }

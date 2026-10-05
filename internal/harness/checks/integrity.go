@@ -1,12 +1,14 @@
 package checks
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"go/ast"
-	buildconstraint "go/build/constraint"
+	"go/build"
 	"go/parser"
 	"go/token"
+	"io"
 	"io/fs"
 	"path"
 	"slices"
@@ -20,7 +22,8 @@ type IntegrityLimits struct {
 }
 
 // testShape is what a test function checks: its assertions, its skips, its table cases and fuzz
-// seeds, and the returns that can end it before its checks.
+// seeds, and the returns that can end it before its checks. A helper is a function of a test file
+// that takes the test's *testing.T, *testing.F or testing.TB.
 type testShape struct {
 	path    string
 	line    int
@@ -28,6 +31,7 @@ type testShape struct {
 	skips   int
 	cases   int
 	returns int
+	helper  bool
 }
 
 // allowHint says how a person accepts a weaker test.
@@ -35,8 +39,9 @@ const allowHint = "a person accepts it in gates/limits.yaml (integrity.allow)"
 
 // Integrity compares each changed Go test file with its version at the base. A Test or Fuzz
 // function that is gone, now skips, or has fewer assertions or table cases is a finding, unless
-// limits allow it. A test moved to another changed file of its package is compared there.
-// before returns a file at the base, and whether it existed there.
+// limits allow it, and so is a helper that is kept but checks less or skips more: its callers count
+// a call to it as one assertion. A test moved to another changed file of its package is compared
+// there, and reported there. before returns a file at the base, and whether it existed there.
 func Integrity(tree Tree, changed []string, before func(string) ([]byte, bool), limits IntegrityLimits) ([]Finding, error) {
 	was := map[string]testShape{}
 	now := map[string]testShape{}
@@ -60,13 +65,23 @@ func Integrity(tree Tree, changed []string, before func(string) ([]byte, bool), 
 
 	for key, w := range was {
 		name := path.Base(key)
-		if allowed(limits, w.path, name) {
+		n, kept := now[key]
+
+		if allowed(limits, w.path, name) || (kept && allowed(limits, n.path, name)) || (w.helper && !kept) {
 			continue
 		}
 
-		if msg := weaker(name, w, now[key], now[key].path != ""); msg != "" {
-			found = append(found, Finding{Path: w.path, Line: now[key].line, Msg: msg + ": " + allowHint})
+		msg := weaker(name, w, n, kept)
+		if msg == "" {
+			continue
 		}
+
+		at := w.path
+		if kept && n.path != w.path {
+			at, msg = n.path, msg+" (moved from "+w.path+")"
+		}
+
+		found = append(found, Finding{Path: at, Line: n.line, Msg: msg + ": " + allowHint})
 	}
 
 	sort.Slice(found, func(i, j int) bool { return found[i].String() < found[j].String() })
@@ -74,9 +89,10 @@ func Integrity(tree Tree, changed []string, before func(string) ([]byte, bool), 
 	return found, nil
 }
 
-// compareFile adds a changed test file's shapes, at the base and now, and refuses a build
-// constraint that takes a test file out of CI's build, where the gates run it: on a new file, or one
-// CI built before. A constraint that only leaves other platforms out (unix) takes nothing away.
+// compareFile adds a changed test file's shapes, at the base and now, and refuses a name or a build
+// constraint that takes a test file out of CI's build, where the gates run it: on a new file (a
+// renamed one is new at its new path), or one CI built before. A constraint that only leaves other
+// platforms out (unix) takes nothing away.
 func compareFile(tree Tree, p string, before func(string) ([]byte, bool), limits IntegrityLimits, was, now map[string]testShape) ([]Finding, error) {
 	old, existed := before(p)
 	if existed {
@@ -94,9 +110,13 @@ func compareFile(tree Tree, p string, before func(string) ([]byte, bool), limits
 
 	addShapes(now, p, data)
 
-	if !ciBuilds(data) && (!existed || ciBuilds(old)) && !allowed(limits, p, "build") {
-		return []Finding{{Path: p, Msg: "its build constraint is now `" + constraint(data) + "`, which takes its tests out of CI's build " +
-			"(linux/amd64, no cgo, no tags): " + allowHint}}, nil
+	if !ciBuilds(p, data) && (!existed || ciBuilds(p, old)) && !allowed(limits, p, "build") {
+		why := "its build constraint is now `" + constraint(data) + "`, which"
+		if !ciBuilds(p, []byte("package x\n")) {
+			why = "its name, " + path.Base(p) + ","
+		}
+
+		return []Finding{{Path: p, Msg: why + " takes its tests out of CI's build (linux/amd64, no cgo, no tags): " + allowHint}}, nil
 	}
 
 	return nil, nil
@@ -122,24 +142,20 @@ func allowed(limits IntegrityLimits, file, what string) bool {
 	return ok
 }
 
-// ciTags are the build tags CI's tests satisfy: GOOS linux, GOARCH amd64, the gc compiler, and the
-// Go releases (go1.N). CGO_ENABLED is 0 there, and no custom tag is set.
-var ciTags = map[string]bool{"linux": true, "amd64": true, "unix": true, "gc": true}
+// ciContext is CI's build: GOOS linux, GOARCH amd64, the gc compiler and this toolchain's Go
+// releases (go1.N), with CGO_ENABLED=0 and no custom tag.
+var ciContext = build.Context{GOOS: "linux", GOARCH: "amd64", Compiler: "gc", ReleaseTags: build.Default.ReleaseTags}
 
-// ciBuilds reports whether CI's build includes a Go file. A constraint go cannot read builds
-// nothing.
-func ciBuilds(src []byte) bool {
-	line := constraint(src)
-	if line == "" {
-		return true
-	}
+// ciBuilds reports whether CI's build includes the Go file p, whose content is src, as go build
+// decides it: by its name (a _GOOS or _GOARCH suffix, a leading _ or .) and by its build
+// constraint. A file go cannot read builds nothing.
+func ciBuilds(p string, src []byte) bool {
+	ctx := ciContext
+	ctx.OpenFile = func(string) (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(src)), nil }
 
-	expr, err := buildconstraint.Parse(line)
-	if err != nil {
-		return false
-	}
+	ok, err := ctx.MatchFile(path.Dir(p), path.Base(p))
 
-	return expr.Eval(func(tag string) bool { return ciTags[tag] || strings.HasPrefix(tag, "go1.") })
+	return err == nil && ok
 }
 
 // constraint is a Go file's build constraint (//go:build), or "".
@@ -176,8 +192,8 @@ func weaker(name string, was, now testShape, kept bool) string {
 	return ""
 }
 
-// addShapes adds the shape of each Test and Fuzz function of a file, keyed by package directory
-// and name. A file that does not parse adds nothing: the compiler reports it.
+// addShapes adds the shape of each Test and Fuzz function of a file, and of each helper, keyed by
+// package directory and name. A file that does not parse adds nothing: the compiler reports it.
 func addShapes(shapes map[string]testShape, p string, src []byte) {
 	fset := token.NewFileSet()
 
@@ -188,13 +204,19 @@ func addShapes(shapes map[string]testShape, p string, src []byte) {
 
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Recv != nil || fn.Body == nil || !isTestName(fn.Name.Name) {
+		if !ok || fn.Recv != nil || fn.Body == nil {
 			continue
 		}
 
-		shape := testShape{path: p, line: fset.Position(fn.Pos()).Line}
 		testers := map[string]bool{}
 		addTesters(testers, fn.Type)
+
+		test := isTestName(fn.Name.Name)
+		if !test && len(testers) == 0 {
+			continue
+		}
+
+		shape := testShape{path: p, line: fset.Position(fn.Pos()).Line, helper: !test}
 		ast.Inspect(fn.Body, func(n ast.Node) bool {
 			if lit, ok := n.(*ast.FuncLit); ok {
 				addTesters(testers, lit.Type)
@@ -276,15 +298,20 @@ func countMethod(shape *testShape, sel *ast.SelectorExpr, testers map[string]boo
 	return true
 }
 
-// addTesters adds the names of a function's *testing.T and *testing.F parameters.
+// addTesters adds the names of a function's *testing.T, *testing.F and testing.TB parameters.
 func addTesters(testers map[string]bool, fn *ast.FuncType) {
 	for _, field := range fn.Params.List {
-		star, ok := field.Type.(*ast.StarExpr)
+		typ, pointer := field.Type, false
+		if star, ok := typ.(*ast.StarExpr); ok {
+			typ, pointer = star.X, true
+		}
+
+		sel, ok := typ.(*ast.SelectorExpr)
 		if !ok {
 			continue
 		}
 
-		if sel, ok := star.X.(*ast.SelectorExpr); ok && (sel.Sel.Name == "T" || sel.Sel.Name == "F") {
+		if (pointer && (sel.Sel.Name == "T" || sel.Sel.Name == "F")) || (!pointer && sel.Sel.Name == "TB") {
 			for _, name := range field.Names {
 				testers[name.Name] = true
 			}

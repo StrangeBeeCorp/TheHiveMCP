@@ -320,10 +320,11 @@ func (e env) builtin(ctx context.Context, name string) ([]string, error) {
 }
 
 // integrity compares the changed tests with those at the merge base, where the changed paths are
-// counted from; with no base there is nothing to compare.
+// counted from. A run with no base to compare with (--all, a push to main, no origin/main) has no
+// test to compare: its gate is SKIPPED, not passed.
 func (e env) integrity(ctx context.Context, tree checks.Tree, limits checks.IntegrityLimits) ([]checks.Finding, error) {
 	if e.base == "" {
-		return nil, nil
+		return nil, fmt.Errorf("%w: no base to compare with, so no changed test to compare", runner.ErrSkipped)
 	}
 
 	base := gitx.MergeBase(ctx, e.root, e.base)
@@ -359,11 +360,12 @@ func dockerUp(ctx context.Context) bool {
 }
 
 func (e env) check(ctx context.Context, args []string, out io.Writer) error {
-	if len(args) == 0 || !isBuiltin(args[0]) || (len(args) > 1 && args[0] != builtinChangelog) {
+	since := len(args) > 0 && (args[0] == builtinChangelog || args[0] == builtinIntegrity)
+	if len(args) == 0 || !isBuiltin(args[0]) || (len(args) > 1 && !since) {
 		return usageError{"usage: harness check structure|public-safety|docs|go-source|branch|spec|changelog|integrity [--base REF]"}
 	}
 
-	if args[0] == builtinChangelog {
+	if since {
 		var err error
 
 		e, err = e.changeSet(ctx, args[1:])

@@ -35,8 +35,9 @@
 
 ## What the pr gates hold the tests to
 
-- **Integrity:** a changed test may not be removed, skip, or lose assertions or table cases (a helper given `t` counts as one). A person who accepts it adds
-  `path_test.go:TestName: why` to `integrity.allow` in `gates/limits.yaml`. Assertions inside a helper's own body are not counted.
+- **Integrity:** a changed test may not be removed, skip, or lose assertions or table cases (a helper given `t` counts as one), and a helper that takes `t` may
+  not lose its own checks or gain a skip while it is kept. A test file may not leave CI's build (linux/amd64, no cgo) by its build constraint or its name
+  (`_windows_test.go`, a leading `_`). A person who accepts it adds `path_test.go:TestName: why` (or `:build`) to `integrity.allow` in `gates/limits.yaml`.
 - **Coverage:** each package keeps the unit-test coverage floor of `gates/coverage.yaml`. Test the code you add; raise a floor when its package gains tests.
 - **Mutation:** a changed package with a floor in `gates/mutation.yaml` must kill that share of gremlins' mutants (`bin/harness mutation`). A mutant that lives
   is a behaviour no test pins: the gate names the lines, and gremlins' report is in `.cache/harness/mutation/`.

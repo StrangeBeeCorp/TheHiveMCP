@@ -27,8 +27,8 @@ const (
 var errOverBudget = errors.New("over budget")
 
 // bench runs the benchmarks of gates/bench.yaml at the merge base and at HEAD, on this machine,
-// and holds HEAD's to the budgets there (the bench gate). The base runs in a scratch worktree
-// through this checkout's Makefile: the base's own may lack the go target.
+// and holds HEAD's to the budgets there (the bench gate). The base runs in a scratch worktree,
+// mounted into this checkout's make go: the base's own Makefile may lack the go target.
 func (e env) bench(ctx context.Context, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("bench", flag.ContinueOnError)
 	base := fs.String("base", os.Getenv("HARNESS_BASE"), "compare with the merge base of this ref and HEAD (default origin/main; $HARNESS_BASE)")
@@ -101,10 +101,9 @@ func (e env) baseBench(ctx context.Context, base string, budgets bench.Budgets, 
 	return results
 }
 
-// runBench runs the benchmarks in dir, in the pinned Go image, through this checkout's Makefile.
+// runBench runs the benchmarks of the checkout dir in the pinned Go image.
 func (e env) runBench(ctx context.Context, dir string, b bench.Budgets) (map[string]bench.Result, error) {
-	cmd := exec.CommandContext(ctx, "make", "-f", filepath.Join(e.root, "Makefile"), "go", "CMD="+strings.Join(b.Args(), " ")) // #nosec G204 -- this checkout's Makefile; the arguments come from the reviewed budgets file
-	cmd.Dir = dir
+	cmd := benchCommand(ctx, e.root, dir, b)
 
 	var output bytes.Buffer
 
@@ -116,4 +115,14 @@ func (e env) runBench(ctx context.Context, dir string, b bench.Budgets) (map[str
 	}
 
 	return bench.Parse(output.String()), nil
+}
+
+// benchCommand is `make go` run in this checkout, root, so that its Makefile finds the files it
+// includes (scripts/harness.mk, which has the go target), with the checkout dir mounted as the
+// one to run in: the base's own Makefile may lack the target, or the include.
+func benchCommand(ctx context.Context, root, dir string, b bench.Budgets) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "make", "--no-print-directory", "go", "CMD="+strings.Join(b.Args(), " "), "MOUNT_APP="+dir+":/app") // #nosec G204 G702 -- this checkout's Makefile; the arguments come from the reviewed budgets file, and dir is a scratch checkout the harness made
+	cmd.Dir = root
+
+	return cmd
 }

@@ -9,7 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
+	"strings"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/policy"
 )
@@ -25,7 +27,7 @@ type move struct{ from, to string }
 
 // unseal moves the Tester's sealed tests of a ticket, .claude/sealed/<ticket>/<path>, to <path>
 // in the checkout: the end of the duel, when the Coder may see them. Nothing moves unless all can:
-// each must be a test, and none may replace a file.
+// each must be a test, none may replace a file, and a move that fails puts the ones before it back.
 func (e env) unseal(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("unseal", flag.ContinueOnError)
 	ticket := fs.String("ticket", "", "the ticket whose sealed tests to move into the code (DL-1234)")
@@ -46,6 +48,8 @@ func (e env) unseal(args []string, out io.Writer) error {
 		return err
 	}
 
+	var moved []move
+
 	for _, m := range moves {
 		err = os.MkdirAll(filepath.Dir(m.to), dirPerm)
 		if err == nil {
@@ -53,9 +57,13 @@ func (e env) unseal(args []string, out io.Writer) error {
 		}
 
 		if err != nil {
-			return fmt.Errorf("move %s: %w", m.from, err)
+			return fmt.Errorf("move %s: %w%s", m.from, err, putBack(moved))
 		}
 
+		moved = append(moved, m)
+	}
+
+	for _, m := range moves {
 		rel, _ := filepath.Rel(e.root, m.to)
 		_, _ = fmt.Fprintln(out, "unsealed", rel)
 	}
@@ -110,6 +118,24 @@ func unsealPlan(dir, root string) ([]move, error) {
 	sort.Slice(moves, func(i, j int) bool { return moves[i].to < moves[j].to })
 
 	return moves, nil
+}
+
+// putBack moves the sealed tests already in the code back under the sealed directory, the last
+// first, and names those it could not.
+func putBack(moved []move) string {
+	var stuck []string
+
+	for _, m := range slices.Backward(moved) {
+		if os.Rename(m.to, m.from) != nil {
+			stuck = append(stuck, m.to)
+		}
+	}
+
+	if len(stuck) == 0 {
+		return ""
+	}
+
+	return "; these stayed in the code: " + strings.Join(stuck, ", ")
 }
 
 func exists(p string) bool {

@@ -66,6 +66,9 @@ const sealable = /^[A-Z][A-Z0-9]*-[0-9]+$/.test(ticket)
 const sealing = sealable
   ? `\nAlso seal one to three tests the Coder will not see until the end: the cases an honest implementation of the task passes and one shaped to the visible tests would not. Write each under .claude/sealed/${ticket}/ at the path it will have in the repository (.claude/sealed/${ticket}/internal/tools/search/sealed_test.go), as a new file, and list them in sealed.`
   : ''
+// With a ticket key the Tester's first answer must list its sealed tests, even none: the unseal
+// phase runs for the listed ones, and an unlisted sealed test would never run.
+const FIRST = sealable ? { ...TESTS, required: [...TESTS.required, 'sealed'] } : TESTS
 
 const UNSEALED = {
   type: 'object',
@@ -79,7 +82,7 @@ const UNSEALED = {
 phase('Tests first')
 let tests = await agent(
   `${header}\nWrite the failing tests that prove this task, before any code exists. Check that each fails for the reason the task gives, and that the older tests still pass.${sealing}`,
-  { agentType: 'tester', label: 'tester: tests first', schema: TESTS },
+  { agentType: 'tester', label: 'tester: tests first', schema: FIRST },
 )
 if (!tests || tests.tests.length === 0) {
   return { ticket, outcome: 'no tests', note: 'the Tester wrote no failing test: the task may already be done, or be unclear', tests }

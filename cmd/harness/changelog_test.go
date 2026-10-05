@@ -124,5 +124,5 @@ func TestTheChangelogGateJudgesOnlyAChangeWithABase(t *testing.T) {
 	_, err = harness(t, "check", "spec", "--base", "main")
 
 	var usage usageError
-	require.ErrorAs(t, err, &usage, "only the changelog check takes a base")
+	require.ErrorAs(t, err, &usage, "only the changelog and integrity checks take a base")
 }
