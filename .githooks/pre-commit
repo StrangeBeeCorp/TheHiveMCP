@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The commit gates of gates/registry.yaml, judged on exactly what the commit carries: the staged
-# files select the gates, scripts/lint.sh runs on them (--staged, as before), and the structure,
+# files select the gates, the lint gate runs on them (bin/harness lint --staged), and the structure,
 # public-safety and docs checks read the index, not the working tree. Unrelated work in progress
 # can't fail the commit.
 # Bypassable with `git commit --no-verify`.

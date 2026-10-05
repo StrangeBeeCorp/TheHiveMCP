@@ -72,6 +72,15 @@
     },
     {
       "customType": "regex",
+      "description": "Track the linter and formatter images pinned in the harness (internal/harness/lint/images.go), with the testcontainer helpers' string-literal match: a digest-only pin stays as it is.",
+      "managerFilePatterns": ["/^internal/harness/lint/images\\.go$/"],
+      "matchStrings": [
+        "\"(?<depName>(?:[a-z0-9]+(?:[._-][a-z0-9]+)*/)*[a-z0-9]+(?:[._-][a-z0-9]+)*):(?<currentValue>[a-zA-Z0-9][a-zA-Z0-9._-]*)(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
       "description": "Track the Docker build image pinned in the Makefile (e.g. GO_IMAGE := golang:1.26.x-alpine)",
       "managerFilePatterns": ["/^Makefile$/"],
       "matchStrings": [

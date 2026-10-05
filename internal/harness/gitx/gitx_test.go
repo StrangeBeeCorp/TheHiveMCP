@@ -14,6 +14,7 @@ import (
 const (
 	docA   = "docs/a.md"
 	goFile = "internal/x.go"
+	newDoc = "new.md"
 )
 
 // base is a repository whose main branch has a doc, a Go file and an ignore rule, with a work
@@ -77,6 +78,44 @@ func TestChangedSinceComparesWithTheMergeBase(t *testing.T) {
 	assert.Empty(t, changed)
 }
 
+// The work not committed yet is the edited, the staged and the new files, not the ignored ones.
+func TestUncommittedListsTheWorkNotCommittedYet(t *testing.T) {
+	t.Parallel()
+
+	dir, _ := base(t)
+	gittest.Write(t, dir, map[string]string{docA: "# edited\n", "staged.md": "# s\n", newDoc: "# n\n", "run.log": "noise\n"})
+	gittest.Git(t, dir, "add", "staged.md")
+
+	got, err := gitx.Uncommitted(t.Context(), dir)
+	require.NoError(t, err)
+	assert.Equal(t, []string{docA, newDoc, "staged.md"}, got)
+}
+
+// A commit's files are its change against its first parent: a merge's are what it brought in,
+// and the root commit's every file it added.
+func TestCommittedListsACommitsFilesAgainstItsFirstParent(t *testing.T) {
+	t.Parallel()
+
+	dir, _ := base(t)
+
+	root, err := gitx.Committed(t.Context(), dir, "HEAD")
+	require.NoError(t, err)
+	assert.Equal(t, []string{ignoreRules, docA, goFile}, root, "the root commit")
+
+	gittest.Write(t, dir, map[string]string{"work.md": "# w\n"})
+	gittest.Git(t, dir, "add", "work.md")
+	gittest.Commit(t, dir)
+	gittest.Git(t, dir, "checkout", "-q", "main")
+	gittest.Write(t, dir, map[string]string{"main.md": "# m\n"})
+	gittest.Git(t, dir, "add", "main.md")
+	gittest.Commit(t, dir)
+	gittest.Git(t, dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "merge", "-q", "--no-ff", "--no-edit", "work")
+
+	merged, err := gitx.Committed(t.Context(), dir, "HEAD")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"work.md"}, merged, "what the merge brought into main")
+}
+
 // The pre-commit hook judges what the commit carries: the staged paths and the staged content,
 // whatever the working tree holds.
 func TestStagedAndIndexDescribeTheNextCommit(t *testing.T) {
@@ -103,11 +142,11 @@ func TestFilesListsTrackedAndNewFilesButNotIgnoredOnes(t *testing.T) {
 	t.Parallel()
 
 	dir, _ := base(t)
-	gittest.Write(t, dir, map[string]string{"new.md": "x\n", "debug.log": "x\n"})
+	gittest.Write(t, dir, map[string]string{newDoc: "x\n", "debug.log": "x\n"})
 
 	files, err := gitx.Files(t.Context(), dir)
 	require.NoError(t, err)
-	assert.Equal(t, []string{".gitignore", docA, goFile, "new.md"}, files)
+	assert.Equal(t, []string{".gitignore", docA, goFile, newDoc}, files)
 }
 
 func TestRootHeadAndHasRef(t *testing.T) {

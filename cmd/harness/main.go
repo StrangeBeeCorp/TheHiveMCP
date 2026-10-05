@@ -13,6 +13,8 @@
 //	harness review-effort [--base REF]
 //	harness canaries [--id ID]... [--integration]
 //	harness structure [--top N] [--json]  (the largest files and fullest directories against the limits)
+//	harness lint [--all | --staged | --changed [COMMIT] | PATH...] [--check | --fix]  (the pinned linters; check by default)
+//	harness fmt [--all | --staged | --changed [COMMIT] | PATH...] [--check | --fix]  (the pinned formatters; fix by default)
 package main
 
 import (
@@ -157,7 +159,7 @@ func stagedRun(args []string) bool {
 
 func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer) error {
 	if len(args) == 0 {
-		return usageError{"usage: harness run|select|list|check|docs|hook|pr|push|evidence|review-effort|canaries|structure (see cmd/harness/main.go)"}
+		return usageError{"usage: harness run|select|list|check|docs|hook|pr|push|evidence|review-effort|canaries|structure|lint|fmt (see cmd/harness/main.go)"}
 	}
 
 	e, err := load(ctx, stagedRun(args))
@@ -165,34 +167,29 @@ func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer
 		return err
 	}
 
-	switch args[0] {
-	case cmdRun:
-		return e.run(ctx, args[1:], out)
-	case cmdSelect:
-		return e.selectCmd(ctx, args[1:], out)
-	case "list":
-		return e.list(args[1:], out)
-	case "check":
-		return e.check(ctx, args[1:], out)
-	case "docs":
-		return e.docs(args[1:], out)
-	case "hook":
-		return e.hook(ctx, args[1:], stdin, out)
-	case "push":
-		return e.push(ctx, args[1:], out)
-	case "canaries":
-		return e.canaries(ctx, args[1:], out)
-	case "pr":
-		return e.pr(ctx, args[1:], out)
-	case "evidence":
-		return e.showEvidence(ctx, args[1:], out)
-	case builtinStructure:
-		return e.structure(ctx, args[1:], out)
-	case "review-effort":
-		return e.reviewEffort(ctx, args[1:], out)
-	default:
+	commands := map[string]func(context.Context, []string, io.Writer) error{
+		cmdRun:           e.run,
+		cmdSelect:        e.selectCmd,
+		"list":           func(_ context.Context, a []string, w io.Writer) error { return e.list(a, w) },
+		"check":          e.check,
+		"docs":           func(_ context.Context, a []string, w io.Writer) error { return e.docs(a, w) },
+		"hook":           func(ctx context.Context, a []string, w io.Writer) error { return e.hook(ctx, a, stdin, w) },
+		"push":           e.push,
+		"canaries":       e.canaries,
+		"pr":             e.pr,
+		"evidence":       e.showEvidence,
+		builtinStructure: e.structure,
+		cmdLint:          e.lint,
+		cmdFmt:           e.fmtCmd,
+		"review-effort":  e.reviewEffort,
+	}
+
+	command, ok := commands[args[0]]
+	if !ok {
 		return usageError{fmt.Sprintf("unknown command %q", args[0])}
 	}
+
+	return command(ctx, args[1:], out)
 }
 
 // The commands that select gates from the changed paths.

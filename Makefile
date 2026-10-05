@@ -123,7 +123,7 @@ lint-makefile: ## Check the Makefile's syntax and hygiene (checkmake) ##@ make l
 	@echo $(BGreen)----------------------$(Color_Off)
 	@make --dry-run -n all > /dev/null || exit 1
 	@echo "Syntax OK"
-	@./scripts/lint-makefile.sh Makefile scripts/harness.mk || exit 1
+	@bin/harness lint Makefile scripts/harness.mk || exit 1
 	@echo "checkmake OK"
 
 .PHONY: fmt
@@ -131,7 +131,7 @@ fmt: ## Auto-format the whole repo (Go, shell, markdown) before committing ##@ m
 	@echo $(BGreen)-------------$(Color_Off)
 	@echo $(BGreen)--- Format --$(Color_Off)
 	@echo $(BGreen)-------------$(Color_Off)
-	./scripts/fmt.sh --all --fix
+	bin/harness fmt --all
 
 # Help system. Each documented target carries a `## <purpose>` comment and an
 # optional `##@ <usage>` marker on the same line, e.g.
@@ -438,14 +438,14 @@ lint: ## Check the whole repo for lint issues, read-only ##@ make lint
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Linter Checks --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
-	./scripts/lint.sh --all --check
+	bin/harness lint --all
 
 .PHONY: lint-fix
 lint-fix: ## Auto-apply safe lint fixes across the whole repo ##@ make lint-fix
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Linter Checks with auto-fix --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
-	./scripts/lint.sh --all --fix
+	bin/harness lint --all --fix
 
 .PHONY: updatedep
 updatedep: ## Upgrade Go deps to latest and tidy go.mod/go.sum ##@ make updatedep

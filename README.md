@@ -550,9 +550,10 @@ compatibility break at either end fails the PR. The image is a single source of 
 
 **Quality and security:**
 
-- `make fmt` - Format code using Docker (`scripts/fmt.sh`: gofmt, golangci fmt, shfmt, markdownlint, prettier)
-- `make lint` - Read-only lint over every tracked file (`scripts/lint.sh`: golangci-lint, `go test -short`, shellcheck/shfmt, markdownlint, lychee, yamllint,
-  hadolint, checkmake, actionlint); `make lint-fix` applies the safe fixes
+- `make fmt` - Format code in Docker (`bin/harness fmt`: gofmt, golangci fmt, shfmt, markdownlint, prettier); `bin/harness fmt --check` lists what it would
+  rewrite
+- `make lint` - Read-only lint over every file (`bin/harness lint`: golangci-lint, `go test -short`, shellcheck/shfmt, markdownlint, lychee, yamllint, hadolint,
+  checkmake, actionlint); `make lint-fix` applies the safe fixes
 - `make sast`, `make vulncheck`, `make dockerlint`, `make dockersec`, `make secrets` - The security checks one by one; their gates run them at pr and in CI
 
 **The harness:**

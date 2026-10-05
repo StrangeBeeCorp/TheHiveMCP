@@ -25,7 +25,6 @@ structure:
     internal/resources/static_resources.go: 891
     bootstrap/tool_schema_test.go: 718
     internal/resources/dynamic_resources.go: 695
-    scripts/lint.sh: 675
     internal/utils/parsers.go: 635
     internal/tools/manage/models.go: 603
     Makefile: 555

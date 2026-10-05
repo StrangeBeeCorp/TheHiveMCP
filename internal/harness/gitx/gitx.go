@@ -14,6 +14,17 @@ import (
 	"strings"
 )
 
+// nameOnly lists paths, not changes, and noRenames lists both paths of a rename.
+const (
+	nameOnly  = "--name-only"
+	noRenames = "--no-renames"
+)
+
+// diffNames is a git diff that lists the paths it changes, NUL-separated.
+func diffNames(args ...string) []string {
+	return append([]string{"diff", "-z", nameOnly, noRenames}, args...)
+}
+
 func run(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...) // #nosec G204 -- fixed git subcommands; only refs and paths vary
 	cmd.Dir = dir
@@ -79,7 +90,7 @@ func Files(ctx context.Context, root string) ([]string, error) {
 
 // Staged lists the paths the next commit changes, deletions included, and both paths of a rename.
 func Staged(ctx context.Context, root string) ([]string, error) {
-	out, err := run(ctx, root, "diff", "-z", "--cached", "--name-only", "--no-renames")
+	out, err := run(ctx, root, diffNames("--cached")...)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +107,7 @@ func ChangedSince(ctx context.Context, root, base string) ([]string, error) {
 		return nil, err
 	}
 
-	diff, err := run(ctx, root, "diff", "-z", "--name-only", "--no-renames", strings.TrimSpace(mb))
+	diff, err := run(ctx, root, diffNames(strings.TrimSpace(mb))...)
 	if err != nil {
 		return nil, err
 	}
@@ -107,6 +118,43 @@ func ChangedSince(ctx context.Context, root, base string) ([]string, error) {
 	}
 
 	return split(diff, untracked), nil
+}
+
+// Uncommitted lists the paths the working tree and the index change against HEAD, and the
+// untracked files that are not ignored: the work not committed yet.
+func Uncommitted(ctx context.Context, root string) ([]string, error) {
+	var outs []string
+
+	for _, args := range [][]string{
+		diffNames(),
+		diffNames("--cached"),
+		{"ls-files", "-z", "--others", "--exclude-standard"},
+	} {
+		out, err := run(ctx, root, args...)
+		if err != nil {
+			return nil, err
+		}
+
+		outs = append(outs, out)
+	}
+
+	return split(outs...), nil
+}
+
+// Committed lists the paths a commit changed against its first parent: a merge's are what it
+// brought in, a root commit's every file it added.
+func Committed(ctx context.Context, root, rev string) ([]string, error) {
+	args := []string{"diff-tree", "-z", "-r", nameOnly, noRenames, "--no-commit-id", "--root", rev}
+	if parent := Resolve(ctx, root, rev+"^1"); parent != "" {
+		args = diffNames(parent, rev)
+	}
+
+	out, err := run(ctx, root, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	return split(out), nil
 }
 
 // Indexed is a file as the index holds it: what the next commit carries.

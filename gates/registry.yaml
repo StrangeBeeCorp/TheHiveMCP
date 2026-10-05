@@ -55,9 +55,6 @@ suites:
       - .github/**
       - Makefile
       - scripts/harness.mk
-      - scripts/lint.sh
-      - scripts/fmt.sh
-      - scripts/lint-makefile.sh
       - .golangci.yml
       - .markdownlint.jsonc
       - .prettierrc.json
@@ -251,7 +248,7 @@ gates:
       hides a cut (TRN-001), or t.Parallel in an integration test
 
   - id: fmt
-    runs: ./scripts/fmt.sh {scope} --check
+    runs: bin/harness fmt {scope} --check
     docker: true
     cadence: [stop, pr, ci]
     suites: ["*"]
@@ -260,14 +257,14 @@ gates:
     blocks: a Go, shell or Markdown file that its formatter would rewrite
 
   - id: lint
-    runs: ./scripts/lint.sh {scope} --check
+    runs: bin/harness lint {scope}
     docker: true
     cadence: [stop, commit, pr, ci]
     suites: ["*"]
     budget_s: 900
     blocks: >-
       a finding of golangci-lint, shellcheck, markdownlint, yamllint, hadolint, checkmake or
-      actionlint, or a failing unit test (lint.sh runs go test -short when Go files are in scope)
+      actionlint, or a failing unit test (the gate runs go test -short when Go files are in scope)
 
   - id: workflows
     runs: make test-workflows
