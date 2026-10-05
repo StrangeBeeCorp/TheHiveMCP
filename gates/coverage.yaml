@@ -8,10 +8,10 @@
 
 floors:
   bootstrap: 72
-  cmd/harness: 70
-  internal/analyzers: 94
+  cmd/harness: 71
+  internal/analyzers: 95
   internal/harness/bench: 96
-  internal/harness/checks: 91
+  internal/harness/checks: 92
   internal/harness/coverage: 91
   internal/harness/evidence: 89
   internal/harness/gatesdoc: 56
