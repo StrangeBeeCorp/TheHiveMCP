@@ -198,16 +198,20 @@ func TestOrdinaryWorkIsNotInTheWay(t *testing.T) {
 func TestOnlyTheSessionOrAnotherAgentShips(t *testing.T) {
 	t.Parallel()
 
-	const harness = "bin/harness "
+	const harness, makePR = "bin/harness ", "make pr"
+
+	ships := []string{makePR, makePR + " FORCE=1", harness + "pr"}
 
 	for _, role := range []policy.Role{policy.Tester, policy.Coder, policy.Reviewer} {
-		for _, line := range []string{"make pr", "make pr FORCE=1", harness + "pr", harness + "push"} {
+		for _, line := range append(ships, harness+"push") {
 			assert.True(t, bash(role, line).Deny, "%s: %s", role, line)
 		}
 	}
 
 	for _, role := range []policy.Role{policy.Main, policy.Other} {
-		assert.False(t, bash(role, "make pr").Deny, "%s ships through make pr", role)
+		for _, line := range ships {
+			assert.False(t, bash(role, line).Deny, "%s ships through %s", role, line)
+		}
 	}
 }
 
