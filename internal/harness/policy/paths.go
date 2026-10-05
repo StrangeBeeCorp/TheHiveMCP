@@ -53,6 +53,7 @@ var protected = []struct {
 	{"CLAUDE.md", HarnessPolicy},
 	{"Makefile", HarnessPolicy},
 	{"scripts/harness.mk", HarnessPolicy},
+	{"scripts/release.mk", HarnessPolicy},
 	{"gates/**", Gates},
 	{".golangci.yml", Gates},
 	{".markdownlint.jsonc", Gates},

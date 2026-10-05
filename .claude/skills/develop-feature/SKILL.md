@@ -9,16 +9,16 @@ description:
 
 ## Where things live
 
-| Area                 | Path                                                                          | Notes                                                                                                                                                                    |
-| -------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Server wiring        | `bootstrap/server.go`                                                         | `RegisterToolsToMCPServer` registers every tool and resource                                                                                                             |
-| Transports, auth     | `bootstrap/{stdio,http,inprocess,allowlist}.go`                               | `AuthMiddleware` is in `inprocess.go`                                                                                                                                    |
-| One tool             | `internal/tools/<tool>/`                                                      | `definition.go` (schema, annotation), `models.go` (params, results, the `*ToolDescription` text the model reads), `handler.go`, `validation.go`                          |
-| Shared tool code     | `internal/tools/{tool,middlewares,schema,union_schema,annotations,errors}.go` | `WithValidation` runs `ValidateParams` then `ValidatePermissions` before `Handle`                                                                                        |
-| Resources            | `internal/resources/`                                                         | Embedded `facts/*.txt`, `rules/*.txt`, `schemas/<entity>/{Create,Output,Update}*.json`, `internal/resources/docs/filter-dsl.md`. All hand-written, all read by the model |
-| Permissions          | `internal/permissions/`                                                       | Default profile `embedded/default_permissions.yaml` (read-only). Examples in `docs/reference/permissions-examples/`                                                      |
-| Config keys          | `internal/types/constants.go`, `options.go`                                   | Flags override env vars                                                                                                                                                  |
-| Wrapping and parsing | `internal/utils/parsers.go`                                                   | The `[UNTRUSTED_DATA]` boundary                                                                                                                                          |
+| Area                 | Path                                                                          | Notes                                                                                                                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Server wiring        | `bootstrap/server.go`                                                         | `RegisterToolsToMCPServer` registers every tool and resource                                                                                                                              |
+| Transports, auth     | `bootstrap/{stdio,http,inprocess,allowlist}.go`                               | `AuthMiddleware` is in `inprocess.go`                                                                                                                                                     |
+| One tool             | `internal/tools/<tool>/`                                                      | `definition.go` (schema, annotation), `models.go` (params, results, the `*ToolDescription` text the model reads; manage keeps its results in `results.go`), `handler.go`, `validation.go` |
+| Shared tool code     | `internal/tools/{tool,middlewares,schema,union_schema,annotations,errors}.go` | `WithValidation` runs `ValidateParams` then `ValidatePermissions` before `Handle`                                                                                                         |
+| Resources            | `internal/resources/`                                                         | Embedded `facts/*.txt`, `rules/*.txt`, `schemas/<entity>/{Create,Output,Update}*.json`, `internal/resources/docs/filter-dsl.md`. All hand-written, all read by the model                  |
+| Permissions          | `internal/permissions/`                                                       | Default profile `embedded/default_permissions.yaml` (read-only). Examples in `docs/reference/permissions-examples/`                                                                       |
+| Config keys          | `internal/types/constants.go`, `options.go`                                   | Flags override env vars                                                                                                                                                                   |
+| Wrapping and parsing | `internal/utils/parsers.go`                                                   | The `[UNTRUSTED_DATA]` boundary; `dates.go` and `fields.go` hold the date conversion and the JSON helpers it walks with                                                                   |
 
 ## Workflow
 
@@ -32,7 +32,8 @@ description:
    until it finds nothing more. The hooks keep each to its files, and every stop runs `make check-fast`. Review what they did, then commit. Read the reference
    that matches the change first:
    - adding a tool, an operation or a parameter → `references/tool-anatomy.md`
-   - a new response field, an error that quotes entity data, or any edit to `internal/utils/parsers.go` → `references/untrusted-data.md`
+   - a new response field, an error that quotes entity data, or any edit to `internal/utils/parsers.go`, `dates.go` or `fields.go` →
+     `references/untrusted-data.md`
    - any test → `references/testing.md`
 4. **Test.** Use `make check-fast` while you iterate: it runs the gates your branch's changed paths select (`docs/reference/gates.md`); lint and the unit tests
    cover the uncommitted files and the last commit's, and `make pr` and CI run them on everything. Run `make test-integration RUN=<regexp>` for anything that

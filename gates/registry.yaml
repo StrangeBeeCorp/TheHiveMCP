@@ -55,6 +55,7 @@ suites:
       - .github/**
       - Makefile
       - scripts/harness.mk
+      - scripts/release.mk
       - .golangci.yml
       - .markdownlint.jsonc
       - .prettierrc.json
@@ -69,6 +70,7 @@ suites:
     paths:
       - internal/tools/*/definition.go
       - internal/tools/*/models.go
+      - internal/tools/*/results.go
       - internal/tools/schema.go
       - internal/tools/union_schema.go
       - internal/tools/annotations.go
@@ -82,6 +84,8 @@ suites:
     implies: [tools]
     paths:
       - internal/utils/parsers.go
+      - internal/utils/dates.go
+      - internal/utils/fields.go
       - internal/permissions/**
       - internal/auth/**
       - bootstrap/allowlist.go

@@ -24,6 +24,7 @@
 /CLAUDE.md                                               @jean-collette_stb @antoine-salesse_stb
 /Makefile                                                @jean-collette_stb @antoine-salesse_stb
 /scripts/harness.mk                                      @jean-collette_stb @antoine-salesse_stb
+/scripts/release.mk                                      @jean-collette_stb @antoine-salesse_stb
 /.golangci.yml                                           @jean-collette_stb @antoine-salesse_stb
 /.markdownlint.jsonc                                     @jean-collette_stb @antoine-salesse_stb
 /.prettierrc.json                                        @jean-collette_stb @antoine-salesse_stb

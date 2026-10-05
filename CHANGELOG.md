@@ -28,6 +28,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The warning for a date field that holds no timestamp no longer logs the field's value.** It logged the value, which can be entity data and so untrusted, and
+  whenever the server returned an output schema it wrote out each date property's whole schema object. It now names the field and the value's type.
 - **The MITRE ATT&CK catalog is no longer fenced as untrusted data.** A `search-entities` query on `entity-type: pattern` used to return its technique name and
   platform list wrapped in `[UNTRUSTED_DATA]` tags, although a pattern is reference data imported by an administrator, not case material — the trust boundary
   already treats the catalog as trusted, which is why `patternId`, `tactic` and `tactics` were exempt. The fence classifies by field _name_, and a pattern's

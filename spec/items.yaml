@@ -29,7 +29,7 @@ items:
     tests:
       - internal/tools/search/pagination_test.go:TestNewSearchEntitiesResult_Pagination
       - internal/resources/worker_page_test.go:TestNewWorkerPageReportsTruncation
-      - internal/tools/search/search_test.go:TestSearchPagesThroughResultsWithHasMore
+      - internal/tools/search/search_catalog_test.go:TestSearchPagesThroughResultsWithHasMore
     gates: [analyzers]
 
   - id: UNT-001
@@ -77,7 +77,7 @@ items:
     tests:
       - bootstrap/tool_schema_test.go:TestToolSchemas_AdvertiseTheirParameters
       - bootstrap/tool_schema_test.go:TestToolSchemas_EnumerationsSurviveInference
-      - bootstrap/tool_schema_test.go:TestSearchEntityTypes_AdvertisedEnumMatchesValidation
+      - bootstrap/tool_constraints_test.go:TestSearchEntityTypes_AdvertisedEnumMatchesValidation
 
   - id: SCH-002
     title: Output conforms to the advertised output schema
