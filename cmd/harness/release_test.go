@@ -72,10 +72,13 @@ func fakePacker(t *testing.T, exit int) *[][]string {
 func TestPackageTarballsThroughTheHarness(t *testing.T) {
 	dir := releaseRepo(t)
 
-	out, err := harness(t, cmdPackage, "tarballs", "--version", "v9.9.9", "--targets", "linux-amd64")
+	out, err := harness(t, cmdPackage, "tarballs", "--version", "v9.9.9", "--dist", "./dist", "--targets", "linux-amd64")
 	require.NoError(t, err)
-	assert.Contains(t, out, "thehivemcp-v9.9.9-linux-amd64.tar.gz (+ .sha256)")
-	assert.FileExists(t, filepath.Join(dir, "dist", "thehivemcp-v9.9.9-linux-amd64.tar.gz.sha256"))
+	assert.Equal(t, "./dist/thehivemcp-v9.9.9-linux-amd64.tar.gz (+ .sha256)\n", out)
+
+	checksum, err := os.ReadFile(filepath.Join(dir, "dist", "thehivemcp-v9.9.9-linux-amd64.tar.gz.sha256")) // #nosec G304 -- the test's own dist
+	require.NoError(t, err)
+	assert.True(t, strings.HasSuffix(string(checksum), "  ./dist/thehivemcp-v9.9.9-linux-amd64.tar.gz\n"), "as shasum printed it: %s", checksum)
 
 	var usage usageError
 
@@ -104,6 +107,16 @@ func TestPackageMCPBForThisMachineBundlesTheCheckoutsPermissions(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(bundle), `"default": "permissions.yaml"`)
 	assert.Contains(t, string(bundle), `"version": "9.9.9"`)
+
+	// A release's bundles start read-only, whatever the packing machine has in its environment.
+	t.Setenv("PERMISSIONS_CONFIG", "admin")
+
+	_, err = harness(t, cmdPackage, "mcpb", "--version", "v9.9.9", "--targets", "linux-amd64")
+	require.NoError(t, err)
+
+	bundle, err = os.ReadFile(filepath.Join(dir, "dist", "thehivemcp-v9.9.9-linux-amd64.mcpb")) // #nosec G304 -- the test's own dist
+	require.NoError(t, err)
+	assert.Contains(t, string(bundle), `"default": ""`)
 }
 
 func TestSignWindowsWithoutAProviderLeavesThemUnsigned(t *testing.T) {

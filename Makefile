@@ -303,23 +303,22 @@ endif
 THEHIVE_TEST_URL ?= http://localhost:9000
 export THEHIVE_TEST_URL
 
-# THEHIVE_TEST_IMAGE reaches the reset script (which derives the licensing tag
-# from it) and the go-test container; export it so both sub-shells see it.
+# THEHIVE_TEST_IMAGE reaches bin/harness integration, which derives the licensing tag
+# from it, and the go-test container.
 export THEHIVE_TEST_IMAGE
 
 # Integration mode is decided at run time by bin/harness integration (internal/harness/stack),
-# highest-priority first (see that script + the recipe below):
+# highest-priority first:
 #   1. THEHIVE_TEST_LICENSE set ⇒ use that token directly (no probe, no mint) ⇒
 #      parallel one-org-per-test. Supply it as a CI secret or a local export to
 #      get parallel mode without needing the licensing image to be pullable.
 #   2. else the StrangeBee licensing image is pullable ⇒ mint a dev license ⇒
 #      parallel one-org-per-test.
 #   3. else free license ⇒ sequential shared-org.
-# In cases 1-2 the script materialises the token to this file, which the recipe
-# reads to set THEHIVE_TEST_LICENSE and the go-test parallelism for the go-test
-# container. Export it so the reset script (a separate sub-shell) sees case 1.
+# In cases 1-2 it writes the token where the license override mounts it
+# (internal/testutils/testdata/.test-license.lic.local) and runs the suite in parallel.
+# Export THEHIVE_TEST_LICENSE so that it sees case 1.
 export THEHIVE_TEST_LICENSE
-LICENSE_FILE := internal/testutils/testdata/.test-license.lic.local
 
 .PHONY: test
 test: pre ## Default test loop: fast, cached unit tests (no live TheHive) ##@ make test [COVERAGE=1] [RUN=<regexp>]

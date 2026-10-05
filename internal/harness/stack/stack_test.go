@@ -125,6 +125,10 @@ func TestPrepareUsesASuppliedLicense(t *testing.T) {
 	assert.Equal(t, stack.Supplied, mode)
 	assert.Equal(t, "eyJ.supplied", token)
 	assert.Equal(t, "eyJ.supplied", d.license, "TheHive reads it at boot")
+
+	info, err := os.Stat(filepath.Join(d.root, licenseFile))
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o644), info.Mode().Perm(), "TheHive's user reads it through a read-only mount")
 	assert.Equal(t, withReset(licensed, licensed+up), d.calls)
 }
 

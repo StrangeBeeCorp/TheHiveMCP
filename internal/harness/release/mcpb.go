@@ -24,14 +24,21 @@ type Permissions struct {
 	Default string
 }
 
-// PermissionsFrom reads PERMISSIONS_CONFIG as the server does: a path to an existing file is
-// bundled, any other value is the default as it is.
-func PermissionsFrom(value string) Permissions {
-	if value != "" && value != "admin" && value != "read_only" {
-		info, err := os.Stat(value)
-		if err == nil && info.Mode().IsRegular() {
-			return Permissions{File: value, Default: bundledPermissions}
-		}
+// PermissionsFrom reads PERMISSIONS_CONFIG as the server does: a path to an existing file,
+// absolute or relative to root, is bundled; any other value is the default as it is.
+func PermissionsFrom(value, root string) Permissions {
+	if value == "" || value == "admin" || value == "read_only" {
+		return Permissions{Default: value}
+	}
+
+	path := value
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(root, path)
+	}
+
+	info, err := os.Stat(path)
+	if err == nil && info.Mode().IsRegular() {
+		return Permissions{File: path, Default: bundledPermissions}
 	}
 
 	return Permissions{Default: value}
@@ -85,7 +92,7 @@ func (x Extension) Write(dir string) error {
 		return err
 	}
 
-	return writeAtomic(filepath.Join(dir, "manifest.json"), func(w io.Writer) error {
+	return writeAtomic(filepath.Join(dir, "manifest.json"), filePerm, func(w io.Writer) error {
 		_, err := w.Write(manifest)
 		return err //nolint:wrapcheck // Write names the extension
 	})
@@ -153,7 +160,7 @@ func mcpb(ctx context.Context, run proc.Exec, o Options, target, icon string, pe
 
 	err = copyFile(filepath.Join(ws, packed), filepath.Join(o.Dist, name), filePerm)
 	if err == nil {
-		err = WriteChecksum(o.Dist, name)
+		err = WriteChecksum(o.Dist, o.distAs(), name)
 	}
 
 	return name, err
@@ -170,17 +177,17 @@ func PackArgv(workspace string, uid, gid int) []string {
 	}
 }
 
+// copyFile copies from to to, with mode, through writeAtomic.
 func copyFile(from, to string, mode os.FileMode) error {
 	data, err := os.ReadFile(from) // #nosec G304 -- the binary, icon or permissions file a release packs
 	if err != nil {
 		return fmt.Errorf("read %s: %w", from, err)
 	}
 
-	err = os.WriteFile(to, data, mode) // #nosec G306 G703 -- a workspace file of this run, packed into a public release artifact
-	if err == nil {
-		err = os.Chmod(to, mode) // WriteFile's mode is masked by the umask
-	}
-
+	err = writeAtomic(to, mode, func(w io.Writer) error {
+		_, err := w.Write(data)
+		return err //nolint:wrapcheck // copyFile names the file
+	})
 	if err != nil {
 		return fmt.Errorf("write %s: %w", to, err)
 	}

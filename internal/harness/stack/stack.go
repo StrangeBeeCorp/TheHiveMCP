@@ -203,15 +203,21 @@ func (s Stack) compose(mode Mode, args ...string) []string {
 	return append(argv, args...)
 }
 
+// licensePerm is world-readable: TheHive's container user reads the file through a read-only
+// mount, whoever owns it on the host. It holds a dev license, and git ignores it.
 const (
-	licensePerm = 0o600
+	licensePerm = 0o644
 	dirPerm     = 0o750
 )
 
 func writeLicense(path, token string) error {
 	err := os.MkdirAll(filepath.Dir(path), dirPerm)
 	if err == nil {
-		err = os.WriteFile(path, []byte(token), licensePerm)
+		err = os.WriteFile(path, []byte(token), licensePerm) // #nosec G306 -- read by the container's user; a gitignored dev license
+	}
+
+	if err == nil {
+		err = os.Chmod(path, licensePerm) // WriteFile's mode is masked by the umask
 	}
 
 	if err != nil {

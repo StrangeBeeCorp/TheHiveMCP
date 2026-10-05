@@ -45,7 +45,7 @@ func (e env) packageCmd(ctx context.Context, args []string, out io.Writer) error
 
 	o := release.Options{}
 	targets := fs.String("targets", "", "the GOOS-GOARCH targets, space-separated")
-	host := fs.Bool("host", false, "the one target of this machine (mcpb: and PERMISSIONS_CONFIG from the checkout's dotenv file)")
+	host := fs.Bool("host", false, "the one target of this machine (mcpb: with PERMISSIONS_CONFIG, from the environment or the checkout's dotenv file)")
 	fs.StringVar(&o.Version, "version", "v0.0.0", "the version in the package names")
 	fs.StringVar(&o.Build, "build", "build", "the directory of the built binaries")
 	fs.StringVar(&o.Dist, "dist", "dist", "the directory the packages go to")
@@ -60,6 +60,8 @@ func (e env) packageCmd(ctx context.Context, args []string, out io.Writer) error
 		o.Targets = []string{runtime.GOOS + "-" + runtime.GOARCH}
 	}
 
+	o.DistAs = o.Dist
+
 	for _, d := range []*string{&o.Build, &o.Dist} {
 		if !filepath.IsAbs(*d) {
 			*d = filepath.Join(e.root, *d)
@@ -68,7 +70,7 @@ func (e env) packageCmd(ctx context.Context, args []string, out io.Writer) error
 
 	written, err := e.pack(ctx, args[0], o, *host)
 	for _, w := range written {
-		_, _ = fmt.Fprintf(out, "%s/%s (+ .sha256)\n", o.Dist, w)
+		_, _ = fmt.Fprintf(out, "%s/%s (+ .sha256)\n", o.DistAs, w)
 	}
 
 	if err != nil {
@@ -83,20 +85,23 @@ func (e env) pack(ctx context.Context, kind string, o release.Options, host bool
 		return release.Tarballs(o) //nolint:wrapcheck // packageCmd wraps it
 	}
 
-	perms := os.Getenv("PERMISSIONS_CONFIG")
-	if perms == "" && host {
-		// A developer's checkout configures the server in its dotenv file, as the server reads it.
-		local, err := godotenv.Read(filepath.Join(e.root, ".env"))
-		if err == nil {
-			perms = local["PERMISSIONS_CONFIG"]
+	// A release's bundles start read-only: only this machine's bundle, a developer's, takes
+	// PERMISSIONS_CONFIG, from the environment or, as the server reads it, the dotenv file.
+	perms := release.Permissions{}
+
+	if host {
+		value := os.Getenv("PERMISSIONS_CONFIG")
+		if value == "" {
+			local, err := godotenv.Read(filepath.Join(e.root, ".env"))
+			if err == nil {
+				value = local["PERMISSIONS_CONFIG"]
+			}
 		}
+
+		perms = release.PermissionsFrom(value, e.root)
 	}
 
-	if perms != "" && !filepath.IsAbs(perms) && perms != "admin" && perms != "read_only" {
-		perms = filepath.Join(e.root, perms)
-	}
-
-	return release.MCPBs(ctx, streamExec, o, filepath.Join(e.root, "docs", "images", "theHivelogo.png"), release.PermissionsFrom(perms), //nolint:wrapcheck // packageCmd wraps it
+	return release.MCPBs(ctx, streamExec, o, filepath.Join(e.root, "docs", "images", "theHivelogo.png"), perms, //nolint:wrapcheck // packageCmd wraps it
 		os.Getuid(), os.Getgid())
 }
 

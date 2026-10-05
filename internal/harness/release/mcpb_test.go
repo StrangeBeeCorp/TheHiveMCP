@@ -64,18 +64,42 @@ func TestManifestDescribesTheBundle(t *testing.T) {
 	assert.Contains(t, string(empty), `"entry_point": "server/thehivemcp"`)
 }
 
-// A path to a file is bundled; admin, read_only, a missing file or nothing is the default as it is.
+// The manifest is the one generate-mcpb.sh wrote, compared as JSON: testdata holds its Windows
+// rendering with a bundled permissions file, and the Linux one differs by the .exe and the default.
+func TestManifestIsTheOneTheScriptWrote(t *testing.T) {
+	t.Parallel()
+
+	golden, err := os.ReadFile(filepath.Join("testdata", "manifest-windows.json"))
+	require.NoError(t, err)
+
+	windows, err := release.Manifest("1.2.0", ".exe", bundled)
+	require.NoError(t, err)
+	assert.JSONEq(t, string(golden), string(windows))
+
+	linux, err := release.Manifest("1.2.0", "", "")
+	require.NoError(t, err)
+
+	want := strings.ReplaceAll(string(golden), "thehivemcp.exe", "thehivemcp")
+	want = strings.Replace(want, `"default": "permissions.yaml"`, `"default": ""`, 1)
+	assert.JSONEq(t, want, string(linux))
+}
+
+// A path to a file, absolute or relative to the checkout, is bundled; admin, read_only, nothing,
+// or a path that names no file here is the default as it is.
 func TestPermissionsFromReadsTheServersSetting(t *testing.T) {
 	t.Parallel()
 
-	file := filepath.Join(t.TempDir(), "analyst.yaml")
+	root := t.TempDir()
+	file := filepath.Join(root, "analyst.yaml")
 	require.NoError(t, os.WriteFile(file, []byte("tools: {}\n"), 0o600))
 
-	assert.Equal(t, release.Permissions{File: file, Default: bundled}, release.PermissionsFrom(file))
-	assert.Equal(t, release.Permissions{Default: readOnly}, release.PermissionsFrom(readOnly))
-	assert.Equal(t, release.Permissions{Default: "admin"}, release.PermissionsFrom("admin"))
-	assert.Equal(t, release.Permissions{}, release.PermissionsFrom(""))
-	assert.Equal(t, release.Permissions{Default: "/missing.yaml"}, release.PermissionsFrom("/missing.yaml"))
+	assert.Equal(t, release.Permissions{File: file, Default: bundled}, release.PermissionsFrom(file, "/elsewhere"))
+	assert.Equal(t, release.Permissions{File: file, Default: bundled}, release.PermissionsFrom("analyst.yaml", root))
+	assert.Equal(t, release.Permissions{Default: readOnly}, release.PermissionsFrom(readOnly, root))
+	assert.Equal(t, release.Permissions{Default: "admin"}, release.PermissionsFrom("admin", root))
+	assert.Equal(t, release.Permissions{}, release.PermissionsFrom("", root))
+	assert.Equal(t, release.Permissions{Default: "config/analyst.yaml"}, release.PermissionsFrom("config/analyst.yaml", root),
+		"a path of the client machine stays as it was given")
 }
 
 // The extension holds the manifest, the icon, the server binary (executable outside Windows) and
@@ -91,7 +115,7 @@ func TestExtensionLaysOutTheBundle(t *testing.T) {
 	require.NoError(t, os.WriteFile(icon, []byte("png"), 0o600))
 
 	dir := filepath.Join(t.TempDir(), "extension")
-	x := release.Extension{Version: "1.2.0", Binary: filepath.Join(o.Build, linuxBinary), Icon: icon, Permissions: release.PermissionsFrom(perms)}
+	x := release.Extension{Version: "1.2.0", Binary: filepath.Join(o.Build, linuxBinary), Icon: icon, Permissions: release.PermissionsFrom(perms, "")}
 	require.NoError(t, x.Write(dir))
 
 	info, err := os.Stat(filepath.Join(dir, "server", "thehivemcp"))

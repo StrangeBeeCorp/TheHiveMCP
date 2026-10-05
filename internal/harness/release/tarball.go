@@ -23,6 +23,9 @@ type Options struct {
 	// Build holds the built binaries, <name>-<target>[.exe]; Dist receives the packages.
 	Build string
 	Dist  string
+	// DistAs is how the checksum files name Dist: as the caller gave it (./dist), so that a
+	// published .sha256 carries no machine's path. Dist itself when empty.
+	DistAs string
 	// Name is the binary's base name.
 	Name    string
 	Targets []string
@@ -36,6 +39,14 @@ const (
 
 // ErrNoTarget is a run given no target to package.
 var ErrNoTarget = errors.New("no target to package")
+
+func (o Options) distAs() string {
+	if o.DistAs != "" {
+		return o.DistAs
+	}
+
+	return o.Dist
+}
 
 // Binary is a target's binary name: Windows binaries end in .exe.
 func Binary(name, target string) string {
@@ -65,7 +76,7 @@ func Tarballs(o Options) ([]string, error) {
 
 		err = tarball(filepath.Join(o.Build, Binary(o.Name, target)), filepath.Join(o.Dist, archive))
 		if err == nil {
-			err = WriteChecksum(o.Dist, archive)
+			err = WriteChecksum(o.Dist, o.distAs(), archive)
 		}
 
 		if err != nil {
@@ -91,7 +102,7 @@ func tarball(binary, out string) (err error) {
 		return err //nolint:wrapcheck // Tarballs names the target
 	}
 
-	return writeAtomic(out, func(w io.Writer) error {
+	return writeAtomic(out, filePerm, func(w io.Writer) error {
 		gz := gzip.NewWriter(w)
 		tw := tar.NewWriter(gz)
 
@@ -112,9 +123,9 @@ func tarball(binary, out string) (err error) {
 }
 
 // WriteChecksum writes dist/file's SHA-256 to dist/file.sha256 as shasum -a 256 prints it: the
-// hash, two spaces and the path, dist/file.
-func WriteChecksum(dist, file string) error {
-	path := dist + "/" + file
+// hash, two spaces and the path, as/file, where as names dist as the caller gave it.
+func WriteChecksum(dist, as, file string) error {
+	path := as + "/" + file
 
 	data, err := os.ReadFile(filepath.Join(dist, file)) // #nosec G304 -- a package this run wrote
 	if err != nil {
@@ -124,15 +135,15 @@ func WriteChecksum(dist, file string) error {
 	sum := sha256.Sum256(data)
 	line := hex.EncodeToString(sum[:]) + "  " + path + "\n"
 
-	return writeAtomic(filepath.Join(dist, file+".sha256"), func(w io.Writer) error {
+	return writeAtomic(filepath.Join(dist, file+".sha256"), filePerm, func(w io.Writer) error {
 		_, err := io.WriteString(w, line)
 		return err //nolint:wrapcheck // the caller names the package
 	})
 }
 
-// writeAtomic writes path through a temporary file renamed into place, so that a failed run
-// leaves no half-written package.
-func writeAtomic(path string, write func(io.Writer) error) error {
+// writeAtomic writes path, with mode, through a temporary file renamed into place, so that a
+// failed run leaves no half-written package.
+func writeAtomic(path string, mode os.FileMode, write func(io.Writer) error) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
 	if err != nil {
 		return err //nolint:wrapcheck // the caller names the package
@@ -140,7 +151,7 @@ func writeAtomic(path string, write func(io.Writer) error) error {
 
 	err = errors.Join(write(tmp), tmp.Close())
 	if err == nil {
-		err = os.Chmod(tmp.Name(), filePerm)
+		err = os.Chmod(tmp.Name(), mode)
 	}
 
 	if err == nil {

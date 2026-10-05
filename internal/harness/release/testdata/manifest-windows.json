@@ -1,0 +1,57 @@
+{
+  "manifest_version": "0.2",
+  "name": "TheHiveMCP",
+  "version": "1.2.0",
+  "description": "Connect to TheHive and Cortex via Hivemind MCP for security incident management",
+  "long_description": "StrangeBee Hivemind MCP enables Claude to interact with TheHive security incident response platform and Cortex analysis engine...",
+  "author": {
+    "name": "StrangeBee",
+    "email": "admin@strangebee.com",
+    "url": "https://strangebee.com"
+  },
+  "homepage": "https://docs.strangebee.com/mcp",
+  "icon": "icon.png",
+  "server": {
+    "type": "binary",
+    "entry_point": "server/thehivemcp.exe",
+    "mcp_config": {
+      "command": "${__dirname}/server/thehivemcp.exe",
+      "args": ["-transport", "stdio"],
+      "env": {
+        "MCP_PORT": "8082",
+        "THEHIVE_URL": "${user_config.thehive_url}",
+        "THEHIVE_API_KEY": "${user_config.thehive_api_key}",
+        "THEHIVE_ORGANISATION": "${user_config.organisation}",
+        "PERMISSIONS_CONFIG": "${user_config.permissions_config}"
+      }
+    }
+  },
+  "user_config": {
+    "thehive_url": {
+      "title": "TheHive URL",
+      "description": "Your TheHive instance URL (e.g., https://thehive.company.com)",
+      "type": "string",
+      "required": true
+    },
+    "thehive_api_key": {
+      "title": "TheHive API Key",
+      "description": "Your TheHive API key for authentication",
+      "type": "string",
+      "required": true,
+      "sensitive": true
+    },
+    "organisation": {
+      "title": "Organisation",
+      "description": "TheHive organisation name. If not set, defaults to the authenticated user's own organisation.",
+      "type": "string",
+      "required": false
+    },
+    "permissions_config": {
+      "title": "Permissions Config",
+      "description": "Path to permissions YAML config file (leave empty for read-only default, or use bundled relative path)",
+      "type": "string",
+      "required": false,
+      "default": "permissions.yaml"
+    }
+  }
+}
