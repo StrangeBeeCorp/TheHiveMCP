@@ -6,9 +6,9 @@ This example shows how to run TheHiveMCP with **LibreChat** using Anthropic mode
 
 This setup provides a web-based chat interface where users can interact with TheHive through natural language using Claude models. The configuration includes:
 
-- [`docker-compose.librechat.yml`](docker/docker-compose.librechat.yml) - Complete LibreChat stack with MongoDB, Meilisearch, and API
-- [`librechat.yaml`](docker/librechat.yaml) - MCP server configuration with user variables
-- [`Dockerfile.librechat`](docker/Dockerfile.librechat) - Custom LibreChat build with MCP support
+- [`docker-compose.librechat.yml`](../../deployment/examples/docker-compose.librechat.yml) - Complete LibreChat stack with MongoDB, Meilisearch, and API
+- [`librechat.yaml`](../../deployment/examples/librechat.yaml) - MCP server configuration with user variables
+- [`Dockerfile.librechat`](../../deployment/examples/Dockerfile.librechat) - Custom LibreChat build with MCP support
 
 ## Prerequisites
 
@@ -33,10 +33,10 @@ The Docker Compose file already includes all other necessary configuration with 
 
 ```bash
 # Start all services
-docker compose -f docs/how-to/docker/docker-compose.librechat.yml up -d
+docker compose -f deployment/examples/docker-compose.librechat.yml up -d
 
 # Check status
-docker compose -f docs/how-to/docker/docker-compose.librechat.yml ps
+docker compose -f deployment/examples/docker-compose.librechat.yml ps
 ```
 
 ### 3. Access LibreChat
@@ -51,12 +51,12 @@ docker compose -f docs/how-to/docker/docker-compose.librechat.yml ps
 
 ## How it works
 
-The [`librechat.yaml`](docker/librechat.yaml) configuration enables per-user TheHive credentials. It defines custom user variables that LibreChat will prompt
-for and pass as headers to TheHiveMCP.
+The [`librechat.yaml`](../../deployment/examples/librechat.yaml) configuration enables per-user TheHive credentials. It defines custom user variables that
+LibreChat will prompt for and pass as headers to TheHiveMCP.
 
 When you start a conversation, LibreChat will prompt you for these values and send them as headers to TheHiveMCP for each request.
 
-The [`docker-compose.librechat.yml`](docker/docker-compose.librechat.yml) includes:
+The [`docker-compose.librechat.yml`](../../deployment/examples/docker-compose.librechat.yml) includes:
 
 - **TheHiveMCP server** with admin permissions
 - **LibreChat API** with Anthropic endpoint enabled

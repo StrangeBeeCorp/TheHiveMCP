@@ -148,7 +148,6 @@ suites:
       - NOTICE
       - renovate.json
       - .sonarcloud.properties
-      - .pre-commit-config.yaml
       - .air.toml
       - .env.template
 
@@ -161,7 +160,8 @@ gates:
     static: true
     blocks: >-
       a code file over 500 lines or over its cap, more than 14 code files in a directory, a file
-      that is not UTF-8, or a top-level entry gates/limits.yaml does not list
+      over 1 MB, a text file that is not UTF-8, has trailing whitespace or lacks a final newline, a
+      YAML file that does not parse, or a top-level entry gates/limits.yaml does not list
 
   - id: public-safety
     builtin: public-safety
@@ -296,12 +296,12 @@ gates:
     blocks: a known vulnerability reachable from our code
 
   - id: dockerlint
-    runs: make dockerlint
+    runs: make dockerlint dockersec
     docker: true
     cadence: [pr, ci]
-    suites: [packaging, docs]
+    suites: [packaging]
     budget_s: 300
-    blocks: a hadolint finding in one of the Dockerfiles
+    blocks: a hadolint finding in one of the Dockerfiles, or a HIGH or CRITICAL misconfiguration trivy finds in one
 
   - id: secrets
     runs: make secrets

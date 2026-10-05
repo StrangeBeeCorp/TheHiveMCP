@@ -530,7 +530,7 @@ All development operations use Docker containers for consistency and isolation:
 
 **Core commands:**
 
-- `make all` - Format, security checks, tests, and build
+- `make all` - The pr gates on the whole branch, as `make pr` runs them, without recording or pushing
 - `make build` - Build binary using Docker
 - `make run ARGS="arguments"` - Run application with custom arguments
 - `make test` - Run fast unit tests only (skips integration tests via `-short`); results are cached, so a second run is near-instant
@@ -551,21 +551,20 @@ compatibility break at either end fails the PR. The image is a single source of 
 **Quality and security:**
 
 - `make fmt` - Format code using Docker (`scripts/fmt.sh`: gofmt, golangci fmt, shfmt, markdownlint, prettier)
-- `make fmt-check` - Fail if anything is unformatted, without rewriting it (the CI gate)
-- `make security` - Run all security checks (vulncheck, sast, lint)
-- `make sast` - Static application security testing
-- `make lint` - Full read-only lint gate over every tracked file (`scripts/lint.sh`: golangci-lint, `go test -short`, shellcheck/shfmt, markdownlint, lychee,
-  yamllint, hadolint, checkmake, actionlint)
-- `make lint-changed` / `make lint-fix` / `make lint-fix-changed` - the same gate scoped to changed files, and its auto-fixing counterparts
-- `make vulncheck` - Vulnerability scanning
+- `make lint` - Read-only lint over every tracked file (`scripts/lint.sh`: golangci-lint, `go test -short`, shellcheck/shfmt, markdownlint, lychee, yamllint,
+  hadolint, checkmake, actionlint); `make lint-fix` applies the safe fixes
+- `make sast`, `make vulncheck`, `make dockerlint`, `make dockersec`, `make secrets` - The security checks one by one; their gates run them at pr and in CI
 
 **The harness:**
 
 - `make check-fast` - The gates your changed paths select, in about a minute: the loop to run while you work
 - `make gate ID=<gate>` - One gate now, whatever changed
+- `make pr` - The pr gates at HEAD, recorded, then the push of the branch (never main)
 - `make harness-docs` - Regenerate `docs/reference/gates.md` after changing `gates/registry.yaml`
+- `bin/harness structure` - The largest code files and the fullest directories against the structure limits
 
 Every gate, its cadences and what makes it block are in [docs/reference/gates.md](docs/reference/gates.md). CI runs the same gates through `bin/harness`.
+[Work with the harness](docs/how-to/work-with-the-harness.md) walks through a change from the first edit to the pull request.
 
 **Git hooks (recommended, one-time):**
 
@@ -573,9 +572,9 @@ Every gate, its cadences and what makes it block are in [docs/reference/gates.md
 make dev-setup    # git config core.hooksPath .githooks
 ```
 
-This points git at the tracked hooks in `.githooks/`: `pre-commit` runs `make pre-commit` (the commit gates on exactly what the commit will carry, with
-`scripts/lint.sh --staged` among them) and `pre-push` runs `scripts/lint.sh --all` (the full gate). Both are read-only — neither rewrites a file under you — and
-both are bypassable with `--no-verify`: they are a fast local signal, while the authoritative gate stays CI.
+This points git at the tracked hook in `.githooks/`: `pre-commit` runs `make pre-commit`, the commit gates on exactly what the commit will carry. It rewrites no
+file, and `--no-verify` bypasses it: it is a fast local signal, while the authoritative gate stays CI. A Claude Code session says so when a checkout's commits
+do not run it.
 
 **Docker operations:**
 
@@ -585,7 +584,6 @@ both are bypassable with `--no-verify`: they are a fast local signal, while the 
 **Dependencies:**
 
 - `make updatedep` - Update Go dependencies
-- `make install-dev-deps` - Install development tools (Docker-based)
 
 **Utilities:**
 

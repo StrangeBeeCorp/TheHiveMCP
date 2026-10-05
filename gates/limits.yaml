@@ -8,6 +8,12 @@ structure:
   max_code_files_per_dir: 14
   # What counts as code: a pattern with a slash matches the path, one without the file name.
   code_files: ["*.go", "*.sh", "*.py", "*.js", "*.mjs", "*.ts", "*.mk", Makefile, Dockerfile, "Dockerfile.*", ".githooks/*", "bin/*"]
+  # No file is larger than this: a large file belongs in a release or a bucket, not in git. The
+  # README's demo GIF (825 KB) is the largest file the repository keeps.
+  max_kb: 1024
+  # Text files kept byte for byte, with no trailing-whitespace or final-newline rule: a patch's
+  # blank context lines are a single space, and the canaries must apply as written.
+  verbatim: ["gates/canaries/*.patch"]
   # The files that were already over the limit when the gate arrived (2026-10-01), capped at their
   # size then (the Makefile with the line that includes scripts/harness.mk), or at main's when the
   # stack moved onto release 1.2.0 (2026-10-07: manage_test.go, dynamic_resources.go and
@@ -22,7 +28,7 @@ structure:
     scripts/lint.sh: 677
     internal/utils/parsers.go: 635
     internal/tools/manage/models.go: 603
-    Makefile: 597
+    Makefile: 555
     internal/utils/parsers_test.go: 594
     bootstrap/http_test.go: 580
     internal/testutils/container.go: 543
@@ -38,7 +44,6 @@ structure:
     - .gitleaks.toml
     - .golangci.yml
     - .markdownlint.jsonc
-    - .pre-commit-config.yaml
     - .prettierrc.json
     - .sonarcloud.properties
     - AGENTS.md

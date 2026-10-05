@@ -17,6 +17,8 @@ Goal-oriented recipes for a specific task. They assume you already know the basi
 
 - **[Set up TheHiveMCP with Claude Code](how-to/setup-claude-code.md)** — connect the server to the Anthropic CLI, with config precedence and troubleshooting.
 - **[Run on Windows from source](how-to/run-on-windows-from-source.md)** — compile the server locally to sidestep the SmartScreen "unknown publisher" prompt.
+- **[Work with the harness](how-to/work-with-the-harness.md)** — take a change from the first edit to the pull request: `make check-fast`, the Claude Code
+  hooks, `make pr`.
 
 Worked deployment examples for specific hosts:
 
@@ -35,6 +37,7 @@ Information-oriented, neutral description of the tools and their contracts. Look
 - **[Tool annotations](reference/tools/annotations.md)** — the `readOnlyHint`/`destructiveHint`/`idempotentHint`/`openWorldHint` each tool advertises, and why.
 - **[Permissions](reference/permissions.md)** — the permission profile format, tool filters, and the untrusted-data boundary.
 - **[Configuration parameters](../README.md#configuration)** — environment variables, flags, and HTTP headers (in the main README).
+- **[Gates](reference/gates.md)** — every check the harness runs, when it runs and what makes it fail (generated from `gates/registry.yaml`).
 
 ## Explanation
 
@@ -45,4 +48,6 @@ Understanding-oriented discussion of the reasoning behind the project.
   and expansion hits differently.
 - **[ADR-0003 — Track MCP 2026-07-28 on mark3labs/mcp-go v1.0.0](explanation/adr/0003-track-mcp-2026-07-28-on-mark3labs-mcp-go.md)** — why the spec revision is
   a dependency bump rather than a migration to the official Go SDK.
+- **[ADR-0004 — The harness judges what changed, not the commands that changed it](explanation/adr/0004-judge-outcomes.md)** — why the agent harness leaves
+  commands to Claude Code and judges the files an agent changed.
 - **[Evaluation evidence](evaluation/README.md)** — published per-model accuracy and prompt-injection resilience results, per server version.

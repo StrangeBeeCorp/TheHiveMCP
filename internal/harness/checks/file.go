@@ -61,6 +61,8 @@ func OneFile(builtin, rel string, content []byte, lim Limits) ([]Finding, error)
 			out = append(out, Finding{Path: rel, Msg: fmt.Sprintf("top-level entry %q is not in structure.root of gates/limits.yaml: ask before adding one", top)})
 		}
 
+		out = append(out, cleanFindings(rel, content, lim.Structure)...)
+
 		if !isBinary(content) && matchesFile(lim.Structure.CodeFiles, rel) {
 			out = append(out, overFindings(rel, countLines(content), lim.Structure)...)
 		}

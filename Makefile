@@ -31,8 +31,8 @@ MOUNT_APP := $(CURDIR):/app
 # path has one ("Application Support"). Quoted in CA_MOUNT for the same reason.
 STRANGEBEE_CA_BUNDLE := /Library/Application Support/StrangeBee/Certificates/zscaler-ca-bundle.pem
 CA_MOUNT := $(if $(shell [ -f "$(STRANGEBEE_CA_BUNDLE)" ] && echo found),-v "$(STRANGEBEE_CA_BUNDLE)":/etc/ssl/certs/extra-ca-bundle.pem:ro)
-# All Go work runs inside the $(GO_IMAGE) container — there is NO host Go install
-# (see install-dev-deps). So every cache is a Docker named volume, never a host
+# All Go work runs inside the $(GO_IMAGE) container — there is NO host Go install.
+# So every cache is a Docker named volume, never a host
 # path: named volumes are linux-native, populated in-container, and — unlike a
 # bind mount of a host path — work identically whether `make` runs on the host
 # or itself inside a container talking to the same daemon (docker-in-docker),
@@ -113,7 +113,8 @@ RELEASE_TARGETS := linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd
 bin_ext = $(if $(filter windows-%,$(1)),.exe,)
 
 .PHONY: all
-all: fmt lint security test build ## Full local gate before pushing: fmt, lint, security, test, build ##@ make all
+all: ## The pr gates on the whole branch, as make pr runs them, without recording or pushing ##@ make all
+	bin/harness run --cadence pr
 
 .PHONY: lint-makefile
 lint-makefile: ## Check the Makefile's syntax and hygiene (checkmake) ##@ make lint-makefile
@@ -131,23 +132,6 @@ fmt: ## Auto-format the whole repo (Go, shell, markdown) before committing ##@ m
 	@echo $(BGreen)--- Format --$(Color_Off)
 	@echo $(BGreen)-------------$(Color_Off)
 	./scripts/fmt.sh --all --fix
-
-.PHONY: fmt-check
-fmt-check: ## Fail (exit 1) if any file is unformatted, without rewriting it — the CI gate ##@ make fmt-check
-	@echo $(BGreen)-------------------$(Color_Off)
-	@echo $(BGreen)--- Format check --$(Color_Off)
-	@echo $(BGreen)-------------------$(Color_Off)
-	./scripts/fmt.sh --all --check
-
-.PHONY: fmt-changed
-fmt-changed: ## Fast format loop while iterating: only git-changed files ##@ make fmt-changed
-	@echo $(BGreen)-------------$(Color_Off)
-	@echo $(BGreen)--- Format --$(Color_Off)
-	@echo $(BGreen)-------------$(Color_Off)
-	./scripts/fmt.sh --changed --fix
-
-.PHONY: security
-security: vulncheck sast dockerlint dockersec secrets ## Run every security check at once (vuln, SAST, docker, secrets) ##@ make security
 
 # Help system. Each documented target carries a `## <purpose>` comment and an
 # optional `##@ <usage>` marker on the same line, e.g.
@@ -250,7 +234,7 @@ sast: ## Find insecure code patterns via SAST (gosec) ##@ make sast
 # Every Dockerfile in the repo. hadolint lints each — the production image plus
 # the MCPB and LibreChat helper images — so a misconfig regression in any of them
 # turns the build red, not just the one we ship.
-DOCKERFILES := deployment/Dockerfile scripts/Dockerfile.mcpb docs/how-to/docker/Dockerfile.librechat
+DOCKERFILES := deployment/Dockerfile scripts/Dockerfile.mcpb deployment/examples/Dockerfile.librechat
 
 .PHONY: dockerlint
 dockerlint: ## Catch Dockerfile hygiene issues in all images (hadolint) ##@ make dockerlint
@@ -456,26 +440,12 @@ lint: ## Check the whole repo for lint issues, read-only ##@ make lint
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	./scripts/lint.sh --all --check
 
-.PHONY: lint-changed
-lint-changed: ## Fast read-only lint of git-changed files only ##@ make lint-changed
-	@echo $(BGreen)-----------------------------$(Color_Off)
-	@echo $(BGreen)-- Linter Checks: changed --$(Color_Off)
-	@echo $(BGreen)-----------------------------$(Color_Off)
-	./scripts/lint.sh --changed --check
-
 .PHONY: lint-fix
 lint-fix: ## Auto-apply safe lint fixes across the whole repo ##@ make lint-fix
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Linter Checks with auto-fix --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	./scripts/lint.sh --all --fix
-
-.PHONY: lint-fix-changed
-lint-fix-changed: ## Auto-apply safe lint fixes to git-changed files only ##@ make lint-fix-changed
-	@echo $(BGreen)-----------------------------$(Color_Off)
-	@echo $(BGreen)-- Linter Checks: auto-fix changed --$(Color_Off)
-	@echo $(BGreen)-----------------------------$(Color_Off)
-	./scripts/lint.sh --changed --fix
 
 .PHONY: updatedep
 updatedep: ## Upgrade Go deps to latest and tidy go.mod/go.sum ##@ make updatedep
@@ -484,22 +454,13 @@ updatedep: ## Upgrade Go deps to latest and tidy go.mod/go.sum ##@ make updatede
 	@echo $(BGreen)-----------------------$(Color_Off)
 	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) sh -c 'go get -u ./... && go mod tidy'
 
-.PHONY: install-dev-deps
-install-dev-deps: ## No-op: tooling runs on-demand via Docker (kept for habit) ##@ make install-dev-deps
-	@echo $(BGreen)----------------------------------------$(Color_Off)
-	@echo $(BGreen)-- Installing development dependencies --$(Color_Off)
-	@echo $(BGreen)----------------------------------------$(Color_Off)
-	@echo "Dependencies are now installed on-demand via Docker containers"
-	@echo "No local Go installation required"
-
 .PHONY: dev-setup
-dev-setup: ## Point git at the tracked .githooks (pre-commit/pre-push lint gate) ##@ make dev-setup
+dev-setup: ## Point git at the tracked .githooks: each commit runs the harness's commit gates ##@ make dev-setup
 	@echo $(BGreen)---------------------$(Color_Off)
 	@echo $(BGreen)-- Dev environment --$(Color_Off)
 	@echo $(BGreen)---------------------$(Color_Off)
 	git config core.hooksPath .githooks
-	@echo "git hooks enabled: pre-commit -> make pre-commit, pre-push -> lint.sh --all"
-	@echo "Bypass either with --no-verify; the authoritative gate stays CI."
+	@echo "git hooks enabled: each commit runs the commit gates of gates/registry.yaml (make pre-commit)"
 
 # The harness's targets (check-fast, pre-commit, gate, ...): see that file.
 include scripts/harness.mk
@@ -514,9 +475,6 @@ build-%: pre
 .PHONY: pre-dist
 pre-dist: ## Internal: ensure the dist/ directory exists (packaging dep) ##@ make pre-dist (usually run automatically)
 	@mkdir -p $(DISTDIR)
-
-.PHONY: build-current
-build-current: build ## Alias for `build` (current host platform) ##@ make build-current
 
 .PHONY: build-all
 build-all: $(addprefix build-,$(RELEASE_TARGETS)) ## Cross-compile binaries for every release target ##@ make build-all

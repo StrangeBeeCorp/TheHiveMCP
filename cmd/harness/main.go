@@ -156,7 +156,7 @@ func stagedRun(args []string) bool {
 
 func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer) error {
 	if len(args) == 0 {
-		return usageError{"usage: harness run|select|list|check|docs|hook|pr|push|evidence|review-effort|canaries (see cmd/harness/main.go)"}
+		return usageError{"usage: harness run|select|list|check|docs|hook|pr|push|evidence|review-effort|canaries|structure (see cmd/harness/main.go)"}
 	}
 
 	e, err := load(ctx, stagedRun(args))
@@ -185,6 +185,8 @@ func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer
 		return e.pr(ctx, args[1:], out)
 	case "evidence":
 		return e.showEvidence(ctx, args[1:], out)
+	case builtinStructure:
+		return e.structure(ctx, args[1:], out)
 	case "review-effort":
 		return e.reviewEffort(ctx, args[1:], out)
 	default:

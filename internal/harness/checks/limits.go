@@ -48,13 +48,18 @@ type HookLimits struct {
 	MaxRedRounds int `yaml:"max_red_rounds"`
 }
 
-// StructureLimits bounds file and directory size.
+// StructureLimits bounds file and directory size, and keeps text files clean.
 type StructureLimits struct {
 	MaxLines           int            `yaml:"max_lines"`
 	MaxCodeFilesPerDir int            `yaml:"max_code_files_per_dir"`
 	CodeFiles          []string       `yaml:"code_files"`
 	Caps               map[string]int `yaml:"caps"`
 	Root               []string       `yaml:"root"`
+	// MaxKB bounds any file's size: a large file belongs in a release or a bucket, not in git.
+	MaxKB int `yaml:"max_kb"`
+	// Verbatim are the text files kept byte for byte (a patch's blank context line is a space):
+	// no trailing-whitespace or final-newline rule for them.
+	Verbatim []string `yaml:"verbatim"`
 }
 
 // SafetyRules says what must never be committed to this public repository.
@@ -94,6 +99,10 @@ func ParseLimits(data []byte, file string) (Limits, error) {
 
 	if l.Hooks.MaxRedRounds <= 0 {
 		return Limits{}, fmt.Errorf("%s: hooks.max_red_rounds must be at least 1", file)
+	}
+
+	if l.Structure.MaxKB < 0 {
+		return Limits{}, fmt.Errorf("%s: structure.max_kb must not be negative (0 sets no limit)", file)
 	}
 
 	return l, nil

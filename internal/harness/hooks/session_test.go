@@ -41,6 +41,10 @@ func TestSessionStartGivesBackWhereTheWorkStands(t *testing.T) {
 	assert.Contains(t, start, "ticket DL-1234")
 	assert.Contains(t, start, "the main checkout")
 	assert.Contains(t, start, "No check-fast has run")
+	assert.Contains(t, start, "run make dev-setup", "git runs .git/hooks, not the commit gates")
+
+	gittest.Git(t, root, "config", "core.hooksPath", ".githooks")
+	assert.NotContains(t, sessionContext(t, root, "startup"), "make dev-setup")
 
 	check := &fakeCheck{result: hooks.Check{Red: true, Report: "unit: FAIL TestA"}}
 	s := hooks.Stopper{Root: root, MaxRounds: 6, Check: check.run, Fingerprint: same}

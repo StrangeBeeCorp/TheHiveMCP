@@ -26,8 +26,11 @@ The Tester writes the tests and the Coder the code (.claude/agents/); the implem
 Ship with make pr: the pr gates at HEAD, recorded, then the push (after the review; never main); a person merges. The hooks deny what breaks
 these rules, and say what to do instead.`
 
-// SessionStart tells the agent where it is: the checkout and its ticket, the last check-fast, a
-// BLOCKED report, and what was saved before a compaction.
+// hooksDir is where make dev-setup points git for its hooks: the commit gates.
+const hooksDir = ".githooks"
+
+// SessionStart tells the agent where it is: the checkout and its ticket, whether its commits run
+// the commit gates, the last check-fast, a BLOCKED report, and what was saved before a compaction.
 func SessionStart(ctx context.Context, root string, in Input) Output {
 	var b strings.Builder
 
@@ -46,6 +49,10 @@ func SessionStart(ctx context.Context, root string, in Input) Output {
 	}
 
 	b.WriteString(".\n")
+
+	if gitx.HooksPath(ctx, root) != hooksDir {
+		b.WriteString("Commits here do not run the harness's commit gates (core.hooksPath is not " + hooksDir + "): run make dev-setup.\n")
+	}
 
 	st := load(root)
 

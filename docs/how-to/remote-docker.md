@@ -45,15 +45,15 @@ THEHIVE_ORGANISATION=your-org  # Optional, defaults to user's own organisation
 
 ```bash
 # Start the service
-docker compose -f docs/how-to/docker/docker-compose.basic.yml up -d
+docker compose -f deployment/examples/docker-compose.basic.yml up -d
 
 # Check status
-docker compose -f docs/how-to/docker/docker-compose.basic.yml ps
+docker compose -f deployment/examples/docker-compose.basic.yml ps
 ```
 
 ## How it works
 
-The [`docker-compose.basic.yml`](docker/docker-compose.basic.yml) provides:
+The [`docker-compose.basic.yml`](../../deployment/examples/docker-compose.basic.yml) provides:
 
 - **HTTP server** on port 8082
 - **Read-only permissions** by default
