@@ -264,7 +264,9 @@ func TestADeletedSnapshotIsNoPass(t *testing.T) {
 	hooks.Remember(t.Context(), root, reviewer, c.list)
 	require.True(t, hooks.Remembered(root, reviewer))
 	require.NoError(t, os.Remove(snapshotOf(t, root, snapshots[0])))
-	assert.Contains(t, decode(t, s.Stop(t.Context(), reviewer))["systemMessage"], "not a pass", "a reviewer's too")
+	r := decode(t, s.Stop(t.Context(), reviewer))
+	assert.Equal(t, "block", r["decision"], "a reviewer runs no gate: an unjudged stop is held for its rounds")
+	assert.Contains(t, r["reason"], "not a pass")
 }
 
 // snapshotOf is the one agent snapshot of root that is not skip.

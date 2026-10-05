@@ -93,8 +93,10 @@ func (s Stopper) Stop(ctx context.Context, in Input) Output {
 	}
 
 	if role.ReadOnly() {
+		// A reviewer runs no gate: a change check that could not run counts like a change it may not
+		// make, held for the rounds, then let go with a note for the session, never as a pass.
 		if unjudged != nil {
-			return note("harness: what the reviewer changed could not be judged, so this stop is not a pass: " + unjudged.Error())
+			changes = append(changes, "what the reviewer changed could not be judged, so this stop is not a pass: "+unjudged.Error())
 		}
 
 		return s.readOnly(in, changes)
