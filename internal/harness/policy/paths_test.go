@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -61,14 +63,39 @@ func TestClaudeCodeRefusesWhatOnlyAPersonDoes(t *testing.T) {
 
 	require.NoError(t, json.Unmarshal(repoFile(t, ".claude/settings.json"), &settings))
 
-	for _, rule := range []string{
-		"Bash(git push *)", "Bash(gh pr merge *)", "Bash(gh pr review * --approve*)", "Bash(gh pr update-branch *)",
-		"Bash(bin/harness push *)", "Bash(bin/harness * --person*)",
-	} {
-		assert.Contains(t, settings.Permissions.Deny, rule)
+	refused := func(command string) bool {
+		return slices.ContainsFunc(settings.Permissions.Deny, func(rule string) bool { return denies(rule, command) })
 	}
 
-	assert.NotContains(t, settings.Permissions.Deny, "Bash(make pr *)", "make pr is how a Claude session ships")
+	for _, command := range []string{
+		"git push", "git push origin HEAD:main", "git send-pack origin main", "gh pr merge 12 --squash", "gh pr review --approve",
+		"gh pr review 5 --approve", "gh pr update-branch 3", "bin/harness push", "./bin/harness push --force", "bin/harness pr --person",
+	} {
+		assert.True(t, refused(command), command)
+	}
+
+	for _, command := range []string{
+		"make pr", "make pr FORCE=1", "git status", "git commit -m x", "gh pr view 3", "gh pr review 5 --comment -b ok",
+		"bin/harness pr", "bin/harness review-effort",
+	} {
+		assert.False(t, refused(command), command)
+	}
+}
+
+// denies reports whether a Bash deny rule matches a command as Claude Code documents it: * stands
+// for any text, and a trailing " *" that is the rule's only wildcard also matches the bare command.
+func denies(rule, command string) bool {
+	pattern, ok := strings.CutPrefix(rule, "Bash(")
+	if !ok {
+		return false
+	}
+
+	pattern = strings.TrimSuffix(pattern, ")")
+	if strings.Count(pattern, "*") == 1 && strings.HasSuffix(pattern, " *") && command == strings.TrimSuffix(pattern, " *") {
+		return true
+	}
+
+	return regexp.MustCompile("^" + strings.ReplaceAll(regexp.QuoteMeta(pattern), `\*`, ".*") + "$").MatchString(command)
 }
 
 // GitHub asks for a person's review of what only a person may change: .github/CODEOWNERS names

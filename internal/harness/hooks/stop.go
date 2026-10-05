@@ -83,18 +83,20 @@ type Stopper struct {
 func (s Stopper) Stop(ctx context.Context, in Input) Output {
 	role := in.Role()
 
-	var changes []string
+	var (
+		changes  []string
+		unjudged error
+	)
 
 	if role.Agent() && s.List != nil {
-		var err error
-
-		changes, err = Changes(ctx, s.Root, in, s.List)
-		if err != nil {
-			return note("harness: what the agent changed could not be read: " + err.Error())
-		}
+		changes, unjudged = Changes(ctx, s.Root, in, s.List)
 	}
 
 	if role.ReadOnly() {
+		if unjudged != nil {
+			return note("harness: what the reviewer changed could not be judged: " + unjudged.Error())
+		}
+
 		return s.readOnly(in, changes)
 	}
 
@@ -120,10 +122,10 @@ func (s Stopper) Stop(ctx context.Context, in Input) Output {
 			st.Last = &Last{Fingerprint: fp, Static: static, Check: c, At: s.now()}
 		}
 
-		judged := withChanges(c, changes)
+		judged := withChanges(c, changes, unjudged)
 		out = s.apply(st, in, judged, static)
 
-		if !judged.Red {
+		if !judged.Red && !judged.Incomplete {
 			Forget(s.Root, in)
 		}
 
@@ -174,13 +176,19 @@ func (s Stopper) readOnly(in Input, changes []string) Output {
 }
 
 // withChanges is check-fast's result with the changes the agent's role may not make: any is red.
-func withChanges(c Check, changes []string) Check {
-	if len(changes) == 0 {
-		return c
+// A change check that could not run leaves the stop incomplete, as a gate that could not run
+// does: not a pass, and check-fast still ran.
+func withChanges(c Check, changes []string, unjudged error) Check {
+	if unjudged != nil {
+		c.Incomplete = true
+		c.Report = strings.TrimSpace("the change check could not run, so what the agent changed is not judged: " +
+			unjudged.Error() + "\n\n" + c.Report)
 	}
 
-	c.Red = true
-	c.Report = strings.TrimSpace(changesReport(changes) + "\n\n" + c.Report)
+	if len(changes) > 0 {
+		c.Red = true
+		c.Report = strings.TrimSpace(changesReport(changes) + "\n\n" + c.Report)
+	}
 
 	return c
 }

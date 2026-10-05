@@ -28,6 +28,8 @@ type Snapshot struct {
 	Head  string            `json:"head"`
 	Files map[string]string `json:"files"`
 	Dirty []string          `json:"dirty,omitempty"`
+	// Error is why the checkout could not be read: the stop says so, and the next call tries again.
+	Error string `json:"error,omitempty"`
 }
 
 // Lister reads the checkout as it is now.
@@ -52,16 +54,18 @@ func snapshotPath(root, actor string) string {
 
 // Remember keeps the checkout as an agent finds it, at its first tool call, with a copy of each
 // file its role may not write that git cannot restore (a test the Tester has not committed yet,
-// for the Coder). The main session changes what it likes: it keeps none.
+// for the Coder). A checkout it could not read is kept as that error, and a snapshot that does not
+// read back is taken again, at the next call. The main session changes what it likes: it keeps
+// none.
 func Remember(ctx context.Context, root string, in Input, list Lister) {
 	path := snapshotPath(root, in.Actor())
-	if !in.Role().Agent() || exists(path) {
+	if !in.Role().Agent() || usable(path) {
 		return
 	}
 
 	s, err := list(ctx)
 	if err != nil {
-		return
+		s = Snapshot{Error: err.Error()}
 	}
 
 	for _, rel := range s.Dirty {
@@ -75,7 +79,23 @@ func Remember(ctx context.Context, root string, in Input, list Lister) {
 		return
 	}
 
-	_ = os.WriteFile(path, data, filePerm)
+	// Written whole or not at all: a stop never reads half a snapshot.
+	tmp := path + ".tmp"
+	if os.WriteFile(tmp, data, filePerm) == nil {
+		_ = os.Rename(tmp, path)
+	}
+}
+
+// usable reports whether the snapshot at path reads back and holds a checkout.
+func usable(path string) bool {
+	data, err := os.ReadFile(path) // #nosec G304 -- this checkout's own snapshot
+	if err != nil {
+		return false
+	}
+
+	var s Snapshot
+
+	return json.Unmarshal(data, &s) == nil && s.Error == ""
 }
 
 // keep copies rel into the agent's directory, when it exists.
@@ -108,6 +128,10 @@ func Changes(ctx context.Context, root string, in Input, list Lister) ([]string,
 	err = json.Unmarshal(data, &before)
 	if err != nil {
 		return nil, fmt.Errorf("read the agent's snapshot: %w", err)
+	}
+
+	if before.Error != "" {
+		return nil, fmt.Errorf("the checkout could not be read when the agent started: %s", before.Error)
 	}
 
 	now, err := list(ctx)

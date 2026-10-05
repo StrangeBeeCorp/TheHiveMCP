@@ -2,6 +2,8 @@ package hooks_test
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"maps"
 	"os"
 	"path/filepath"
@@ -12,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/hooks"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/policy"
 )
 
 // exploreType is a read-only agent type.
@@ -189,6 +192,60 @@ func TestAReviewerIsLetGoAfterItsRounds(t *testing.T) {
 	hooks.Remember(t.Context(), root, in, c.list)
 	c.set("notes.md", "x")
 	assert.Contains(t, decode(t, s.Stop(t.Context(), in))["reason"], "round 1 of 3", "a clean stop starts the count again")
+}
+
+// A checkout that could not be read at the agent's start, or a snapshot that does not read back,
+// is no pass: check-fast still runs, the stop says the change check could not, and the next tool
+// call takes the snapshot again.
+func TestAChangeCheckThatCannotRunIsNoPass(t *testing.T) {
+	t.Parallel()
+
+	root, c := t.TempDir(), started()
+	check := &fakeCheck{}
+	s := hooks.Stopper{Root: root, MaxRounds: 6, Check: check.run, Fingerprint: same, List: c.list}
+	in := hooks.Input{SessionID: "s", AgentID: "a", AgentType: coderType}
+
+	hooks.Remember(t.Context(), root, in, func(context.Context) (hooks.Snapshot, error) {
+		return hooks.Snapshot{}, errors.New("git: index.lock exists")
+	})
+
+	v := decode(t, s.Stop(t.Context(), in))
+	assert.Nil(t, v["decision"])
+	assert.Contains(t, v["systemMessage"], "not a pass")
+	assert.Contains(t, v["systemMessage"], "index.lock")
+	assert.Equal(t, 1, check.calls, "check-fast ran all the same")
+
+	hooks.Remember(t.Context(), root, in, c.list)
+	c.set("internal/tools/search/search_test.go", "x")
+	assert.Equal(t, "block", decode(t, s.Stop(t.Context(), in))["decision"], "the next call took the snapshot")
+
+	snapshots, err := filepath.Glob(filepath.Join(root, ".cache", "harness", "agents", "*.json"))
+	require.NoError(t, err)
+	require.Len(t, snapshots, 1)
+	require.NoError(t, os.WriteFile(snapshots[0], []byte(`{"head": "aa`), 0o600))
+
+	assert.Contains(t, decode(t, s.Stop(t.Context(), in))["systemMessage"], "not a pass", "half a snapshot is no pass either")
+	hooks.Remember(t.Context(), root, in, c.list)
+	assert.True(t, json.Valid([]byte(readFile(t, snapshots[0]))), "and is taken again")
+}
+
+// A change the agent does not undo counts its red rounds like a red check-fast: after max rounds
+// it must write BLOCKED.md, and then it may stop.
+func TestAChangeKeptPastTheRoundsEndsBlocked(t *testing.T) {
+	t.Parallel()
+
+	root, c := t.TempDir(), started()
+	s := hooks.Stopper{Root: root, MaxRounds: 2, Check: (&fakeCheck{}).run, Fingerprint: same, List: c.list}
+	in := hooks.Input{SessionID: "s", AgentID: "a", AgentType: coderType}
+
+	hooks.Remember(t.Context(), root, in, c.list)
+	c.set("internal/tools/search/search_test.go", "x")
+
+	assert.Contains(t, decode(t, s.Stop(t.Context(), in))["reason"], "round 1 of 2")
+	assert.Contains(t, decode(t, s.Stop(t.Context(), in))["reason"], "red rounds: stop trying")
+
+	writeFile(t, root, policy.BlockedFile, "the test I changed cannot be restored: the Tester's copy is gone\n")
+	assert.Contains(t, decode(t, s.Stop(t.Context(), in))["systemMessage"], "stopped BLOCKED")
 }
 
 // The main session keeps no snapshot: a person is there, and it changes what it likes.
