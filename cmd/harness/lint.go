@@ -1,18 +1,17 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/lint"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/proc"
 )
 
 // The commands that run the pinned linters and formatters.
@@ -24,48 +23,9 @@ const (
 // toolExec runs the tools' command lines, and dockerRunning says whether they can run: the
 // tests replace both.
 var (
-	toolExec      lint.Exec = runTool
+	toolExec      proc.Exec = proc.Local
 	dockerRunning           = dockerUp
 )
-
-func runTool(ctx context.Context, argv []string, stdin io.Reader) (lint.Output, error) {
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) // #nosec G204 -- the pinned command lines of internal/harness/lint
-	cmd.Stdin = stdin
-
-	var stdout, stderr bytes.Buffer
-
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	err := cmd.Run()
-
-	out := lint.Output{Stdout: stdout.Bytes(), Stderr: stderr.Bytes()}
-
-	var exit *exec.ExitError
-	if errors.As(err, &exit) {
-		out.Code = exit.ExitCode()
-		return out, nil
-	}
-
-	if err != nil {
-		return out, fmt.Errorf("%s: %w", argv[0], err)
-	}
-
-	return out, nil
-}
-
-// tools runs bin/harness lint or fmt in the repository of the working directory.
-func tools(ctx context.Context, args []string, out io.Writer) error {
-	root, err := repositoryRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	e := env{root: root}
-	if args[0] == cmdFmt {
-		return e.fmtCmd(ctx, args[1:], out)
-	}
-
-	return e.lint(ctx, args[1:], out)
-}
 
 // toolRun is what a run of the linters or the formatters did.
 type toolRun struct {

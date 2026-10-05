@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/lint"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/proc"
 )
 
 // fakeDocker answers each command line by the tool it names (its last word before the args is
@@ -34,7 +35,7 @@ type answer struct {
 	do     func()
 }
 
-func (f *fakeDocker) exec(_ context.Context, argv []string, stdin io.Reader) (lint.Output, error) {
+func (f *fakeDocker) exec(_ context.Context, argv []string, stdin io.Reader) (proc.Output, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -42,14 +43,14 @@ func (f *fakeDocker) exec(_ context.Context, argv []string, stdin io.Reader) (li
 
 	if argv[1] == "image" {
 		if f.have[argv[len(argv)-1]] {
-			return lint.Output{Stdout: []byte("sha256:x")}, nil
+			return proc.Output{Stdout: []byte("sha256:x")}, nil
 		}
 
-		return lint.Output{Stderr: []byte("No such image"), Code: 1}, nil
+		return proc.Output{Stderr: []byte("No such image"), Code: 1}, nil
 	}
 
 	if argv[1] == "pull" {
-		return lint.Output{}, nil
+		return proc.Output{}, nil
 	}
 
 	for word, a := range f.answers {
@@ -63,11 +64,11 @@ func (f *fakeDocker) exec(_ context.Context, argv []string, stdin io.Reader) (li
 				a.do()
 			}
 
-			return lint.Output{Stdout: []byte(a.out), Stderr: []byte(a.stderr), Code: a.code}, a.err
+			return proc.Output{Stdout: []byte(a.out), Stderr: []byte(a.stderr), Code: a.code}, a.err
 		}
 	}
 
-	return lint.Output{}, nil
+	return proc.Output{}, nil
 }
 
 func (f *fakeDocker) ran(prefix ...string) int {

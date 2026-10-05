@@ -81,7 +81,7 @@ services:
     # To run the parallel, one-org-per-test mode you need a license whose
     # `organisations` quota is unlimited: supply THEHIVE_TEST_LICENSE and layer
     # docker-compose.license.yml on top (it adds `--dev` + the license mounts).
-    # That override is selected automatically by scripts/reset-integration-db.sh
+    # That override is selected automatically by bin/harness integration (internal/harness/stack)
     # and the Makefile when THEHIVE_TEST_LICENSE is set.
 
   # Serves the minimal MITRE ATT&CK STIX bundle that initHiveInstance imports.

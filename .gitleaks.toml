@@ -24,7 +24,7 @@ regexes = [
 # operator is expected to regenerate. They are not our secrets.
 paths = [
   '''deployment/examples/docker-compose\.librechat\.yml''',
-  # The test license the integration scripts write at run time (scripts/reset-integration-db.sh)
+  # The test license the integration scripts write at run time (bin/harness integration (internal/harness/stack))
   # and keep for the next run. The scan reads the working tree, gitignored files included;
   # the public-safety gate refuses committing *.lic.local, so this file never reaches git.
   '''internal/testutils/testdata/\.test-license\.lic\.local''',

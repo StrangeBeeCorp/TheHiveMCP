@@ -1,27 +1,14 @@
-# Dockerfile for MCPB generation in CI
+# The MCPB packer image: bin/harness package mcpb (internal/harness/release) lays out each
+# extension in a workspace and runs this image on it, as the host user, to pack it.
 FROM node:24-alpine
 
-# Install required tools and the MCPB packer.
-# apk versions are intentionally unpinned (DL3018): node:24-alpine floats its
-# Alpine minor, so a pinned bash=<rev>/git=<rev> would break the build on the
-# next repo bump. The npm packer is pinned for reproducible CI artifacts.
-# hadolint ignore=DL3018
-RUN apk add --no-cache bash git \
-    && npm install -g --ignore-scripts @anthropic-ai/mcpb@2.1.2
+# The npm packer is pinned for reproducible release artifacts.
+RUN npm install -g --ignore-scripts @anthropic-ai/mcpb@2.1.2
 
-# Copy logo and scripts to /usr/local/bin
-COPY docs/images/theHivelogo.png /usr/local/share/icon.png
-COPY scripts/generate-mcpb.sh /usr/local/bin/generate-mcpb.sh
-
-# Make script executable
-RUN chmod +x /usr/local/bin/generate-mcpb.sh
-
-# Set working directory for volumes
 WORKDIR /workspace
 
-# Drop root: the upstream node:alpine image ships a non-root "node" user. All
-# build-time file ops above run as root; the packer runs unprivileged and only
-# needs to write into the mounted /workspace.
+# Drop root: the upstream node:alpine image ships a non-root "node" user; bin/harness runs the
+# packer as the host user, so that it can write the mounted workspace.
 USER node
 
-ENTRYPOINT ["/usr/local/bin/generate-mcpb.sh"]
+ENTRYPOINT ["mcpb"]

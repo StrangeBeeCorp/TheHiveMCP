@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx/gittest"
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/lint"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/proc"
 )
 
 const (
@@ -23,14 +23,14 @@ const (
 
 // fakeTools stands in for docker: every command line is recorded and answered by respond, given
 // the line; nil answers a clean run, with an npm notice on stderr as noise.
-func fakeTools(t *testing.T, respond func(line string) *lint.Output) *[][]string {
+func fakeTools(t *testing.T, respond func(line string) *proc.Output) *[][]string {
 	t.Helper()
 
 	var calls [][]string
 
 	prevExec, prevUp := toolExec, dockerRunning
 
-	toolExec = func(_ context.Context, argv []string, _ io.Reader) (lint.Output, error) {
+	toolExec = func(_ context.Context, argv []string, _ io.Reader) (proc.Output, error) {
 		calls = append(calls, argv)
 
 		if respond != nil {
@@ -39,7 +39,7 @@ func fakeTools(t *testing.T, respond func(line string) *lint.Output) *[][]string
 			}
 		}
 
-		return lint.Output{Stderr: []byte(npmNotice)}, nil
+		return proc.Output{Stderr: []byte(npmNotice)}, nil
 	}
 	dockerRunning = func(context.Context) bool { return true }
 
@@ -49,10 +49,10 @@ func fakeTools(t *testing.T, respond func(line string) *lint.Output) *[][]string
 }
 
 // rewrites answers the line naming tool by writing content to file.
-func rewrites(t *testing.T, tool, file, content string) func(string) *lint.Output {
+func rewrites(t *testing.T, tool, file, content string) func(string) *proc.Output {
 	t.Helper()
 
-	return func(line string) *lint.Output {
+	return func(line string) *proc.Output {
 		if strings.Contains(line, tool) {
 			require.NoError(t, os.WriteFile(file, []byte(content), 0o600))
 		}
@@ -82,9 +82,9 @@ func TestLintFailsOnAFindingAndNamesIt(t *testing.T) {
 	gittest.Write(t, dir, map[string]string{"scripts/bad.sh": "echo $1\n", "scripts/unstaged.sh": "echo $2\n"})
 	gittest.Git(t, dir, "add", "scripts/bad.sh")
 
-	calls := fakeTools(t, func(line string) *lint.Output {
+	calls := fakeTools(t, func(line string) *proc.Output {
 		if strings.Contains(line, "shellcheck") {
-			return &lint.Output{Stdout: []byte("scripts/bad.sh:1: SC2086 (info): Double quote to prevent globbing.\n"), Code: 1}
+			return &proc.Output{Stdout: []byte("scripts/bad.sh:1: SC2086 (info): Double quote to prevent globbing.\n"), Code: 1}
 		}
 
 		return nil
@@ -109,7 +109,7 @@ func TestLintFixReportsEveryFileItChanged(t *testing.T) {
 	gittest.Write(t, dir, map[string]string{xGo: "package  x\n"})
 
 	formatX, fixY := rewrites(t, "gofmt -l -w", filepath.Join(dir, xGo), pkgX), rewrites(t, "run --fix", filepath.Join(dir, yGo), "package y // fixed\n")
-	fakeTools(t, func(line string) *lint.Output {
+	fakeTools(t, func(line string) *proc.Output {
 		formatX(line)
 		fixY(line)
 
@@ -145,9 +145,9 @@ func TestFmtRewritesOrFailsTheCheck(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "✓ fmt check passed (2 go)\n", out, "npm's notice on stderr lists no file")
 
-	fakeTools(t, func(line string) *lint.Output {
+	fakeTools(t, func(line string) *proc.Output {
 		if strings.Contains(line, "gofmt -l /app/") {
-			return &lint.Output{Stdout: []byte("/app/" + yGo + "\n"), Stderr: []byte(npmNotice)}
+			return &proc.Output{Stdout: []byte("/app/" + yGo + "\n"), Stderr: []byte(npmNotice)}
 		}
 
 		return nil
@@ -163,9 +163,9 @@ func TestFmtRewritesOrFailsTheCheck(t *testing.T) {
 //nolint:paralleltest // t.Chdir, and the tools are replaced for the test
 func TestFmtFailsWhenAFormatterCannotRun(t *testing.T) {
 	lintRepo(t)
-	fakeTools(t, func(line string) *lint.Output {
+	fakeTools(t, func(line string) *proc.Output {
 		if strings.Contains(line, "golangci-lint fmt") {
-			return &lint.Output{Stderr: []byte("Unable to find image locally\n"), Code: 125}
+			return &proc.Output{Stderr: []byte("Unable to find image locally\n"), Code: 125}
 		}
 
 		return nil

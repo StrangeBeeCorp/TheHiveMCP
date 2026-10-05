@@ -10,22 +10,14 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/proc"
 )
-
-// Exec runs one command line with stdin. Its error is for a command that could not start.
-type Exec func(ctx context.Context, argv []string, stdin io.Reader) (Output, error)
-
-// Output is what a command printed, and its exit code.
-type Output struct {
-	Stdout []byte
-	Stderr []byte
-	Code   int
-}
 
 // Runner runs steps in a checkout.
 type Runner struct {
 	Root string
-	Exec Exec
+	Exec proc.Exec
 	// Watch are the files whose content a fix may change, relative to Root: a fix is reported by
 	// the files it changed.
 	Watch []string
@@ -153,11 +145,11 @@ func (r Runner) check(ctx context.Context, s Step) (Failure, bool) {
 	return Failure{}, false
 }
 
-func (r Runner) execOut(ctx context.Context, s Step) (Output, error) {
+func (r Runner) execOut(ctx context.Context, s Step) (proc.Output, error) {
 	if s.Before != nil {
 		err := r.write(*s.Before)
 		if err != nil {
-			return Output{}, err
+			return proc.Output{}, err
 		}
 	}
 
@@ -166,7 +158,7 @@ func (r Runner) execOut(ctx context.Context, s Step) (Output, error) {
 	if s.Stdin != "" {
 		data, err := os.ReadFile(filepath.Join(r.Root, filepath.FromSlash(s.Stdin))) // #nosec G304 -- a file the run selected in the checkout
 		if err != nil {
-			return Output{}, fmt.Errorf("read %s: %w", s.Stdin, err)
+			return proc.Output{}, fmt.Errorf("read %s: %w", s.Stdin, err)
 		}
 
 		stdin = bytes.NewReader(data)
@@ -174,7 +166,7 @@ func (r Runner) execOut(ctx context.Context, s Step) (Output, error) {
 
 	out, err := r.Exec(ctx, s.Argv, stdin)
 	if err != nil {
-		return Output{}, fmt.Errorf("%s could not run: %w", s.Name, err)
+		return proc.Output{}, fmt.Errorf("%s could not run: %w", s.Name, err)
 	}
 
 	return out, nil

@@ -112,18 +112,12 @@ suites:
       - "**/*_test.go"
       - docker-compose.test.yml
       - docker-compose.license.yml
-      - scripts/run-integration-tests.sh
-      - scripts/reset-integration-db.sh
   - id: packaging
     review: medium
     about: The production image, the MCPB packages and the release archives
     paths:
       - deployment/**
       - scripts/Dockerfile.mcpb
-      - scripts/generate-mcpb.sh
-      - scripts/generate-hashes.sh
-      - scripts/package-*.sh
-      - scripts/sign-windows.sh
       - .dockerignore
   - id: spec
     review: medium

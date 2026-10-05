@@ -375,9 +375,8 @@ docker run -d \
 When generating MCPB packages, permissions configs can be bundled directly:
 
 ```bash
-# Bundle a permissions config with the MCPB
-export PERMISSIONS_CONFIG=docs/reference/permissions-examples/analyst.yaml
-./scripts/generate-mcpb.sh
+# Bundle a permissions config with the MCPB of your machine
+make mcpb-local PERMISSIONS_CONFIG=docs/reference/permissions-examples/analyst.yaml
 ```
 
 The permissions file will be:

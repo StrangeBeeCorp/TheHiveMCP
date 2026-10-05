@@ -26,8 +26,7 @@ structure:
     bootstrap/tool_schema_test.go: 718
     internal/resources/dynamic_resources.go: 695
     internal/utils/parsers.go: 635
-    internal/tools/manage/models.go: 603
-    Makefile: 555
+    Makefile: 553
     internal/utils/parsers_test.go: 594
     bootstrap/http_test.go: 580
     internal/testutils/container.go: 543

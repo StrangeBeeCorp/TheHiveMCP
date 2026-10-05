@@ -307,7 +307,7 @@ export THEHIVE_TEST_URL
 # from it) and the go-test container; export it so both sub-shells see it.
 export THEHIVE_TEST_IMAGE
 
-# Integration mode is decided at run time by scripts/reset-integration-db.sh,
+# Integration mode is decided at run time by bin/harness integration (internal/harness/stack),
 # highest-priority first (see that script + the recipe below):
 #   1. THEHIVE_TEST_LICENSE set ⇒ use that token directly (no probe, no mint) ⇒
 #      parallel one-org-per-test. Supply it as a CI secret or a local export to
@@ -346,10 +346,10 @@ test-integration: pre ## Full suite vs a live TheHive stack; slow, leaves stack 
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Running Integration Tests --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
-	@LICENSE_FILE="$(LICENSE_FILE)" MOUNT_APP="$(MOUNT_APP)" GO_IMAGE="$(GO_IMAGE_CGO)" \
+	@MOUNT_APP="$(MOUNT_APP)" GO_IMAGE="$(GO_IMAGE_CGO)" \
 		GO_RUN_AS_HOST_UID="$(GO_RUN_AS_HOST_UID)" DOCKER_CACHE_MOUNTS="$(DOCKER_CACHE_MOUNTS)" \
 		GO_TOOLS_CACHE="$(GO_TOOLS_CACHE)" GO_TEST_COVER="$(GO_TEST_COVER)" GO_TEST_RUN="$(GO_TEST_RUN)" \
-		./scripts/run-integration-tests.sh
+		bin/harness integration
 ifeq ($(COVERAGE),1)
 	docker run -i --rm -v $(MOUNT_APP) -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
 endif
@@ -491,9 +491,8 @@ package-from-built: pre-dist mcpb-ci-nobuild ## Release CI: package existing (si
 	@echo $(BGreen)--------------------------------$(Color_Off)
 	@echo $(BGreen)-- Packaging release binaries --$(Color_Off)
 	@echo $(BGreen)--------------------------------$(Color_Off)
-	@VERSION="$(VERSION)" BUILDDIR="$(BUILDDIR)" DISTDIR="$(DISTDIR)" \
-		BINARY_NAME="$(BINARY_NAME)" RELEASE_TARGETS="$(RELEASE_TARGETS)" \
-		./scripts/package-tarballs.sh
+	@bin/harness package tarballs --version "$(VERSION)" --build "$(BUILDDIR)" --dist "$(DISTDIR)" \
+		--name "$(BINARY_NAME)" --targets "$(RELEASE_TARGETS)"
 
 .PHONY: version
 version: ## Print the version string baked into builds ##@ make version
@@ -507,11 +506,11 @@ mcpb-build-image: ## Internal: build the MCPB packaging image (dep of mcpb-*) ##
 	docker build -f scripts/Dockerfile.mcpb -t thehivemcp-mcpb:latest .
 
 .PHONY: mcpb-local
-mcpb-local: build ## Build + package a single MCPB for your host, to test it ##@ make mcpb-local
+mcpb-local: build mcpb-build-image ## Build + package a single MCPB for your host, to test it ##@ make mcpb-local [PERMISSIONS_CONFIG=<file>]
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Generating MCPB Package --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
-	./scripts/generate-mcpb.sh
+	bin/harness package mcpb --host --version "$(VERSION)" --build "$(BUILDDIR)" --dist "$(DISTDIR)" --name "$(BINARY_NAME)"
 
 # The set of targets mcpb-ci-nobuild packages. Defaults to every release
 # target; override it to a subset for a fast packaging smoke-test (see
@@ -539,9 +538,8 @@ mcpb-ci-nobuild: pre-dist mcpb-build-image ## Release CI: MCPB-package existing 
 	@echo $(BGreen)----------------------------------$(Color_Off)
 	@echo $(BGreen)-- Generating MCPB Packages CI --$(Color_Off)
 	@echo $(BGreen)----------------------------------$(Color_Off)
-	@VERSION="$(VERSION)" BUILDDIR="$(BUILDDIR)" DISTDIR="$(DISTDIR)" \
-		MCPB_TARGETS="$(MCPB_TARGETS)" \
-		./scripts/package-mcpb-ci.sh
+	@bin/harness package mcpb --version "$(VERSION)" --build "$(BUILDDIR)" --dist "$(DISTDIR)" \
+		--name "$(BINARY_NAME)" --targets "$(MCPB_TARGETS)"
 
 # The windows release targets, expanded to their built .exe paths.
 WINDOWS_TARGETS := $(filter windows-%,$(RELEASE_TARGETS))
@@ -552,4 +550,4 @@ sign-windows: ## Release CI: code-sign the built Windows .exe files in place ##@
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Signing Windows binaries --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
-	./scripts/sign-windows.sh $(WINDOWS_BINARIES)
+	bin/harness sign-windows $(WINDOWS_BINARIES)

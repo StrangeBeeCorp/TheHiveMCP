@@ -15,6 +15,9 @@
 //	harness structure [--top N] [--json]  (the largest files and fullest directories against the limits)
 //	harness lint [--all | --staged | --changed [COMMIT] | PATH...] [--check | --fix]  (the pinned linters; check by default)
 //	harness fmt [--all | --staged | --changed [COMMIT] | PATH...] [--check | --fix]  (the pinned formatters; fix by default)
+//	harness package tarballs|mcpb [--version V] [--build DIR] [--dist DIR] [--name N] [--targets "T ..." | --host]
+//	harness sign-windows BINARY...  (SIGNING_PROVIDER: none, signpath or azure)
+//	harness integration  (make test-integration: the stack up and reset, then the suite)
 package main
 
 import (
@@ -169,13 +172,18 @@ func stagedRun(args []string) bool {
 
 func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer) error {
 	if len(args) == 0 {
-		return usageError{"usage: harness run|select|list|check|docs|hook|pr|push|evidence|review-effort|canaries|structure|lint|fmt (see cmd/harness/main.go)"}
+		return usageError{"usage: harness run|select|list|check|docs|hook|pr|push|evidence|review-effort|canaries|structure|lint|fmt|package|sign-windows|integration (see cmd/harness/main.go)"}
 	}
 
-	if args[0] == cmdLint || args[0] == cmdFmt {
-		// The tools read the repository alone: a registry or limits file half edited, or staged in
-		// part, cannot stop a lint or a commit.
-		return tools(ctx, args, out)
+	if command, ok := standalone[args[0]]; ok {
+		// These read the repository alone: a registry or limits file half edited, or staged in
+		// part, cannot stop a lint, a commit, a test run or a release.
+		root, err := repositoryRoot(ctx)
+		if err != nil {
+			return err
+		}
+
+		return command(env{root: root}, ctx, args[1:], out)
 	}
 
 	e, err := load(ctx, stagedRun(args))
@@ -204,6 +212,15 @@ func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer
 	}
 
 	return command(ctx, args[1:], out)
+}
+
+// standalone are the commands that need the repository only, not its registry or limits.
+var standalone = map[string]func(env, context.Context, []string, io.Writer) error{
+	cmdLint:        env.lint,
+	cmdFmt:         env.fmtCmd,
+	cmdPackage:     env.packageCmd,
+	cmdSign:        env.signWindows,
+	cmdIntegration: env.integration,
 }
 
 // The commands that select gates from the changed paths.
