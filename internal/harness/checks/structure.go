@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"path"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -92,7 +93,7 @@ func cleanFindings(f string, content []byte, lim StructureLimits) []Finding {
 
 	err := parseYAML(f, content)
 	if err != nil {
-		out = append(out, Finding{Path: f, Msg: "not valid YAML: " + err.Error()})
+		out = append(out, Finding{Path: f, Msg: "not valid YAML: " + yamlPrefix.ReplaceAllString(err.Error(), "")})
 	}
 
 	if matchesFile(lim.Verbatim, f) || len(content) == 0 {
@@ -109,6 +110,10 @@ func cleanFindings(f string, content []byte, lim StructureLimits) []Finding {
 
 	return out
 }
+
+// yamlPrefix is how a yaml.v3 error starts. Its line counts from 0 for a parser error and from 1
+// for a scanner error, so a finding leaves it out rather than point at the wrong line.
+var yamlPrefix = regexp.MustCompile(`^yaml: (line \d+: )?`)
 
 // parseYAML decodes every document of a .yaml or .yml file; any other file is left alone.
 func parseYAML(f string, content []byte) error {

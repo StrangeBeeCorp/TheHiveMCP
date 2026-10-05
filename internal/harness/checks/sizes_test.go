@@ -53,7 +53,7 @@ func TestTextFilesAreCleanAndSmall(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, found)
 	assert.Equal(t, "pkg/bad.yml", found[0].Path, "the second document does not parse")
-	assert.True(t, strings.HasPrefix(found[0].Msg, "not valid YAML: "), found[0].Msg)
+	assert.Equal(t, "not valid YAML: did not find expected ',' or ']'", found[0].Msg, "without yaml.v3's line, which is off by one")
 	assert.Equal(t, strings.Join([]string{
 		"pkg/big.bin: 2 KB, over the limit of 1 KB: keep large files out of the repository",
 		"pkg/big.json: 2 KB, over the limit of 1 KB: keep large files out of the repository",
