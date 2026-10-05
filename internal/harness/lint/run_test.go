@@ -165,6 +165,21 @@ func TestRunFailsAFixThatCouldNotRun(t *testing.T) {
 	}, rep.Failures)
 }
 
+// A fix killed before it finished (a signal, a cancelled gate: a negative exit code) is a failure,
+// not a clean run that formatted nothing.
+func TestRunFailsAFixThatWasKilled(t *testing.T) {
+	t.Parallel()
+
+	fake := newFake()
+	fake.answers["markdownlint-cli2 --fix"] = answer{stderr: "signal: killed\n", code: -1}
+
+	rep := lint.Runner{Root: t.TempDir(), Exec: fake.exec}.Run(t.Context(), lint.FormatSteps(lint.Classify([]string{mdFile}), repo, true))
+
+	require.Len(t, rep.Failures, 1)
+	assert.Contains(t, rep.Failures[0].Name, "markdownlint")
+	assert.Equal(t, "signal: killed", rep.Failures[0].Output)
+}
+
 // An image docker has is not pulled again; one it lacks is pulled quietly, once, before the
 // steps run, so its progress never reads as a finding.
 func TestRunPullsOnlyTheMissingImages(t *testing.T) {

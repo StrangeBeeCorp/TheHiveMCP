@@ -109,14 +109,15 @@ func (r Runner) pull(ctx context.Context, steps []Step) {
 const cannotRun = 125
 
 // fix runs one fix. What a tool could not fix is not a failure: lint's checks after it report
-// it, and the fmt gate checks the files. A fix that could not run at all is one.
+// it, and the fmt gate checks the files. A fix that could not run at all is one, and so is one
+// killed before it finished (a negative code: a signal, or a cancelled context).
 func (r Runner) fix(ctx context.Context, s Step) (Failure, bool) {
 	out, err := r.execOut(ctx, s)
 	if err != nil {
 		return Failure{Name: s.Name, Output: err.Error()}, true
 	}
 
-	if out.Code >= cannotRun {
+	if out.Code >= cannotRun || out.Code < 0 {
 		return Failure{Name: s.Name, Output: strings.TrimRight(string(out.Stdout)+string(out.Stderr), "\n")}, true
 	}
 
