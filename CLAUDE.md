@@ -12,8 +12,8 @@
   pull request, and the person who merges is the last check.
 - The hooks of `.claude/settings.json` send every tool call to `bin/harness hook` (`internal/harness/hooks/`, `internal/harness/policy/`): an edit or a read is
   judged by the role's paths, a command only for an environment file it names, and when an agent stops, every file it changed is judged by its role again,
-  whatever command changed it. Every stop runs `make check-fast` (the gates your changed paths select, listed in `docs/reference/gates.md`): an agent does not
-  stop red, and after six red rounds it writes `.cache/harness/BLOCKED.md`.
+  whatever command changed it: the sealed tests included, not the baselines, which their make targets regenerate. Every stop runs `make check-fast` (the gates
+  your changed paths select, listed in `docs/reference/gates.md`): an agent does not stop red, and after six red rounds it writes `.cache/harness/BLOCKED.md`.
 - Implement test first with the `implement-task` workflow: the Tester (`.claude/agents/tester.md`) writes the tests, the Coder (`.claude/agents/coder.md`) the
   code, and neither may edit the other's files.
 - Per-machine notes go in `CLAUDE.local.md` and per-machine settings in `settings.local.json` next to `settings.json`. Both stay out of git; the public-safety

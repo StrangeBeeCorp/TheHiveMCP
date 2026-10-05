@@ -238,7 +238,8 @@ func Read(role Role, root, p string) Decision {
 		return deny("the canaries are the known-bad patches the gates must catch: implement from the spec, not from them")
 	}
 
-	if role == Coder && under(rel, strings.ToLower(SealedDir)) {
+	// The Stop hook's copy of a sealed test (under .cache/harness/agents/) is as sealed as it.
+	if role == Coder && (under(rel, strings.ToLower(SealedDir)) || strings.Contains(rel, "/"+strings.ToLower(SealedDir))) {
 		return deny("the sealed tests stay hidden from the Coder until the end: make the visible tests pass")
 	}
 

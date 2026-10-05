@@ -1,7 +1,10 @@
 package gitx_test
 
 import (
+	"maps"
+	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx"
@@ -15,6 +18,7 @@ const (
 	ignoreRules = ".gitignore"
 	pkgSource   = "package x\n"
 	pkgEdited   = "package x // edited\n"
+	newGo       = "new.go"
 )
 
 // The fingerprint changes with what the gates read, and only with it: an edit, staged or not, a
@@ -46,12 +50,12 @@ func TestTheFingerprintChangesWithWhatTheGatesRead(t *testing.T) {
 	gittest.Git(t, dir, "add", goFile)
 	assert.Equal(t, edited, fingerprint(), "staging the same edit changes nothing the gates read")
 
-	gittest.Write(t, dir, map[string]string{"new.go": pkgSource})
+	gittest.Write(t, dir, map[string]string{newGo: pkgSource})
 
 	untracked := fingerprint()
 	assert.NotEqual(t, edited, untracked)
 
-	gittest.Write(t, dir, map[string]string{"new.go": "package x // other\n"})
+	gittest.Write(t, dir, map[string]string{newGo: "package x // other\n"})
 	assert.NotEqual(t, untracked, fingerprint(), "an untracked file's content counts")
 
 	gittest.Git(t, dir, "add", "-A")
@@ -61,6 +65,30 @@ func TestTheFingerprintChangesWithWhatTheGatesRead(t *testing.T) {
 
 	gittest.Commit(t, dir)
 	assert.NotEqual(t, committed, fingerprint(), "a new HEAD")
+}
+
+// Contents hash what a commit would carry and the ignored files of the directories named, never
+// another ignored file or a deleted one; Dirty lists what HEAD does not hold as it is.
+func TestContentsAndDirtyReadTheCheckout(t *testing.T) {
+	t.Parallel()
+
+	sealed := ".claude/sealed/DL-1/a_test.go"
+	dir := gittest.Repo(t, map[string]string{goFile: pkgSource, ignoreRules: ".cache/\n.claude/sealed/\n", "gone.go": pkgSource})
+	gittest.Write(t, dir, map[string]string{newGo: pkgSource, ".cache/x": "x\n", sealed: "x\n"})
+	require.NoError(t, os.Remove(filepath.Join(dir, "gone.go")))
+
+	files, err := gitx.Contents(t.Context(), dir, ".claude/sealed/")
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{goFile, ignoreRules, newGo, sealed}, slices.Collect(maps.Keys(files)))
+	assert.Equal(t, files[goFile], files[newGo], "the same content, the same hash")
+
+	plain, err := gitx.Contents(t.Context(), dir)
+	require.NoError(t, err)
+	assert.NotContains(t, plain, sealed, "an ignored directory is read only when named")
+
+	dirty, err := gitx.Dirty(t.Context(), dir)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"gone.go", newGo}, dirty)
 }
 
 // Branch is empty on a detached HEAD, MainCheckout names the main working tree from a linked

@@ -38,17 +38,22 @@ func Ignored(ctx context.Context, root, rel string) bool {
 	return err == nil
 }
 
-// Contents are the checkout's Files, each with the sha256 of its content. A tracked file deleted
-// from the tree is not among them.
-func Contents(ctx context.Context, root string) (map[string]string, error) {
+// Contents are the checkout's Files, and the files git ignores under the directories named, each
+// with the sha256 of its content. A tracked file deleted from the tree is not among them.
+func Contents(ctx context.Context, root string, ignoredDirs ...string) (map[string]string, error) {
 	paths, err := Files(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+
+	ignored, err := IgnoredUnder(ctx, root, ignoredDirs...)
 	if err != nil {
 		return nil, err
 	}
 
 	files := map[string]string{}
 
-	for _, p := range paths {
+	for _, p := range append(paths, ignored...) {
 		content, err := os.ReadFile(filepath.Join(root, p)) // #nosec G304 -- a file of this checkout
 		if err != nil {
 			continue
@@ -59,6 +64,50 @@ func Contents(ctx context.Context, root string) (map[string]string, error) {
 	}
 
 	return files, nil
+}
+
+// IgnoredUnder lists the files git ignores under the directories named (none: no file).
+func IgnoredUnder(ctx context.Context, root string, dirs ...string) ([]string, error) {
+	if len(dirs) == 0 {
+		return nil, nil
+	}
+
+	out, err := run(ctx, root, append([]string{"ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--"}, dirs...)...)
+	if err != nil {
+		return nil, err
+	}
+
+	return split(out), nil
+}
+
+// Dirty lists the files whose content HEAD does not hold: changed, added, untracked or deleted,
+// and both paths of a rename. Only HEAD's own files can be restored from git.
+func Dirty(ctx context.Context, root string) ([]string, error) {
+	out, err := run(ctx, root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+	if err != nil {
+		return nil, err
+	}
+
+	var paths []string
+
+	fields := strings.Split(out, "\x00")
+	for i := 0; i < len(fields); i++ {
+		entry := fields[i]
+		if len(entry) < len("XY p") {
+			continue
+		}
+
+		paths = append(paths, entry[3:])
+
+		if entry[0] == 'R' || entry[0] == 'C' {
+			i++
+			if i < len(fields) && fields[i] != "" {
+				paths = append(paths, fields[i])
+			}
+		}
+	}
+
+	return split(strings.Join(paths, "\x00")), nil
 }
 
 // Fingerprint identifies what the gates would read: HEAD, the diff from it (staged and not), and

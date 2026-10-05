@@ -19,7 +19,7 @@ const (
 	// mainBranch changes only when a person merges a pull request.
 	mainBranch = "main"
 	// personUsage is the help of --person, the flag only a person types.
-	personUsage = "a person pushes: missing evidence or review only warn (the policy refuses it to Claude)"
+	personUsage = "a person pushes: missing evidence or review only warn (Claude Code's permission rules refuse it to Claude)"
 )
 
 // pushTarget is the branch a push may update: never main or a release branch, which change only
@@ -38,14 +38,13 @@ func pushTarget(branch string) (string, error) {
 // push pushes the branch checked out to origin, under its own name. The pr gates must have
 // passed at HEAD (make pr) and the adversarial review must be ready for HEAD, or for the same
 // change before a rebase, or the push is refused. A person who says so (--person, which the
-// policy refuses to every Claude session) gets the same checks as warnings. A push keeps the
-// review that let it ship (evidence.Keep), for that change's next rebase.
+// permission rules of .claude/settings.json refuse to Claude in the form it writes) gets the same
+// checks as warnings. A push keeps the review that let it ship (evidence.Keep), for that change's
+// next rebase.
 //
-// This stops an agent's mistakes and a subagent's shortcuts, not a determined forger. The policy
-// refuses the usual ways to write the evidence and the review state (the editor, redirects,
-// copies, archives, sort -o, curl -o), not every program that can write a file, and a main
-// session may run code it cannot read (python3). CI runs every gate again on the pull request,
-// and a person merges it.
+// This stops mistakes and shortcuts, not a determined forger: the policy refuses an edit of the
+// evidence or the review state, not a command that writes them. CI runs every gate again on the
+// pull request, and a person merges it.
 func (e env) push(ctx context.Context, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("push", flag.ContinueOnError)
 	force := fs.Bool("force", false, "push with --force-with-lease, after a rebase")

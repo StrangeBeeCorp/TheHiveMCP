@@ -3,6 +3,9 @@ package hooks_test
 import (
 	"context"
 	"maps"
+	"os"
+	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,11 +14,31 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/hooks"
 )
 
+// exploreType is a read-only agent type.
+const exploreType = "Explore"
+
 // checkout is a fake one: its listing is what the test says it is now.
 type checkout struct{ now hooks.Snapshot }
 
 func (c *checkout) list(context.Context) (hooks.Snapshot, error) {
-	return hooks.Snapshot{Head: c.now.Head, Files: maps.Clone(c.now.Files)}, nil
+	return hooks.Snapshot{Head: c.now.Head, Files: maps.Clone(c.now.Files), Dirty: slices.Clone(c.now.Dirty)}, nil
+}
+
+func writeFile(t *testing.T, root, rel, content string) {
+	t.Helper()
+
+	p := filepath.Join(root, rel)
+	require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o750))
+	require.NoError(t, os.WriteFile(p, []byte(content), 0o600))
+}
+
+func readFile(t *testing.T, p string) string {
+	t.Helper()
+
+	data, err := os.ReadFile(p) // #nosec G304 -- a file the test wrote
+	require.NoError(t, err)
+
+	return string(data)
 }
 
 func (c *checkout) set(path, sum string) { c.now.Files[path] = sum }
@@ -44,12 +67,12 @@ func TestAnAgentIsHeldToWhatItsRoleMayChange(t *testing.T) {
 		{coderType, func(c *checkout) { c.set("internal/tools/search/search_test.go", "x") }, []string{"search_test.go is a test"}},
 		{coderType, func(c *checkout) { delete(c.now.Files, "internal/tools/search/testdata/a.json") }, []string{"testdata/a.json is a test"}},
 		{coderType, func(c *checkout) { c.set("internal/tools/search/handler.go", "x") }, nil},
-		{coderType, func(c *checkout) { c.now.Head = "bbbbbbbbbb" }, []string{"HEAD moved from aaaaaaa to bbbbbbb"}},
+		{coderType, func(c *checkout) { c.now.Head = "bbbbbbbbbb" }, []string{"keep its changes: git reset --soft aaaaaaaaaa"}},
 		{testerType, func(c *checkout) { c.set("internal/tools/search/new.go", "x") }, []string{"new.go is code"}},
 		{testerType, func(c *checkout) { c.set("internal/tools/search/search_test.go", "x") }, nil},
 		{"general-purpose", func(c *checkout) { c.set("CLAUDE.md", "x") }, []string{"CLAUDE.md is harness policy"}},
 		{"general-purpose", func(c *checkout) { c.set("baselines/surface/tokens.json", "x"); c.now.Head = "b" }, nil},
-		{"Explore", func(c *checkout) { c.set("notes.md", "x") }, []string{"reads and reports"}},
+		{exploreType, func(c *checkout) { c.set("notes.md", "x") }, []string{"reads and reports"}},
 		{"", func(c *checkout) { c.set("CLAUDE.md", "x"); c.now.Head = "b" }, nil},
 	} {
 		root, c := t.TempDir(), started()
@@ -89,7 +112,7 @@ func TestTheSnapshotIsTakenOnce(t *testing.T) {
 func TestAStopIsRedUntilTheChangeIsUndone(t *testing.T) {
 	t.Parallel()
 
-	for _, agentType := range []string{coderType, "Explore"} {
+	for _, agentType := range []string{coderType, exploreType} {
 		root, c := t.TempDir(), started()
 		s := hooks.Stopper{Root: root, MaxRounds: 6, Check: (&fakeCheck{}).run, Fingerprint: same, List: c.list}
 		in := hooks.Input{SessionID: "s", AgentID: "a", AgentType: agentType}
@@ -100,7 +123,7 @@ func TestAStopIsRedUntilTheChangeIsUndone(t *testing.T) {
 		v := decode(t, s.Stop(t.Context(), in))
 		assert.Equal(t, "block", v["decision"], agentType)
 		assert.Contains(t, v["reason"], "search_test.go", agentType)
-		assert.Contains(t, v["reason"], "git checkout --", "the agent is told how to undo it")
+		assert.Contains(t, v["reason"], "git checkout HEAD -- internal/tools/search/search_test.go", "the agent is told how to undo it")
 
 		c.set("internal/tools/search/search_test.go", "2")
 		assert.Empty(t, s.Stop(t.Context(), in).Stdout, "%s: undone, the stop is green", agentType)
@@ -110,6 +133,62 @@ func TestAStopIsRedUntilTheChangeIsUndone(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, got, "the green stop forgot the snapshot: a later run starts from what it finds")
 	}
+}
+
+// A file the role may not write that git cannot restore (a test the Tester has not committed, for
+// the Coder) is copied at the snapshot, and the report restores it from the copy, never from git,
+// which would lose the Tester's work.
+func TestAFileGitCannotRestoreIsRestoredFromItsCopy(t *testing.T) {
+	t.Parallel()
+
+	root, c := t.TempDir(), started()
+	newTest := "internal/tools/search/new_test.go"
+	writeFile(t, root, newTest, "the Tester's test\n")
+	c.set(newTest, "6")
+	c.now.Dirty = []string{newTest, "internal/tools/search/handler.go"}
+
+	in := hooks.Input{SessionID: "s", AgentID: "a", AgentType: coderType}
+	hooks.Remember(t.Context(), root, in, c.list)
+	c.set(newTest, "x")
+
+	got, err := hooks.Changes(t.Context(), root, in, c.list)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Contains(t, got[0], "cp .cache/harness/agents/")
+	assert.NotContains(t, got[0], "git checkout")
+
+	copies, err := filepath.Glob(filepath.Join(root, ".cache", "harness", "agents", "*", newTest))
+	require.NoError(t, err)
+	require.Len(t, copies, 1, "the Coder's test was kept, not its code")
+	assert.Equal(t, "the Tester's test\n", readFile(t, copies[0]))
+}
+
+// A reviewer is sent back to undo its change for max rounds, then let go with a note: it writes
+// no BLOCKED.md, which the policy refuses it, and a clean stop clears its count.
+func TestAReviewerIsLetGoAfterItsRounds(t *testing.T) {
+	t.Parallel()
+
+	root, c := t.TempDir(), started()
+	s := hooks.Stopper{Root: root, MaxRounds: 3, Check: (&fakeCheck{}).run, Fingerprint: same, List: c.list}
+	in := hooks.Input{SessionID: "s", AgentID: "r", AgentType: exploreType}
+
+	hooks.Remember(t.Context(), root, in, c.list)
+	c.set("notes.md", "x")
+
+	assert.Contains(t, decode(t, s.Stop(t.Context(), in))["reason"], "round 1 of 3")
+	assert.Contains(t, decode(t, s.Stop(t.Context(), in))["reason"], "round 2 of 3")
+
+	v := decode(t, s.Stop(t.Context(), in))
+	assert.Nil(t, v["decision"], "let go")
+	assert.Contains(t, v["systemMessage"], "tell the session")
+	assert.NotContains(t, v["systemMessage"], "BLOCKED")
+
+	delete(c.now.Files, "notes.md")
+	assert.Empty(t, s.Stop(t.Context(), in).Stdout)
+
+	hooks.Remember(t.Context(), root, in, c.list)
+	c.set("notes.md", "x")
+	assert.Contains(t, decode(t, s.Stop(t.Context(), in))["reason"], "round 1 of 3", "a clean stop starts the count again")
 }
 
 // The main session keeps no snapshot: a person is there, and it changes what it likes.

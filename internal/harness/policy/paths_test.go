@@ -194,6 +194,11 @@ func TestProtectedClassesAreTheMainSessions(t *testing.T) {
 	}
 
 	assert.True(t, policy.Write(policy.Main, root, ".git/config").Deny, "nobody writes inside .git")
+
+	for _, p := range []string{"~/.gitconfig", "~/.config/git/config", "~/.config/gh/hosts.yml"} {
+		assert.True(t, policy.Write(policy.Main, root, p).Deny, "%s is git's or gh's configuration, a person's", p)
+	}
+
 	assert.True(t, policy.Write(policy.Reviewer, root, "notes.md").Deny)
 	assert.True(t, policy.Write(policy.Coder, root, "/Users/example/x.txt").Deny)
 	assert.False(t, policy.Write(policy.Coder, root, "/tmp/x.txt").Deny)
@@ -212,6 +217,8 @@ func TestReadsKeepSecretsCanariesAndSealedTestsAway(t *testing.T) {
 	assert.True(t, policy.Read(policy.Tester, root, "gates/canaries/SIL-001.patch").Deny)
 	assert.False(t, policy.Read(policy.Main, root, "gates/canaries/SIL-001.patch").Deny)
 	assert.True(t, policy.Read(policy.Coder, root, ".claude/sealed/DL-1/x_test.go").Deny)
+	assert.True(t, policy.Read(policy.Coder, root, ".cache/harness/agents/ab12/.claude/sealed/DL-1/x_test.go").Deny,
+		"the Stop hook's copy of a sealed test is as sealed as it")
 	assert.False(t, policy.Read(policy.Tester, root, ".claude/sealed/DL-1/x_test.go").Deny)
 }
 

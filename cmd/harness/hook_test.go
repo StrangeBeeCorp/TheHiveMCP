@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"maps"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -30,6 +32,12 @@ hooks: {max_red_rounds: 6}
 )
 
 const gitignore = ".gitignore"
+
+// The files of the change-check test: a package, and a test the Tester has not committed.
+const (
+	pkgX      = "package x\n"
+	newTestGo = "internal/x/new_test.go"
+)
 
 // hook runs bin/harness hook <event> with the input as JSON on stdin, and decodes its answer.
 func hook(t *testing.T, event string, input map[string]any) map[string]any {
@@ -74,4 +82,49 @@ func TestTheEditCheckSkipsWhatGitIgnores(t *testing.T) {
 	v := written("newdir/x.md")
 	assert.Equal(t, "block", v["decision"])
 	assert.Contains(t, v["reason"], `top-level entry "newdir"`)
+}
+
+// The change check runs through the real hook and git: a Coder's first tool call keeps the
+// checkout, a test it then changes by any command sends its stop back with the command that
+// restores it (from git for a committed test, from a copy for one the Tester has not committed),
+// and once both are restored the stop is green.
+//
+//nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory
+func TestACoderThatChangesATestIsSentBack(t *testing.T) {
+	dir := gittest.Repo(t, map[string]string{
+		registryPath: editRegistry, limitsPath: editLimits, gitignore: ".cache/\n.claude/sealed/\n",
+		"internal/x/x.go": pkgX, "internal/x/x_test.go": pkgX,
+	})
+	gittest.Write(t, dir, map[string]string{newTestGo: "package x // the Tester's\n"})
+	t.Chdir(dir)
+
+	coder := map[string]any{"session_id": "s", "agent_id": "c1", "agent_type": "coder"}
+	call := maps.Clone(coder)
+	call["tool_name"], call["tool_input"] = "Bash", map[string]any{"command": "make test"}
+	assert.Nil(t, hook(t, "pre-tool-use", call))
+
+	gittest.Write(t, dir, map[string]string{
+		"internal/x/x_test.go": "package x // weakened\n", newTestGo: "package x // weakened\n", "internal/x/x.go": "package x // done\n",
+	})
+
+	v := hook(t, "subagent-stop", coder)
+	require.NotNil(t, v)
+	assert.Equal(t, "block", v["decision"])
+
+	reason, _ := v["reason"].(string)
+	assert.Contains(t, reason, "git checkout HEAD -- internal/x/x_test.go")
+	assert.Contains(t, reason, "cp .cache/harness/agents/")
+	assert.NotContains(t, reason, "internal/x/x.go ", "the code is the Coder's")
+
+	gittest.Git(t, dir, "checkout", "HEAD", "--", "internal/x/x_test.go")
+
+	copies, err := filepath.Glob(filepath.Join(dir, ".cache", "harness", "agents", "*", "internal", "x", "new_test.go"))
+	require.NoError(t, err)
+	require.Len(t, copies, 1)
+
+	kept, err := os.ReadFile(copies[0]) // #nosec G304 -- the copy the hook kept
+	require.NoError(t, err)
+	gittest.Write(t, dir, map[string]string{newTestGo: string(kept)})
+
+	assert.Nil(t, hook(t, "subagent-stop", coder), "restored: the stop is green")
 }

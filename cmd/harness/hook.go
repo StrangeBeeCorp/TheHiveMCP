@@ -10,6 +10,7 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/checks"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/hooks"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/policy"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/registry"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/runner"
 )
@@ -135,11 +136,22 @@ func lastLines(s string, n int) string {
 
 // snapshot is the checkout as it is now, for what an agent changed since its first tool call
 // (hooks.Changes).
+// The sealed tests are judged too, though git ignores them.
 func (e env) snapshot(ctx context.Context) (hooks.Snapshot, error) {
-	files, err := gitx.Contents(ctx, e.root)
+	files, err := gitx.Contents(ctx, e.root, policy.SealedDir)
 	if err != nil {
 		return hooks.Snapshot{}, fmt.Errorf("list the checkout's files: %w", err)
 	}
 
-	return hooks.Snapshot{Head: gitx.Head(ctx, e.root), Files: files}, nil
+	dirty, err := gitx.Dirty(ctx, e.root)
+	if err != nil {
+		return hooks.Snapshot{}, fmt.Errorf("list the checkout's changes: %w", err)
+	}
+
+	sealed, err := gitx.IgnoredUnder(ctx, e.root, policy.SealedDir)
+	if err != nil {
+		return hooks.Snapshot{}, fmt.Errorf("list the sealed tests: %w", err)
+	}
+
+	return hooks.Snapshot{Head: gitx.Head(ctx, e.root), Files: files, Dirty: append(dirty, sealed...)}, nil
 }

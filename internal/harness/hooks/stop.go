@@ -136,22 +136,38 @@ func (s Stopper) Stop(ctx context.Context, in Input) Output {
 	return out
 }
 
-// readOnly holds a reviewer to the one rule it has: it changes nothing. Its rounds count like an
-// implementer's; as for a static run, its stop never clears the task's block.
+// readOnly holds a reviewer to the one rule it has: it changes nothing. It is sent back to undo a
+// change for max rounds, then lets go with a note: it writes no BLOCKED.md, which is an
+// implementer's, and its stop never touches the task's.
 func (s Stopper) readOnly(in Input, changes []string) Output {
-	if len(changes) == 0 {
-		Forget(s.Root, in)
-		return Output{}
-	}
+	actor := in.Actor()
 
 	var out Output
 
 	err := update(s.Root, func(st *State) error {
-		out = s.apply(st, in, withChanges(Check{}, changes), true)
+		rounds := st.Rounds[actor] + 1
+
+		switch {
+		case len(changes) == 0:
+			delete(st.Rounds, actor)
+		case rounds < s.MaxRounds:
+			st.Rounds[actor] = rounds
+			out = block(fmt.Sprintf("round %d of %d: %s", rounds, s.MaxRounds, changesReport(changes)))
+		default:
+			delete(st.Rounds, actor)
+
+			out = note(fmt.Sprintf("the %s stopped after %d rounds with changes it may not make: tell the session.\n%s",
+				in.Role(), rounds, changesReport(changes)))
+		}
+
 		return nil
 	})
 	if err != nil {
 		return note("harness: the stop could not be recorded: " + err.Error())
+	}
+
+	if len(changes) == 0 {
+		Forget(s.Root, in)
 	}
 
 	return out
