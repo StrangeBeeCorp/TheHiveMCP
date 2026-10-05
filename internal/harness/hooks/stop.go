@@ -94,7 +94,7 @@ func (s Stopper) Stop(ctx context.Context, in Input) Output {
 
 	if role.ReadOnly() {
 		if unjudged != nil {
-			return note("harness: what the reviewer changed could not be judged: " + unjudged.Error())
+			return note("harness: what the reviewer changed could not be judged, so this stop is not a pass: " + unjudged.Error())
 		}
 
 		return s.readOnly(in, changes)

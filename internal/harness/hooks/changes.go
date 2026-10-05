@@ -55,11 +55,18 @@ func snapshotPath(root, actor string) string {
 // Remember keeps the checkout as an agent finds it, at its first tool call, with a copy of each
 // file its role may not write that git cannot restore (a test the Tester has not committed yet,
 // for the Coder). A checkout it could not read is kept as that error, and a snapshot that does not
-// read back is taken again, at the next call. The main session changes what it likes: it keeps
+// read back is taken again, at the next call. A snapshot gone since the agent started is not
+// taken again: a new one would hide what the agent changed before, so it stays gone, the agent's
+// calls are refused and its stop is no pass. The main session changes what it likes: it keeps
 // none.
 func Remember(ctx context.Context, root string, in Input, list Lister) {
 	path := snapshotPath(root, in.Actor())
 	if !in.Role().Agent() || usable(path) {
+		return
+	}
+
+	_, statErr := os.Stat(path)
+	if errors.Is(statErr, os.ErrNotExist) && load(root).Started[in.Actor()] {
 		return
 	}
 
@@ -89,9 +96,10 @@ func Remember(ctx context.Context, root string, in Input, list Lister) {
 	}
 }
 
-// Remembered reports whether an agent's start is on record: a snapshot of the checkout, or of the
-// error that kept it from being read. Without one its stop could not judge what it changed, so its
-// tool calls are refused (hook pre-tool-use). The main session keeps none.
+// Remembered reports whether an agent's start is on record: its snapshot (of the checkout, or of
+// the error that kept it from being read) and the state's note that it started. Without both its
+// stop could not judge what it changed, so its tool calls are refused (hook pre-tool-use). The
+// main session keeps none.
 func Remembered(root string, in Input) bool {
 	if !in.Role().Agent() {
 		return true
@@ -99,7 +107,7 @@ func Remembered(root string, in Input) bool {
 
 	_, err := os.Stat(snapshotPath(root, in.Actor()))
 
-	return err == nil
+	return err == nil && load(root).Started[in.Actor()]
 }
 
 // readSnapshot is the checkout as the agent found it, and whether there is one: an agent that made
@@ -132,9 +140,10 @@ func readSnapshot(root string, in Input) (Snapshot, bool, error) {
 	return s, true, nil
 }
 
-// NotRemembered is why an agent's tool call is refused when its snapshot could not be written.
-const NotRemembered = "harness: the checkout as you found it could not be kept (" + snapshotDir + " is not writable), " +
-	"so your stop could not judge what you change: no tool call runs until it can. Tell the person"
+// NotRemembered is why an agent's tool call is refused when its start is not on record.
+const NotRemembered = "harness: the checkout as you found it is not on record (" + snapshotDir + " could not be written, " +
+	"or the snapshot was deleted), so your stop could not judge what you change: no tool call runs. Stop, and say so in " +
+	"your answer: the session that started you must look at it"
 
 // usable reports whether the snapshot at path reads back and holds a checkout.
 func usable(path string) bool {

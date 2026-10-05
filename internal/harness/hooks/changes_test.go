@@ -229,8 +229,10 @@ func TestAChangeCheckThatCannotRunIsNoPass(t *testing.T) {
 	assert.True(t, json.Valid([]byte(readFile(t, snapshots[0]))), "and is taken again")
 }
 
-// A snapshot gone after the agent's first tool call is no pass, not "changed nothing", and its
-// green stop forgets the agent; an agent that made no tool call has none and changed nothing.
+// A snapshot gone after the agent's first tool call is no pass, not "changed nothing": a later
+// call does not take it again (that would hide what the agent changed before), the agent is no
+// longer remembered, and a reviewer's stop says so too. An agent that made no tool call has none,
+// and changed nothing.
 func TestADeletedSnapshotIsNoPass(t *testing.T) {
 	t.Parallel()
 
@@ -253,11 +255,34 @@ func TestADeletedSnapshotIsNoPass(t *testing.T) {
 	assert.Contains(t, v["systemMessage"], "not a pass")
 	assert.Contains(t, v["systemMessage"], "is gone")
 
+	c.set("internal/tools/search/search_test.go", "x")
 	hooks.Remember(t.Context(), root, in, c.list)
-	assert.Nil(t, decode(t, s.Stop(t.Context(), in))["systemMessage"], "a green stop")
-	got, err = hooks.Changes(t.Context(), root, in, c.list)
+	assert.False(t, hooks.Remembered(root, in), "a later call does not take the snapshot again, which would hide the change")
+	assert.Contains(t, decode(t, s.Stop(t.Context(), in))["systemMessage"], "is gone", "the stop is still no pass")
+
+	reviewer := hooks.Input{SessionID: "s", AgentID: "r", AgentType: exploreType}
+	hooks.Remember(t.Context(), root, reviewer, c.list)
+	require.True(t, hooks.Remembered(root, reviewer))
+	require.NoError(t, os.Remove(snapshotOf(t, root, snapshots[0])))
+	assert.Contains(t, decode(t, s.Stop(t.Context(), reviewer))["systemMessage"], "not a pass", "a reviewer's too")
+}
+
+// snapshotOf is the one agent snapshot of root that is not skip.
+func snapshotOf(t *testing.T, root, skip string) string {
+	t.Helper()
+
+	all, err := filepath.Glob(filepath.Join(root, ".cache", "harness", "agents", "*.json"))
 	require.NoError(t, err)
-	assert.Empty(t, got, "and the agent is forgotten")
+
+	for _, p := range all {
+		if p != skip {
+			return p
+		}
+	}
+
+	t.Fatal("no other snapshot")
+
+	return ""
 }
 
 // An agent whose start cannot be kept (the disk refuses .cache/) is not remembered, so the

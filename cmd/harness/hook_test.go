@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx/gittest"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/hooks"
 )
 
 // editRegistry runs the structure and public-safety builtins on each edit, as gates/registry.yaml
@@ -108,7 +109,7 @@ func TestAnAgentWhoseStartCannotBeKeptIsRefused(t *testing.T) {
 	}
 	v := hook(t, "pre-tool-use", call)
 	require.NotNil(t, v)
-	assert.Contains(t, fmt.Sprint(v["hookSpecificOutput"]), "could not be kept")
+	assert.Contains(t, fmt.Sprint(v["hookSpecificOutput"]), hooks.NotRemembered)
 
 	delete(call, "agent_id")
 	delete(call, "agent_type")
