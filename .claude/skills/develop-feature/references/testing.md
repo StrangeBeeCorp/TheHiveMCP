@@ -29,6 +29,6 @@
 - `make test-integration RUN=<regexp> [THEHIVE_TEST_IMAGE=strangebee/thehive:5.5.16]` uses 5.8.0 unless you set the image. The stack stays up for fast reruns;
   `make test-integration-down` removes it.
 - License modes are decided by `bin/harness integration (internal/harness/stack)`, in this order: a `THEHIVE_TEST_LICENSE` you supply; otherwise one it mints
-  from a pullable licensing image; otherwise the free license, which runs the tests one by one (slowest). The script prints the mode it picked.
+  from a pullable licensing image; otherwise the free license, which runs the tests one by one (slowest). It prints the mode it picked.
 - TheHive 5.5 and 5.6 do not always answer the same way. For example, a duplicate organisation gets 409 on 5.6 but 400 with "already exists" on 5.5 (see
   `organisationAlreadyExists`). When a test fails on one version only, check this before blaming the code.

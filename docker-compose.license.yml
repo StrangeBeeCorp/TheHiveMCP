@@ -1,7 +1,7 @@
-# License override for the integration test stack. Layered on top of
-# docker-compose.test.yml ONLY when a license token is supplied via
-# THEHIVE_TEST_LICENSE (selected by bin/harness integration (internal/harness/stack) and the
-# Makefile). Without it, the base file boots on TheHive's built-in free license.
+# License override for the integration test stack. bin/harness integration
+# (internal/harness/stack) layers it on top of docker-compose.test.yml in a licensed mode: a
+# token supplied via THEHIVE_TEST_LICENSE, or one minted for the run. Without it, the base file
+# boots on TheHive's built-in free license.
 #
 # Why this exists: the base stack's free license caps `organisations` at 1, so
 # the suite must share one org sequentially. A license whose `organisations`
