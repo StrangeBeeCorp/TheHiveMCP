@@ -193,6 +193,24 @@ func TestOrdinaryWorkIsNotInTheWay(t *testing.T) {
 	assert.False(t, bash(policy.Other, "git commit -m x").Deny)
 }
 
+// No side of the duel ships, and no reviewer does: make pr and bin/harness pr are the session's,
+// or any other agent's, which ships through them, never around them.
+func TestOnlyTheSessionOrAnotherAgentShips(t *testing.T) {
+	t.Parallel()
+
+	const harness = "bin/harness "
+
+	for _, role := range []policy.Role{policy.Tester, policy.Coder, policy.Reviewer} {
+		for _, line := range []string{"make pr", "make pr FORCE=1", harness + "pr", harness + "push"} {
+			assert.True(t, bash(role, line).Deny, "%s: %s", role, line)
+		}
+	}
+
+	for _, role := range []policy.Role{policy.Main, policy.Other} {
+		assert.False(t, bash(role, "make pr").Deny, "%s ships through make pr", role)
+	}
+}
+
 func TestTheDuelKeepsEachSideToItsFiles(t *testing.T) {
 	t.Parallel()
 
