@@ -229,6 +229,58 @@ func TestAChangeCheckThatCannotRunIsNoPass(t *testing.T) {
 	assert.True(t, json.Valid([]byte(readFile(t, snapshots[0]))), "and is taken again")
 }
 
+// A snapshot gone after the agent's first tool call is no pass, not "changed nothing", and its
+// green stop forgets the agent; an agent that made no tool call has none and changed nothing.
+func TestADeletedSnapshotIsNoPass(t *testing.T) {
+	t.Parallel()
+
+	root, c := t.TempDir(), started()
+	s := hooks.Stopper{Root: root, MaxRounds: 6, Check: (&fakeCheck{}).run, Fingerprint: same, List: c.list}
+	in := hooks.Input{SessionID: "s", AgentID: "a", AgentType: coderType}
+
+	idle := hooks.Input{SessionID: "s", AgentID: "idle", AgentType: coderType}
+	got, err := hooks.Changes(t.Context(), root, idle, c.list)
+	require.NoError(t, err)
+	assert.Empty(t, got, "no tool call, nothing changed")
+
+	hooks.Remember(t.Context(), root, in, c.list)
+	snapshots, err := filepath.Glob(filepath.Join(root, ".cache", "harness", "agents", "*.json"))
+	require.NoError(t, err)
+	require.Len(t, snapshots, 1)
+	require.NoError(t, os.Remove(snapshots[0]))
+
+	v := decode(t, s.Stop(t.Context(), in))
+	assert.Contains(t, v["systemMessage"], "not a pass")
+	assert.Contains(t, v["systemMessage"], "is gone")
+
+	hooks.Remember(t.Context(), root, in, c.list)
+	assert.Nil(t, decode(t, s.Stop(t.Context(), in))["systemMessage"], "a green stop")
+	got, err = hooks.Changes(t.Context(), root, in, c.list)
+	require.NoError(t, err)
+	assert.Empty(t, got, "and the agent is forgotten")
+}
+
+// An agent whose start cannot be kept (the disk refuses .cache/) is not remembered, so the
+// pre-tool-use hook refuses its calls; the main session keeps no snapshot and is never refused.
+func TestAStartThatCannotBeKeptIsNotRemembered(t *testing.T) {
+	t.Parallel()
+
+	root, c := t.TempDir(), started()
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".cache"), []byte("a file where .cache/ should be\n"), 0o600))
+
+	agent := hooks.Input{SessionID: "s", AgentID: "a", AgentType: coderType}
+	hooks.Remember(t.Context(), root, agent, c.list)
+	assert.False(t, hooks.Remembered(root, agent))
+	assert.True(t, hooks.Remembered(root, hooks.Input{SessionID: "s"}), "the main session")
+
+	v := decode(t, hooks.Deny(hooks.NotRemembered))
+	assert.Contains(t, v["hookSpecificOutput"], "permissionDecision")
+
+	ok := t.TempDir()
+	hooks.Remember(t.Context(), ok, agent, c.list)
+	assert.True(t, hooks.Remembered(ok, agent))
+}
+
 // A change the agent does not undo counts its red rounds like a red check-fast: after max rounds
 // it must write BLOCKED.md, and then it may stop.
 func TestAChangeKeptPastTheRoundsEndsBlocked(t *testing.T) {

@@ -81,10 +81,60 @@ func Remember(ctx context.Context, root string, in Input, list Lister) {
 
 	// Written whole or not at all: a stop never reads half a snapshot.
 	tmp := path + ".tmp"
-	if os.WriteFile(tmp, data, filePerm) == nil {
-		_ = os.Rename(tmp, path)
+	if os.WriteFile(tmp, data, filePerm) == nil && os.Rename(tmp, path) == nil {
+		_ = update(root, func(st *State) error {
+			st.Started[in.Actor()] = true
+			return nil
+		})
 	}
 }
+
+// Remembered reports whether an agent's start is on record: a snapshot of the checkout, or of the
+// error that kept it from being read. Without one its stop could not judge what it changed, so its
+// tool calls are refused (hook pre-tool-use). The main session keeps none.
+func Remembered(root string, in Input) bool {
+	if !in.Role().Agent() {
+		return true
+	}
+
+	_, err := os.Stat(snapshotPath(root, in.Actor()))
+
+	return err == nil
+}
+
+// readSnapshot is the checkout as the agent found it, and whether there is one: an agent that made
+// no tool call has none, and changed nothing. A snapshot gone since the agent's first call, one
+// that does not read back, or one of a checkout that could not be read, is an error: what the
+// agent changed cannot be judged.
+func readSnapshot(root string, in Input) (Snapshot, bool, error) {
+	data, err := os.ReadFile(snapshotPath(root, in.Actor()))
+	if errors.Is(err, os.ErrNotExist) {
+		if load(root).Started[in.Actor()] {
+			return Snapshot{}, false, errors.New("the snapshot of the checkout the agent started from is gone (deleted since its first tool call)")
+		}
+
+		return Snapshot{}, false, nil
+	} else if err != nil {
+		return Snapshot{}, false, fmt.Errorf("read the agent's snapshot: %w", err)
+	}
+
+	var s Snapshot
+
+	err = json.Unmarshal(data, &s)
+	if err != nil {
+		return Snapshot{}, false, fmt.Errorf("read the agent's snapshot: %w", err)
+	}
+
+	if s.Error != "" {
+		return Snapshot{}, false, fmt.Errorf("the checkout could not be read when the agent started: %s", s.Error)
+	}
+
+	return s, true, nil
+}
+
+// NotRemembered is why an agent's tool call is refused when its snapshot could not be written.
+const NotRemembered = "harness: the checkout as you found it could not be kept (" + snapshotDir + " is not writable), " +
+	"so your stop could not judge what you change: no tool call runs until it can. Tell the person"
 
 // usable reports whether the snapshot at path reads back and holds a checkout.
 func usable(path string) bool {
@@ -116,22 +166,9 @@ func keep(root, actor, rel string) {
 // with the command that undoes it. A baseline is changed by its make target, which an agent runs:
 // it is not judged here.
 func Changes(ctx context.Context, root string, in Input, list Lister) ([]string, error) {
-	data, err := os.ReadFile(snapshotPath(root, in.Actor()))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil // no snapshot: the agent made no tool call, so it changed nothing
-	} else if err != nil {
-		return nil, fmt.Errorf("read the agent's snapshot: %w", err)
-	}
-
-	var before Snapshot
-
-	err = json.Unmarshal(data, &before)
-	if err != nil {
-		return nil, fmt.Errorf("read the agent's snapshot: %w", err)
-	}
-
-	if before.Error != "" {
-		return nil, fmt.Errorf("the checkout could not be read when the agent started: %s", before.Error)
+	before, found, err := readSnapshot(root, in)
+	if err != nil || !found {
+		return nil, err
 	}
 
 	now, err := list(ctx)

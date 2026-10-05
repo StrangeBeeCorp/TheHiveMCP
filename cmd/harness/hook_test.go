@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
@@ -37,6 +38,7 @@ const gitignore = ".gitignore"
 const (
 	pkgX      = "package x\n"
 	newTestGo = "internal/x/new_test.go"
+	xGo       = "internal/x/x.go"
 )
 
 // hook runs bin/harness hook <event> with the input as JSON on stdin, and decodes its answer.
@@ -89,11 +91,35 @@ func TestTheEditCheckSkipsWhatGitIgnores(t *testing.T) {
 // restores it (from git for a committed test, from a copy for one the Tester has not committed),
 // and once both are restored the stop is green.
 //
+// An agent's tool call is refused when the hook cannot keep the checkout as the agent found it:
+// its stop could not judge what it changed. The main session keeps none and goes on.
+//
+//nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory
+func TestAnAgentWhoseStartCannotBeKeptIsRefused(t *testing.T) {
+	dir := gittest.Repo(t, map[string]string{
+		registryPath: editRegistry, limitsPath: editLimits, gitignore: ".cache\n", xGo: pkgX,
+	})
+	gittest.Write(t, dir, map[string]string{".cache": "a file where .cache/ should be\n"})
+	t.Chdir(dir)
+
+	call := map[string]any{
+		"session_id": "s", "agent_id": "c1", "agent_type": "coder",
+		"tool_name": "Bash", "tool_input": map[string]any{"command": "make test"},
+	}
+	v := hook(t, "pre-tool-use", call)
+	require.NotNil(t, v)
+	assert.Contains(t, fmt.Sprint(v["hookSpecificOutput"]), "could not be kept")
+
+	delete(call, "agent_id")
+	delete(call, "agent_type")
+	assert.Nil(t, hook(t, "pre-tool-use", call), "the main session")
+}
+
 //nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory
 func TestACoderThatChangesATestIsSentBack(t *testing.T) {
 	dir := gittest.Repo(t, map[string]string{
 		registryPath: editRegistry, limitsPath: editLimits, gitignore: ".cache/\n.claude/sealed/\n",
-		"internal/x/x.go": pkgX, "internal/x/x_test.go": pkgX,
+		xGo: pkgX, "internal/x/x_test.go": pkgX,
 	})
 	gittest.Write(t, dir, map[string]string{newTestGo: "package x // the Tester's\n"})
 	t.Chdir(dir)
@@ -104,7 +130,7 @@ func TestACoderThatChangesATestIsSentBack(t *testing.T) {
 	assert.Nil(t, hook(t, "pre-tool-use", call))
 
 	gittest.Write(t, dir, map[string]string{
-		"internal/x/x_test.go": "package x // weakened\n", newTestGo: "package x // weakened\n", "internal/x/x.go": "package x // done\n",
+		"internal/x/x_test.go": "package x // weakened\n", newTestGo: "package x // weakened\n", xGo: "package x // done\n",
 	})
 
 	v := hook(t, "subagent-stop", coder)

@@ -36,10 +36,15 @@ func PreToolUse(root string, in Input) Output {
 		return Output{}
 	}
 
+	return Deny(d.Reason)
+}
+
+// Deny refuses a tool call, with the reason the agent reads.
+func Deny(reason string) Output {
 	return jsonOutput(map[string]any{"hookSpecificOutput": map[string]any{
 		"hookEventName":            "PreToolUse",
 		"permissionDecision":       "deny",
-		"permissionDecisionReason": d.Reason,
+		"permissionDecisionReason": reason,
 	}})
 }
 

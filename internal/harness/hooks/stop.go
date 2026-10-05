@@ -127,6 +127,7 @@ func (s Stopper) Stop(ctx context.Context, in Input) Output {
 
 		if !judged.Red && !judged.Incomplete {
 			Forget(s.Root, in)
+			delete(st.Started, in.Actor())
 		}
 
 		return nil
@@ -152,6 +153,7 @@ func (s Stopper) readOnly(in Input, changes []string) Output {
 		switch {
 		case len(changes) == 0:
 			delete(st.Rounds, actor)
+			delete(st.Started, actor)
 		case rounds < s.MaxRounds:
 			st.Rounds[actor] = rounds
 			out = block(fmt.Sprintf("round %d of %d: %s", rounds, s.MaxRounds, changesReport(changes)))

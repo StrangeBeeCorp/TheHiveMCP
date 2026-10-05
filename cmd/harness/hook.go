@@ -41,7 +41,11 @@ func (e env) hook(ctx context.Context, args []string, stdin io.Reader, out io.Wr
 	switch args[0] {
 	case "pre-tool-use":
 		hooks.Remember(ctx, e.root, in, e.snapshot)
+
 		o = hooks.PreToolUse(e.root, in)
+		if !hooks.Remembered(e.root, in) {
+			o = hooks.Deny(hooks.NotRemembered)
+		}
 	case "post-tool-use":
 		o = hooks.PostToolUse(e.root, in, func(rel string, content []byte) ([]string, error) { return e.fileCheck(ctx, rel, content) })
 	case "stop", "subagent-stop":

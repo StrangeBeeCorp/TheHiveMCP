@@ -26,6 +26,9 @@ type State struct {
 	Last *Last `json:"last,omitempty"`
 	// Progress is what PreCompact saved for after the compaction.
 	Progress string `json:"progress,omitempty"`
+	// Started holds each agent whose first tool call kept a snapshot, until its green stop: a
+	// snapshot gone before then was deleted, and the stop cannot judge what the agent changed.
+	Started map[string]bool `json:"started,omitempty"`
 }
 
 // Last is a check-fast result with the fingerprint of what it judged.
@@ -51,6 +54,10 @@ func load(root string) State {
 
 	if st.RedSince == nil {
 		st.RedSince = map[string]time.Time{}
+	}
+
+	if st.Started == nil {
+		st.Started = map[string]bool{}
 	}
 
 	return st
