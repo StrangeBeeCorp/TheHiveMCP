@@ -342,7 +342,16 @@ func TestManageCreateObservableWithAnExistingValue(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, failures, 1)
 
-	require.True(t, create("198.51.100.7").IsError, "a create that made nothing is an error")
+	failure, ok := failures[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "[UNTRUSTED_DATA]CreateError[/UNTRUSTED_DATA]", failure["type"], "TheHive's reason reaches the model, fenced")
+
+	refused := create("198.51.100.7")
+	require.True(t, refused.IsError, "a create that made nothing is an error")
+	require.NotEmpty(t, refused.Content)
+	text, ok := refused.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	require.Contains(t, text.Text, "(CreateError)", "the error names TheHive's reason")
 }
 
 func TestManageUpdateMultipleEntities(t *testing.T) {
