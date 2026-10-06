@@ -236,6 +236,8 @@ var (
 	errEvalSmoke = errors.New("eval smoke")
 	// errNoPrevious means there is no previous night to compare with: the first night, or none kept.
 	errNoPrevious = errors.New("no previous night")
+	// errNoEval means the run created no evaluation: there is nothing to read.
+	errNoEval = errors.New("the run created no evaluation")
 )
 
 // evalLogLines is how much of eval-cli's output a failure shows.
@@ -243,12 +245,13 @@ const evalLogLines = 30
 
 // evalSmoke runs TheHiveMCPEval's suite against this checkout on gates/eval.yaml's model, its
 // stack already up, and holds the result to the cap and to the previous night's pass rate (the
-// eval-smoke gate, nightly).
+// eval-smoke gate, nightly). The result is written whatever it says, with whether it passed: the
+// next night compares itself with the last night that did.
 func (e env) evalSmoke(ctx context.Context, args []string, out io.Writer) error {
 	set := flag.NewFlagSet("eval-smoke", flag.ContinueOnError)
 	dir := set.String("eval", os.Getenv("THEHIVEMCP_EVAL"), "the TheHiveMCPEval checkout, its stack up ($THEHIVEMCP_EVAL)")
 	outPath := set.String("out", "", "write the night's result as JSON to this file")
-	previousPath := set.String("previous", "", "the previous night's result, to hold the pass rate to (absent: not compared)")
+	previousPath := set.String("previous", "", "the last night that passed, to hold the pass rate to (absent: not compared)")
 
 	err := set.Parse(args)
 	if err != nil {
@@ -260,7 +263,7 @@ func (e env) evalSmoke(ctx context.Context, args []string, out io.Writer) error 
 		return fmt.Errorf("eval smoke: %w", err)
 	}
 
-	err = evalReady(*dir)
+	err = evalReady(*dir, runtime.GOOS)
 	if err != nil {
 		return err
 	}
@@ -270,25 +273,13 @@ func (e env) evalSmoke(ctx context.Context, args []string, out io.Writer) error 
 		return fmt.Errorf("eval smoke: %w", err)
 	}
 
-	result, err := e.runEval(ctx, *dir, config, out)
-	if err != nil {
+	previous, err := readPrevious(*previousPath, out)
+	if err != nil && !errors.Is(err, errNoPrevious) {
 		return err
 	}
 
-	if *outPath != "" {
-		err = os.MkdirAll(filepath.Dir(*outPath), dirPerm)
-		if err != nil {
-			return fmt.Errorf("eval smoke: %w", err)
-		}
-
-		err = result.Write(*outPath)
-		if err != nil {
-			return fmt.Errorf("eval smoke: %w", err)
-		}
-	}
-
-	previous, err := readPrevious(*previousPath)
-	if err != nil && !errors.Is(err, errNoPrevious) {
+	result, err := e.runEval(ctx, *dir, config, out)
+	if err != nil {
 		return err
 	}
 
@@ -299,16 +290,38 @@ func (e env) evalSmoke(ctx context.Context, args []string, out io.Writer) error 
 		_, _ = fmt.Fprintln(out, p)
 	}
 
-	if len(problems) > 0 {
+	result.OK = len(problems) == 0
+
+	if *outPath != "" {
+		err = writeResult(result, *outPath)
+		if err != nil {
+			return err
+		}
+	}
+
+	if !result.OK {
 		return fmt.Errorf("%w: %d problem(s)", errEvalSmoke, len(problems))
 	}
 
 	return nil
 }
 
+func writeResult(r evalsmoke.Result, p string) error {
+	err := os.MkdirAll(filepath.Dir(p), dirPerm)
+	if err == nil {
+		err = r.Write(p)
+	}
+
+	if err != nil {
+		return fmt.Errorf("eval smoke: %w", err)
+	}
+
+	return nil
+}
+
 // evalReady says whether the smoke can run here: a TheHiveMCPEval checkout, uv to run its CLI,
-// and an OpenRouter key (on macOS the eval CLI reads it from the keychain).
-func evalReady(dir string) error {
+// and an OpenRouter key (on macOS, goos darwin, the eval CLI reads it from the keychain).
+func evalReady(dir, goos string) error {
 	if dir == "" {
 		return fmt.Errorf("%w: no TheHiveMCPEval checkout (set THEHIVEMCP_EVAL)", errCannotRun)
 	}
@@ -323,44 +336,87 @@ func evalReady(dir string) error {
 		return fmt.Errorf("%w: uv is needed to run the eval CLI", errCannotRun)
 	}
 
-	if os.Getenv("OPENROUTER_API_KEY") == "" && runtime.GOOS != "darwin" {
+	if os.Getenv("OPENROUTER_API_KEY") == "" && goos != "darwin" {
 		return fmt.Errorf("%w: no OPENROUTER_API_KEY", errCannotRun)
 	}
 
 	return nil
 }
 
-// runEval runs the suite, then reads its columns and its true cost.
+// runEval runs the suite, then reads the evaluations the run created: the suite runs as one
+// promptfoo evaluation per phase (read, then write), and the night is their sum.
 func (e env) runEval(ctx context.Context, dir string, c evalsmoke.Config, out io.Writer) (evalsmoke.Result, error) {
 	_, _ = fmt.Fprintf(out, "eval smoke: %s on %s, %d cases, about $%.3f (cap $%.2f)\n", c.Suite, c.Model, c.Cases, c.Estimate(), c.Cap)
 
-	// A failing case makes eval-cli exit non-zero; the columns say how many passed, so only a run
-	// that leaves no column for the model is an error.
+	before, err := evalCLI(ctx, dir, "eval", "list")
+	if err != nil {
+		return evalsmoke.Result{}, fmt.Errorf("eval smoke: %w", err)
+	}
+
+	// A failing case makes eval-cli exit non-zero: the evaluations say how many passed.
 	runOut, runErr := evalCLI(ctx, dir, "eval", cmdRun, c.Suite, "--local", e.root, "--model", c.Model)
 
-	columns, err := evalCLI(ctx, dir, "eval", "columns")
+	after, err := evalCLI(ctx, dir, "eval", "list")
 	if err != nil {
-		return evalsmoke.Result{}, fmt.Errorf("eval smoke: %w\n%s", err, lastLines(runOut, evalLogLines))
+		return evalsmoke.Result{}, fmt.Errorf("eval smoke: %w", err)
 	}
 
-	result, err := evalsmoke.FromColumns([]byte(columns), c.Model)
-	if err != nil {
-		return evalsmoke.Result{}, fmt.Errorf("eval smoke: %w (the run: %w)\n%s", err, runErr, lastLines(runOut, evalLogLines))
+	ids := evalsmoke.NewEvals(before, after)
+	if len(ids) == 0 {
+		return evalsmoke.Result{}, fmt.Errorf("eval smoke: %w%s\n%s", errNoEval, runNote(runErr), lastLines(runOut, evalLogLines))
 	}
 
-	cost, err := evalCLI(ctx, dir, "eval", "cost")
-	if err == nil {
-		usd, ok := evalsmoke.TrueCost([]byte(cost), c.Model)
-		if ok {
-			result.CostUSD = usd
+	result := evalsmoke.Result{Suite: c.Suite, Model: c.Model, Evals: ids}
+
+	for _, id := range ids {
+		part, err := readEval(ctx, dir, id, c.Model)
+		if err != nil {
+			return evalsmoke.Result{}, fmt.Errorf("eval smoke: %w\n%s", err, lastLines(runOut, evalLogLines))
 		}
+
+		result = result.Add(part)
 	}
 
-	result.Suite = c.Suite
+	_, _ = fmt.Fprintf(out, "evaluations: %s\n", strings.Join(ids, ", "))
+
 	result.Head = gitx.Head(ctx, e.root)
 	result.Recorded = time.Now().UTC().Truncate(time.Second)
 
 	return result, nil
+}
+
+// runNote is how eval run ended, for an error that follows it.
+func runNote(err error) string {
+	if err == nil {
+		return " (eval run exited 0)"
+	}
+
+	return " (" + err.Error() + ")"
+}
+
+// readEval reads one evaluation's column for the model and its true cost; a cost eval-cli could
+// not attribute is left unmeasured, which the night's check reports.
+func readEval(ctx context.Context, dir, id, model string) (evalsmoke.Result, error) {
+	columns, err := evalCLI(ctx, dir, "eval", "columns", id)
+	if err != nil {
+		return evalsmoke.Result{}, err
+	}
+
+	part, err := evalsmoke.FromColumns([]byte(columns), model)
+	if err != nil {
+		return evalsmoke.Result{}, fmt.Errorf("%s: %w", id, err)
+	}
+
+	usd, ok := 0.0, false
+
+	cost, costErr := evalCLI(ctx, dir, "eval", "cost", id)
+	if costErr == nil {
+		usd, ok = evalsmoke.TrueCost([]byte(cost), model)
+	}
+
+	part.CostUSD, part.CostUnmeasured = usd, !ok
+
+	return part, nil
 }
 
 // evalCLI runs `uv run eval-cli ARGS` in the TheHiveMCPEval checkout and returns its output.
@@ -380,20 +436,28 @@ func evalCLI(ctx context.Context, dir string, args ...string) (string, error) {
 	return stdout.String(), nil
 }
 
-// readPrevious reads the previous night's result; none (the first night, or no artifact) is no
-// error, and nil.
-func readPrevious(p string) (*evalsmoke.Result, error) {
+// readPrevious reads the last night that passed, which the nightly workflow downloads. None (the
+// first night, or none kept) is errNoPrevious; a night that did not pass is no baseline either.
+func readPrevious(p string, out io.Writer) (*evalsmoke.Result, error) {
 	if p == "" {
 		return nil, errNoPrevious
 	}
 
 	r, err := evalsmoke.Read(p)
 	if errors.Is(err, fs.ErrNotExist) {
+		_, _ = fmt.Fprintln(out, "no previous night to compare with:", p)
+
 		return nil, errNoPrevious
 	}
 
 	if err != nil {
 		return nil, fmt.Errorf("eval smoke: %w", err)
+	}
+
+	if !r.OK {
+		_, _ = fmt.Fprintf(out, "the previous night (%s) did not pass: not compared with\n", r.Recorded.Format(time.DateOnly))
+
+		return nil, errNoPrevious
 	}
 
 	return &r, nil

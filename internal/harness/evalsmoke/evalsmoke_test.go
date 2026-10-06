@@ -3,6 +3,7 @@ package evalsmoke
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,26 +60,50 @@ func TestARunOverItsCapIsNotStarted(t *testing.T) {
 	require.ErrorIs(t, c.Preflight(), ErrOverCap, "37 cases at $0.003 is $0.111")
 }
 
-// The model's column gives the cases, the passes and promptfoo's cost; another model's, or none,
-// is no result.
+// The model's column of `eval-cli eval columns ID`, as it prints it, gives the cases, the passes
+// and promptfoo's cost; another model's, or none, is no result.
 func TestTheResultIsTheModelsColumn(t *testing.T) {
 	t.Parallel()
 
-	columns := []byte(`{"glm-5.3-flash": {"n": 37, "passed": 30, "pass_rate": 0.8108, "cost": 0.2},
-		"mimo-v2.6-flash": {"n": 37, "passed": 35, "pass_rate": 0.9459, "cost": 0.049, "latency_ms_mean": 9000}}`)
+	columns := []byte(`{"eval_id": "eval-Ab1-2026-10-06T02:20:01", "split": null, "columns": {
+		"glm-5.3-flash": {"n": 20, "passed": 15, "pass_rate": 0.75, "cost": 0.2},
+		"mimo-v2.6-flash": {"n": 20, "passed": 19, "pass_rate": 0.95, "cost": 0.029, "latency_ms_mean": 9000, "metric_means": {}}}}`)
 
 	r, err := FromColumns(columns, model)
 	require.NoError(t, err)
-	assert.Equal(t, Result{Model: model, Cases: 37, Passed: 35, PassRate: 0.9459, CostUSD: 0.049}, r)
+	assert.Equal(t, Result{Model: model, Cases: 20, Passed: 19, PassRate: 0.95, CostUSD: 0.029}, r)
 
-	_, err = FromColumns([]byte(`{"glm-5.3-flash": {"n": 37}}`), model)
+	_, err = FromColumns([]byte(`{"eval_id": "e", "columns": {"glm-5.3-flash": {"n": 37}}}`), model)
 	require.ErrorIs(t, err, ErrNoColumn)
 
-	_, err = FromColumns([]byte(`{"mimo-v2.6-flash": {"n": 0}}`), model)
+	_, err = FromColumns([]byte(`{"eval_id": "e", "columns": {"mimo-v2.6-flash": {"n": 0}}}`), model)
 	require.ErrorIs(t, err, ErrNoColumn, "a column with no case measured nothing")
 
 	_, err = FromColumns([]byte(`No evaluations found.`), model)
 	require.Error(t, err)
+}
+
+// The run's evaluations are those eval-cli eval list shows after it and not before: one per phase
+// of the suite. A night is their sum.
+func TestTheNightIsTheSumOfTheEvaluationsItsRunCreated(t *testing.T) {
+	t.Parallel()
+
+	header := "Eval ID" + strings.Repeat(" ", 53) + "  Local Time  Tests\n" + strings.Repeat("-", 92) + "\n"
+	before := header + "eval-Old-2026-10-05T02:20:01   2026-10-05 04:20 CEST   20\n\n1 evaluation(s) total. Latest is at the bottom.\n"
+	after := header + "eval-Old-2026-10-05T02:20:01   2026-10-05 04:20 CEST   20\n" +
+		"eval-Rd1-2026-10-06T02:20:01   2026-10-06 04:20 CEST   20\n" +
+		"eval-Wr2-2026-10-06T02:31:44   2026-10-06 04:31 CEST   17\n\n3 evaluation(s) total. Latest is at the bottom.\n"
+
+	assert.Equal(t, []string{"eval-Rd1-2026-10-06T02:20:01", "eval-Wr2-2026-10-06T02:31:44"}, NewEvals(before, after))
+	assert.Equal(t, []string{"eval-Old-2026-10-05T02:20:01"}, NewEvals("No evaluations found.\n", before), "a first run on a fresh stack")
+	assert.Empty(t, NewEvals(before, before), "a run that created none")
+
+	night := Result{}.Add(Result{Cases: 20, Passed: 19, CostUSD: 0.029}).Add(Result{Cases: 17, Passed: 14, CostUSD: 0.024, CostUnmeasured: true})
+	assert.Equal(t, 37, night.Cases)
+	assert.Equal(t, 33, night.Passed)
+	assert.InDelta(t, 33.0/37, night.PassRate, 1e-9)
+	assert.InDelta(t, 0.053, night.CostUSD, 1e-9)
+	assert.True(t, night.CostUnmeasured, "one evaluation's cost unmeasured leaves the night's unmeasured")
 }
 
 // The true cost is the model's column of eval-cli's cost report, when it has one.
@@ -109,6 +134,9 @@ func TestANightIsHeldToItsCasesItsCapAndThePreviousNight(t *testing.T) {
 	assert.Empty(t, c.Check(Result{Model: model, Cases: 37, PassRate: 0.5, CostUSD: 0.05}, nil), "the first night has nothing to compare")
 	assert.Empty(t, c.Check(Result{Model: "other", Cases: 37, PassRate: 0.5, CostUSD: 0.05}, last), "another model's night is not compared")
 
+	assert.Equal(t, []string{"eval-cli could not attribute the run's true cost (eval-cli eval cost): the cap was not checked"},
+		c.Check(Result{Model: model, Cases: 37, PassRate: 0.95, CostUnmeasured: true}, last), "an unmeasured cost is no pass")
+
 	assert.Equal(t, []string{
 		"only 30 of the 37 cases of mcp-tools ran",
 		"the run cost $0.120, over its cap of $0.10",
@@ -131,7 +159,7 @@ func TestTheSummaryShowsThePreviousNight(t *testing.T) {
 func TestAResultReadsBack(t *testing.T) {
 	t.Parallel()
 
-	r := Result{Suite: suite, Model: model, Head: "abc1234", Cases: 37, Passed: 35, PassRate: 0.9459, CostUSD: 0.05, Recorded: time.Date(2026, 10, 6, 2, 0, 0, 0, time.UTC)}
+	r := Result{Suite: suite, Model: model, Head: "abc1234", Evals: []string{"eval-Rd1", "eval-Wr2"}, OK: true, Cases: 37, Passed: 35, PassRate: 0.9459, CostUSD: 0.05, Recorded: time.Date(2026, 10, 6, 2, 0, 0, 0, time.UTC)}
 	p := filepath.Join(t.TempDir(), "result.json")
 	require.NoError(t, r.Write(p))
 

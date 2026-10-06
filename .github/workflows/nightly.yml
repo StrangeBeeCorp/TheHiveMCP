@@ -208,13 +208,16 @@ jobs:
       packages: read
       # The previous night's result, from that run's artifact.
       actions: read
+    # The OpenRouter key, a spending credential, is given only to the two steps that call the
+    # model: the stack's LiteLLM and the eval smoke.
     env:
       THEHIVEMCP_EVAL: ${{ github.workspace }}/.cache/eval
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     steps:
+      # No credential stays in the checkouts: the MCP image is built from this one.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       # TheHiveMCPEval is internal: EVAL_REPO_TOKEN reads it. Without the token, the checkout
       # fails here, and the triage files the shard as one that recorded nothing.
       - name: Check out TheHiveMCPEval
@@ -223,6 +226,10 @@ jobs:
           repository: StrangeBee/TheHiveMCPEval
           token: ${{ secrets.EVAL_REPO_TOKEN }}
           path: .cache/eval
+          persist-credentials: false
+      # bin/harness builds itself in the Go image with these dirs mounted as the runner's user.
+      - name: Prepare cache dirs
+        run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools
       - uses: astral-sh/setup-uv@v6
       - name: Log in to ghcr.io
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
@@ -235,20 +242,30 @@ jobs:
       # checkout itself (eval-cli eval run --local).
       - name: Bring the eval stack up and seed it
         working-directory: .cache/eval
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: make up CORTEX=1 NO_VIEWER=1 && uv run eval-cli seed load
       - name: Memory after the stack came up
         run: docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' | sort -k2 -h
-      # The previous night's result, for the pass rate's comparison: the latest nightly run on
-      # main that kept one. None on the first night, which is no error.
-      - name: The previous night's result
+      # The last night that passed, for the pass rate's comparison: the latest nightly run on main
+      # whose eval artifact holds a result marked ok. A night that fell, or that kept no result, is
+      # skipped; none on the first night is no error.
+      - name: The last night that passed
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          for id in $(gh run list --workflow nightly.yml --branch main --limit 10 --json databaseId,status --jq '.[] | select(.status == "completed") | .databaseId'); do
-            if gh run download "$id" --name eval --dir .cache/harness/eval/previous 2>/dev/null; then echo "from run $id"; break; fi
+          for id in $(gh run list --workflow nightly.yml --branch main --limit 30 --json databaseId,status --jq '.[] | select(.status == "completed") | .databaseId'); do
+            rm -rf .cache/harness/eval/try
+            gh run download "$id" --name eval --dir .cache/harness/eval/try 2>/dev/null || continue
+            if jq -e '.ok == true' .cache/harness/eval/try/eval/result.json >/dev/null 2>&1; then
+              rm -rf .cache/harness/eval/previous && mv .cache/harness/eval/try .cache/harness/eval/previous
+              echo "from run $id"; break
+            fi
           done
       - name: Eval smoke
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: bin/harness run --cadence nightly --all --gate eval-smoke
       - name: Keep the results for the triage, and the night's eval result
         if: always()

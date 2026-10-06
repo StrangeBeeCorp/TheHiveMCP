@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -81,16 +82,68 @@ func (c Config) Preflight() error {
 	return nil
 }
 
-// Result is one night's smoke.
+// Result is one night's smoke: the sum of the evaluations its run created.
 type Result struct {
-	Suite    string    `json:"suite"`
-	Model    string    `json:"model"`
-	Head     string    `json:"head"`
-	Cases    int       `json:"cases"`
-	Passed   int       `json:"passed"`
-	PassRate float64   `json:"pass_rate"`
-	CostUSD  float64   `json:"cost_usd"`
+	Suite    string   `json:"suite"`
+	Model    string   `json:"model"`
+	Head     string   `json:"head"`
+	Evals    []string `json:"evals,omitempty"`
+	Cases    int      `json:"cases"`
+	Passed   int      `json:"passed"`
+	PassRate float64  `json:"pass_rate"`
+	CostUSD  float64  `json:"cost_usd"`
+	// CostUnmeasured means eval-cli could not attribute the true cost of an evaluation: the cap was
+	// not checked.
+	CostUnmeasured bool `json:"cost_unmeasured,omitempty"`
+	// OK says whether the night passed its checks: only such a night is the next one's baseline.
+	OK       bool      `json:"ok"`
 	Recorded time.Time `json:"recorded"`
+}
+
+// Add is the sum of two evaluations of the same night.
+func (r Result) Add(o Result) Result {
+	r.Cases += o.Cases
+	r.Passed += o.Passed
+	r.CostUSD += o.CostUSD
+	r.CostUnmeasured = r.CostUnmeasured || o.CostUnmeasured
+
+	if r.Cases > 0 {
+		r.PassRate = float64(r.Passed) / float64(r.Cases)
+	}
+
+	return r
+}
+
+// NewEvals are the evaluation ids `eval-cli eval list` shows after a run and did not before: the
+// run's own, one per phase of the suite, in the list's order.
+func NewEvals(before, after string) []string {
+	seen := map[string]bool{}
+	for _, id := range evalIDs(before) {
+		seen[id] = true
+	}
+
+	var ids []string
+
+	for _, id := range evalIDs(after) {
+		if !seen[id] {
+			ids = append(ids, id)
+		}
+	}
+
+	return ids
+}
+
+// evalIDs are the ids of `eval-cli eval list`'s table: the first word of each row, eval-....
+func evalIDs(list string) []string {
+	var ids []string
+
+	for line := range strings.SplitSeq(list, "\n") {
+		if f := strings.Fields(line); len(f) > 0 && strings.HasPrefix(f[0], "eval-") {
+			ids = append(ids, f[0])
+		}
+	}
+
+	return ids
 }
 
 // ErrNoColumn means the eval's report has no column for the model: the run measured nothing.
@@ -104,16 +157,19 @@ type column struct {
 	Cost     float64 `json:"cost"`
 }
 
-// FromColumns reads the model's column of `eval-cli eval columns` (JSON, one object per column).
+// FromColumns reads the model's column of `eval-cli eval columns ID`: {"eval_id", "split",
+// "columns": {label: {...}}}.
 func FromColumns(data []byte, model string) (Result, error) {
-	var cols map[string]column
+	var report struct {
+		Columns map[string]column `json:"columns"`
+	}
 
-	err := json.Unmarshal(data, &cols)
+	err := json.Unmarshal(data, &report)
 	if err != nil {
 		return Result{}, fmt.Errorf("read eval-cli's columns: %w", err)
 	}
 
-	c, ok := cols[model]
+	c, ok := report.Columns[model]
 	if !ok || c.N == 0 {
 		return Result{}, fmt.Errorf("%w %q in eval-cli's columns", ErrNoColumn, model)
 	}
@@ -149,6 +205,10 @@ func (c Config) Check(r Result, previous *Result) []string {
 
 	if r.Cases < c.Cases {
 		problems = append(problems, fmt.Sprintf("only %d of the %d cases of %s ran", r.Cases, c.Cases, c.Suite))
+	}
+
+	if r.CostUnmeasured {
+		problems = append(problems, "eval-cli could not attribute the run's true cost (eval-cli eval cost): the cap was not checked")
 	}
 
 	if r.CostUSD > c.Cap {
