@@ -15,6 +15,7 @@ import (
 const (
 	makefile       = "Makefile"
 	baseFlag       = "--base"
+	allFlag        = "--all"
 	mutationConfig = "tool: example.com/gremlins@v0.0.1\ntimeout_coefficient: 1\nfloors: {pkg/a: 80}\n"
 	// gremlinsStub stands in for gremlins: the go target writes report.json where gremlins writes pkg/a's.
 	gremlinsStub = "go:\n\tmkdir -p .cache/harness/mutation\n\tcp report.json .cache/harness/mutation/pkg_a.json\n"
@@ -111,10 +112,49 @@ func TestTheNightMutatesEveryFlooredPackage(t *testing.T) {
 
 	var out bytes.Buffer
 
-	require.NoError(t, env{root: dir}.mutate(t.Context(), []string{"--all", baseFlag, "work"}, &out), out.String())
+	require.NoError(t, env{root: dir}.mutate(t.Context(), []string{allFlag, baseFlag, "work"}, &out), out.String())
 	assert.Contains(t, out.String(), "pkg/a: efficacy 90.0%")
 	assert.NotContains(t, out.String(), "not mutated", "--all does not look at what changed")
 	assert.Contains(t, out.String(), "1 package(s) at or over their mutation floor")
+}
+
+// At night, --all on a package whose mutants mostly timed out cannot run either: the night files
+// it as a gate that could not run, not as weaker tests.
+func TestANightWhoseMutantsTimedOutCannotRun(t *testing.T) {
+	t.Parallel()
+
+	dir := mutationRepo(t, aTimedOut)
+
+	var out bytes.Buffer
+
+	err := env{root: dir}.mutate(t.Context(), []string{allFlag, baseFlag, "work"}, &out)
+	require.ErrorIs(t, err, errCannotRun, out.String())
+	require.NotErrorIs(t, err, errMutation)
+}
+
+// A package under its floor fails the gate even when another one could not be measured: the
+// failure is what the change must fix, and it is never hidden behind UNAVAILABLE.
+func TestAPackageUnderItsFloorWinsOverOneNotMeasured(t *testing.T) {
+	t.Parallel()
+
+	_, err := exec.LookPath("make")
+	if err != nil {
+		t.Skip("make is not installed here (the Debian Go image and CI's runner have it)")
+	}
+
+	dir := gittest.Repo(t, map[string]string{
+		mutationPath: "tool: example.com/gremlins@v0.0.1\ntimeout_coefficient: 1\nfloors: {pkg/a: 80, pkg/b: 80}\n",
+		makefile: "go:\n\tmkdir -p .cache/harness/mutation\n\tcp a.json .cache/harness/mutation/pkg_a.json\n" +
+			"\tcp b.json .cache/harness/mutation/pkg_b.json\n",
+		ignoreFile: ignoreCache, "a.json": aLived, "b.json": aTimedOut,
+	})
+
+	var out bytes.Buffer
+
+	err = env{root: dir}.mutate(t.Context(), []string{allFlag}, &out)
+	require.ErrorIs(t, err, errMutation, out.String())
+	assert.Contains(t, out.String(), "pkg/a: efficacy 50.0%")
+	assert.Contains(t, out.String(), "pkg/b: efficacy 100.0%")
 }
 
 // When gremlins cannot run, the gate fails with gremlins' output, never a pass.
