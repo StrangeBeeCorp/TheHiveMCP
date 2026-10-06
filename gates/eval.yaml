@@ -6,8 +6,9 @@
 #
 # The estimate per case: TheHiveMCPEval's mcp-tools cases take about 9,500 prompt and 400
 # completion tokens each; mimo-v2.6-flash costs $0.14 and $0.28 per million on OpenRouter, so
-# about $0.0015 a case and $0.053 a night. The first nights give the true cost (eval-cli eval
-# cost); raising the cap is a person's call.
+# about $0.0015 a case and $0.053 a night. TheHiveMCPEval's first locked run (its #81, on
+# 2026-10-06) cost $0.024 for the 37 cases (eval-cli eval cost), so the estimate leaves room.
+# Raising the cap is a person's call.
 
 suite: mcp-tools
 model: mimo-v2.6-flash # a label of TheHiveMCPEval's configs/providers.yaml

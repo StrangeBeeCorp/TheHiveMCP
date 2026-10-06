@@ -238,8 +238,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       # The stack the mcp-tools suite needs, and no more: TheHive, the Orchestrator, LiteLLM, and
-      # Cortex for its automation cases; no viewer. The suite builds the MCP server from this
-      # checkout itself (eval-cli eval run --local).
+      # Cortex for its automation cases; no viewer. Under CI (GitHub sets CI=true) the stack is
+      # locked: every image is pulled by the digest TheHiveMCPEval's deployment/images.lock names,
+      # and nothing is built but the MCP server, from this checkout (eval-cli eval run --local).
       - name: Bring the eval stack up and seed it
         working-directory: .cache/eval
         env:

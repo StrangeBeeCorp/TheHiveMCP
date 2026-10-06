@@ -236,15 +236,17 @@ var (
 	errEvalSmoke = errors.New("eval smoke")
 	// errNoPrevious means there is no previous night to compare with: the first night, or none kept.
 	errNoPrevious = errors.New("no previous night")
-	// errNoEval means the run created no evaluation: there is nothing to read.
+	// errNoEval means the run left no summary: there is nothing to read.
 	errNoEval = errors.New("the run created no evaluation")
 )
 
 const (
 	// evalLogLines is how much of eval-cli's output a failure shows.
 	evalLogLines = 30
-	// noResultsTable is how eval-cli's queries fail on a promptfoo database with no evaluation yet.
-	noResultsTable = "no such table: eval_results"
+	// evalUsageExit is eval-cli's exit for a usage error, or CI without an OpenRouter key.
+	evalUsageExit = 2
+	// summaryName is the run summary's file, next to the night's result.
+	summaryName = "summary.json"
 )
 
 // evalSmoke runs TheHiveMCPEval's suite against this checkout on gates/eval.yaml's model, its
@@ -282,7 +284,12 @@ func (e env) evalSmoke(ctx context.Context, args []string, out io.Writer) error 
 		return err
 	}
 
-	result, err := e.runEval(ctx, *dir, config, out)
+	summaryPath, err := runSummaryPath(*outPath)
+	if err != nil {
+		return err
+	}
+
+	result, err := e.runEval(ctx, *dir, summaryPath, config, out)
 	if err != nil {
 		return err
 	}
@@ -308,6 +315,39 @@ func (e env) evalSmoke(ctx context.Context, args []string, out io.Writer) error 
 	}
 
 	return nil
+}
+
+// runSummaryPath is where eval-cli writes the run's summary: next to the night's result, which
+// the nightly keeps, else in a directory of its own. It is absolute: eval-cli runs in its checkout.
+func runSummaryPath(outPath string) (string, error) {
+	dir := filepath.Dir(outPath)
+	if outPath == "" {
+		var err error
+
+		dir, err = os.MkdirTemp("", "eval-smoke-")
+		if err != nil {
+			return "", fmt.Errorf("eval smoke: %w", err)
+		}
+	}
+
+	err := os.MkdirAll(dir, dirPerm)
+	if err == nil {
+		dir, err = filepath.Abs(dir)
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("eval smoke: %w", err)
+	}
+
+	p := filepath.Join(dir, summaryName)
+
+	// A summary left by an earlier run would be read as this one's.
+	err = os.Remove(p)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return "", fmt.Errorf("eval smoke: %w", err)
+	}
+
+	return p, nil
 }
 
 func writeResult(r evalsmoke.Result, p string) error {
@@ -347,51 +387,45 @@ func evalReady(dir, goos string) error {
 	return nil
 }
 
-// runEval runs the suite, then reads the evaluations the run created: the suite runs as one
-// promptfoo evaluation per phase (read, then write), and the night is their sum.
-func (e env) runEval(ctx context.Context, dir string, c evalsmoke.Config, out io.Writer) (evalsmoke.Result, error) {
+// runEval runs the suite, then reads the summary eval-cli writes whatever the outcome: the
+// evaluations the run created (one per phase, read then write) and their counts. The night is
+// their sum, at the true cost of each.
+func (e env) runEval(ctx context.Context, dir, summaryPath string, c evalsmoke.Config, out io.Writer) (evalsmoke.Result, error) {
 	_, _ = fmt.Fprintf(out, "eval smoke: %s on %s, %d cases, about $%.3f (cap $%.2f)\n", c.Suite, c.Model, c.Cases, c.Estimate(), c.Cap)
 
-	// On a fresh stack, before its first evaluation, promptfoo's database has no results table and
-	// eval list fails on it: there is no evaluation yet. Any other failure is an error: an empty
-	// list would make every older evaluation look like the run's own.
-	before, err := evalCLI(ctx, dir, "eval", "list")
+	// eval-cli exits 100 when cases failed: the summary says how many passed, and its status
+	// whether the run completed.
+	runOut, runErr := evalCLI(ctx, dir, "eval", cmdRun, c.Suite, "--local", e.root, "--model", c.Model, "--summary-json", summaryPath)
 
-	switch {
-	case err == nil:
-	case strings.Contains(err.Error(), noResultsTable):
-		_, _ = fmt.Fprintln(out, "no evaluation before the run: promptfoo's database has no results yet (a fresh stack)")
-
-		before = ""
-	default:
-		return evalsmoke.Result{}, fmt.Errorf("eval smoke: %w", err)
+	data, err := os.ReadFile(summaryPath) // #nosec G304 -- the summary this run asked eval-cli for
+	if err != nil {
+		return evalsmoke.Result{}, fmt.Errorf("eval smoke: %w: no run summary (%w)%s\n%s", errNoEval, err, runNote(runErr), lastLines(runOut, evalLogLines))
 	}
 
-	// A failing case makes eval-cli exit non-zero: the evaluations say how many passed.
-	runOut, runErr := evalCLI(ctx, dir, "eval", cmdRun, c.Suite, "--local", e.root, "--model", c.Model)
-
-	after, err := evalCLI(ctx, dir, "eval", "list")
+	run, err := evalsmoke.ReadRun(data)
 	if err != nil {
 		return evalsmoke.Result{}, fmt.Errorf("eval smoke: %w", err)
 	}
 
-	ids := evalsmoke.NewEvals(before, after)
-	if len(ids) == 0 {
-		return evalsmoke.Result{}, fmt.Errorf("eval smoke: %w%s\n%s", errNoEval, runNote(runErr), lastLines(runOut, evalLogLines))
+	// Exit 2 is a usage error, or CI without an OpenRouter key: the night could not run here.
+	if run.ExitCode == evalUsageExit {
+		return evalsmoke.Result{}, fmt.Errorf("%w: eval-cli refused the run (exit 2): %s", errCannotRun, lastLines(runOut, evalLogLines))
 	}
 
-	result := evalsmoke.Result{Suite: c.Suite, Model: c.Model, Evals: ids}
-
-	for _, id := range ids {
-		part, err := readEval(ctx, dir, id, c.Model)
-		if err != nil {
-			return evalsmoke.Result{}, fmt.Errorf("eval smoke: %w\n%s", err, lastLines(runOut, evalLogLines))
-		}
-
-		result = result.Add(part)
+	result, err := run.Result(c.Model)
+	if err != nil {
+		return evalsmoke.Result{}, fmt.Errorf("eval smoke: %w\n%s", err, lastLines(runOut, evalLogLines))
 	}
 
-	_, _ = fmt.Fprintf(out, "evaluations: %s\n", strings.Join(ids, ", "))
+	result.Suite = c.Suite
+
+	for _, id := range run.EvalIDs {
+		usd, ok := trueCost(ctx, dir, id, c.Model)
+		result.CostUSD += usd
+		result.CostUnmeasured = result.CostUnmeasured || !ok
+	}
+
+	_, _ = fmt.Fprintf(out, "evaluations: %s\n", strings.Join(run.EvalIDs, ", "))
 
 	result.Head = gitx.Head(ctx, e.root)
 	result.Recorded = time.Now().UTC().Truncate(time.Second)
@@ -408,29 +442,15 @@ func runNote(err error) string {
 	return " (" + err.Error() + ")"
 }
 
-// readEval reads one evaluation's column for the model and its true cost; a cost eval-cli could
-// not attribute is left unmeasured, which the night's check reports.
-func readEval(ctx context.Context, dir, id, model string) (evalsmoke.Result, error) {
-	columns, err := evalCLI(ctx, dir, "eval", "columns", id)
+// trueCost is one evaluation's true cost for the model, from LiteLLM's spend log: false when
+// eval-cli could not attribute it, which the night's check reports.
+func trueCost(ctx context.Context, dir, id, model string) (float64, bool) {
+	cost, err := evalCLI(ctx, dir, "eval", "cost", id)
 	if err != nil {
-		return evalsmoke.Result{}, err
+		return 0, false
 	}
 
-	part, err := evalsmoke.FromColumns([]byte(columns), model)
-	if err != nil {
-		return evalsmoke.Result{}, fmt.Errorf("%s: %w", id, err)
-	}
-
-	usd, ok := 0.0, false
-
-	cost, costErr := evalCLI(ctx, dir, "eval", "cost", id)
-	if costErr == nil {
-		usd, ok = evalsmoke.TrueCost([]byte(cost), model)
-	}
-
-	part.CostUSD, part.CostUnmeasured = usd, !ok
-
-	return part, nil
+	return evalsmoke.TrueCost([]byte(cost), model)
 }
 
 // evalCLI runs `uv run eval-cli ARGS` in the TheHiveMCPEval checkout and returns its output.

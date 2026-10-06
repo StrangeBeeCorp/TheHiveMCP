@@ -19,34 +19,28 @@ const (
 	previousFlag = "--previous"
 	outFlag      = "--out"
 	evalConfig   = "suite: mcp-tools\nmodel: mimo-v2.6-flash\ncases: 37\ncost_per_case_usd: 0.0015\ncap_usd: 0.10\nmax_drop: 0.10\n"
-	// fakeUV stands in for `uv run eval-cli`, as TheHiveMCPEval prints: it records its arguments in
-	// $UV_CALLS; eval list shows $UV_OLD_EVALS, then the read and write phases' evaluations of every
-	// eval run so far, and fails when it has none, as on a fresh stack whose promptfoo database has
-	// no results yet; eval columns and eval cost print $UV_COLUMNS_<PHASE> and $UV_COST_<PHASE> (exiting 1 when
-	// it is empty); eval run exits $UV_RUN_EXIT.
+	// fakeUV stands in for `uv run eval-cli`, as TheHiveMCPEval answers: it records its arguments
+	// in $UV_CALLS; eval run prints a line, writes $UV_SUMMARY to its --summary-json path (nothing
+	// when it is empty, as when eval-cli died before writing it) and exits $UV_RUN_EXIT; eval cost
+	// prints $UV_COST_<PHASE> for the read or write phase's evaluation, exiting 1 when it is empty.
 	fakeUV = `#!/bin/sh
 echo "$*" >> "$UV_CALLS"
-phase=$(case "$5" in eval-Rd*) echo READ ;; eval-Wr*) echo WRITE ;; esac)
 case "$3 $4" in
-  "eval list")
-    n=$(cat "$UV_CALLS.runs" 2>/dev/null || echo 0)
-    [ -z "$UV_LIST_FAILS" ] || { echo "Error: docker volume inspect timed out" >&2; exit 1; }
-    [ "$n" -gt 0 ] || [ -n "$UV_OLD_EVALS" ] || { printf 'Traceback (most recent call last):\n  ...\nsqlite3.OperationalError: no such table: eval_results\n' >&2; exit 1; }
-    printf 'Eval ID\n-----\n'
-    for old in $UV_OLD_EVALS; do printf '%s  2026-10-05 04:20 CEST  20\n' "$old"; done
-    i=1; while [ "$i" -le "$n" ]; do
-      printf 'eval-Rd%s-2026-10-06T02:20:01  2026-10-06 04:20 CEST  20\neval-Wr%s-2026-10-06T02:31:44  2026-10-06 04:31 CEST  17\n' "$i" "$i"
-      i=$((i+1))
-    done ;;
-  "eval run") echo $(( $(cat "$UV_CALLS.runs" 2>/dev/null || echo 0) + 1 )) > "$UV_CALLS.runs"; echo "running the suite"; exit "${UV_RUN_EXIT:-0}" ;;
-  "eval columns") eval "out=\$UV_COLUMNS_$phase"; [ -n "$out" ] || exit 1; printf '%s' "$out" ;;
-  "eval cost") eval "out=\$UV_COST_$phase"; [ -n "$out" ] || exit 1; printf '%s' "$out" ;;
+  "eval run")
+    echo "running the suite"
+    [ -z "$UV_SUMMARY" ] || printf '%s' "$UV_SUMMARY" > "${11}"
+    exit "${UV_RUN_EXIT:-0}" ;;
+  "eval cost")
+    phase=$(case "$5" in eval-Rd*) echo READ ;; eval-Wr*) echo WRITE ;; esac)
+    eval "out=\$UV_COST_$phase"; [ -n "$out" ] || exit 1; printf '%s' "$out" ;;
 esac
 `
-	readColumns  = `{"eval_id": "eval-Rd1-2026-10-06T02:20:01", "split": null, "columns": {"mimo-v2.6-flash": {"n": 20, "passed": 19, "pass_rate": 0.95, "cost": 0.03}}}`
-	writeColumns = `{"eval_id": "eval-Wr2-2026-10-06T02:31:44", "split": null, "columns": {"mimo-v2.6-flash": {"n": 17, "passed": 16, "pass_rate": 0.9412, "cost": 0.03}}}`
-	readCost     = `{"eval_id": "eval-Rd1-2026-10-06T02:20:01", "columns": {"mimo-v2.6-flash": {"cost_usd": 0.0281}}}`
-	writeCost    = `{"eval_id": "eval-Wr2-2026-10-06T02:31:44", "columns": {"mimo-v2.6-flash": {"cost_usd": 0.025}}}`
+	readID    = "eval-Rd1-2026-10-06T02:20:01"
+	writeID   = "eval-Wr1-2026-10-06T02:31:44"
+	summary   = `{"schema": 1, "suites": ["mcp-tools"], "model": "mimo-v2.6-flash", "exit_code": 100, "status": "tests_failed", "failed_step": null, "eval_ids": ["` + readID + `", "` + writeID + `"], "evaluations": [{"eval_id": "` + readID + `", "total": 20, "passed": 19, "failed": 1, "errors": 0}, {"eval_id": "` + writeID + `", "total": 17, "passed": 16, "failed": 1, "errors": 0}]}`
+	readCost  = `{"columns": {"mimo-v2.6-flash": {"cost_usd": 0.0281}}, "unattributed": {"cost_usd": 0.004}}`
+	writeCost = `{"columns": {"mimo-v2.6-flash": {"cost_usd": 0.025}}}`
+	runCall   = "run eval-cli eval run mcp-tools --local "
 )
 
 // evalCheckout is a repository with gates/eval.yaml, and a TheHiveMCPEval checkout, with a fake uv
@@ -65,8 +59,8 @@ func evalCheckout(t *testing.T) (root, eval, calls string) {
 
 	for k, v := range map[string]string{
 		"PATH": bin + string(os.PathListSeparator) + os.Getenv("PATH"), "UV_CALLS": calls,
-		"UV_COLUMNS_READ": readColumns, "UV_COLUMNS_WRITE": writeColumns, "UV_COST_READ": readCost, "UV_COST_WRITE": writeCost,
-		"OPENROUTER_API_KEY": "sk-or-test", "THEHIVEMCP_EVAL": "", "UV_RUN_EXIT": "0",
+		"UV_SUMMARY": summary, "UV_COST_READ": readCost, "UV_COST_WRITE": writeCost,
+		"OPENROUTER_API_KEY": "sk-or-test", "THEHIVEMCP_EVAL": "", "UV_RUN_EXIT": "100",
 	} {
 		t.Setenv(k, v)
 	}
@@ -84,9 +78,10 @@ func writePrevious(t *testing.T, ok bool, rate float64) string {
 	return p
 }
 
-// The night runs the suite against this checkout on the model, reads the two evaluations the
-// run created (the read and write phases), sums their columns and true costs, writes the result
-// marked as passed, and passes within the cap and the previous night's pass rate.
+// The night runs the suite against this checkout on the model, reads the run's summary (the read
+// and write phases' evaluations, cases failing included: exit 100), adds each one's true cost,
+// writes the result marked as passed next to the summary, and passes within the cap and the
+// previous night's pass rate.
 //
 //nolint:paralleltest // evalCheckout sets PATH
 func TestTheEvalSmokeRunsTheSuiteAndHoldsItsResult(t *testing.T) {
@@ -98,30 +93,27 @@ func TestTheEvalSmokeRunsTheSuiteAndHoldsItsResult(t *testing.T) {
 	err := env{root: root}.evalSmoke(t.Context(), []string{evalFlag, eval, outFlag, out, previousFlag, writePrevious(t, true, 0.9459)}, &log)
 	require.NoError(t, err, log.String())
 
-	recorded, err := os.ReadFile(calls) // #nosec G304 -- the test's own record
-	require.NoError(t, err)
-	assert.Equal(t, "run eval-cli eval list\nrun eval-cli eval run mcp-tools --local "+root+" --model mimo-v2.6-flash\nrun eval-cli eval list\n"+
-		"run eval-cli eval columns eval-Rd1-2026-10-06T02:20:01\nrun eval-cli eval cost eval-Rd1-2026-10-06T02:20:01\n"+
-		"run eval-cli eval columns eval-Wr1-2026-10-06T02:31:44\nrun eval-cli eval cost eval-Wr1-2026-10-06T02:31:44\n", string(recorded))
+	summaryPath := filepath.Join(filepath.Dir(out), summaryName)
+	assert.Equal(t, runCall+root+" --model mimo-v2.6-flash --summary-json "+summaryPath+"\n"+
+		"run eval-cli eval cost "+readID+"\nrun eval-cli eval cost "+writeID+"\n", readCalls(t, calls))
+	assert.FileExists(t, summaryPath, "the run's summary is kept with the night")
 
 	r, err := evalsmoke.Read(out)
 	require.NoError(t, err)
+	assert.Equal(t, []string{readID, writeID}, r.Evals)
 	assert.Equal(t, 37, r.Cases)
 	assert.Equal(t, 35, r.Passed)
-	assert.InDelta(t, 0.0531, r.CostUSD, 1e-9, "the true costs, not promptfoo's")
+	assert.InDelta(t, 0.0531, r.CostUSD, 1e-9, "the model's true costs, not the judge's unattributed calls")
 	assert.True(t, r.OK)
 	assert.Len(t, r.Head, 40)
 	assert.Contains(t, log.String(), "mcp-tools on mimo-v2.6-flash: 35/37 passed (95%), $0.053; previous night 34/37 (95%, 2026-10-05)")
-	assert.Contains(t, log.String(), "no evaluation before the run:", "a fresh stack's failing list is no error")
 }
 
-// Failing cases make eval-cli exit non-zero; the evaluations still say how the night went, and a
-// pass rate that fell more than the max drop under the previous night's fails it. The night is
-// still written, marked as failed: it is no baseline for the next.
+// A pass rate that fell more than the max drop under the previous night's fails the night. The
+// night is still written, marked as failed: it is no baseline for the next.
 func TestANightThatFellUnderThePreviousOneFails(t *testing.T) {
 	root, eval, _ := evalCheckout(t)
-	t.Setenv("UV_RUN_EXIT", "100")
-	t.Setenv("UV_COLUMNS_WRITE", `{"eval_id": "eval-Wr2", "columns": {"mimo-v2.6-flash": {"n": 17, "passed": 7, "pass_rate": 0.41}}}`)
+	t.Setenv("UV_SUMMARY", `{"model": "mimo-v2.6-flash", "exit_code": 100, "status": "tests_failed", "eval_ids": ["`+readID+`", "`+writeID+`"], "evaluations": [{"total": 20, "passed": 19}, {"total": 17, "passed": 7}]}`)
 
 	out := filepath.Join(t.TempDir(), "result.json")
 
@@ -158,53 +150,68 @@ func TestThePreviousNightIsTheLastOneThatPassed(t *testing.T) {
 	require.Error(t, env{root: root}.evalSmoke(t.Context(), []string{evalFlag, eval, previousFlag, corrupt}, &bytes.Buffer{}))
 }
 
-// On a stack that already holds earlier nights, the night reads only the evaluations its own run
-// created, not the older ones the list shows before it.
-func TestANightReadsOnlyTheEvaluationsItsRunCreated(t *testing.T) {
+// A run that did not complete measured nothing: the night fails, naming the step eval-cli says
+// failed, with its output, reads no cost and writes no result.
+func TestARunThatDidNotCompleteFailsNamingItsStep(t *testing.T) {
 	root, eval, calls := evalCheckout(t)
-	t.Setenv("UV_OLD_EVALS", "eval-Rd0-2026-10-05T02:20:01 eval-Wr0-2026-10-05T02:31:44")
+	t.Setenv("UV_RUN_EXIT", "3")
+	t.Setenv("UV_SUMMARY", `{"model": "mimo-v2.6-flash", "exit_code": 3, "status": "error", "failed_step": "make mcp-key", "eval_ids": [], "evaluations": []}`)
 
 	out := filepath.Join(t.TempDir(), "result.json")
 
-	var log bytes.Buffer
-
-	require.NoError(t, env{root: root}.evalSmoke(t.Context(), []string{evalFlag, eval, outFlag, out}, &log), log.String())
-	assert.NotContains(t, log.String(), "no evaluation before the run", "the list before the run worked")
-
-	r, err := evalsmoke.Read(out)
-	require.NoError(t, err)
-	assert.Equal(t, []string{"eval-Rd1-2026-10-06T02:20:01", "eval-Wr1-2026-10-06T02:31:44"}, r.Evals)
-	assert.Equal(t, 37, r.Cases, "the older night's 37 cases are not added")
-
-	recorded, err := os.ReadFile(calls) // #nosec G304 -- the test's own record
-	require.NoError(t, err)
-	assert.NotContains(t, string(recorded), "eval-Rd0", "the older evaluations are not read")
+	err := env{root: root}.evalSmoke(t.Context(), []string{evalFlag, eval, outFlag, out}, &bytes.Buffer{})
+	require.ErrorIs(t, err, evalsmoke.ErrRunBroke)
+	assert.Contains(t, err.Error(), `"make mcp-key"`)
+	assert.Contains(t, err.Error(), "running the suite", "eval-cli's output")
+	assert.NotContains(t, readCalls(t, calls), "eval cost")
+	assert.NoFileExists(t, out)
 }
 
-// A list that fails for another reason than a fresh stack's empty database is an error, before
-// anything runs: an empty list would make every older evaluation look like the run's own.
-func TestAListThatFailsBeforeTheRunStopsTheNight(t *testing.T) {
-	root, eval, calls := evalCheckout(t)
-	t.Setenv("UV_LIST_FAILS", "1")
+// eval-cli's exit 2 is a usage error, or CI without an OpenRouter key: the night cannot run here,
+// never a pass and never a failure of main.
+func TestARunEvalCLIRefusedCannotRun(t *testing.T) {
+	root, eval, _ := evalCheckout(t)
+	t.Setenv("UV_RUN_EXIT", "2")
+	t.Setenv("UV_SUMMARY", `{"model": "mimo-v2.6-flash", "exit_code": 2, "status": "error", "failed_step": "OPENROUTER_API_KEY", "eval_ids": [], "evaluations": []}`)
 
 	err := env{root: root}.evalSmoke(t.Context(), []string{evalFlag, eval}, &bytes.Buffer{})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "docker volume inspect timed out")
-
-	recorded, readErr := os.ReadFile(calls) // #nosec G304 -- the test's own record
-	require.NoError(t, readErr)
-	assert.Equal(t, "run eval-cli eval list\n", string(recorded), "nothing ran after the list")
+	require.ErrorIs(t, err, errCannotRun)
 }
 
-// A run that created no evaluation, or whose evaluation has no column for the model, measured
-// nothing: an error, with eval-cli's output.
+// A run that left no summary, one on another model, or one with no evaluation measured nothing:
+// an error, with eval-cli's output. A summary an earlier night left in the same place is not read
+// as this one's.
 func TestARunWithNoResultForTheModelIsAnError(t *testing.T) {
 	root, eval, _ := evalCheckout(t)
-	t.Setenv("UV_COLUMNS_READ", `{"eval_id": "eval-Rd1", "columns": {"glm-5.3-flash": {"n": 20, "passed": 15}}}`)
+	out := filepath.Join(t.TempDir(), "result.json")
+	require.NoError(t, os.WriteFile(filepath.Join(filepath.Dir(out), summaryName), []byte(summary), 0o600))
 
-	err := env{root: root}.evalSmoke(t.Context(), []string{evalFlag, eval}, &bytes.Buffer{})
-	require.ErrorIs(t, err, evalsmoke.ErrNoColumn)
+	t.Setenv("UV_SUMMARY", "")
+
+	err := env{root: root}.evalSmoke(t.Context(), []string{evalFlag, eval, outFlag, out}, &bytes.Buffer{})
+	require.ErrorIs(t, err, errNoEval, "the earlier night's summary was not read")
 	assert.Contains(t, err.Error(), "running the suite")
+
+	for name, s := range map[string]string{
+		"another model": `{"model": "glm-5.3-flash", "status": "passed", "eval_ids": ["e1"], "evaluations": [{"total": 37, "passed": 37}]}`,
+		"no evaluation": `{"model": "mimo-v2.6-flash", "status": "passed", "eval_ids": [], "evaluations": []}`,
+		"zero cases":    `{"model": "mimo-v2.6-flash", "status": "passed", "eval_ids": ["e1"], "evaluations": [{"total": 0}]}`,
+		"not JSON":      `No evaluations found.`,
+	} {
+		t.Setenv("UV_SUMMARY", s)
+		require.Error(t, env{root: root}.evalSmoke(t.Context(), []string{evalFlag, eval}, &bytes.Buffer{}), name)
+	}
+}
+
+// Cases that got no answer measured nothing: the night fails, whatever its pass rate.
+func TestCasesWithNoAnswerFailTheNight(t *testing.T) {
+	root, eval, _ := evalCheckout(t)
+	t.Setenv("UV_SUMMARY", `{"model": "mimo-v2.6-flash", "exit_code": 100, "status": "tests_failed", "eval_ids": ["`+readID+`", "`+writeID+`"], "evaluations": [{"total": 20, "passed": 19, "errors": 1}, {"total": 17, "passed": 17}]}`)
+
+	var log bytes.Buffer
+
+	require.ErrorIs(t, env{root: root}.evalSmoke(t.Context(), []string{evalFlag, eval}, &log), errEvalSmoke)
+	assert.Contains(t, log.String(), "1 case(s) got no answer")
 }
 
 // The true cost that eval-cli cannot give, or a true cost over the cap, fails the night: the cap is

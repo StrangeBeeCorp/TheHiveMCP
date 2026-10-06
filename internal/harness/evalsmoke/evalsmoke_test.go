@@ -3,7 +3,6 @@ package evalsmoke
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -60,50 +59,51 @@ func TestARunOverItsCapIsNotStarted(t *testing.T) {
 	require.ErrorIs(t, c.Preflight(), ErrOverCap, "37 cases at $0.003 is $0.111")
 }
 
-// The model's column of `eval-cli eval columns ID`, as it prints it, gives the cases, the passes
-// and promptfoo's cost; another model's, or none, is no result.
-func TestTheResultIsTheModelsColumn(t *testing.T) {
-	t.Parallel()
-
-	columns := []byte(`{"eval_id": "eval-Ab1-2026-10-06T02:20:01", "split": null, "columns": {
-		"glm-5.3-flash": {"n": 20, "passed": 15, "pass_rate": 0.75, "cost": 0.2},
-		"mimo-v2.6-flash": {"n": 20, "passed": 19, "pass_rate": 0.95, "cost": 0.029, "latency_ms_mean": 9000, "metric_means": {}}}}`)
-
-	r, err := FromColumns(columns, model)
-	require.NoError(t, err)
-	assert.Equal(t, Result{Model: model, Cases: 20, Passed: 19, PassRate: 0.95, CostUSD: 0.029}, r)
-
-	_, err = FromColumns([]byte(`{"eval_id": "e", "columns": {"glm-5.3-flash": {"n": 37}}}`), model)
-	require.ErrorIs(t, err, ErrNoColumn)
-
-	_, err = FromColumns([]byte(`{"eval_id": "e", "columns": {"mimo-v2.6-flash": {"n": 0}}}`), model)
-	require.ErrorIs(t, err, ErrNoColumn, "a column with no case measured nothing")
-
-	_, err = FromColumns([]byte(`No evaluations found.`), model)
-	require.Error(t, err)
-}
-
-// The run's evaluations are those eval-cli eval list shows after it and not before: one per phase
-// of the suite. A night is their sum.
+// The summary `eval-cli eval run --summary-json` writes, as #81 of TheHiveMCPEval documents it,
+// gives the run's evaluations and the night is their sum: cases, passes and rows with no answer.
 func TestTheNightIsTheSumOfTheEvaluationsItsRunCreated(t *testing.T) {
 	t.Parallel()
 
-	header := "Eval ID" + strings.Repeat(" ", 53) + "  Local Time  Tests\n" + strings.Repeat("-", 92) + "\n"
-	before := header + "eval-Old-2026-10-05T02:20:01   2026-10-05 04:20 CEST   20\n\n1 evaluation(s) total. Latest is at the bottom.\n"
-	after := header + "eval-Old-2026-10-05T02:20:01   2026-10-05 04:20 CEST   20\n" +
-		"eval-Rd1-2026-10-06T02:20:01   2026-10-06 04:20 CEST   20\n" +
-		"eval-Wr2-2026-10-06T02:31:44   2026-10-06 04:31 CEST   17\n\n3 evaluation(s) total. Latest is at the bottom.\n"
+	run, err := ReadRun([]byte(`{"schema": 1, "suites": ["mcp-tools"], "model": "mimo-v2.6-flash", "mcp_version": "local",
+		"exit_code": 100, "status": "tests_failed", "failed_step": null, "duration_s": 887.2,
+		"eval_ids": ["eval-Rd1-2026-10-06T02:20:01", "eval-Wr2-2026-10-06T02:31:44"],
+		"evaluations": [
+			{"eval_id": "eval-Rd1-2026-10-06T02:20:01", "description": "MCP Tools (read) [MCP local]", "tests": 20, "total": 20, "passed": 19, "failed": 1, "errors": 0},
+			{"eval_id": "eval-Wr2-2026-10-06T02:31:44", "description": "MCP Tools (write) [MCP local]", "tests": 17, "total": 17, "passed": 14, "failed": 2, "errors": 1}]}`))
+	require.NoError(t, err)
 
-	assert.Equal(t, []string{"eval-Rd1-2026-10-06T02:20:01", "eval-Wr2-2026-10-06T02:31:44"}, NewEvals(before, after))
-	assert.Equal(t, []string{"eval-Old-2026-10-05T02:20:01"}, NewEvals("No evaluations found.\n", before), "a first run on a fresh stack")
-	assert.Empty(t, NewEvals(before, before), "a run that created none")
-
-	night := Result{}.Add(Result{Cases: 20, Passed: 19, CostUSD: 0.029}).Add(Result{Cases: 17, Passed: 14, CostUSD: 0.024, CostUnmeasured: true})
+	night, err := run.Result(model)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"eval-Rd1-2026-10-06T02:20:01", "eval-Wr2-2026-10-06T02:31:44"}, night.Evals)
 	assert.Equal(t, 37, night.Cases)
 	assert.Equal(t, 33, night.Passed)
+	assert.Equal(t, 1, night.Unanswered)
 	assert.InDelta(t, 33.0/37, night.PassRate, 1e-9)
-	assert.InDelta(t, 0.053, night.CostUSD, 1e-9)
-	assert.True(t, night.CostUnmeasured, "one evaluation's cost unmeasured leaves the night's unmeasured")
+
+	costs := Result{}.Add(Result{CostUSD: 0.029}).Add(Result{CostUSD: 0.024, CostUnmeasured: true})
+	assert.InDelta(t, 0.053, costs.CostUSD, 1e-9)
+	assert.True(t, costs.CostUnmeasured, "one evaluation's cost unmeasured leaves the night's unmeasured")
+}
+
+// A run that did not complete, one on another model, or one with no case measured nothing.
+func TestARunThatMeasuredNothingHasNoResult(t *testing.T) {
+	t.Parallel()
+
+	_, err := Run{Model: model, ExitCode: 1, Status: "error", FailedStep: "run the suites in the eval container"}.Result(model)
+	require.ErrorIs(t, err, ErrRunBroke)
+	assert.Contains(t, err.Error(), "run the suites in the eval container")
+
+	_, err = Run{Model: model, ExitCode: 130, Status: "interrupted"}.Result(model)
+	require.ErrorIs(t, err, ErrRunBroke)
+
+	_, err = Run{Model: "glm-5.3-flash", Status: StatusPassed, Evaluations: []Evaluation{{Total: 37, Passed: 37}}}.Result(model)
+	require.ErrorIs(t, err, ErrNoEval)
+
+	_, err = Run{Model: model, Status: StatusPassed}.Result(model)
+	require.ErrorIs(t, err, ErrNoEval)
+
+	_, err = ReadRun([]byte(`No evaluations found.`))
+	require.Error(t, err)
 }
 
 // The true cost is the model's column of eval-cli's cost report, when it has one.
@@ -139,6 +139,9 @@ func TestANightIsHeldToItsCasesItsCapAndThePreviousNight(t *testing.T) {
 
 	assert.Equal(t, []string{"eval-cli could not attribute the run's true cost (eval-cli eval cost): the cap was not checked"},
 		c.Check(Result{Model: model, Cases: 37, PassRate: 0.95, CostUnmeasured: true}, last), "an unmeasured cost is no pass")
+
+	assert.Equal(t, []string{"2 case(s) got no answer and measured nothing: rerun them before trusting the pass rate"},
+		c.Check(Result{Model: model, Cases: 37, Passed: 35, PassRate: 0.9459, Unanswered: 2, CostUSD: 0.05}, last), "rows with no answer are no pass")
 
 	assert.Equal(t, []string{
 		"only 30 of the 37 cases of mcp-tools ran",

@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -92,6 +91,8 @@ type Result struct {
 	Passed   int      `json:"passed"`
 	PassRate float64  `json:"pass_rate"`
 	CostUSD  float64  `json:"cost_usd"`
+	// Unanswered counts the cases that got no answer at all: they measured nothing.
+	Unanswered int `json:"unanswered,omitempty"`
 	// CostUnmeasured means eval-cli could not attribute the true cost of an evaluation: the cap was
 	// not checked.
 	CostUnmeasured bool `json:"cost_unmeasured,omitempty"`
@@ -104,6 +105,7 @@ type Result struct {
 func (r Result) Add(o Result) Result {
 	r.Cases += o.Cases
 	r.Passed += o.Passed
+	r.Unanswered += o.Unanswered
 	r.CostUSD += o.CostUSD
 	r.CostUnmeasured = r.CostUnmeasured || o.CostUnmeasured
 
@@ -114,67 +116,72 @@ func (r Result) Add(o Result) Result {
 	return r
 }
 
-// NewEvals are the evaluation ids `eval-cli eval list` shows after a run and did not before: the
-// run's own, one per phase of the suite, in the list's order.
-func NewEvals(before, after string) []string {
-	seen := map[string]bool{}
-	for _, id := range evalIDs(before) {
-		seen[id] = true
-	}
+// Run statuses `eval-cli eval run --summary-json` writes when the run completed: every case
+// passed, or some failed. Any other status (error, interrupted) is a run that did not complete.
+const (
+	StatusPassed      = "passed"
+	StatusTestsFailed = "tests_failed"
+)
 
-	var ids []string
+var (
+	// ErrRunBroke means the run did not complete: its summary names the step that failed.
+	ErrRunBroke = errors.New("the eval run did not complete")
+	// ErrNoEval means the run created no evaluation for the model: it measured nothing.
+	ErrNoEval = errors.New("the run created no evaluation")
+)
 
-	for _, id := range evalIDs(after) {
-		if !seen[id] {
-			ids = append(ids, id)
-		}
-	}
-
-	return ids
+// Run is what `eval-cli eval run --summary-json PATH` writes, whatever the run's outcome.
+type Run struct {
+	Model      string `json:"model"`
+	ExitCode   int    `json:"exit_code"`
+	Status     string `json:"status"`
+	FailedStep string `json:"failed_step"`
+	// EvalIDs are the evaluations the run created, one per phase of the suite (read, then write).
+	EvalIDs     []string     `json:"eval_ids"`
+	Evaluations []Evaluation `json:"evaluations"`
 }
 
-// evalIDs are the ids of `eval-cli eval list`'s table: the first word of each row, eval-....
-func evalIDs(list string) []string {
-	var ids []string
-
-	for line := range strings.SplitSeq(list, "\n") {
-		if f := strings.Fields(line); len(f) > 0 && strings.HasPrefix(f[0], "eval-") {
-			ids = append(ids, f[0])
-		}
-	}
-
-	return ids
+// Evaluation is one phase's count. Errors counts the rows that got no answer at all.
+type Evaluation struct {
+	EvalID string `json:"eval_id"`
+	Total  int    `json:"total"`
+	Passed int    `json:"passed"`
+	Errors int    `json:"errors"`
 }
 
-// ErrNoColumn means the eval's report has no column for the model: the run measured nothing.
-var ErrNoColumn = errors.New("no result for the model")
+// ReadRun reads a run's summary.
+func ReadRun(data []byte) (Run, error) {
+	var r Run
 
-// column is the part of `eval-cli eval columns` the smoke reads.
-type column struct {
-	N        int     `json:"n"`
-	Passed   int     `json:"passed"`
-	PassRate float64 `json:"pass_rate"`
-	Cost     float64 `json:"cost"`
-}
-
-// FromColumns reads the model's column of `eval-cli eval columns ID`: {"eval_id", "split",
-// "columns": {label: {...}}}.
-func FromColumns(data []byte, model string) (Result, error) {
-	var report struct {
-		Columns map[string]column `json:"columns"`
-	}
-
-	err := json.Unmarshal(data, &report)
+	err := json.Unmarshal(data, &r)
 	if err != nil {
-		return Result{}, fmt.Errorf("read eval-cli's columns: %w", err)
+		return Run{}, fmt.Errorf("read eval-cli's run summary: %w", err)
 	}
 
-	c, ok := report.Columns[model]
-	if !ok || c.N == 0 {
-		return Result{}, fmt.Errorf("%w %q in eval-cli's columns", ErrNoColumn, model)
+	return r, nil
+}
+
+// Result is the night a completed run measured, the sum of its evaluations. A run that did not
+// complete, or that created no evaluation for the model, measured nothing.
+func (r Run) Result(model string) (Result, error) {
+	if r.Status != StatusPassed && r.Status != StatusTestsFailed {
+		return Result{}, fmt.Errorf("%w: status %q, exit %d, at the step %q", ErrRunBroke, r.Status, r.ExitCode, r.FailedStep)
 	}
 
-	return Result{Model: model, Cases: c.N, Passed: c.Passed, PassRate: c.PassRate, CostUSD: c.Cost}, nil
+	if r.Model != model {
+		return Result{}, fmt.Errorf("%w on %q: the run was on %q", ErrNoEval, model, r.Model)
+	}
+
+	night := Result{Model: model, Evals: r.EvalIDs}
+	for _, e := range r.Evaluations {
+		night = night.Add(Result{Cases: e.Total, Passed: e.Passed, Unanswered: e.Errors})
+	}
+
+	if night.Cases == 0 {
+		return Result{}, fmt.Errorf("%w on %q", ErrNoEval, model)
+	}
+
+	return night, nil
 }
 
 // TrueCost is the model's cost from `eval-cli eval cost`, which reconciles LiteLLM's spend log, or
@@ -198,8 +205,8 @@ func TrueCost(data []byte, model string) (float64, bool) {
 	return *c.CostUSD, true
 }
 
-// Check lists what is wrong with a night's result: part of the suite measured, a cost over the
-// cap, or a pass rate that fell more than MaxDrop under the previous night's (nil: no previous).
+// Check lists what is wrong with a night's result: part of the suite measured, cases with no
+// answer, a cost over the cap, or a pass rate that fell more than MaxDrop under the previous night's (nil: no previous).
 func (c Config) Check(r Result, previous *Result) []string {
 	var problems []string
 
@@ -208,6 +215,10 @@ func (c Config) Check(r Result, previous *Result) []string {
 		problems = append(problems, fmt.Sprintf("only %d of the %d cases of %s ran", r.Cases, c.Cases, c.Suite))
 	case r.Cases > c.Cases:
 		problems = append(problems, fmt.Sprintf("%d cases read for the %d of %s: evaluations that are not this run's were read", r.Cases, c.Cases, c.Suite))
+	}
+
+	if r.Unanswered > 0 {
+		problems = append(problems, fmt.Sprintf("%d case(s) got no answer and measured nothing: rerun them before trusting the pass rate", r.Unanswered))
 	}
 
 	if r.CostUnmeasured {

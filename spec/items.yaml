@@ -207,6 +207,10 @@ items:
       - cmd/harness/evalsmoke_test.go:TestANightThatFellUnderThePreviousOneFails
       - cmd/harness/evalsmoke_test.go:TestAnEvalSmokeThatCannotRunSaysWhy
       - cmd/harness/evalsmoke_test.go:TestANightOverItsCapIsNotStarted
+      - cmd/harness/evalsmoke_test.go:TestARunThatDidNotCompleteFailsNamingItsStep
+      - cmd/harness/evalsmoke_test.go:TestARunEvalCLIRefusedCannotRun
+      - cmd/harness/evalsmoke_test.go:TestCasesWithNoAnswerFailTheNight
+      - internal/harness/evalsmoke/evalsmoke_test.go:TestARunThatMeasuredNothingHasNoResult
     gates: [eval-smoke]
 
   - id: PRF-002

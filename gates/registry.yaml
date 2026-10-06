@@ -423,9 +423,10 @@ gates:
     suites: ["*"]
     budget_s: 3600
     blocks: >-
-      TheHiveMCPEval's mcp-tools suite on main, on gates/eval.yaml's model: a night that ran part
-      of the suite, cost more than its cap, or whose pass rate fell more than its max drop under
-      the previous night's (no TheHiveMCPEval checkout, uv or OpenRouter key: it cannot run)
+      TheHiveMCPEval's mcp-tools suite on main, on gates/eval.yaml's model: a night whose run did
+      not complete, ran part of the suite, left cases with no answer, cost more than its cap, or
+      whose pass rate fell more than its max drop under the previous night's (no TheHiveMCPEval
+      checkout, uv or OpenRouter key, or eval-cli refusing the run: it cannot run)
 
   - id: fuzz
     runs: >-
