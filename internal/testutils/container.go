@@ -475,7 +475,7 @@ func findOrganisationID(resp any, orgName string) (string, bool) {
 // organisationAlreadyExists reports whether a failed CreateOrganisation means
 // the organisation is simply already there.
 //
-// The status alone is not enough: TheHive 5.6 answers 409, while 5.5 answers
+// The status alone is not enough: TheHive 5.6+ answers 409, while 5.5 answers
 // 400 with {"type":"CreateError","message":"Organisation already exists"}. The
 // integration matrix runs both, so matching only on 409 makes the 5.5 leg fail
 // whenever the preceding listOrganisation misses a row that does exist — which

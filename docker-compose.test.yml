@@ -55,8 +55,8 @@ services:
 
   thehive:
     # THEHIVE_TEST_IMAGE is the single source of truth for the version under
-    # test; CI sets it per matrix leg (5.5.2 / 5.6.3).
-    image: ${THEHIVE_TEST_IMAGE:-strangebee/thehive:5.6.3}
+    # test; CI sets it per matrix leg (5.5.16 / 5.8.0).
+    image: ${THEHIVE_TEST_IMAGE:-strangebee/thehive:5.8.0}
     depends_on:
       elasticsearch:
         condition: service_started

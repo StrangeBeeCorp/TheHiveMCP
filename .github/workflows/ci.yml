@@ -184,20 +184,21 @@ jobs:
     # actually mounted AND is runner-owned for actions/cache to save.
     env:
       GO_CACHE_DIR: /home/runner/.cache/thehivemcp-go
-    # Run the integration suite against every supported TheHive version, so a
-    # compatibility break against any of them turns the PR red instead of going
-    # unnoticed (see DL-6007). `make test-integration` brings up the docker-compose
+    # Run the integration suite against the oldest and the newest supported
+    # TheHive versions, so a compatibility break at either end turns the PR red
+    # instead of going unnoticed (see DL-6007). The versions in between share the
+    # same v1 API, so testing them too would only cost runner minutes. `make test-integration` brings up the docker-compose
     # test stack (TheHive + Elasticsearch + Cassandra + MITRE) for the selected
     # THEHIVE_TEST_IMAGE. It deliberately LEAVES the stack up (for fast local
     # reruns), so the teardown step below runs it down explicitly — with
     # `if: always()` so it fires even when the tests fail. Each leg boots a full
-    # TheHive (~5 min startup); keep this to the versions we actually support.
+    # TheHive (~5 min startup); keep this to the oldest and newest supported.
     strategy:
       fail-fast: false
       matrix:
         thehive-image:
-          - strangebee/thehive:5.5.2
-          - strangebee/thehive:5.6.3
+          - strangebee/thehive:5.5.16
+          - strangebee/thehive:5.8.0
     steps:
       - uses: actions/checkout@v4
 

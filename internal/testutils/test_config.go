@@ -9,7 +9,7 @@ import (
 // DefaultTheHiveTestImage is used when THEHIVE_TEST_IMAGE is unset (CI sets it
 // per version-matrix leg). Renovate tracks this tag via the custom Docker
 // manager in renovate.json.
-const DefaultTheHiveTestImage = "strangebee/thehive:5.6.3"
+const DefaultTheHiveTestImage = "strangebee/thehive:5.8.0"
 
 // DefaultAdminUser is the built-in TheHive superadmin login used across the
 // integration suite for authentication and as a default assignee in fixtures.
@@ -36,7 +36,7 @@ func LicensePresent() bool {
 }
 
 // TheHiveTestImage returns the integration-suite image: THEHIVE_TEST_IMAGE
-// overrides the default (how the CI matrix selects 5.5 vs 5.6).
+// overrides the default (how the CI matrix selects 5.5 vs 5.8).
 func TheHiveTestImage() string {
 	if img := os.Getenv("THEHIVE_TEST_IMAGE"); img != "" {
 		return img
