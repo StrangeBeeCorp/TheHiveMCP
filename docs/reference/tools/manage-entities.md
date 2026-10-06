@@ -139,6 +139,10 @@ Create new entities with complete schema data.
 }
 ```
 
+`data` also takes a list of values. When TheHive refuses some of them (most often because the observable already exists), the create still succeeds: `result`
+lists the observables it made and `failures` lists TheHive's error for each refused value. When it refuses every value, the call fails and names the error types
+(`CreateError` for an existing observable).
+
 #### Creating procedures (requires parent case/alert)
 
 A procedure maps observed attacker behaviour to a MITRE ATT&CK technique. Use `search-entities` with `entity-type="pattern"` to find the `patternId` before
