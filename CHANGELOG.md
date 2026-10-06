@@ -39,9 +39,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- **IDs are checked before they reach a URL path.** `get-job-status` and `wait-for-jobs` put the job ID into TheHive's job endpoint path unchecked: in the
-  1.2.0 test run, `job-id: "../../user/current"` reached the HTTP layer and only the reverse proxy refused it. `entity-id` got this check after the RandoriSec
-  5.3 audit; job IDs did not, and neither did `manage-entities`' `entity-ids` and `target-id` or the analyzer catalog's `dataType`. The generated client
+- **IDs are checked before they reach a URL path.** `get-job-status` and `wait-for-jobs` put the job ID into TheHive's job endpoint path unchecked: in the 1.2.0
+  test run, `job-id: "../../user/current"` reached the HTTP layer and only the reverse proxy refused it. `entity-id` got this check after the RandoriSec 5.3
+  audit; job IDs did not, and neither did `manage-entities`' `entity-ids` and `target-id` or the analyzer catalog's `dataType`. The generated client
   percent-encodes path values, which left a dot segment (`..`), an empty ID, and a proxy that decodes `%2F` before routing. Job IDs are now held to TheHive's ID
   shape (`~123456` or bare digits), like `entity-id`. `manage-entities` IDs and `dataType` refuse empty values, dot segments, slashes, backslashes and control
   characters; `apply-template`, which sends its IDs and template name in the request body, is left as it was, so a template name may still hold a slash. The
