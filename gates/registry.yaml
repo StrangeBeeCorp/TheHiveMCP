@@ -364,7 +364,8 @@ gates:
     budget_s: 1800
     blocks: >-
       a changed package with a floor in gates/mutation.yaml whose unit tests kill a smaller share
-      of gremlins' mutants than the floor
+      of gremlins' mutants than the floor (a run whose mutants mostly timed out, on a busy machine,
+      measured nothing: UNAVAILABLE, run it again)
 
   - id: fuzz
     runs: >-
