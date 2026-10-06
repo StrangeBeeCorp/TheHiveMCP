@@ -79,6 +79,7 @@ func TestWaitForJobsKeepsTheOtherReportsWhenOneReadFails(t *testing.T) {
 	assert.Equal(t, "~3", wait.Failed[0].JobID)
 	assert.False(t, wait.Failed[0].Retryable, "a 404 will not change")
 	assert.Contains(t, string(wait.Message), "2 of 3 job(s) finished. 1 could not be read: see jobErrors")
+	assert.NotContains(t, string(wait.Message), "retryable", "no failure is retryable, so pendingJobIds holds none of them")
 }
 
 // Regression: a job whose last read before the deadline failed transiently was
@@ -99,6 +100,30 @@ func TestWaitForJobsKeepsARetryableFailurePending(t *testing.T) {
 	require.Len(t, wait.Failed, 1)
 	assert.Equal(t, "~2", wait.Failed[0].JobID)
 	assert.True(t, wait.Failed[0].Retryable)
+	assert.Contains(t, string(wait.Message), "A retryable one is also in pendingJobIds.")
+}
+
+// Regression: a timeout above the maximum was capped silently, so a model that
+// asked for 500 s read the shorter wait as the whole one.
+func TestWaitForJobsSaysWhenTheTimeoutWasCapped(t *testing.T) {
+	t.Parallel()
+
+	params := ExecuteAutomationParams{Operation: OperationWaitForJobs, JobIDs: []string{"~1"}, TimeoutSecs: 500}
+	require.NoError(t, (&ExecuteAutomationTool{}).ValidateParams(&params))
+	require.Equal(t, MaxWaitSeconds, params.TimeoutSecs)
+
+	fake := fakecortex.NewJobs(map[string][]fakecortex.Reply{"~1": {fakecortex.Status(statusSuccess)}})
+	ctx := context.WithValue(context.Background(), types.HiveClientCtxKey, fake.Client(t))
+	ctx = utils.AddPermissionsToContext(ctx, permissions.LoadAdminForTesting())
+
+	result, err := (&ExecuteAutomationTool{pollInterval: 10 * time.Millisecond}).Handle(ctx, mcp.CallToolRequest{}, params)
+	require.NoError(t, err)
+	require.NotNil(t, result.WaitForJobsResult)
+	assert.Contains(t, string(result.WaitForJobsResult.Message), "timeout-seconds was capped at the maximum, 120.")
+
+	uncapped, err := waitForJobs(t, map[string][]fakecortex.Reply{"~1": {fakecortex.Status(statusSuccess)}}, []string{"~1"}, 5)
+	require.NoError(t, err)
+	assert.NotContains(t, string(uncapped.WaitForJobsResult.Message), "capped")
 }
 
 // Regression: the reads had no deadline, so a stalled TheHive held the call

@@ -32,7 +32,7 @@ func NewToolErrorf(format string, args ...any) *ToolError {
 
 // Cause adds the underlying error
 func (e *ToolError) Cause(err error) *ToolError {
-	e.cause = err
+	e.cause = utils.ReadableAPIError(err)
 	return e
 }
 

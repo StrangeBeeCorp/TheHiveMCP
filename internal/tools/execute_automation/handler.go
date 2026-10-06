@@ -184,9 +184,12 @@ func (t *ExecuteAutomationTool) handleWaitForJobs(ctx context.Context, params Ex
 
 	slog.Info("Waited for jobs", "jobs", len(wait.order), "pending", len(pending), "failed", len(failed), "seconds", waited)
 
-	return ExecuteAutomationResult{
-		WaitForJobsResult: NewWaitForJobsResult(wait.read(), pending, failed, len(wait.order), waited),
-	}, nil
+	result := NewWaitForJobsResult(wait.read(), pending, failed, len(wait.order), waited)
+	if params.timeoutCapped {
+		result.Message = utils.Trustedf("timeout-seconds was capped at the maximum, %d. %s", MaxWaitSeconds, result.Message)
+	}
+
+	return ExecuteAutomationResult{WaitForJobsResult: result}, nil
 }
 
 // sleep waits for d, reporting false when ctx ends first.

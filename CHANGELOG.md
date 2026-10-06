@@ -39,6 +39,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Four answers no longer mislead a model.** All found in the 1.2.0 test run:
+  - **An error's cause is TheHive's answer, not the client's decoding error.** When TheHive's body held a field the generated client does not declare (a 400's
+    `errors`), the cause read `json: unknown field "errors"`, ahead of TheHive's message. It now reads `TheHive answered: <body>`.
+  - **`wait-for-jobs` mentions retryable jobs only when there is one.** Its message said "a retryable one is also in pendingJobIds" after any failure, including
+    a 404 that will never be retried.
+  - **A capped `timeout-seconds` is said.** A value above 120 was lowered silently, so a model that asked for 500 s took the shorter wait for the whole one. The
+    result message now starts with `timeout-seconds was capped at the maximum, 120.`
+  - **`sort-by: platforms` on `pattern` is refused**, like a filter on it: TheHive does not index the field, accepted the sort and ordered nothing by it.
+
 - **Creating an observable that TheHive did not create is now an error.** An observable sent without `data` (a common slip is `value`) made TheHive answer 2xx
   with an empty list, and `manage-entities` reported "Observable created successfully" with an empty `result`. A model then believed the observable existed and
   built on it; one measured run spent its whole turn budget re-creating it. The tool now fails with a hint to set `entity-data.data`.

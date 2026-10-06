@@ -2,6 +2,7 @@ package execute_automation
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 
@@ -69,6 +70,10 @@ type ExecuteAutomationParams struct {
 	TimeoutSecs  int            `json:"timeout-seconds,omitempty" jsonschema_description:"Longest wait for wait-for-jobs, in seconds (default 45, max 120). Stay under your client's tool-call timeout: the MCP TypeScript SDK's is 60 s by default."`
 	ActionID     string         `json:"action-id,omitempty"       jsonschema_description:"Action ID for get-action-status operations."`
 	Parameters   map[string]any `json:"parameters,omitempty"      jsonschema_description:"Optional parameters for analyzer/responder execution. JSON object with automation-specific configuration."`
+
+	// timeoutCapped records that validation lowered timeout-seconds to
+	// MaxWaitSeconds, so the result can say the wait was shorter than asked.
+	timeoutCapped bool
 }
 
 // Operation names accepted by the execute-automation tool.
@@ -269,7 +274,10 @@ func NewWaitForJobsResult(jobs []*thehive.OutputJob, pending []string, failed []
 	}
 
 	if len(failed) > 0 {
-		message += fmt.Sprintf(" %d could not be read: see jobErrors, where a retryable one is also in pendingJobIds.", len(failed))
+		message += fmt.Sprintf(" %d could not be read: see jobErrors.", len(failed))
+		if slices.ContainsFunc(failed, func(f JobError) bool { return f.Retryable }) {
+			message += " A retryable one is also in pendingJobIds."
+		}
 	}
 
 	result.Message = utils.TrustedString(message + " Reports carry the verdict only: get-job-status returns a job's full report.")

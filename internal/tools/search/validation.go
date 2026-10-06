@@ -39,6 +39,13 @@ func (t *Tool) ValidateParams(params *EntitiesParams) error {
 		return err
 	}
 
+	// An unindexed field cannot order the results either: TheHive accepts the
+	// sort, and the page it returns does not follow it.
+	if slices.Contains(unfilterableFields[params.EntityType], params.SortBy) {
+		return tools.NewToolErrorf("cannot sort %s by '%s': TheHive does not index it, so the results would not follow that order", params.EntityType, params.SortBy).
+			Hintf("Sort by an indexed field such as %s, and request the value with extra-columns: [\"%s\"]", types.DefaultSortField(params.EntityType), params.SortBy)
+	}
+
 	if params.SortOrder != SortOrderAsc && params.SortOrder != SortOrderDesc {
 		return tools.NewToolErrorf("invalid sort-order '%s'. Must be 'asc' or 'desc'", params.SortOrder)
 	}

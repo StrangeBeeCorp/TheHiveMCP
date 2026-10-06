@@ -22,7 +22,7 @@ observables with threat intelligence and run responders to perform automated act
 | `entity-id`       | string | Conditional | Entity ID - required for `run-responder` and `get-action-status`                                           |
 | `job-id`          | string | Conditional | Job ID (required for `get-job-status`)                                                                     |
 | `job-ids`         | array  | Conditional | Job IDs (required for `wait-for-jobs`, at most 20)                                                         |
-| `timeout-seconds` | int    | No          | Longest wait for `wait-for-jobs`, in seconds (default 45, clamped to 120)                                  |
+| `timeout-seconds` | int    | No          | Longest wait for `wait-for-jobs`, in seconds (default 45; above 120 it is capped, and the result says so)  |
 | `action-id`       | string | Conditional | Action ID (required for `get-action-status`)                                                               |
 | `parameters`      | object | No          | JSON object with automation-specific configuration                                                         |
 
