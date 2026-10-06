@@ -263,7 +263,7 @@ func (t Tests) Argv(license string) []string {
 
 	argv := []string{
 		dockerCmd, "run", "-i", "--rm", "--network", "host", "-v", t.Mount, "-w", "/app",
-		"-e", "THEHIVE_TEST_URL", "-e", "LOG_LEVEL", "-e", "THEHIVE_TEST_IMAGE", "-e", "THEHIVE_TEST_LICENSE=" + license, "-e", "CGO_ENABLED=0",
+		"-e", "THEHIVE_TEST_URL", "-e", "LOG_LEVEL", "-e", "THEHIVE_TEST_IMAGE", "-e", "HARNESS_LOAD", "-e", "THEHIVE_TEST_LICENSE=" + license, "-e", "CGO_ENABLED=0",
 	}
 	argv = append(append(append(argv, t.User...), t.Caches...), t.Tools...)
 

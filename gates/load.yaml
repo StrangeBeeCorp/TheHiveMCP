@@ -3,7 +3,8 @@
 # with its clients at once, each with its own MCP session calling search-entities on 25 alerts,
 # and holds the result to its budget. baselines/load/<run>.json is what the run measured when the
 # budget was set: go run ./cmd/load --run <run> --write-baseline for a run against the stub, and
-# for the thehive run, the .cache/harness/load/<image>.json the integration test writes. A run
+# for the thehive run, the .cache/harness/load/<image>.json its test writes (make gate
+# ID=load-thehive CADENCE=nightly). A run
 # that sampled no memory, or a soak cut short, is an error. Raising a budget is a reviewed change,
 # like a cap in gates/limits.yaml.
 #
@@ -36,9 +37,10 @@ runs:
     sample: 15s
     budget: {p95_ms: 200, p99_ms: 500, max_errors: 0, max_rss_mib: 110, max_growth_mib_per_hour: 20}
 
-  # TheHive 5.5 and 5.6 of the integration stack (internal/load's TestLoadAgainstTheHive). With a
-  # license the suite's tests run in parallel on the same TheHive, so its latency budgets have ten
-  # times the margin and its throughput none: no call may fail, and the memory is held.
+  # TheHive 5.5 and 5.6 of the integration stack (internal/load's TestLoadAgainstTheHive, the
+  # load-thehive gate, alone on the stack after the suite). CI runners share their machine, so its
+  # latency budgets have ten times the margin and its throughput none: no call may fail, and the
+  # memory is held.
   thehive:
     against: thehive
     clients: 10

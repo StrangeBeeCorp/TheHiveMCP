@@ -80,8 +80,9 @@ jobs:
             go-int-${{ runner.os }}-
       - name: Prepare cache dirs
         run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools
-      - name: Integration suite
-        run: bin/harness run --cadence nightly --all --gate integration
+      # The suite, then the load against the same TheHive, alone on it.
+      - name: Integration suite, then the load against TheHive
+        run: bin/harness run --cadence nightly --all --gate integration --gate load-thehive
         env:
           THEHIVE_TEST_IMAGE: strangebee/thehive:${{ matrix.thehive }}
           THEHIVE_TEST_LICENSE: ${{ secrets.THEHIVE_TEST_LICENSE }}
@@ -183,7 +184,7 @@ jobs:
       - name: Prepare cache dirs
         run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools
       # The server over HTTP under many clients against a TheHive stub, then 30 minutes of
-      # steady calls; the integration shards hold the same load against TheHive 5.5 and 5.8.
+      # steady calls; the integration shards run the load against TheHive 5.5 and 5.8.
       - name: Load and soak
         run: bin/harness run --cadence nightly --all --gate load --gate soak
       - name: Keep the results for the triage

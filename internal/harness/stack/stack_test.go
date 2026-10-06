@@ -208,7 +208,7 @@ func TestTestsArgvRunsTheSuiteOnTheHostNetwork(t *testing.T) {
 	licensedRun := tests.Argv("eyJ.lic")
 	assert.Equal(t, []string{
 		"docker", "run", "-i", "--rm", "--network", "host", "-v", "/repo:/app", "-w", "/app",
-		"-e", "THEHIVE_TEST_URL", "-e", "LOG_LEVEL", "-e", "THEHIVE_TEST_IMAGE", "-e", "THEHIVE_TEST_LICENSE=eyJ.lic", "-e", "CGO_ENABLED=0",
+		"-e", "THEHIVE_TEST_URL", "-e", "LOG_LEVEL", "-e", "THEHIVE_TEST_IMAGE", "-e", "HARNESS_LOAD", "-e", "THEHIVE_TEST_LICENSE=eyJ.lic", "-e", "CGO_ENABLED=0",
 		"-v", "thehivemcp-gomod:/go/pkg/mod", "-v", "thehivemcp-go-tools:/go/bin", "golang:1.26.8", "sh", "-c",
 	}, licensedRun[:len(licensedRun)-1])
 	assert.Equal(t, "command -v gotestsum >/dev/null 2>&1 || go install gotest.tools/gotestsum@v1.13.0 ; "+

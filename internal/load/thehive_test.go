@@ -19,8 +19,14 @@ import (
 
 // The thehive run of gates/load.yaml against the integration stack's TheHive (5.5 and 5.6 in CI):
 // the server built and run as its HTTP users do, the test's own user's key sent by every client,
-// each searching the 25 alerts seeded here, and the result held to the run's budget.
+// each searching the 25 alerts seeded here, and the result held to the run's budget. It runs in
+// the load-thehive gate, alone on the stack: inside the suite, whose tests run in parallel under a
+// license, its 200 searches would slow the other tests' TheHive, and theirs its measurement.
 func TestLoadAgainstTheHive(t *testing.T) {
+	if os.Getenv(loadEnv) == "" {
+		t.Skip("the load-thehive gate runs it alone on the stack (" + loadEnv + "=1)")
+	}
+
 	testutils.Parallel(t)
 
 	hive := testutils.SetupTestWithCleanup(t)
@@ -72,6 +78,9 @@ func TestLoadAgainstTheHive(t *testing.T) {
 
 	assert.Empty(t, run.Budget.Check(r), "the thehive run is held to its budget in "+BudgetsPath)
 }
+
+// loadEnv is what the load-thehive gate sets to run the TheHive load.
+const loadEnv = "HARNESS_LOAD"
 
 // renewKey gives the test's user an API key: the server's clients send a key, as its users do.
 func renewKey(t *testing.T, base, org string, user thehive.BasicAuth) string {

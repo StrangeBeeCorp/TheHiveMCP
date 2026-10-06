@@ -208,4 +208,4 @@ items:
       - internal/load/load_test.go:TestAShortRunMeasuresTheServer
       - internal/load/load_test.go:TestARunThatMeasuresNothingIsAnError
       - internal/load/thehive_test.go:TestLoadAgainstTheHive
-    gates: [load, soak]
+    gates: [load, load-thehive, soak]
