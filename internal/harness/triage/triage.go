@@ -186,7 +186,8 @@ func details(o Outcome) string {
 		b.WriteString(fence("log (last lines)", o.Log))
 	}
 
-	b.WriteString("\nRun it again with `make gate ID=" + o.Gate + " CADENCE=nightly`; `make next` lists the open findings.\n")
+	b.WriteString("\nThe run's `" + o.Shard + "` artifact holds the whole log (and, for fuzz, the input it found under testdata/fuzz). " +
+		"Run it again with `make gate ID=" + o.Gate + " CADENCE=nightly`; `make next` lists the open findings.\n")
 
 	return b.String()
 }

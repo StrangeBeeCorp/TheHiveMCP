@@ -16,12 +16,14 @@ import (
 
 const (
 	runsFlag = "--runs"
+	urlFlag  = "--run-url"
 	nightURL = "https://github.com/o/r/actions/runs/9"
-	// fakeGH records each call's arguments and stdin in $GH_CALLS, and answers issue list with
-	// $GH_ISSUES.
+	// fakeGH records each call's arguments and stdin in $GH_CALLS, answers issue list with
+	// $GH_ISSUES, and fails every other call with $GH_FAIL when it is set.
 	fakeGH = `#!/bin/sh
 { echo "ARGS $*"; if [ "$1" = issue ] && [ "$2" != list ] && [ "$2" != close ]; then cat; echo; fi; } >> "$GH_CALLS"
-if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
+if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; exit 0; fi
+if [ -n "$GH_FAIL" ]; then echo "$GH_FAIL" >&2; exit 1; fi
 `
 )
 
@@ -78,7 +80,7 @@ func TestTheTriageFilesAndClosesTheNightsFindings(t *testing.T) {
 
 	var out bytes.Buffer
 
-	err := env{root: t.TempDir()}.triageNight(t.Context(), []string{runsFlag, nightRuns(t), "--run-url", nightURL, "--expect", "checks,mutation"}, &out)
+	err := env{root: t.TempDir()}.triageNight(t.Context(), []string{runsFlag, nightRuns(t), urlFlag, nightURL, "--expect", "checks,mutation"}, &out)
 	require.NoError(t, err, out.String())
 
 	got := readCalls(t, calls)
@@ -98,9 +100,38 @@ func TestADryTriageChangesNothing(t *testing.T) {
 
 	var out bytes.Buffer
 
-	require.NoError(t, env{root: t.TempDir()}.triageNight(t.Context(), []string{runsFlag, nightRuns(t), "--run-url", nightURL, "--dry-run"}, &out))
+	require.NoError(t, env{root: t.TempDir()}.triageNight(t.Context(), []string{runsFlag, nightRuns(t), urlFlag, nightURL, "--dry-run"}, &out))
 	assert.Equal(t, "open: nightly: lint fails (checks)\n", out.String())
 	assert.Equal(t, "ARGS issue list --label nightly --state open --limit 500 --json number,title,body\n", readCalls(t, calls))
+}
+
+// A finding that still fails gets the night's comment on stdin, and a night that opens nothing
+// leaves the label alone.
+//
+//nolint:paralleltest // withFakeGH sets PATH
+func TestTheTriageCommentsOnAFindingThatStillFails(t *testing.T) {
+	calls := withFakeGH(t, `[{"number": 6, "title": "nightly: lint fails (checks)", "body": "<!-- nightly-finding: checks/lint -->"}]`)
+
+	var out bytes.Buffer
+
+	require.NoError(t, env{root: t.TempDir()}.triageNight(t.Context(), []string{runsFlag, nightRuns(t), urlFlag, nightURL}, &out), out.String())
+
+	got := readCalls(t, calls)
+	assert.Contains(t, got, "ARGS issue comment 6 --body-file -\nStill failing in "+nightURL+".")
+	assert.Contains(t, got, "lint failed")
+	assert.NotContains(t, got, "label create")
+	assert.NotContains(t, got, "issue create")
+}
+
+// When gh fails, the triage fails with what gh said: a night is never filed in part silently.
+func TestATriageWhoseGHFailsFails(t *testing.T) {
+	withFakeGH(t, `[]`)
+	t.Setenv("GH_FAIL", "HTTP 403: Resource not accessible by integration")
+
+	err := env{root: t.TempDir()}.triageNight(t.Context(), []string{runsFlag, nightRuns(t), urlFlag, nightURL}, &bytes.Buffer{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "gh label create")
+	assert.Contains(t, err.Error(), "HTTP 403")
 }
 
 // The triage needs its directory and the run's URL.

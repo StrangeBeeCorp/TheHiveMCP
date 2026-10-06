@@ -15,6 +15,7 @@ import (
 
 const (
 	lintGate = "lint"
+	lintLog  = "lint.log"
 	runURL   = "https://github.com/o/r/actions/runs/1"
 	checks   = "checks"
 	fuzzGate = "fuzz"
@@ -113,7 +114,7 @@ func TestReadFindsEachShardsResultsAndLogs(t *testing.T) {
 	writeShard(t, dir, checks, []runner.Result{
 		{Gate: lintGate, Verdict: runner.Fail, Summary: "lint failed", Log: "/home/runner/work/.cache/harness/runs/x/lint.log"},
 		{Gate: "race", Verdict: runner.Pass},
-	}, map[string]string{"lint.log": long})
+	}, map[string]string{lintLog: long})
 
 	outcomes, err := Read(dir, []string{checks, "mutation"})
 	require.NoError(t, err)
@@ -129,6 +130,50 @@ func TestReadFindsEachShardsResultsAndLogs(t *testing.T) {
 	actions := Plan(outcomes, []Issue{issue(4, "checks/*")}, runURL)
 	assert.Equal(t, Close, actions[0].Kind, "the shard ran again: its own finding closes")
 	assert.Equal(t, "nightly: the mutation shard records no result", actions[len(actions)-1].Title)
+}
+
+// A log is quoted at most logBytes long, its start cut: one long line as well as many.
+func TestALongLogIsCutToItsEnd(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	writeShard(t, dir, checks, []runner.Result{{Gate: lintGate, Verdict: runner.Fail, Log: lintLog}},
+		map[string]string{lintLog: strings.Repeat("x", 10*logBytes) + "the end"})
+
+	outcomes, err := Read(dir, nil)
+	require.NoError(t, err)
+	require.Len(t, outcomes, 2)
+
+	tail := outcomes[1].Log
+	assert.True(t, strings.HasPrefix(tail, "…"), "the cut is shown")
+	assert.True(t, strings.HasSuffix(tail, "the end"))
+	assert.Len(t, tail, len("…")+logBytes)
+}
+
+// The artifact is read through an os.Root: a log or a results.json that is a symlink out of the
+// shard quotes nothing from outside it.
+func TestASymlinkCannotLeadOutOfTheShard(t *testing.T) {
+	t.Parallel()
+
+	secret := filepath.Join(t.TempDir(), "secret")
+	require.NoError(t, os.WriteFile(secret, []byte("a runner secret"), 0o600))
+
+	dir := t.TempDir()
+	writeShard(t, dir, checks, []runner.Result{{Gate: lintGate, Verdict: runner.Fail, Log: lintLog}}, nil)
+	require.NoError(t, os.Symlink(secret, filepath.Join(dir, checks, "nightly-20261006-020000", lintLog)))
+
+	outcomes, err := Read(dir, nil)
+	require.NoError(t, err)
+	require.Len(t, outcomes, 2)
+	assert.Empty(t, outcomes[1].Log, "the log outside the shard is not quoted")
+
+	other := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(other, checks), 0o750))
+	require.NoError(t, os.Symlink(secret, filepath.Join(other, checks, "results.json")))
+
+	_, err = Read(other, nil)
+	require.Error(t, err, "a results.json outside the shard is not read")
+	assert.NotContains(t, err.Error(), "a runner secret")
 }
 
 // With no shard at all and none expected there is nothing to triage: that is an error, never a

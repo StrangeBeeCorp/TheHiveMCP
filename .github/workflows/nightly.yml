@@ -5,7 +5,9 @@ name: Nightly
 # of every floored package. Some regressions come from no pull request: a new TheHive image, a new
 # vulnerability, a fuzz input found tonight. The last job files each failure as an issue labelled
 # nightly (bin/harness triage), and `make next` lists them. The docs gate fails when a gate whose
-# cadence includes ci or nightly is missing here.
+# cadence includes nightly is missing here: a ci gate runs at night when its cadence says so.
+# Started by hand on another branch, the shards run that branch and the triage only prints what it
+# would file: the findings describe main.
 on:
   schedule:
     - cron: "17 2 * * *"
@@ -114,12 +116,16 @@ jobs:
         run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools "$GO_CACHE_DIR"/golangci
       - name: Fuzzing, the unit suite and the canaries
         run: bin/harness run --cadence nightly --all --gate fuzz --gate unit --gate canaries
-      - name: Keep the results for the triage
+      # go test writes an input that breaks a fuzz target under testdata/fuzz: the artifact keeps
+      # it, to commit with the fix as a seed.
+      - name: Keep the results and the fuzz inputs for the triage
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: nightly-gates
-          path: .cache/harness/runs/
+          path: |
+            .cache/harness/runs/
+            **/testdata/fuzz/**
           if-no-files-found: ignore
           retention-days: 14
 
@@ -153,7 +159,8 @@ jobs:
 
   triage:
     needs: [checks, integration, nightly-gates, mutation]
-    if: always() && github.repository == 'StrangeBee/TheHiveMCP'
+    # After failed shards too, but not a cancelled run: its shards recorded nothing, and nothing failed.
+    if: ${{ !cancelled() && github.repository == 'StrangeBee/TheHiveMCP' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -161,6 +168,9 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@v4
+      # bin/harness builds itself in the Go image with these dirs mounted as the runner's user.
+      - name: Prepare cache dirs
+        run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools
       - name: Collect the shards' results
         uses: actions/download-artifact@v4
         with:
@@ -171,5 +181,6 @@ jobs:
           bin/harness triage --runs night
           --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           --expect checks,integration-5.5.2,integration-5.6.3,nightly-gates,mutation
+          ${{ github.ref != 'refs/heads/main' && '--dry-run' || '' }}
         env:
           GH_TOKEN: ${{ github.token }}
