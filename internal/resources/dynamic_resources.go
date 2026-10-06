@@ -14,6 +14,7 @@ import (
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/tools"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 )
 
@@ -136,6 +137,11 @@ func dataTypeArgument(req mcp.ReadResourceRequest) (string, error) {
 
 	if strings.TrimSpace(value) == "" {
 		return "", fmt.Errorf("%s must not be empty. Omit it entirely to list the whole catalog", argDataType)
+	}
+
+	// The value becomes a path segment of the analyzer-by-type endpoint.
+	if !tools.IsPathSegment(value) {
+		return "", fmt.Errorf("invalid %s %q: an observable type such as ip or domain cannot be a dot segment or contain a slash, a backslash or a control character", argDataType, value)
 	}
 
 	return value, nil

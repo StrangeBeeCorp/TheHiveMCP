@@ -201,6 +201,30 @@ func TestAutomationTargetMustBeATheHiveEntity(t *testing.T) {
 	}
 }
 
+// Regression: get-job-status and wait-for-jobs put job IDs into the job
+// endpoint's path unchecked; the 1.2.0 test run reached a reverse proxy with
+// "../../user/current".
+func TestJobIDsMustBeTheHiveJobIDs(t *testing.T) {
+	t.Parallel()
+
+	tool := execute_automation.NewExecuteAutomationTool()
+	getStatus := func(jobID string) error {
+		return tool.ValidateParams(&execute_automation.ExecuteAutomationParams{Operation: execute_automation.OperationGetJobStatus, JobID: jobID})
+	}
+	wait := func(jobIDs ...string) error {
+		return tool.ValidateParams(&execute_automation.ExecuteAutomationParams{Operation: execute_automation.OperationWaitForJobs, JobIDs: jobIDs})
+	}
+
+	require.NoError(t, getStatus("~4096"))
+	require.NoError(t, getStatus("4096"), "a bare ID stays accepted, as for entities")
+	require.NoError(t, wait("~4096", "~8192"))
+
+	for _, bad := range []string{"../../user/current", "..", "~1/../../../status", "~1%2F..", "AYx-cortexJobId", "~1 "} {
+		require.ErrorContains(t, getStatus(bad), "invalid job-id", bad)
+		require.ErrorContains(t, wait("~4096", bad), "invalid job-ids entry", bad)
+	}
+}
+
 // Regression: TheHive's responder endpoints resolve case_task and
 // case_artifact, not the task and observable the tool advertises, so both the
 // catalog lookup and the run on a task answered 404.

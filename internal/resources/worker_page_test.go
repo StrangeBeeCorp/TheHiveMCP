@@ -126,6 +126,12 @@ func TestDataTypeArgument(t *testing.T) {
 	// Present but blank is not: it would silently widen the answer.
 	_, err = dataTypeArgument(requestWithArguments(map[string]any{argDataType: "  "}))
 	require.Error(t, err)
+
+	// It becomes a path segment of the analyzer-by-type endpoint (DL-8118).
+	for _, bad := range []string{"..", "ip/../../user", `ip\..`, "ip\n"} {
+		_, err = dataTypeArgument(requestWithArguments(map[string]any{argDataType: bad}))
+		require.ErrorContains(t, err, "invalid dataType", "%q", bad)
+	}
 }
 
 func TestPaginationArgumentsDefaults(t *testing.T) {
