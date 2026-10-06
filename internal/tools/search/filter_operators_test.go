@@ -136,4 +136,8 @@ func TestSearchInvalidFieldReturnsActionableError(t *testing.T) {
 
 	text := resultText(t, result)
 	require.Contains(t, text, "hive://schema/", "the error hint should point at the schema resources for self-correction")
+	// Regression (DL-8119): TheHive's 400 carries an "errors" field the client's
+	// error model lacks, and the cause read `json: unknown field "errors"`.
+	require.NotContains(t, text, "unknown field", "the cause must be TheHive's answer, not the client's decoding error")
+	require.Contains(t, text, "thisFieldDoesNotExist", "TheHive's message names the field")
 }

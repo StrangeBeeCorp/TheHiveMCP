@@ -39,6 +39,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Four answers no longer mislead a model.** All found in the 1.2.0 test run:
+  - **An error's cause names TheHive's answer, not the client's decoding error.** When TheHive's error body held a field the generated client does not declare
+    (a 400's `errors`), the cause read `json: unknown field "errors"`, which a model took for the reason. It now reads
+    `TheHive answered 400 Bad Request: see its message in the API response`, where TheHive's message already was. A 2xx the client cannot decode keeps the
+    client's error, which names the field.
+  - **`wait-for-jobs` mentions retryable jobs only when there is one.** Its message said "a retryable one is also in pendingJobIds" after any failure, including
+    a 404 that will never be retried.
+  - **A capped `timeout-seconds` is said.** A value above 120 was lowered silently, so a model that asked for 500 s took the shorter wait for the whole one. The
+    result message now starts with `timeout-seconds was capped at the maximum, 120.`
+  - **`sort-by: platforms` on `pattern` is refused**, like a filter on it: TheHive does not index the field, accepted the sort and ordered nothing by it.
+
 - **IDs are checked before they reach a URL path.** `get-job-status` and `wait-for-jobs` put the job ID into TheHive's job endpoint path unchecked: in the 1.2.0
   test run, `job-id: "../../user/current"` reached the HTTP layer and only the reverse proxy refused it. `entity-id` got this check after the RandoriSec 5.3
   audit; job IDs did not, and neither did `manage-entities`' `entity-ids` and `target-id` or the analyzer catalog's `dataType`. The generated client

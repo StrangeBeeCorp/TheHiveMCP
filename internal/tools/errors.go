@@ -57,11 +57,15 @@ func (e *ToolError) Schema(entityType, operation string) *ToolError {
 	return e.Hintf("Use get-resource 'hive://schema/%s' for available fields", entityType)
 }
 
-// API attaches resp's body to the error; consumes and closes it.
+// API attaches resp's body to the error; consumes and closes it. A cause that
+// is the client's failure to decode that body reads as TheHive's status line
+// instead (utils.StatusCause): the body itself is right here.
 func (e *ToolError) API(resp *http.Response) *ToolError {
 	if resp == nil {
 		return e.Hintf("API response is nil")
 	}
+
+	e.cause = utils.StatusCause(e.cause, resp)
 
 	if resp.Body == nil {
 		return e.Hintf("API response body is nil")

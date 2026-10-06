@@ -371,6 +371,7 @@ func validateWaitForJobsParams(params *ExecuteAutomationParams) error {
 		params.TimeoutSecs = DefaultWaitSeconds
 	case params.TimeoutSecs > MaxWaitSeconds:
 		params.TimeoutSecs = MaxWaitSeconds
+		params.timeoutCapped = true
 	}
 
 	return nil

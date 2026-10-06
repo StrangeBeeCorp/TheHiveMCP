@@ -96,6 +96,23 @@ func TestValidateParamsRejectsPatternPlatformFilter(t *testing.T) {
 	}
 }
 
+// Regression: sort-by platforms on pattern was accepted and ordered nothing,
+// the same silent answer as a filter on it.
+func TestValidateParamsRejectsPatternPlatformSort(t *testing.T) {
+	t.Parallel()
+
+	tool := &Tool{}
+
+	err := tool.ValidateParams(&EntitiesParams{EntityType: types.EntityTypePattern, SortBy: fieldPlatforms})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot sort pattern by 'platforms'")
+	assert.Contains(t, err.Error(), "extra-columns", "the error must point at the way to read platforms")
+
+	require.NoError(t, tool.ValidateParams(&EntitiesParams{EntityType: types.EntityTypePattern, SortBy: "name"}))
+	require.NoError(t, tool.ValidateParams(&EntitiesParams{EntityType: types.EntityTypeCase, SortBy: fieldPlatforms}),
+		"the ban is per entity type")
+}
+
 // The ban is per entity and per field: platforms stays readable, name stays
 // filterable, and no other entity is affected.
 func TestValidateParamsAcceptsFiltersOnIndexedFields(t *testing.T) {
