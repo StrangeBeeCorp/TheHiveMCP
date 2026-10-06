@@ -168,12 +168,17 @@ func (t *Tool) createObservable(ctx context.Context, client *thehive.APIClient, 
 	defer closeResponse(resp)
 
 	if err != nil && !isSuccessStatus(resp) {
-		var alertResp *http.Response
+		caseResp, caseErr := resp, err
 
-		result, alertResp, err = client.ObservableAPI.CreateObservableInAlert(ctx, parentID).InputCreateObservable(inputObservable).Execute()
-		defer closeResponse(alertResp)
+		result, resp, err = client.ObservableAPI.CreateObservableInAlert(ctx, parentID).InputCreateObservable(inputObservable).Execute()
+		defer closeResponse(resp)
 
-		resp = alertResp
+		// The case endpoint answers 403 for an ID that is not a case. Any other
+		// refusal came from a case that exists (unknown dataType, no data), so
+		// when the alert endpoint refuses too, the case's answer is the reason.
+		if err != nil && !isSuccessStatus(resp) && caseResp != nil && caseResp.StatusCode != http.StatusForbidden {
+			resp, err = caseResp, caseErr
+		}
 	}
 
 	if err != nil {
@@ -182,7 +187,7 @@ func (t *Tool) createObservable(ctx context.Context, client *thehive.APIClient, 
 		}
 
 		return EntityResult{}, tools.NewToolError("failed to create observable").Cause(err).
-			Hint("Check that the target case/alert exists and you have permissions").API(resp)
+			Hint("Check that the target case/alert exists, that dataType is a known observable type, and that you have permissions").API(resp)
 	}
 
 	// TheHive answers 2xx with an EMPTY list when the input carries no value (a

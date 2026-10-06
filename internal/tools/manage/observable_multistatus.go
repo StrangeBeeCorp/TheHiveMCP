@@ -29,6 +29,9 @@ type observableMultiStatus struct {
 // reaches the model unwrapped.
 var errorTypePattern = regexp.MustCompile(`^[A-Za-z]{1,64}$`)
 
+// hintCreateError tells the model what TheHive's duplicate refusal means.
+const hintCreateError = "A CreateError means the observable already exists in this case or alert: search its observables instead of creating it again"
+
 func isSuccessStatus(resp *http.Response) bool {
 	return resp != nil && resp.StatusCode >= 200 && resp.StatusCode < 300
 }
@@ -50,7 +53,8 @@ func observableMultiStatusResult(err error) (EntityResult, error) {
 	if len(status.Success) == 0 {
 		return EntityResult{}, tools.NewToolErrorf("TheHive created no observable: it refused all %d value(s)%s",
 			len(status.Failure), failureTypesSuffix(status.Failure)).
-			Hint("A CreateError means the observable already exists in this case or alert: search its observables instead of creating it again").
+			Hint(hintCreateError).
+			Hint("Any other type means TheHive rejected the value itself: check it against dataType before retrying").
 			Schema("observable", "create")
 	}
 

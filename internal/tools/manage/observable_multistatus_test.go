@@ -147,3 +147,46 @@ func TestCreateObservableRefusedByBothEndpointsCarriesTheAnswer(t *testing.T) {
 	assert.Contains(t, err.Error(), "Operation not permitted")
 	assert.Equal(t, int32(1), fake.alertCalls.Load())
 }
+
+// A case that exists but refuses the create (here an unknown dataType) is the
+// reason to report, not the alert endpoint's 403 for an ID that is no alert.
+func TestCreateObservableReportsTheCaseRefusal(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeObservableEndpoints{
+		caseStatus: http.StatusNotFound, caseBody: `{"type":"NotFoundError","message":"ObservableType ipaddr not found"}`,
+		alertStatus: http.StatusForbidden, alertBody: forbiddenBody,
+	}
+
+	_, err := (&Tool{}).createObservable(t.Context(), fake.client(t), ipObservable, "~1")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ObservableType ipaddr not found")
+	assert.NotContains(t, err.Error(), "Operation not permitted")
+}
+
+// A 207 whose body is not TheHive's {success, failure} may hide created
+// observables: the error says so instead of claiming nothing happened.
+func TestCreateObservableUnreadable207(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeObservableEndpoints{caseStatus: http.StatusMultiStatus, caseBody: `not json`}
+
+	_, err := (&Tool{}).createObservable(t.Context(), fake.client(t), ipObservable, "~1")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "could not read")
+	assert.Contains(t, err.Error(), "search the parent's observables")
+	assert.Equal(t, int32(0), fake.alertCalls.Load())
+}
+
+// Any 2xx from the case endpoint means the parent is a case, even one the
+// client cannot decode: it is not retried on the alert endpoint.
+func TestCreateObservableUndecodable2xxDoesNotTryTheAlert(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeObservableEndpoints{caseStatus: http.StatusCreated, caseBody: `{"unexpected":true}`}
+
+	_, err := (&Tool{}).createObservable(t.Context(), fake.client(t), ipObservable, "~1")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create observable")
+	assert.Equal(t, int32(0), fake.alertCalls.Load())
+}

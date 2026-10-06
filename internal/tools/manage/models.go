@@ -267,7 +267,8 @@ func newPartialCreateObservableResult(created []FilteredOutputObservable, failur
 		EntityType: types.EntityTypeObservable,
 		Result:     created,
 		Failures:   failures,
-		Message: utils.Trustedf("Created %d of %d observables; TheHive refused %d, listed in failures. Do not create the ones in result again.",
+		Message: utils.Trustedf("Created %d of %d observables; TheHive refused %d, listed in failures. Do not create the ones in result again. "+
+			"A failure of type CreateError is a value that already exists in this case or alert: it needs no retry.",
 			len(created), len(created)+len(failures), len(failures)),
 	}
 }
