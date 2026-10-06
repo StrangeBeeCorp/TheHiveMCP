@@ -1,6 +1,7 @@
 package load
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,15 +26,18 @@ func ms(n ...int) []time.Duration {
 	return d
 }
 
-// The percentiles are the nearest rank, whatever the calls' order.
+// The percentiles are the nearest rank (the smallest latency at least q of the calls do not
+// exceed), whatever the calls' order.
 func TestPercentilesAreTheNearestRank(t *testing.T) {
 	t.Parallel()
 
 	lat := ms(90, 10, 50, 30, 70, 20, 60, 40, 80, 100)
-	assert.InDelta(t, 60.0, percentile(lat, 0.50), 0.001)
+	assert.InDelta(t, 50.0, percentile(lat, 0.50), 0.001)
+	assert.InDelta(t, 90.0, percentile(lat, 0.90), 0.001)
 	assert.InDelta(t, 100.0, percentile(lat, 0.95), 0.001)
-	assert.InDelta(t, 100.0, percentile(lat, 0.99), 0.001)
 	assert.InDelta(t, 10.0, percentile(lat, 0), 0.001)
+	assert.InDelta(t, 10.0, percentile(lat, 0.1), 0.001)
+	assert.InDelta(t, 20.0, percentile(lat, 0.11), 0.001)
 	assert.Zero(t, percentile(nil, 0.95), "no call, no latency")
 	assert.Equal(t, ms(90, 10, 50, 30, 70, 20, 60, 40, 80, 100), lat, "the calls are not reordered")
 }
@@ -109,6 +114,10 @@ func TestTheRepositoryBudgetsLoad(t *testing.T) {
 	assert.Equal(t, 30*time.Minute, soak.Duration)
 	assert.Positive(t, soak.Budget.MaxGrowth, "the soak holds the memory's growth")
 
+	thehive, err := b.Run("thehive")
+	require.NoError(t, err)
+	assert.Equal(t, AgainstTheHive, thehive.Against, "the integration suite makes it, not cmd/load")
+
 	_, err = b.Run("nightly")
 	require.ErrorIs(t, err, ErrBudgets)
 }
@@ -118,11 +127,13 @@ func TestIncompleteBudgetsAreRefused(t *testing.T) {
 	t.Parallel()
 
 	for name, body := range map[string]string{
-		"no calls nor duration": "runs: {a: {clients: 1, sample: 1s, budget: {}}}\n",
-		"a soak with no rate":   "runs: {a: {clients: 1, duration: 1m, sample: 1s, budget: {}}}\n",
-		"no clients":            "runs: {a: {calls: 1, sample: 1s, budget: {}}}\n",
-		"no sample interval":    "runs: {a: {clients: 1, calls: 1, budget: {}}}\n",
-		"an unknown field":      "runs: {a: {clients: 1, calls: 1, sample: 1s, budget: {p90_ms: 1}}}\n",
+		"no calls nor duration": "runs: {a: {against: stub, clients: 1, sample: 1s, budget: {}}}\n",
+		"a soak with no rate":   "runs: {a: {against: stub, clients: 1, duration: 1m, sample: 1s, budget: {}}}\n",
+		"no clients":            "runs: {a: {against: stub, calls: 1, sample: 1s, budget: {}}}\n",
+		"no sample interval":    "runs: {a: {against: stub, clients: 1, calls: 1, budget: {}}}\n",
+		"an unknown field":      "runs: {a: {against: stub, clients: 1, calls: 1, sample: 1s, budget: {p90_ms: 1}}}\n",
+		"no target":             "runs: {a: {clients: 1, calls: 1, sample: 1s, budget: {}}}\n",
+		"an unknown target":     "runs: {a: {against: prod, clients: 1, calls: 1, sample: 1s, budget: {}}}\n",
 	} {
 		p := filepath.Join(t.TempDir(), "load.yaml")
 		require.NoError(t, os.WriteFile(p, []byte(body), 0o600))
@@ -200,6 +211,57 @@ func TestAShortRunMeasuresTheServer(t *testing.T) {
 	assert.Positive(t, r.P95ms)
 	assert.NotEmpty(t, r.RSSMiB, "the server's memory is sampled")
 
+	assert.Equal(t, modeLoad, r.Mode)
+
 	_, err = Measure(t.Context(), "short", Config{Clients: 1, Calls: 1, Sample: time.Second}, bin, Target{URL: target.URL, Key: "wrong"}, &log)
 	require.ErrorIs(t, err, ErrNoCall, "a run where every call fails is no measurement")
+
+	// A short soak: paced calls, its end no error, its memory sampled for a slope.
+	soak, err := Measure(t.Context(), "short-soak", Config{Clients: 2, Duration: 2 * time.Second, Rate: 5, Sample: 200 * time.Millisecond}, bin, target, &log)
+	require.NoError(t, err, log.String())
+	assert.Equal(t, modeSoak, soak.Mode)
+	assert.Zero(t, soak.Errors, soak.FirstError)
+	assert.InDelta(t, 20, soak.Calls, 6, "2 clients at 5 calls a second for 2 s")
+	assert.GreaterOrEqual(t, len(afterWarmup(soak.RSSMiB)), minGrowthSamples)
+
+	// Interrupted, the soak is cut short: an error, never a pass.
+	ctx, cancel := context.WithTimeout(t.Context(), 1500*time.Millisecond)
+	defer cancel()
+
+	_, err = Measure(ctx, "cut", Config{Clients: 1, Duration: time.Minute, Rate: 5, Sample: 100 * time.Millisecond}, bin, target, &log)
+	require.ErrorIs(t, err, ErrCutShort)
+}
+
+// A run measures what it is held to, or fails: a call that succeeded, the server's memory, and
+// for a soak its whole duration and enough samples after the warmup for a slope.
+func TestARunThatMeasuresNothingIsAnError(t *testing.T) {
+	t.Parallel()
+
+	load := Config{Clients: 1, Calls: 1}
+	soak := Config{Clients: 1, Duration: time.Minute, Rate: 1, Sample: time.Second}
+	ok := Result{Calls: 2, Errors: 1, RSSMiB: []float64{20}}
+
+	require.NoError(t, measured(t.Context(), load, ok, ""))
+	require.ErrorIs(t, measured(t.Context(), load, Result{Calls: 2, Errors: 2, RSSMiB: []float64{20}}, "EOF"), ErrNoCall)
+	require.ErrorIs(t, measured(t.Context(), load, Result{Calls: 2}, ""), ErrNoMemory, "no /proc, no memory: not a pass")
+	require.ErrorIs(t, measured(t.Context(), soak, ok, ""), ErrNoMemory, "one sample gives no slope")
+	require.NoError(t, measured(t.Context(), soak, Result{Calls: 1, RSSMiB: []float64{1, 2, 3, 4}}, ""))
+
+	done, cancel := context.WithCancel(t.Context())
+	cancel()
+	require.ErrorIs(t, measured(done, soak, Result{Calls: 1, RSSMiB: []float64{1, 2, 3, 4}}, ""), ErrCutShort)
+}
+
+// A call counts only when the search answered with alerts: an empty page measures nothing.
+func TestACallMustAnswerWithAlerts(t *testing.T) {
+	t.Parallel()
+
+	page := func(text string) *mcp.CallToolResult {
+		return &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: text}}}
+	}
+
+	require.NoError(t, answered(page(`{"results":[{"_id":"~1"}],"hasMore":false}`)))
+	require.ErrorIs(t, answered(page(`{"hasMore":false}`)), errNoResults, "an empty search omits its results")
+	require.ErrorIs(t, answered(page(`not json`)), errNoResults)
+	require.ErrorIs(t, answered(&mcp.CallToolResult{}), errNoResults)
 }

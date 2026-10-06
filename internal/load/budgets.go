@@ -17,6 +17,12 @@ const (
 	BaselineDir = "baselines/load"
 )
 
+// What a run runs against.
+const (
+	AgainstStub    = "stub"
+	AgainstTheHive = "thehive"
+)
+
 // ErrBudgets means gates/load.yaml is incomplete.
 var ErrBudgets = errors.New("load budgets")
 
@@ -32,11 +38,13 @@ type Budget struct {
 	MaxGrowth float64 `yaml:"max_growth_mib_per_hour"`
 }
 
-// Run is one run of gates/load.yaml: its shape and its budget.
+// Run is one run of gates/load.yaml: what it runs against, its shape and its budget.
 type Run struct {
 	Config `yaml:",inline"`
 
-	Budget Budget `yaml:"budget"`
+	// Against is stub (cmd/load, the load and soak gates) or thehive (the integration suite).
+	Against string `yaml:"against"`
+	Budget  Budget `yaml:"budget"`
 }
 
 // Budgets is gates/load.yaml.
@@ -62,6 +70,10 @@ func ReadBudgets(p string) (Budgets, error) {
 	}
 
 	for name, r := range b.Runs {
+		if r.Against != AgainstStub && r.Against != AgainstTheHive {
+			return Budgets{}, fmt.Errorf("%w: %s: run %q runs against %q (stub or thehive)", ErrBudgets, p, name, r.Against)
+		}
+
 		soak := r.Duration > 0
 		if r.Clients < 1 || r.Sample <= 0 || (!soak && r.Calls < 1) || (soak && r.Rate <= 0) {
 			return Budgets{}, fmt.Errorf("%w: %s: run %q needs clients, a sample interval, and calls or a duration with a rate", ErrBudgets, p, name)

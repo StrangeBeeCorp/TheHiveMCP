@@ -42,6 +42,8 @@ var protected = []struct {
 	{"cmd/surface/**", HarnessPolicy},
 	{"cmd/analyzers/**", HarnessPolicy},
 	{"cmd/coverage/**", HarnessPolicy},
+	{"cmd/load/**", HarnessPolicy},
+	{"internal/load/**", HarnessPolicy},
 	{"internal/surface/**", HarnessPolicy},
 	{"internal/analyzers/**", HarnessPolicy},
 	{"bin/**", HarnessPolicy},

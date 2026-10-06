@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"slices"
 	"strconv"
@@ -42,8 +43,18 @@ const (
 	modeSoak = "soak"
 )
 
-// ErrNoCall means no call of the run succeeded: there is nothing to measure.
-var ErrNoCall = errors.New("no call succeeded")
+// The ways a run measures nothing: it is an error, never a pass.
+var (
+	// ErrNoCall means no call of the run succeeded.
+	ErrNoCall = errors.New("no call succeeded")
+	// ErrNoMemory means the run could not sample the server's memory (/proc, in the Linux image), or
+	// a soak took too few samples after its warmup to give a slope.
+	ErrNoMemory = errors.New("the server's memory was not measured")
+	// ErrCutShort means a soak ended before its duration: it was interrupted.
+	ErrCutShort = errors.New("the soak ended before its duration")
+	// errNoResults means a call answered, but with no alert: it measured nothing of the search.
+	errNoResults = errors.New("search-entities answered no alert")
+)
 
 // Target is the TheHive the server talks to, and what its clients send it.
 type Target struct {
@@ -228,11 +239,26 @@ func drive(ctx context.Context, cfg Config, url string, pid int, target Target) 
 		r.GrowthMiBPerHour = growth(rss, cfg.Sample)
 	}
 
-	if len(calls.latencies) == 0 {
-		return r, fmt.Errorf("%w: %s", ErrNoCall, calls.first)
+	return r, measured(ctx, cfg, r, calls.first)
+}
+
+// measured says whether the run measured what it is held to: a call that succeeded, the server's
+// memory, and for a soak its whole duration and enough samples after the warmup for a slope.
+func measured(ctx context.Context, cfg Config, r Result, first string) error {
+	switch {
+	case r.Calls == r.Errors:
+		return fmt.Errorf("%w: %s", ErrNoCall, first)
+	case len(r.RSSMiB) == 0:
+		return ErrNoMemory
+	case cfg.Duration == 0:
+		return nil
+	case ctx.Err() != nil:
+		return fmt.Errorf("%w: %.0f s of %s", ErrCutShort, r.Seconds, cfg.Duration)
+	case len(afterWarmup(r.RSSMiB)) < minGrowthSamples:
+		return fmt.Errorf("%w: %d samples after the warmup, %d needed (sample more often)", ErrNoMemory, len(afterWarmup(r.RSSMiB)), minGrowthSamples)
 	}
 
-	return r, nil
+	return nil
 }
 
 // session is one client: its own MCP session, initialised, then its calls. A soak run's calls
@@ -312,10 +338,31 @@ func call(ctx context.Context, c *client.Client, request mcp.CallToolRequest) (t
 		return d, fmt.Errorf("search-entities answered an error: %v", result.Content)
 	}
 
-	return d, nil
+	return d, answered(result)
 }
 
-// percentile is the latency at q (0 to 1), in milliseconds: the nearest rank.
+// answered checks that a search answered with alerts: an empty page measures nothing of the search.
+func answered(result *mcp.CallToolResult) error {
+	for _, c := range result.Content {
+		text, ok := c.(mcp.TextContent)
+		if !ok {
+			continue
+		}
+
+		var page struct {
+			Results []json.RawMessage `json:"results"`
+		}
+
+		if json.Unmarshal([]byte(text.Text), &page) == nil && len(page.Results) > 0 {
+			return nil
+		}
+	}
+
+	return errNoResults
+}
+
+// percentile is the latency at q (0 to 1), in milliseconds: the nearest rank, the smallest
+// latency at least q of the calls do not exceed.
 func percentile(d []time.Duration, q float64) float64 {
 	if len(d) == 0 {
 		return 0
@@ -324,7 +371,7 @@ func percentile(d []time.Duration, q float64) float64 {
 	s := slices.Clone(d)
 	slices.Sort(s)
 
-	i := min(len(s)-1, int(q*float64(len(s))))
+	i := max(0, min(len(s)-1, int(math.Ceil(q*float64(len(s))))-1))
 
 	return float64(s[i].Microseconds()) / 1000
 }
@@ -410,9 +457,14 @@ func parseRSS(status string) (float64, bool) {
 	return 0, false
 }
 
+// afterWarmup is the samples a soak's memory growth is measured over.
+func afterWarmup(samples []float64) []float64 {
+	return samples[int(warmup*float64(len(samples))):]
+}
+
 // growth is the least-squares slope of the samples after the warmup, in MiB per hour.
 func growth(samples []float64, every time.Duration) float64 {
-	s := samples[int(warmup*float64(len(samples))):]
+	s := afterWarmup(samples)
 	if len(s) < minGrowthSamples {
 		return 0
 	}
