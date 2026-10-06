@@ -127,9 +127,9 @@ canaries:
     expect: "DATA RACE"
     why: the credentials cache drops its lock, and concurrent requests write its map at once
 
-  - id: untested-teardown
+  - id: unchecked-code
     item: TST-002
     gate: mutation
-    patch: untested-teardown.patch
+    patch: unchecked-code.patch
     expect: "add the tests that kill the mutants that lived"
-    why: a test keeps running the stack's teardown but stops checking it, so mutants of it live
+    why: new code lands with a test that runs it and checks nothing, so coverage counts it and its mutants live

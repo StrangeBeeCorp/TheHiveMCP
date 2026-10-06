@@ -179,6 +179,7 @@ items:
       - internal/harness/mutation/mutation_test.go:TestAPackageUnderItsFloorFails
       - cmd/harness/mutation_test.go:TestAPackageUnderItsMutationFloorFailsTheGate
       - cmd/harness/mutation_test.go:TestAMutationRunThatTimedOutCannotRun
+      - bootstrap/validation_cache_test.go:TestTheValidationCacheIsSafeForConcurrentUse
     gates: [coverage, race, mutation]
 
   - id: PRF-001

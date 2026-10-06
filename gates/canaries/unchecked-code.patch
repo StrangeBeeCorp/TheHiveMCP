@@ -1,0 +1,54 @@
+diff --git a/internal/utils/page.go b/internal/utils/page.go
+new file mode 100644
+index 0000000..3f713e8
+--- /dev/null
++++ b/internal/utils/page.go
+@@ -0,0 +1,28 @@
++package utils
++
++// PageEnd is where a page of limit items from offset ends in a list of total, never past it.
++func PageEnd(offset, limit, total int) int {
++	end := offset + limit
++	if end > total {
++		end = total
++	}
++
++	if end < offset {
++		end = offset
++	}
++
++	return end
++}
++
++// ClampLimit holds a requested page size between lo and hi.
++func ClampLimit(n, lo, hi int) int {
++	if n < lo {
++		return lo
++	}
++
++	if n > hi {
++		return hi
++	}
++
++	return n
++}
+diff --git a/internal/utils/page_test.go b/internal/utils/page_test.go
+new file mode 100644
+index 0000000..17e5bc3
+--- /dev/null
++++ b/internal/utils/page_test.go
+@@ -0,0 +1,14 @@
++package utils
++
++import "testing"
++
++// The test runs the code, so coverage counts it, and checks nothing, so its mutants live.
++func TestPageEnd(t *testing.T) {
++	t.Parallel()
++
++	_ = PageEnd(0, 10, 25)
++	_ = PageEnd(20, 10, 25)
++	_ = ClampLimit(0, 1, 100)
++	_ = ClampLimit(500, 1, 100)
++	_ = ClampLimit(50, 1, 100)
++}
