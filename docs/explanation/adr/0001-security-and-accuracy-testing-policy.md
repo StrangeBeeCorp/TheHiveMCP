@@ -98,7 +98,9 @@ matrix is the starting point, not the outcome.
 The live roster lives in the internal evaluation suite, whose segment headings are these axes; this table follows it rather than the reverse. The set above is
 what v1.1.0 was evaluated against. v1.0.0 and earlier used a different one — `claude-sonnet-4.6`, `gpt-5.5`, `gemini-3.5-flash`, `deepseek-v4-pro`, `glm-5.2`,
 `kimi-k2.6`, `gemini-3.1-flash-lite`, `ministral-8b-2512` — retired for cost and availability, so per-model comparison across that boundary is only possible for
-the rows that survived (`mistral-medium-3.5`, `qwen3.5-9b`).
+the rows that survived (`mistral-medium-3.5`, `qwen3.5-9b`). v1.2.0 was evaluated on a subset of five: `z-ai/glm-5.3-flash`,
+`meta/muse-spark-1.3-contributor` and `google/gemma-4-26b-a4b-it` from this matrix, plus `anthropic/claude-sonnet-5.5` and `qwen/qwen3.8-27b`, the newer
+releases of two of its families; the other candidates keep their v1.1.0 evidence.
 
 This set is a **starting proposal, not a fixed benchmark.** It will change as models are released and in response to customer demand. The goal is to keep it
 broadly comparable over time, but comparability is a best-effort aim, not the main objective. Changes follow the recommended-model policy above.

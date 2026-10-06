@@ -14,12 +14,39 @@ Evidence is published **one folder per evaluated MCP-server version**. Each vers
 
 | Version                       | Released           | Folder                         |
 | ----------------------------- | ------------------ | ------------------------------ |
-| **v1.1.0** (latest evaluated) | September 10, 2026 | [`v1.1.0/`](v1.1.0/summary.md) |
+| **v1.2.0** (latest evaluated) | October 6, 2026    | [`v1.2.0/`](v1.2.0/summary.md) |
+| v1.1.0                        | September 10, 2026 | [`v1.1.0/`](v1.1.0/summary.md) |
 | v1.0.0                        | July 6, 2026       | [`v1.0.0/`](v1.0.0/summary.md) |
 | v0.3.4                        | May 22, 2026       | [`v0.3.4/`](v0.3.4/summary.md) |
 | v0.3.3                        | March 17, 2026     | [`v0.3.3/`](v0.3.3/summary.md) |
 
-## Latest evaluation — v1.1.0 (released and evaluated September 10, 2026)
+## Latest evaluation — v1.2.0 (released and evaluated October 6, 2026)
+
+v1.2.0 was evaluated on five models, with the same judge (`z-ai/glm-5.3`) and the same 55 tests as v1.1.0:
+
+- three carried over from v1.1.0: `glm-5.3-flash`, `muse-spark-1.3-contributor`, `gemma-4-26b-a4b`;
+- two newer releases of candidate families: `claude-sonnet-5.5`, `qwen3.8-27b`.
+
+The other candidates keep their v1.1.0 evidence, below. Full detail is in [`v1.2.0/summary.md`](v1.2.0/summary.md). Machine-readable data is in
+[`v1.2.0/results.csv`](v1.2.0/results.csv).
+
+| Model                        | Accuracy    | Security (injection resilience) |
+| ---------------------------- | ----------- | ------------------------------- |
+| `claude-sonnet-5.5`          | 98% (39/40) | 100% (15/15)                    |
+| `glm-5.3-flash`              | 98% (39/40) | 100% (15/15)                    |
+| `muse-spark-1.3-contributor` | 93% (37/40) | 100% (15/15)                    |
+| `gemma-4-26b-a4b`            | 93% (37/40) | 80% (12/15)                     |
+| `qwen3.8-27b`                | 88% (35/40) | 100% (15/15)                    |
+
+**What to read into it:**
+
+- `muse-spark-1.3-contributor` gains 25 points of accuracy and no longer fails to answer, now that list parameters are advertised as plain arrays: its v1.1.0
+  misses were loops on list arguments sent as strings.
+- `glm-5.3-flash` is unchanged.
+- Four models resist and warn on every injection scenario. The smallest, `gemma-4-26b-a4b`, stays silent on two, and failed to answer four runs on its current
+  provider.
+
+## Previous evaluation — v1.1.0 (released and evaluated September 10, 2026)
 
 Accuracy = `mcp-tools` (37 checks) + `workflows` (3) = 40. Security = 15 prompt-injection scenarios (the agent must both ignore the injection **and** warn the
 analyst). This run refreshes the candidate matrix (12 models, two of them carried over from v1.0.0) and moves the pinned judge from `z-ai/glm-5.2` to
