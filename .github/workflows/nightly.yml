@@ -1,8 +1,8 @@
 name: Nightly
 
 # Every night, main is checked whole: every ci gate over every file, the integration suite on each
-# supported TheHive, the nightly gates (fuzzing, the unit suite, the canaries) and mutation testing
-# of every floored package. Some regressions come from no pull request: a new TheHive image, a new
+# supported TheHive, the nightly gates (fuzzing, the unit suite, the canaries), mutation testing
+# of every floored package, and the server under load and over 30 minutes. Some regressions come from no pull request: a new TheHive image, a new
 # vulnerability, a fuzz input found tonight. The last job files each failure as an issue labelled
 # nightly (bin/harness triage), and `make next` lists them. The docs gate fails when a gate whose
 # cadence includes nightly is missing here: a ci gate runs at night when its cadence says so.
@@ -165,8 +165,38 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  load:
+    if: github.repository == 'StrangeBee/TheHiveMCP'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore the Go caches main saved
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.GO_CACHE_DIR }}
+          key: go-${{ runner.os }}-${{ hashFiles('go.sum', '.golangci.yml') }}
+          restore-keys: |
+            go-${{ runner.os }}-
+      - name: Prepare cache dirs
+        run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools
+      # The server over HTTP under many clients against a TheHive stub, then 30 minutes of
+      # steady calls; the integration shards hold the same load against TheHive 5.5 and 5.8.
+      - name: Load and soak
+        run: bin/harness run --cadence nightly --all --gate load --gate soak
+      - name: Keep the results for the triage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load
+          path: .cache/harness/runs/
+          if-no-files-found: ignore
+          retention-days: 14
+
   triage:
-    needs: [checks, integration, nightly-gates, mutation]
+    needs: [checks, integration, nightly-gates, mutation, load]
     # After failed shards too, but not a cancelled run: its shards recorded nothing, and nothing failed.
     if: ${{ !cancelled() && github.repository == 'StrangeBee/TheHiveMCP' }}
     runs-on: ubuntu-latest
@@ -188,7 +218,7 @@ jobs:
         run: >-
           bin/harness triage --runs night
           --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          --expect checks,integration-5.5.16,integration-5.8.0,nightly-gates,mutation
+          --expect checks,integration-5.5.16,integration-5.8.0,nightly-gates,mutation,load
           ${{ github.ref != 'refs/heads/main' && '--dry-run' || '' }}
         env:
           GH_TOKEN: ${{ github.token }}

@@ -48,6 +48,8 @@ suites:
       - cmd/surface/**
       - cmd/analyzers/**
       - cmd/coverage/**
+      - cmd/load/**
+      - internal/load/**
       - internal/surface/**
       - internal/analyzers/**
       - gates/**
@@ -64,6 +66,8 @@ suites:
       - checkmake.ini
       - go.mod
       - go.sum
+      # What the load and soak runs measured when their budgets were set.
+      - baselines/load/**
   - id: surface
     review: high
     about: What the model reads - tool definitions and descriptions, schemas, resources
@@ -78,7 +82,7 @@ suites:
       - internal/tools/errors.go
       - internal/resources/**
       # The snapshot of what the model reads (make surface-propose).
-      - baselines/**
+      - baselines/surface/**
   - id: trust
     review: high
     about: The untrusted-data boundary, permissions and authentication
@@ -377,6 +381,27 @@ gates:
     blocks: >-
       a package with a floor in gates/mutation.yaml whose unit tests kill a smaller share of
       gremlins' mutants than the floor, whatever changed: the night mutates them all
+
+  - id: load
+    runs: make go CMD="run ./cmd/load --run stub"
+    docker: true
+    cadence: [nightly]
+    suites: ["*"]
+    budget_s: 600
+    blocks: >-
+      the server over HTTP, 20 clients at once against a TheHive stub, over its budget in
+      gates/load.yaml: latency, a failed call, throughput or memory (the integration suite holds
+      the same load against TheHive 5.5 and 5.6)
+
+  - id: soak
+    runs: make go CMD="run ./cmd/load --run soak"
+    docker: true
+    cadence: [nightly]
+    suites: ["*"]
+    budget_s: 2700
+    blocks: >-
+      30 minutes of steady calls from 10 clients over their budget in gates/load.yaml: latency, a
+      failed call, memory, or memory that keeps growing after the warmup
 
   - id: fuzz
     runs: >-

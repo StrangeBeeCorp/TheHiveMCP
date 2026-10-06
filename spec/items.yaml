@@ -193,3 +193,18 @@ items:
       - internal/harness/bench/bench_test.go:TestAbsoluteBudgetsHoldWithoutABase
       - cmd/harness/bench_test.go:TestWithoutABaseToRunOnlyTheAbsoluteBudgetsHold
     gates: [bench]
+
+  - id: PRF-002
+    title: The server holds under many clients at once, and over time
+    status: active
+    rule: >-
+      Run as its HTTP users run it, the server answers 20 clients at once, each with its own MCP
+      session, within gates/load.yaml's latency, throughput, failed calls and memory, against a
+      TheHive stub and against TheHive 5.5 and 5.6; and over 30 minutes of steady calls its memory
+      does not keep growing.
+    tests:
+      - internal/load/load_test.go:TestABudgetReportsEachLimitExceeded
+      - internal/load/load_test.go:TestMemoryGrowthIsTheSlopeAfterTheWarmup
+      - internal/load/load_test.go:TestAShortRunMeasuresTheServer
+      - internal/load/thehive_test.go:TestLoadAgainstTheHive
+    gates: [load, soak]

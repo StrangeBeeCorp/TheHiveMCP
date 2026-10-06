@@ -1,0 +1,40 @@
+# The load and soak gates (go run ./cmd/load --run <run>) and the integration suite's load test
+# (internal/load): each run starts the server as its HTTP users do (--transport http), drives it
+# with its clients at once, each with its own MCP session calling search-entities on 25 alerts,
+# and holds the result to its budget. baselines/load/<run>.json is what the run measured when the
+# budget was set (go run ./cmd/load --run <run> --write-baseline). Raising a budget is a reviewed
+# change, like a cap in gates/limits.yaml.
+#
+# Measured on 2026-10-06 in the pinned Go image (Apple M-series, Docker): the stub run, three
+# times, p95 39 to 61 ms (median 47), p99 54 to 81 ms (median 61), 543 to 808 calls a second
+# (median 708), at most 28 MiB; the soak, 35,990 calls in 30 minutes, p95 50 ms, p99 116 ms, at
+# most 27 MiB, memory growth -2.3 MiB/h (flat). The budgets are about four times the latency and
+# the memory measured, a fifth of the throughput, for slower CI machines; no call may fail. A
+# leak of 20 MiB/h would be 10 MiB over the soak, a third of the server's memory.
+#
+# The thehive run, on the integration stack (Docker on the same Mac), 5.6.3 twice and 5.5.2 once:
+# p50 48 to 56 ms, p95 336 to 470 ms and p99 346 to 477 ms (each client's first call, cold), 124
+# to 125 calls a second, at most 22 MiB; no call failed.
+
+runs:
+  # A TheHive stub that answers each query in 5 ms: the time the server adds, and its queueing.
+  stub:
+    clients: 20
+    calls: 50
+    sample: 1s
+    budget: {p95_ms: 200, p99_ms: 250, max_errors: 0, min_calls_per_second: 150, max_rss_mib: 110}
+
+  # The same calls for 30 minutes at a steady rate: the server's memory may not keep growing.
+  soak:
+    clients: 10
+    duration: 30m
+    rate: 2
+    sample: 15s
+    budget: {p95_ms: 200, p99_ms: 500, max_errors: 0, max_rss_mib: 110, max_growth_mib_per_hour: 20}
+
+  # TheHive 5.5 and 5.6 of the integration stack (internal/load's TestLoadAgainstTheHive).
+  thehive:
+    clients: 10
+    calls: 20
+    sample: 1s
+    budget: {p95_ms: 2000, p99_ms: 2000, max_errors: 0, min_calls_per_second: 30, max_rss_mib: 110}
