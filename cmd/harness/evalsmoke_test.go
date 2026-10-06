@@ -30,7 +30,8 @@ phase=$(case "$5" in eval-Rd*) echo READ ;; eval-Wr*) echo WRITE ;; esac)
 case "$3 $4" in
   "eval list")
     n=$(cat "$UV_CALLS.runs" 2>/dev/null || echo 0)
-    [ "$n" -gt 0 ] || { echo "Query error: no such table: eval_results" >&2; exit 1; }
+    [ -z "$UV_LIST_FAILS" ] || { echo "Error: docker volume inspect timed out" >&2; exit 1; }
+    [ "$n" -gt 0 ] || { printf 'Traceback (most recent call last):\n  ...\nsqlite3.OperationalError: no such table: eval_results\n' >&2; exit 1; }
     printf 'Eval ID\n-----\n'
     i=1; while [ "$i" -le "$n" ]; do
       printf 'eval-Rd%s-2026-10-06T02:20:01  2026-10-06 04:20 CEST  20\neval-Wr%s-2026-10-06T02:31:44  2026-10-06 04:31 CEST  17\n' "$i" "$i"
@@ -154,6 +155,21 @@ func TestThePreviousNightIsTheLastOneThatPassed(t *testing.T) {
 	corrupt := filepath.Join(t.TempDir(), "previous.json")
 	require.NoError(t, os.WriteFile(corrupt, []byte("{"), 0o600))
 	require.Error(t, env{root: root}.evalSmoke(t.Context(), []string{evalFlag, eval, previousFlag, corrupt}, &bytes.Buffer{}))
+}
+
+// A list that fails for another reason than a fresh stack's empty database is an error, before
+// anything runs: an empty list would make every older evaluation look like the run's own.
+func TestAListThatFailsBeforeTheRunStopsTheNight(t *testing.T) {
+	root, eval, calls := evalCheckout(t)
+	t.Setenv("UV_LIST_FAILS", "1")
+
+	err := env{root: root}.evalSmoke(t.Context(), []string{evalFlag, eval}, &bytes.Buffer{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "docker volume inspect timed out")
+
+	recorded, readErr := os.ReadFile(calls) // #nosec G304 -- the test's own record
+	require.NoError(t, readErr)
+	assert.Equal(t, "run eval-cli eval list\n", string(recorded), "nothing ran after the list")
 }
 
 // A run that created no evaluation, or whose evaluation has no column for the model, measured

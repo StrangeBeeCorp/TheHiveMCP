@@ -134,6 +134,9 @@ func TestANightIsHeldToItsCasesItsCapAndThePreviousNight(t *testing.T) {
 	assert.Empty(t, c.Check(Result{Model: model, Cases: 37, PassRate: 0.5, CostUSD: 0.05}, nil), "the first night has nothing to compare")
 	assert.Empty(t, c.Check(Result{Model: "other", Cases: 37, PassRate: 0.5, CostUSD: 0.05}, last), "another model's night is not compared")
 
+	assert.Equal(t, []string{"74 cases read for the 37 of mcp-tools: evaluations that are not this run's were read"},
+		c.Check(Result{Model: model, Cases: 74, PassRate: 0.95, CostUSD: 0.05}, last), "an older night read as this one")
+
 	assert.Equal(t, []string{"eval-cli could not attribute the run's true cost (eval-cli eval cost): the cap was not checked"},
 		c.Check(Result{Model: model, Cases: 37, PassRate: 0.95, CostUnmeasured: true}, last), "an unmeasured cost is no pass")
 

@@ -203,8 +203,11 @@ func TrueCost(data []byte, model string) (float64, bool) {
 func (c Config) Check(r Result, previous *Result) []string {
 	var problems []string
 
-	if r.Cases < c.Cases {
+	switch {
+	case r.Cases < c.Cases:
 		problems = append(problems, fmt.Sprintf("only %d of the %d cases of %s ran", r.Cases, c.Cases, c.Suite))
+	case r.Cases > c.Cases:
+		problems = append(problems, fmt.Sprintf("%d cases read for the %d of %s: evaluations that are not this run's were read", r.Cases, c.Cases, c.Suite))
 	}
 
 	if r.CostUnmeasured {
