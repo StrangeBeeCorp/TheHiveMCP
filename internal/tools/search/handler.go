@@ -282,14 +282,7 @@ func (t *Tool) executeQuery(ctx context.Context, hiveQuery thehive.InputQuery, e
 
 	results, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(ctx).InputQuery(hiveQuery).Execute()
 	if err != nil {
-		readable := utils.ReadableAPIError(err)
-
-		response := utils.DescribeHTTPResponse(resp)
-		if readable != err && resp != nil { //nolint:errorlint // identity: did ReadableAPIError swap in TheHive's body?
-			response = resp.Status // the cause already holds the body; do not send it twice
-		}
-
-		return nil, fmt.Errorf("failed to search %ss: %w. The filter may reference a field or operator this entity does not have, or you may lack permission to view %ss. API response: %s", entityType, readable, entityType, response)
+		return nil, fmt.Errorf("failed to search %ss: %w. The filter may reference a field or operator this entity does not have, or you may lack permission to view %ss. API response: %s", entityType, utils.StatusCause(err, resp), entityType, utils.DescribeHTTPResponse(resp))
 	}
 
 	// Count queries return a bare number, not an array.

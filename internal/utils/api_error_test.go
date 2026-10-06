@@ -37,34 +37,47 @@ func queryAnswering(t *testing.T, status int, body string) error {
 	return err //nolint:wrapcheck // the client's own error is what these tests inspect
 }
 
+// The parts of a response StatusCause reads.
+var (
+	badRequest = &http.Response{StatusCode: http.StatusBadRequest, Status: "400 Bad Request"}
+	ok200      = &http.Response{StatusCode: http.StatusOK, Status: "200 OK"}
+)
+
 // Regression: an invalid filter field made TheHive answer 400 with an "errors"
 // field the client's error model lacks, and the cause read
-// `json: unknown field "errors"` instead of TheHive's message.
-func TestReadableAPIErrorShowsTheHiveAnswer(t *testing.T) {
+// `json: unknown field "errors"` instead of pointing at TheHive's answer.
+func TestStatusCauseNamesTheHiveStatus(t *testing.T) {
 	t.Parallel()
 
 	err := queryAnswering(t, http.StatusBadRequest,
 		`{"type":"BadRequest","message":"Invalid field nosuchfield","errors":[{"name":"nosuchfield"}]}`)
 	require.Contains(t, err.Error(), "json: ", "precondition: the client fails to decode this body")
 
-	readable := ReadableAPIError(err)
-	assert.Contains(t, readable.Error(), "Invalid field nosuchfield")
-	assert.NotContains(t, readable.Error(), "unknown field")
+	cause := StatusCause(err, badRequest)
+	assert.Equal(t, "TheHive answered 400 Bad Request: see its message in the API response", cause.Error())
+	assert.NotContains(t, cause.Error(), "nosuchfield", "the body is not copied into the cause")
 
 	var apiErr *thehive.GenericOpenAPIError
-	assert.ErrorAs(t, readable, &apiErr, "the client's error stays reachable")
+	assert.ErrorAs(t, cause, &apiErr, "the client's error stays reachable")
 }
 
-func TestReadableAPIErrorKeepsOtherErrors(t *testing.T) {
+func TestStatusCauseKeepsOtherErrors(t *testing.T) {
 	t.Parallel()
 
 	decoded := queryAnswering(t, http.StatusBadRequest, `{"type":"BadRequest","message":"Invalid filter"}`)
-	assert.Same(t, decoded, ReadableAPIError(decoded), "a body the client decoded keeps its error")
+	assert.Same(t, decoded, StatusCause(decoded, badRequest), "a body the client decoded keeps its error")
+
+	// A 2xx the client cannot decode is a schema drift: its message names what
+	// failed, and its body is entity data.
+	drift := queryAnswering(t, http.StatusOK, `{"_id":"~1","title":"secret case"`)
+	assert.Same(t, drift, StatusCause(drift, ok200))
 
 	plain := fmt.Errorf("request to TheHive: %w", context.DeadlineExceeded)
-	assert.Same(t, plain, ReadableAPIError(plain))
+	assert.Same(t, plain, StatusCause(plain, badRequest))
 
-	decodeFailure := queryAnswering(t, http.StatusBadRequest, `{"type":"BadRequest","message":"x","errors":[]}`)
-	wrapped := fmt.Errorf("failed to search cases: %w", decodeFailure)
-	assert.Same(t, wrapped, ReadableAPIError(wrapped), "a caller's message around the client's error is kept")
+	failure := queryAnswering(t, http.StatusBadRequest, `{"type":"BadRequest","message":"x","errors":[]}`)
+	wrapped := fmt.Errorf("failed to search cases: %w", failure)
+	assert.Same(t, wrapped, StatusCause(wrapped, badRequest), "a caller's message around the client's error is kept")
+	assert.Same(t, failure, StatusCause(failure, nil), "no response, nothing to point at")
+	assert.Same(t, failure, StatusCause(failure, ok200), "a 2xx body is never pointed at as an error")
 }

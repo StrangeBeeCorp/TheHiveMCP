@@ -173,9 +173,14 @@ func (t *ExecuteAutomationTool) handleWaitForJobs(ctx context.Context, params Ex
 	wait.markUnanswered(params.TimeoutSecs)
 
 	if len(wait.jobs) == 0 {
-		return ExecuteAutomationResult{}, tools.NewToolErrorf("failed to get the status of any of the %d jobs", len(wait.order)).
+		failure := tools.NewToolErrorf("failed to get the status of any of the %d jobs", len(wait.order)).
 			Cause(errors.New(wait.errors[wait.order[0]])).
 			Hint("Check that every job ID was returned by run-analyzer, and that TheHive is reachable")
+		if params.timeoutCapped {
+			failure = failure.Hintf("timeout-seconds was capped at the maximum, %d", MaxWaitSeconds)
+		}
+
+		return ExecuteAutomationResult{}, failure
 	}
 
 	waited := int(time.Since(start).Seconds())

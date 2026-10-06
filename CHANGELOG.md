@@ -40,8 +40,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - **Four answers no longer mislead a model.** All found in the 1.2.0 test run:
-  - **An error's cause is TheHive's answer, not the client's decoding error.** When TheHive's body held a field the generated client does not declare (a 400's
-    `errors`), the cause read `json: unknown field "errors"`, ahead of TheHive's message. It now reads `TheHive answered: <body>`.
+  - **An error's cause names TheHive's answer, not the client's decoding error.** When TheHive's error body held a field the generated client does not declare
+    (a 400's `errors`), the cause read `json: unknown field "errors"`, which a model took for the reason. It now reads
+    `TheHive answered 400 Bad Request: see its message in the API response`, where TheHive's message already was. A 2xx the client cannot decode keeps the
+    client's error, which names the field.
   - **`wait-for-jobs` mentions retryable jobs only when there is one.** Its message said "a retryable one is also in pendingJobIds" after any failure, including
     a 404 that will never be retried.
   - **A capped `timeout-seconds` is said.** A value above 120 was lowered silently, so a model that asked for 500 s took the shorter wait for the whole one. The
