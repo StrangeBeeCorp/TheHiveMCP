@@ -19,8 +19,10 @@
 //	harness sign-windows BINARY...  (SIGNING_PROVIDER: none, signpath or azure)
 //	harness integration  (make test-integration: the stack up and reset, then the suite)
 //	harness unseal --ticket KEY  (the end of a duel: the Tester's sealed tests move into the code)
-//	harness mutation [--base REF]  (gremlins on the changed packages, against gates/mutation.yaml)
+//	harness mutation [--base REF | --all]  (gremlins on the changed packages, or every floored one, against gates/mutation.yaml)
 //	harness bench [--base REF]  (the benchmarks at the merge base and at HEAD, against gates/bench.yaml)
+//	harness triage --runs DIR --run-url URL [--expect SHARD,...] [--dry-run]  (the night's failures as issues labelled nightly)
+//	harness next  (make next: a blocked agent, then the open nightly findings, the oldest first)
 package main
 
 import (
@@ -190,7 +192,7 @@ func stagedRun(args []string) bool {
 
 func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer) error {
 	if len(args) == 0 {
-		return usageError{"usage: harness run|select|list|check|docs|hook|pr|push|evidence|review-effort|canaries|structure|lint|fmt|package|sign-windows|integration|bench|mutation|unseal (see cmd/harness/main.go)"}
+		return usageError{"usage: harness run|select|list|check|docs|hook|pr|push|evidence|review-effort|canaries|structure|lint|fmt|package|sign-windows|integration|bench|mutation|triage|next|unseal (see cmd/harness/main.go)"}
 	}
 
 	if command, ok := standalone[args[0]]; ok {
@@ -224,6 +226,8 @@ func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer
 		"review-effort":  e.reviewEffort,
 		"bench":          e.bench,
 		"mutation":       e.mutate,
+		"triage":         e.triageNight,
+		"next":           func(ctx context.Context, _ []string, w io.Writer) error { return e.next(ctx, w) },
 		"unseal":         func(_ context.Context, a []string, w io.Writer) error { return e.unseal(a, w) },
 	}
 

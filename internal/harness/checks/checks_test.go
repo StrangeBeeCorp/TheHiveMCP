@@ -275,6 +275,33 @@ func TestTheCIWorkflowCheckReadsTheStepsThatRun(t *testing.T) {
 	require.Error(t, err, "a workflow that does not parse")
 }
 
+// The nightly workflow runs every gate whose cadence includes nightly, as ci.yml does the ci
+// gates; a registry with no nightly gate needs no nightly workflow, and one with some does.
+func TestTheNightlyWorkflowRunsEveryNightlyGate(t *testing.T) {
+	t.Parallel()
+
+	reg := &registry.Registry{Gates: []registry.Gate{
+		{ID: "lint", Cadence: []string{"ci", "nightly"}}, {ID: "fuzz", Cadence: []string{"nightly"}},
+	}}
+	ci := ciRunning("bin/harness run --cadence ci --gate lint")
+	root, files := repo(t, map[string]string{
+		checks.CIWorkflow:      ci,
+		checks.NightlyWorkflow: ciRunning("bin/harness run --cadence nightly --gate lint --gate ghost"),
+		gatesdoc.Path:          gatesdoc.Render(reg),
+	})
+
+	found, err := checks.Docs(checks.DirTree{Root: root, Names: files}, reg)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{
+		`.github/workflows/nightly.yml: does not run gate "fuzz", whose cadence includes nightly`,
+		`.github/workflows/nightly.yml: runs gate "ghost", which gates/registry.yaml does not define`,
+	}, strings.Split(messages(found), "\n"))
+
+	missing, names := repo(t, map[string]string{checks.CIWorkflow: ci, gatesdoc.Path: gatesdoc.Render(reg)})
+	_, err = checks.Docs(checks.DirTree{Root: missing, Names: names}, reg)
+	require.Error(t, err, "nightly gates and no nightly workflow")
+}
+
 func TestChecksReadTheTreeTheyAreGiven(t *testing.T) {
 	t.Parallel()
 	// The index of a commit: nothing of it is on disk, and the checks must judge it all the same.

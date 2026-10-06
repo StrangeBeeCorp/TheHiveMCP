@@ -55,7 +55,7 @@ func TestTheMutationGateHoldsTheChangedFlooredPackages(t *testing.T) {
 	require.NoError(t, env{root: dir}.mutate(t.Context(), []string{baseFlag, onMain}, &out), out.String())
 	assert.Contains(t, out.String(), "not mutated, no floor in gates/mutation.yaml: pkg/b\n")
 	assert.Contains(t, out.String(), "pkg/a: efficacy 90.0% (floor 80%), 9 killed, 1 lived")
-	assert.Contains(t, out.String(), "1 changed package(s) at or over their mutation floor")
+	assert.Contains(t, out.String(), "1 package(s) at or over their mutation floor")
 }
 
 // A package under its floor fails the gate, and the output says where gremlins' report is.
@@ -101,6 +101,20 @@ func TestACommandThatCannotRunExitsUnavailable(t *testing.T) {
 		code, _ := exitFor(err)
 		assert.Equal(t, want, code, "%v", err)
 	}
+}
+
+// At night, --all mutates every floored package, whatever changed: here, nothing since work.
+func TestTheNightMutatesEveryFlooredPackage(t *testing.T) {
+	t.Parallel()
+
+	dir := mutationRepo(t, aKilled)
+
+	var out bytes.Buffer
+
+	require.NoError(t, env{root: dir}.mutate(t.Context(), []string{"--all", baseFlag, "work"}, &out), out.String())
+	assert.Contains(t, out.String(), "pkg/a: efficacy 90.0%")
+	assert.NotContains(t, out.String(), "not mutated", "--all does not look at what changed")
+	assert.Contains(t, out.String(), "1 package(s) at or over their mutation floor")
 }
 
 // When gremlins cannot run, the gate fails with gremlins' output, never a pass.

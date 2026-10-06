@@ -27,6 +27,19 @@ its tests against a live TheHive. A path no suite claims runs everything. To run
 `bin/harness structure` shows the largest code files and the fullest directories against the structure limits (500 lines a file, 14 code files a directory
 besides tests), with `--json` for scripts.
 
+## Every night
+
+`.github/workflows/nightly.yml` checks main whole at 02:17 UTC, or when started by hand: every ci gate over every file, the integration suite on TheHive 5.5
+and 5.6, fuzzing, the unit suite, the canaries, and mutation testing of every package with a floor. Its last job, `bin/harness triage`, files each gate that
+fails or cannot run as an issue labelled `nightly`, comments on the issue each night it still does, and closes it once it passes. To see what to work on:
+
+```sh
+make next
+```
+
+It shows a blocked agent's `.cache/harness/BLOCKED.md` first, then the open nightly findings, the oldest first. Each finding says how to run its gate again:
+`make gate ID=<gate> CADENCE=nightly`.
+
 ## With Claude Code
 
 The hooks of `.claude/settings.json` send every tool call to `bin/harness hook`:

@@ -23,10 +23,11 @@ const mutationPath = "gates/mutation.yaml"
 var errMutation = errors.New("under the mutation floor")
 
 // mutate runs gremlins on the packages the change touches that have a floor in
-// gates/mutation.yaml, in the pinned Go image, and holds each to its floor (the mutation gate).
+// gates/mutation.yaml (with --all, on every one of them), in the pinned Go image, and holds each to its floor (the mutation gate).
 func (e env) mutate(ctx context.Context, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("mutation", flag.ContinueOnError)
 	base := fs.String("base", os.Getenv("HARNESS_BASE"), "the change is what differs from the merge base of this ref and HEAD (default origin/main; $HARNESS_BASE)")
+	all := fs.Bool("all", false, "mutate every package that has a floor, whatever changed (the nightly run)")
 
 	err := fs.Parse(args)
 	if err != nil {
@@ -42,12 +43,17 @@ func (e env) mutate(ctx context.Context, args []string, out io.Writer) error {
 		return fmt.Errorf("mutation: %w", err)
 	}
 
-	changed, err := gitx.ChangedSince(ctx, e.root, *base)
-	if err != nil {
-		return fmt.Errorf("list what changed since %s: %w", *base, err)
+	floored, unfloored := config.Floored(), []string(nil)
+
+	if !*all {
+		changed, err := gitx.ChangedSince(ctx, e.root, *base)
+		if err != nil {
+			return fmt.Errorf("list what changed since %s: %w", *base, err)
+		}
+
+		floored, unfloored = config.Packages(changed)
 	}
 
-	floored, unfloored := config.Packages(changed)
 	if len(unfloored) > 0 {
 		_, _ = fmt.Fprintf(out, "not mutated, no floor in %s: %s\n", mutationPath, strings.Join(unfloored, ", "))
 	}
@@ -83,7 +89,7 @@ func (e env) mutate(ctx context.Context, args []string, out io.Writer) error {
 		return fmt.Errorf("%w: %d package(s) not measured, too many mutants timed out", errCannotRun, unmeasured)
 	}
 
-	_, _ = fmt.Fprintf(out, "%d changed package(s) at or over their mutation floor\n", len(floored))
+	_, _ = fmt.Fprintf(out, "%d package(s) at or over their mutation floor\n", len(floored))
 
 	return nil
 }

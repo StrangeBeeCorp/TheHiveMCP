@@ -15,6 +15,10 @@ gate: ## Run one gate now, whatever changed (list: docs/reference/gates.md) ##@ 
 	@test -n "$$ID" || { echo 'usage: make gate ID=<gate> [CADENCE=pr]'; exit 2; }
 	@bin/harness run --cadence "$${CADENCE:-pr}" --gate "$$ID" --force
 
+.PHONY: next
+next: ## What to work on: a blocked agent, then the open nightly findings, the oldest first ##@ make next
+	@bin/harness next
+
 .PHONY: harness-docs
 harness-docs: ## Regenerate docs/reference/gates.md from gates/registry.yaml ##@ make harness-docs
 	@bin/harness docs

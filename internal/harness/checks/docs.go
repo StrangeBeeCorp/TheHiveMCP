@@ -18,6 +18,8 @@ import (
 const (
 	// CIWorkflow is the workflow that must run every gate whose cadence includes ci.
 	CIWorkflow = ".github/workflows/ci.yml"
+	// NightlyWorkflow runs every gate whose cadence includes nightly, then files their findings.
+	NightlyWorkflow = ".github/workflows/nightly.yml"
 	// harnessRun is how a workflow step runs gates.
 	harnessRun = "bin/harness run"
 )
@@ -63,12 +65,16 @@ func Docs(tree Tree, reg *registry.Registry) ([]Finding, error) {
 		out = append(out, Finding{Path: gatesdoc.Path, Msg: "does not match gates/registry.yaml: run make harness-docs"})
 	}
 
-	ci, err := ciFindings(tree, reg)
-	if err != nil {
-		return nil, err
+	for _, w := range []struct{ path, cadence string }{{CIWorkflow, "ci"}, {NightlyWorkflow, "nightly"}} {
+		found, err := workflowFindings(tree, reg, w.path, w.cadence)
+		if err != nil {
+			return nil, err
+		}
+
+		out = append(out, found...)
 	}
 
-	return append(out, ci...), nil
+	return out, nil
 }
 
 // isEntryDoc selects the pages an agent or a newcomer reads first.
@@ -168,24 +174,30 @@ func exists(tree Tree, p string) bool {
 	return false
 }
 
-// ciFindings checks that ci.yml runs every ci gate through bin/harness, and names no gate the
-// registry does not have.
-func ciFindings(tree Tree, reg *registry.Registry) ([]Finding, error) {
-	content, err := tree.Read(CIWorkflow)
+// workflowFindings checks that a workflow runs every gate of its cadence through bin/harness, and
+// names no gate the registry does not have. A cadence with no gate needs no workflow.
+func workflowFindings(tree Tree, reg *registry.Registry, path, cadence string) ([]Finding, error) {
+	gates := reg.At(cadence)
+
+	content, err := tree.Read(path)
+	if errors.Is(err, fs.ErrNotExist) && len(gates) == 0 {
+		return nil, nil
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("docs: %w", err)
 	}
 
-	named, err := ranGates(content)
+	named, err := ranGates(path, content)
 	if err != nil {
 		return nil, err
 	}
 
 	var out []Finding
 
-	for _, g := range reg.At("ci") {
+	for _, g := range gates {
 		if !named[g.ID] {
-			out = append(out, Finding{Path: CIWorkflow, Msg: fmt.Sprintf("does not run gate %q, whose cadence includes ci", g.ID)})
+			out = append(out, Finding{Path: path, Msg: fmt.Sprintf("does not run gate %q, whose cadence includes %s", g.ID, cadence)})
 		}
 	}
 
@@ -198,7 +210,7 @@ func ciFindings(tree Tree, reg *registry.Registry) ([]Finding, error) {
 
 	for _, id := range ids {
 		if _, ok := reg.Gate(id); !ok {
-			out = append(out, Finding{Path: CIWorkflow, Msg: fmt.Sprintf("runs gate %q, which gates/registry.yaml does not define", id)})
+			out = append(out, Finding{Path: path, Msg: fmt.Sprintf("runs gate %q, which gates/registry.yaml does not define", id)})
 		}
 	}
 
@@ -217,12 +229,12 @@ type workflow struct {
 // ranGates lists the gates the workflow's steps run: the --gate values of the step scripts that
 // call bin/harness run, comment lines left out. A YAML comment is no step, and a shell comment
 // runs nothing.
-func ranGates(content []byte) (map[string]bool, error) {
+func ranGates(path string, content []byte) (map[string]bool, error) {
 	var wf workflow
 
 	err := yaml.Unmarshal(content, &wf)
 	if err != nil {
-		return nil, fmt.Errorf("docs: read %s: %w", CIWorkflow, err)
+		return nil, fmt.Errorf("docs: read %s: %w", path, err)
 	}
 
 	named := map[string]bool{}
