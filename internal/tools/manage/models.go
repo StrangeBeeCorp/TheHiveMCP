@@ -253,7 +253,23 @@ type CreateObservableResult struct {
 	Operation  string                     `json:"operation"`
 	EntityType string                     `json:"entityType"`
 	Result     []FilteredOutputObservable `json:"result,omitempty"`
-	Message    utils.TrustedString        `json:"message,omitempty"`
+	// Failures lists the values TheHive refused when it created only some of
+	// them; each entry is TheHive's error, with the refused value under object.
+	Failures []utils.UntrustedSubtree `json:"failures,omitempty"`
+	Message  utils.TrustedString      `json:"message,omitempty"`
+}
+
+// newPartialCreateObservableResult builds the result of a create in which
+// TheHive made some observables and refused others.
+func newPartialCreateObservableResult(created []FilteredOutputObservable, failures []utils.UntrustedSubtree) *CreateObservableResult {
+	return &CreateObservableResult{
+		Operation:  OperationCreate,
+		EntityType: types.EntityTypeObservable,
+		Result:     created,
+		Failures:   failures,
+		Message: utils.Trustedf("Created %d of %d observables; TheHive refused %d, listed in failures. Do not create the ones in result again.",
+			len(created), len(created)+len(failures), len(failures)),
+	}
 }
 
 // NewCreateObservableResult builds a CreateObservableResult from created OutputObservables.

@@ -160,24 +160,29 @@ func (t *Tool) createObservable(ctx context.Context, client *thehive.APIClient, 
 			Schema("observable", "create")
 	}
 
-	// parentID may be a case or an alert; try case, fall back to alert.
-	var result []thehive.OutputObservable
+	// parentID may be a case or an alert; try case, fall back to alert. Only a
+	// non-2xx answer means "not a case": a 2xx the client failed to decode is
+	// the case endpoint's 207, and trying the alert endpoint after it would
+	// report the case's partial create as a failure.
+	result, resp, err := client.ObservableAPI.CreateObservableInCase(ctx, parentID).InputCreateObservable(inputObservable).Execute()
+	defer closeResponse(resp)
 
-	caseResult, caseResp, caseErr := client.ObservableAPI.CreateObservableInCase(ctx, parentID).InputCreateObservable(inputObservable).Execute()
-	defer closeResponse(caseResp)
+	if err != nil && !isSuccessStatus(resp) {
+		var alertResp *http.Response
 
-	if caseErr != nil {
-		alertResult, alertResp, alertErr := client.ObservableAPI.CreateObservableInAlert(ctx, parentID).InputCreateObservable(inputObservable).Execute()
+		result, alertResp, err = client.ObservableAPI.CreateObservableInAlert(ctx, parentID).InputCreateObservable(inputObservable).Execute()
 		defer closeResponse(alertResp)
 
-		if alertErr != nil {
-			return EntityResult{}, tools.NewToolError("failed to create observable").Cause(alertErr).
-				Hint("Check that the target case/alert exists and you have permissions")
+		resp = alertResp
+	}
+
+	if err != nil {
+		if resp != nil && resp.StatusCode == http.StatusMultiStatus {
+			return observableMultiStatusResult(err)
 		}
 
-		result = alertResult
-	} else {
-		result = caseResult
+		return EntityResult{}, tools.NewToolError("failed to create observable").Cause(err).
+			Hint("Check that the target case/alert exists and you have permissions").API(resp)
 	}
 
 	// TheHive answers 2xx with an EMPTY list when the input carries no value (a

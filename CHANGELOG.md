@@ -43,6 +43,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with an empty list, and `manage-entities` reported "Observable created successfully" with an empty `result`. A model then believed the observable existed and
   built on it; one measured run spent its whole turn budget re-creating it. The tool now fails with a hint to set `entity-data.data`.
 
+- **An observable create that TheHive completed in part is reported as such.** When some values already existed, TheHive created the others and answered 207
+  with the created and the refused values; the client expected a plain list, so `manage-entities` reported `failed to create observable` with a JSON decoding
+  error and a hint about permissions, although observables had been created. A model then retried, or told the analyst nothing was added. The create now
+  succeeds with the observables made in `result` and TheHive's reason for each refused value in `failures`; when every value is refused, it fails and names
+  the error type (`CreateError` for an observable that already exists). A partial create in a case is no longer retried on the alert endpoint, and a create
+  refused by both endpoints now carries TheHive's answer.
+
 - **A TheHive that stops answering no longer hangs the tool call.** The connection to TheHive had no timeout, so a TheHive that accepted the connection and
   never answered held the call until the MCP client gave up — about four minutes in Claude Desktop — with no error, which read as a crashed server. Every
   request to TheHive is now bounded (2 minutes by default, set with `THEHIVE_REQUEST_TIMEOUT` or `--thehive-request-timeout`), and a request that runs out of
