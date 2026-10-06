@@ -124,6 +124,14 @@ func TestWaitForJobsSaysWhenTheTimeoutWasCapped(t *testing.T) {
 	uncapped, err := waitForJobs(t, map[string][]fakecortex.Reply{"~1": {fakecortex.Status(statusSuccess)}}, []string{"~1"}, 5)
 	require.NoError(t, err)
 	assert.NotContains(t, string(uncapped.WaitForJobsResult.Message), "capped")
+
+	// When no job can be read, the error says it too.
+	unknown := ExecuteAutomationParams{Operation: OperationWaitForJobs, JobIDs: []string{"~9"}, TimeoutSecs: 500}
+	require.NoError(t, (&ExecuteAutomationTool{}).ValidateParams(&unknown))
+
+	_, err = (&ExecuteAutomationTool{pollInterval: 10 * time.Millisecond}).Handle(ctx, mcp.CallToolRequest{}, unknown)
+	require.ErrorContains(t, err, "failed to get the status of any of the 1 jobs")
+	assert.ErrorContains(t, err, "timeout-seconds was capped at the maximum, 120")
 }
 
 // Regression: the reads had no deadline, so a stalled TheHive held the call
