@@ -24,8 +24,9 @@ Entity IDs in `entity-ids` and `target-id` are TheHive internal identifiers in `
 [`search-entities`](search-entities.md). A case's human-readable `number` (for example, "case #42") is not an entity ID. Resolve it to an `_id` with a search
 first.
 
-Every ID goes into a TheHive URL path, so one that is a dot segment (`.`, `..`) or contains a slash, a backslash or a control character is refused before
-any call. Names, such as a case template's in `target-id`, are otherwise accepted as they are.
+IDs go into TheHive URL paths, so one that is empty, a dot segment (`.`, `..`) or contains a slash, a backslash or a control character is refused before any
+call. A name used as an ID (a page, or a case template to update or delete) follows the same rule. `apply-template` is the exception: it sends the case IDs
+and the template name in its request body, so a template name in its `target-id` may hold a slash.
 
 ## Operations
 

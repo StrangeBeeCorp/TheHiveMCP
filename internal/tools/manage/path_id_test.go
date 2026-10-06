@@ -26,11 +26,24 @@ func TestManageRefusesIDsThatLeaveTheirPathSegment(t *testing.T) {
 		})
 	}
 
-	require.NoError(t, deleteCase("~123", "456"))
-	require.NoError(t, applyTemplate("Phishing Investigation"), "a template name with a space stays accepted")
+	mergeIntoCase := func(target string) error {
+		return tool.ValidateParams(&manage.EntityParams{
+			Operation: manage.OperationMerge, EntityType: types.EntityTypeAlert, EntityIDs: []string{"~1"}, TargetID: target,
+		})
+	}
 
-	for _, bad := range []string{"..", ".", "~1/../../user", `~1\..\user`, "~1\n"} {
+	require.NoError(t, deleteCase("~123", "456"))
+	require.NoError(t, mergeIntoCase("~42"))
+	// apply-template sends the case IDs and the template name in its body, so
+	// a template name may hold a slash.
+	require.NoError(t, applyTemplate("Phishing Investigation"), "a template name with a space stays accepted")
+	require.NoError(t, applyTemplate("IR/Phishing"), "a template name with a slash stays accepted")
+
+	for _, bad := range []string{"", "..", ".", "~1/../../user", `~1\..\user`, "~1\n"} {
 		require.ErrorContains(t, deleteCase("~123", bad), "invalid entity-ids entry", "%q", bad)
-		require.ErrorContains(t, applyTemplate(bad), "invalid target-id", "%q", bad)
+	}
+
+	for _, bad := range []string{"..", "~1/../../user", `~1\..\user`} {
+		require.ErrorContains(t, mergeIntoCase(bad), "invalid target-id", "%q", bad)
 	}
 }

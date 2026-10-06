@@ -100,7 +100,7 @@ Unknown query parameters are rejected rather than ignored, so a misspelling (`?d
 
 | Parameter    | Applies to            | Description                                                                                           |
 | ------------ | --------------------- | ----------------------------------------------------------------------------------------------------- |
-| `dataType`   | analyzers             | Only analyzers accepting that observable type (`hash`, `ip`, `domain`, `url`, …). Resolved by Cortex. |
+| `dataType`   | analyzers             | Only analyzers accepting that observable type (`hash`, `ip`, `domain`, `url`, …). Resolved by Cortex. It goes into a URL path: a dot segment, slash, backslash or control character is refused. |
 | `entityType` | responders            | Required. Entity kind the responder acts on (`case`, `alert`, `task`, `observable`).                  |
 | `entityId`   | responders            | Required. Identifier of that entity.                                                                  |
 | `offset`     | analyzers, responders | Index of the first entry to return. Defaults to `0`.                                                  |

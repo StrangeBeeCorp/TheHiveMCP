@@ -259,7 +259,7 @@ func validateGetJobStatusParams(params *ExecuteAutomationParams) error {
 func validateJobID(param, jobID string) error {
 	if !automationEntityIDPattern.MatchString(jobID) {
 		return tools.NewToolErrorf("invalid %s %q: must be a TheHive job ID such as ~123456", param, jobID).
-			Hint("Use the jobId returned by run-analyzer (the job's _id, not its cortexJobId)")
+			Hint("Use job._id from the run-analyzer result, not its cortexJobId")
 	}
 
 	return nil
