@@ -116,16 +116,24 @@ jobs:
         run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools "$GO_CACHE_DIR"/golangci
       - name: Fuzzing, the unit suite and the canaries
         run: bin/harness run --cadence nightly --all --gate fuzz --gate unit --gate canaries
-      # go test writes an input that breaks a fuzz target under testdata/fuzz: the artifact keeps
-      # it, to commit with the fix as a seed.
-      - name: Keep the results and the fuzz inputs for the triage
+      - name: Keep the results for the triage
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: nightly-gates
-          path: |
-            .cache/harness/runs/
-            **/testdata/fuzz/**
+          path: .cache/harness/runs/
+          if-no-files-found: ignore
+          retention-days: 14
+      # go test writes an input that breaks a fuzz target under testdata/fuzz: this artifact keeps
+      # it, to commit with the fix as a seed. It is its own artifact: a second path that searches
+      # from the checkout's root would skip the hidden .cache above (upload-artifact leaves hidden
+      # files out), and the triage reads no results.json from it.
+      - name: Keep the fuzz inputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-inputs
+          path: "**/testdata/fuzz/**"
           if-no-files-found: ignore
           retention-days: 14
 

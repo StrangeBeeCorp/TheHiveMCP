@@ -116,6 +116,11 @@ func TestReadFindsEachShardsResultsAndLogs(t *testing.T) {
 		{Gate: "race", Verdict: runner.Pass},
 	}, map[string]string{lintLog: long})
 
+	// An artifact that is no shard, as the fuzz inputs, holds no results.json: it adds nothing.
+	inputs := filepath.Join(dir, "fuzz-inputs", "internal", "utils", "testdata", "fuzz", "FuzzFilterDSL")
+	require.NoError(t, os.MkdirAll(inputs, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(inputs, "a1b2"), []byte("go test fuzz v1\n"), 0o600))
+
 	outcomes, err := Read(dir, []string{checks, "mutation"})
 	require.NoError(t, err)
 	require.Len(t, outcomes, 4)
