@@ -312,7 +312,7 @@ func TestManageCreateObservableWithoutDataIsAnError(t *testing.T) {
 
 // Regression: when one value already existed, TheHive answered 207 with the
 // created and the refused values, and the tool reported a failure although it
-// had created the others. A value that all already exist is an error.
+// had created the others. A create whose values all exist already is an error.
 func TestManageCreateObservableWithAnExistingValue(t *testing.T) {
 	testutils.Parallel(t)
 	hiveClient := testutils.SetupTestWithCleanup(t)
