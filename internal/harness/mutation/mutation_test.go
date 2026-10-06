@@ -14,6 +14,7 @@ import (
 const (
 	utils  = "internal/utils"
 	policy = "internal/harness/policy"
+	negate = "conditionals_negation"
 )
 
 var config = mutation.Config{Tool: "example.com/gremlins@v1.0.0", TimeoutCoefficient: 30, Floors: map[string]float64{utils: 80, policy: 70}}
@@ -56,15 +57,17 @@ func TestAPackageUnderItsFloorFails(t *testing.T) {
 	_, ok = config.Check(policy, mutation.Report{})
 	assert.True(t, ok, "no mutant to kill: nothing to hold the package to")
 
-	line, ok = config.Check(policy, mutation.Report{NotCovered: 12, Statistics: map[string]int{"conditionals_negation": 12}})
+	line, ok = config.Check(policy, mutation.Report{NotCovered: 12, Statistics: map[string]int{negate: 12}})
 	assert.False(t, ok, "mutants, and no test reaching them")
 	assert.Contains(t, line, "no unit test reaches its code")
 
-	timedOut := mutation.Report{Efficacy: 90.9, Killed: 10, Lived: 1, NotCovered: 26, Statistics: map[string]int{"conditionals_negation": 121}}
+	timedOut := mutation.Report{Efficacy: 90.9, Killed: 10, Lived: 1, NotCovered: 26, Statistics: map[string]int{negate: 121}}
 	line, ok = config.Check(utils, timedOut)
 	assert.False(t, ok, "84 of 95 covered mutants timed out: 90.9 % of the 11 left says little")
 	assert.Contains(t, line, "84 timed out")
 	assert.Contains(t, line, "raise timeout_coefficient")
+	assert.True(t, timedOut.Unmeasured(), "a run that measured nothing, not tests that got weaker")
+	assert.False(t, mutation.Report{Killed: 10, Lived: 1, Statistics: map[string]int{negate: 13}}.Unmeasured(), "two timed out: still measured")
 
 	_, err = mutation.ParseReport([]byte("{"))
 	require.Error(t, err)

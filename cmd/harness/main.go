@@ -69,23 +69,37 @@ func main() {
 
 	stop()
 
+	code, msg := exitFor(err)
+	if msg != "" {
+		_, _ = fmt.Fprintln(os.Stderr, msg)
+	}
+
+	if code != 0 {
+		os.Exit(code)
+	}
+}
+
+// errCannotRun means the command cannot run here: its gate is UNAVAILABLE, never a pass.
+var errCannotRun = errors.New("cannot run here")
+
+// exitFor is the exit code of a command's error, and what to say on stderr: a command that cannot
+// run here exits 75, which the runner reads as UNAVAILABLE.
+func exitFor(err error) (int, string) {
 	var usage usageError
+
 	switch {
 	case err == nil:
+		return 0, ""
 	case errors.Is(err, errFailed):
-		os.Exit(1)
+		return 1, ""
+	case errors.Is(err, errCannotRun):
+		return runner.ExitUnavailable, "harness: " + err.Error()
 	case errors.Is(err, errIncomplete):
-		_, _ = fmt.Fprintln(os.Stderr, "harness: a gate could not run (UNAVAILABLE above), so this run is not a pass")
-
-		os.Exit(exitIncomplete)
+		return exitIncomplete, "harness: a gate could not run (UNAVAILABLE above), so this run is not a pass"
 	case errors.As(err, &usage):
-		_, _ = fmt.Fprintln(os.Stderr, "harness:", err)
-
-		os.Exit(exitUsage)
+		return exitUsage, "harness: " + err.Error()
 	default:
-		_, _ = fmt.Fprintln(os.Stderr, "harness:", err)
-
-		os.Exit(1)
+		return 1, "harness: " + err.Error()
 	}
 }
 

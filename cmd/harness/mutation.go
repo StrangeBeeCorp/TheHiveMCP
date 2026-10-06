@@ -52,7 +52,7 @@ func (e env) mutate(ctx context.Context, args []string, out io.Writer) error {
 		_, _ = fmt.Fprintf(out, "not mutated, no floor in %s: %s\n", mutationPath, strings.Join(unfloored, ", "))
 	}
 
-	failed := 0
+	failed, unmeasured := 0, 0
 
 	for _, pkg := range floored {
 		report, err := e.gremlins(ctx, config, pkg)
@@ -63,14 +63,24 @@ func (e env) mutate(ctx context.Context, args []string, out io.Writer) error {
 		line, ok := config.Check(pkg, report)
 		_, _ = fmt.Fprintln(out, line)
 
-		if !ok {
+		switch {
+		case ok:
+		case report.Unmeasured():
+			unmeasured++
+		default:
 			_, _ = fmt.Fprintf(out, "  gremlins' report: %s\n", reportPath(pkg))
 			failed++
 		}
 	}
 
+	// A package under its floor fails the gate; one whose mutants timed out measured nothing, so
+	// the gate could not run, never a pass.
 	if failed > 0 {
 		return fmt.Errorf("%w: %d package(s)", errMutation, failed)
+	}
+
+	if unmeasured > 0 {
+		return fmt.Errorf("%w: %d package(s) not measured, too many mutants timed out", errCannotRun, unmeasured)
 	}
 
 	_, _ = fmt.Fprintf(out, "%d changed package(s) at or over their mutation floor\n", len(floored))

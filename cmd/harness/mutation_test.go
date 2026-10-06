@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx/gittest"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/runner"
 )
 
 const (
@@ -19,6 +20,8 @@ const (
 	gremlinsStub = "go:\n\tmkdir -p .cache/harness/mutation\n\tcp report.json .cache/harness/mutation/pkg_a.json\n"
 	aKilled      = `{"test_efficacy": 90, "mutants_killed": 9, "mutants_lived": 1}`
 	aLived       = `{"test_efficacy": 50, "mutants_killed": 1, "mutants_lived": 1}`
+	// aTimedOut: 37 mutants found, 30 timed out, as on a machine too busy to measure.
+	aTimedOut = `{"test_efficacy": 100, "mutants_killed": 7, "mutants_lived": 0, "mutator_statistics": {"CONDITIONALS_NEGATION": 37}}`
 )
 
 // mutationRepo is a checkout whose branch work changes pkg/a, which has a floor, and pkg/b, which
@@ -68,6 +71,36 @@ func TestAPackageUnderItsMutationFloorFailsTheGate(t *testing.T) {
 	assert.Contains(t, err.Error(), "1 package(s)")
 	assert.Contains(t, out.String(), "pkg/a: efficacy 50.0% (floor 80%)")
 	assert.Contains(t, out.String(), "  gremlins' report: .cache/harness/mutation/pkg_a.json\n")
+}
+
+// A package whose mutants mostly timed out was not measured: the gate cannot run (exit 75,
+// UNAVAILABLE), never a pass, and never a failure of its tests.
+func TestAMutationRunThatTimedOutCannotRun(t *testing.T) {
+	t.Parallel()
+
+	dir := mutationRepo(t, aTimedOut)
+
+	var out bytes.Buffer
+
+	err := env{root: dir}.mutate(t.Context(), []string{baseFlag, onMain}, &out)
+	require.ErrorIs(t, err, errCannotRun, out.String())
+	require.NotErrorIs(t, err, errMutation)
+	assert.Contains(t, out.String(), "30 timed out")
+	assert.Contains(t, out.String(), "run it on a quieter machine")
+
+	code, _ := exitFor(err)
+	assert.Equal(t, runner.ExitUnavailable, code, "the runner reads it as UNAVAILABLE")
+}
+
+// The harness's exit codes: 75 for a command that cannot run here, which the runner reads as
+// UNAVAILABLE; the other errors keep theirs.
+func TestACommandThatCannotRunExitsUnavailable(t *testing.T) {
+	t.Parallel()
+
+	for err, want := range map[error]int{nil: 0, errFailed: 1, errIncomplete: exitIncomplete, usageError{"x"}: exitUsage, errCannotRun: runner.ExitUnavailable, errMutation: 1} {
+		code, _ := exitFor(err)
+		assert.Equal(t, want, code, "%v", err)
+	}
 }
 
 // When gremlins cannot run, the gate fails with gremlins' output, never a pass.

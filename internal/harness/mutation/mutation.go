@@ -161,14 +161,23 @@ func ParseReport(data []byte) (Report, error) {
 	return r, nil
 }
 
+// Unmeasured says whether too many mutants timed out for the efficacy to mean anything: a busy
+// machine slows each mutant's tests past the timeout, and the run then measured nothing.
+func (r Report) Unmeasured() bool {
+	covered := r.Killed + r.Lived + r.TimedOut()
+
+	return r.TimedOut() > max(2, int(maxTimedOut*float64(covered)))
+}
+
 // Check says whether a package's report is under its floor, and the line that says how it did.
 func (c Config) Check(pkg string, r Report) (string, bool) {
 	floor := c.Floors[pkg]
 	line := fmt.Sprintf("%s: efficacy %.1f%% (floor %.0f%%), %d killed, %d lived, %d timed out, %d not covered",
 		pkg, r.Efficacy, floor, r.Killed, r.Lived, r.TimedOut(), r.NotCovered)
 
-	if covered := r.Killed + r.Lived + r.TimedOut(); r.TimedOut() > max(2, int(maxTimedOut*float64(covered))) {
-		return line + ": too many mutants timed out for the efficacy to mean much: raise timeout_coefficient in gates/mutation.yaml", false
+	if r.Unmeasured() {
+		return line + ": too many mutants timed out for the efficacy to mean much: run it on a quieter machine, " +
+			"or raise timeout_coefficient in gates/mutation.yaml", false
 	}
 
 	if r.Killed+r.Lived == 0 && r.TimedOut() == 0 && r.NotCovered > 0 {

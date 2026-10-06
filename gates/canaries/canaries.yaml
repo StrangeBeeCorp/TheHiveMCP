@@ -112,3 +112,24 @@ canaries:
     patch: slower-wrap.patch
     expect: "BenchmarkWrapSearchPage: allocates"
     why: wrapping untrusted text copies every value once more, and every search result pays for it
+
+  - id: untested-code
+    item: TST-002
+    gate: coverage
+    patch: untested-code.patch
+    expect: "under its floor of 97.0%"
+    why: new code lands in a floored package with no test that runs it
+
+  - id: race-cache
+    item: TST-002
+    gate: race
+    patch: race-cache.patch
+    expect: "DATA RACE"
+    why: the credentials cache drops its lock, and concurrent requests write its map at once
+
+  - id: untested-teardown
+    item: TST-002
+    gate: mutation
+    patch: untested-teardown.patch
+    expect: "add the tests that kill the mutants that lived"
+    why: a test keeps running the stack's teardown but stops checking it, so mutants of it live

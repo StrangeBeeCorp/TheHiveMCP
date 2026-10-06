@@ -1,0 +1,14 @@
+diff --git a/bootstrap/validation_cache.go b/bootstrap/validation_cache.go
+index 7f70b4b..6482670 100644
+--- a/bootstrap/validation_cache.go
++++ b/bootstrap/validation_cache.go
+@@ -54,9 +54,6 @@ func (c *validationCache) IsValid(creds *TheHiveCredentials) bool {
+ func (c *validationCache) MarkValid(creds *TheHiveCredentials) {
+ 	key := c.key(creds)
+ 
+-	c.mu.Lock()
+-	defer c.mu.Unlock()
+-
+ 	c.expires[key] = time.Now().Add(c.ttl)
+ }
+ 

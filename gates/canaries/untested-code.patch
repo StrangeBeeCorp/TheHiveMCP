@@ -1,0 +1,59 @@
+diff --git a/internal/harness/lint/summary.go b/internal/harness/lint/summary.go
+new file mode 100644
+index 0000000..6a14f70
+--- /dev/null
++++ b/internal/harness/lint/summary.go
+@@ -0,0 +1,53 @@
++package lint
++
++import (
++	"fmt"
++	"sort"
++	"strings"
++)
++
++// Summary groups linter findings by file and linter, for a report nobody has tested yet.
++func Summary(lines []string) string {
++	byFile := map[string]map[string]int{}
++	files := []string{}
++
++	for _, line := range lines {
++		parts := strings.SplitN(line, ":", 4)
++		if len(parts) < 4 {
++			continue
++		}
++
++		file := parts[0]
++		linter := "unknown"
++
++		if i := strings.LastIndex(parts[3], "("); i >= 0 {
++			linter = strings.TrimSuffix(strings.TrimSpace(parts[3][i+1:]), ")")
++		}
++
++		if _, ok := byFile[file]; !ok {
++			byFile[file] = map[string]int{}
++			files = append(files, file)
++		}
++
++		byFile[file][linter]++
++	}
++
++	sort.Strings(files)
++
++	var b strings.Builder
++
++	for _, file := range files {
++		linters := make([]string, 0, len(byFile[file]))
++		for l := range byFile[file] {
++			linters = append(linters, l)
++		}
++
++		sort.Strings(linters)
++
++		for _, l := range linters {
++			fmt.Fprintf(&b, "%s: %d %s\n", file, byFile[file][l], l)
++		}
++	}
++
++	return b.String()
++}

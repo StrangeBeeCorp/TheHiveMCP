@@ -167,6 +167,20 @@ items:
       - internal/harness/checks/integrity_test.go:TestAPersonMayAcceptAWeakerTest
     gates: [integrity]
 
+  - id: TST-002
+    title: The tests keep reaching the code, and the code keeps no race
+    status: active
+    rule: >-
+      A floored package does not fall under its coverage floor (gates/coverage.yaml) or, where it
+      has one, its mutation floor (gates/mutation.yaml), and the unit tests run with no data race. A
+      mutation run that measured nothing (its mutants timed out) cannot run, never a pass.
+    tests:
+      - internal/harness/coverage/coverage_test.go:TestAPackageUnderItsFloorFails
+      - internal/harness/mutation/mutation_test.go:TestAPackageUnderItsFloorFails
+      - cmd/harness/mutation_test.go:TestAPackageUnderItsMutationFloorFailsTheGate
+      - cmd/harness/mutation_test.go:TestAMutationRunThatTimedOutCannotRun
+    gates: [coverage, race, mutation]
+
   - id: PRF-001
     title: The server does not get slower unseen
     status: active
