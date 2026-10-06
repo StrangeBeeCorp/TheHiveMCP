@@ -8,6 +8,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-06
+
+**Upgrading from 1.1.x:** four changes can turn a working setup into an error. Each is described in full below.
+
+- A permissions file with an unknown key (a typo such as `entity_permission:`) no longer starts the server. Fix the key the error names.
+- A `pattern` filter or sort on `platforms` is refused, and `platforms` is no longer a default `pattern` column. Ask for it with
+  `extra-columns: ["platforms"]`.
+- An explicit `null` for a list parameter is refused by a gateway that validates arguments against the schema (LiteLLM). Omit the parameter instead.
+- An `Authorization` header in another scheme than Bearer is no longer read as a TheHive key. Send the key as `Bearer` or in `X-TheHive-Api-Key`.
+
 ### Added
 
 - **`execute-automation` can wait for analyzer jobs: operation `wait-for-jobs`.** It takes up to 20 `job-ids` and blocks until every one is final or
@@ -90,6 +100,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   none of which exist.
 - **The basic Docker Compose file no longer reports the container as unhealthy.** Its healthcheck ran `wget` against `/health`, but the image is distroless,
   with no `wget`, and the server has no such route. The override is gone, so the image's own probe applies.
+- **The arm64 Docker image is built on an arm64 base.** Both platforms of the image used to start from the same base, and `make docker-build` built a
+  different set of platforms than a release. Each platform now has its own base, and `make docker-build` builds both, without running Go under an emulator.
 
 ### Security
 
@@ -368,6 +380,8 @@ makes the Cortex analyzer/responder integration configurable.
   instructions from data, scoped to tools that carry user-generated content, with boundary tags escaped inside values so they cannot be spoofed. This is the
   foundation the v1.0.0 security envelope builds on.
 
+[Unreleased]: https://github.com/StrangeBee/TheHiveMCP/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/StrangeBee/TheHiveMCP/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/StrangeBee/TheHiveMCP/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/StrangeBee/TheHiveMCP/compare/v0.3.4...v1.0.0
 [0.3.4]: https://github.com/StrangeBee/TheHiveMCP/compare/v0.3.3...v0.3.4
