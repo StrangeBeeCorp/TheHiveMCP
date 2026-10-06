@@ -19,10 +19,12 @@ import (
 const (
 	evalFlag     = "--eval"
 	previousFlag = "--previous"
+	outFlag      = "--out"
 	evalConfig   = "suite: mcp-tools\nmodel: mimo-v2.6-flash\ncases: 37\ncost_per_case_usd: 0.0015\ncap_usd: 0.10\nmax_drop: 0.10\n"
 	// fakeUV stands in for `uv run eval-cli`, as TheHiveMCPEval prints: it records its arguments in
-	// $UV_CALLS; eval list shows the read and write phases' evaluations of every eval run so far,
-	// and fails before the first, as on a fresh stack whose promptfoo database has no results yet; eval columns and eval cost print $UV_COLUMNS_<PHASE> and $UV_COST_<PHASE> (exiting 1 when
+	// $UV_CALLS; eval list shows $UV_OLD_EVALS, then the read and write phases' evaluations of every
+	// eval run so far, and fails when it has none, as on a fresh stack whose promptfoo database has
+	// no results yet; eval columns and eval cost print $UV_COLUMNS_<PHASE> and $UV_COST_<PHASE> (exiting 1 when
 	// it is empty); eval run exits $UV_RUN_EXIT.
 	fakeUV = `#!/bin/sh
 echo "$*" >> "$UV_CALLS"
@@ -31,8 +33,9 @@ case "$3 $4" in
   "eval list")
     n=$(cat "$UV_CALLS.runs" 2>/dev/null || echo 0)
     [ -z "$UV_LIST_FAILS" ] || { echo "Error: docker volume inspect timed out" >&2; exit 1; }
-    [ "$n" -gt 0 ] || { printf 'Traceback (most recent call last):\n  ...\nsqlite3.OperationalError: no such table: eval_results\n' >&2; exit 1; }
+    [ "$n" -gt 0 ] || [ -n "$UV_OLD_EVALS" ] || { printf 'Traceback (most recent call last):\n  ...\nsqlite3.OperationalError: no such table: eval_results\n' >&2; exit 1; }
     printf 'Eval ID\n-----\n'
+    for old in $UV_OLD_EVALS; do printf '%s  2026-10-05 04:20 CEST  20\n' "$old"; done
     i=1; while [ "$i" -le "$n" ]; do
       printf 'eval-Rd%s-2026-10-06T02:20:01  2026-10-06 04:20 CEST  20\neval-Wr%s-2026-10-06T02:31:44  2026-10-06 04:31 CEST  17\n' "$i" "$i"
       i=$((i+1))
@@ -94,7 +97,7 @@ func TestTheEvalSmokeRunsTheSuiteAndHoldsItsResult(t *testing.T) {
 
 	var log bytes.Buffer
 
-	err := env{root: root}.evalSmoke(t.Context(), []string{evalFlag, eval, "--out", out, previousFlag, writePrevious(t, true, 0.9459)}, &log)
+	err := env{root: root}.evalSmoke(t.Context(), []string{evalFlag, eval, outFlag, out, previousFlag, writePrevious(t, true, 0.9459)}, &log)
 	require.NoError(t, err, log.String())
 
 	recorded, err := os.ReadFile(calls) // #nosec G304 -- the test's own record
@@ -126,7 +129,7 @@ func TestANightThatFellUnderThePreviousOneFails(t *testing.T) {
 
 	var log bytes.Buffer
 
-	err := env{root: root}.evalSmoke(t.Context(), []string{evalFlag, eval, "--out", out, previousFlag, writePrevious(t, true, 0.9459)}, &log)
+	err := env{root: root}.evalSmoke(t.Context(), []string{evalFlag, eval, outFlag, out, previousFlag, writePrevious(t, true, 0.9459)}, &log)
 	require.ErrorIs(t, err, errEvalSmoke)
 	assert.Contains(t, log.String(), "pass rate fell from 95% (2026-10-05) to 70%")
 
@@ -155,6 +158,29 @@ func TestThePreviousNightIsTheLastOneThatPassed(t *testing.T) {
 	corrupt := filepath.Join(t.TempDir(), "previous.json")
 	require.NoError(t, os.WriteFile(corrupt, []byte("{"), 0o600))
 	require.Error(t, env{root: root}.evalSmoke(t.Context(), []string{evalFlag, eval, previousFlag, corrupt}, &bytes.Buffer{}))
+}
+
+// On a stack that already holds earlier nights, the night reads only the evaluations its own run
+// created, not the older ones the list shows before it.
+func TestANightReadsOnlyTheEvaluationsItsRunCreated(t *testing.T) {
+	root, eval, calls := evalCheckout(t)
+	t.Setenv("UV_OLD_EVALS", "eval-Rd0-2026-10-05T02:20:01 eval-Wr0-2026-10-05T02:31:44")
+
+	out := filepath.Join(t.TempDir(), "result.json")
+
+	var log bytes.Buffer
+
+	require.NoError(t, env{root: root}.evalSmoke(t.Context(), []string{evalFlag, eval, outFlag, out}, &log), log.String())
+	assert.NotContains(t, log.String(), "no evaluation before the run", "the list before the run worked")
+
+	r, err := evalsmoke.Read(out)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"eval-Rd1-2026-10-06T02:20:01", "eval-Wr1-2026-10-06T02:31:44"}, r.Evals)
+	assert.Equal(t, 37, r.Cases, "the older night's 37 cases are not added")
+
+	recorded, err := os.ReadFile(calls) // #nosec G304 -- the test's own record
+	require.NoError(t, err)
+	assert.NotContains(t, string(recorded), "eval-Rd0", "the older evaluations are not read")
 }
 
 // A list that fails for another reason than a fresh stack's empty database is an error, before
