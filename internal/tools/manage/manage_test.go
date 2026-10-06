@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/testutils"
@@ -307,6 +308,50 @@ func TestManageCreateObservableWithoutDataIsAnError(t *testing.T) {
 		testArgEntityData: map[string]any{testFieldDataType: "ip", "value": "203.0.113.9"},
 	})
 	require.True(t, result.IsError, "a create that created nothing must be reported as an error")
+}
+
+// Regression: when one value already existed, TheHive answered 207 with the
+// created and the refused values, and the tool reported a failure although it
+// had created the others. A create whose values all exist already is an error.
+func TestManageCreateObservableWithAnExistingValue(t *testing.T) {
+	testutils.Parallel(t)
+	hiveClient := testutils.SetupTestWithCleanup(t)
+	mcpClient := testutils.GetMCPTestClient(t)
+
+	alert := createAlert(t, hiveClient, "Alert for a partial observable create", "obs-partial-create")
+	create := func(values ...string) *mcp.CallToolResult {
+		return testutils.CallTool(t, mcpClient, testToolName, map[string]any{
+			testArgOperation:  testOpCreate,
+			testArgEntityType: types.EntityTypeObservable,
+			testArgEntityIDs:  []string{alert.UnderscoreId},
+			testArgEntityData: map[string]any{testFieldDataType: "ip", testFieldData: values},
+		})
+	}
+
+	require.False(t, create("198.51.100.7").IsError)
+
+	partial := create("198.51.100.7", "198.51.100.8")
+	require.False(t, partial.IsError, "a create that made one of two observables is a success")
+
+	structured := testutils.StructuredData(t, partial)
+	created, ok := structured["result"].([]any)
+	require.True(t, ok)
+	require.Len(t, created, 1)
+
+	failures, ok := structured["failures"].([]any)
+	require.True(t, ok)
+	require.Len(t, failures, 1)
+
+	failure, ok := failures[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "[UNTRUSTED_DATA]CreateError[/UNTRUSTED_DATA]", failure["type"], "TheHive's reason reaches the model, fenced")
+
+	refused := create("198.51.100.7")
+	require.True(t, refused.IsError, "a create that made nothing is an error")
+	require.NotEmpty(t, refused.Content)
+	text, ok := refused.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	require.Contains(t, text.Text, "(CreateError)", "the error names TheHive's reason")
 }
 
 func TestManageUpdateMultipleEntities(t *testing.T) {
