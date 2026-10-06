@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/evalsmoke"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx/gittest"
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/runner"
 )
 
 const (
