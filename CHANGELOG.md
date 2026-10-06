@@ -13,8 +13,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 **Upgrading from 1.1.x:** four changes can turn a working setup into an error. Each is described in full below.
 
 - A permissions file with an unknown key (a typo such as `entity_permission:`) no longer starts the server. Fix the key the error names.
-- A `pattern` filter or sort on `platforms` is refused, and `platforms` is no longer a default `pattern` column. Ask for it with
-  `extra-columns: ["platforms"]`.
+- A `pattern` filter or sort on `platforms` is refused, and `platforms` is no longer a default `pattern` column. Ask for it with `extra-columns: ["platforms"]`.
 - An explicit `null` for a list parameter is refused by a gateway that validates arguments against the schema (LiteLLM). Omit the parameter instead.
 - An `Authorization` header in another scheme than Bearer is no longer read as a TheHive key. Send the key as `Bearer` or in `X-TheHive-Api-Key`.
 
@@ -100,8 +99,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   none of which exist.
 - **The basic Docker Compose file no longer reports the container as unhealthy.** Its healthcheck ran `wget` against `/health`, but the image is distroless,
   with no `wget`, and the server has no such route. The override is gone, so the image's own probe applies.
-- **The arm64 Docker image is built on an arm64 base.** Both platforms of the image used to start from the same base, and `make docker-build` built a
-  different set of platforms than a release. Each platform now has its own base, and `make docker-build` builds both, without running Go under an emulator.
+- **The arm64 Docker image is built on an arm64 base.** Both platforms of the image used to start from the same base, and `make docker-build` built a different
+  set of platforms than a release. Each platform now has its own base, and `make docker-build` builds both, without running Go under an emulator.
 
 ### Security
 
