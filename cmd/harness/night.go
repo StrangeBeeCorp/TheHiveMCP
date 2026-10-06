@@ -1,5 +1,8 @@
 package main
 
+// The nightly workflow's own commands: triage files the night's findings, next lists them, and
+// eval-smoke runs TheHiveMCPEval's suite against main.
+
 import (
 	"bytes"
 	"context"
@@ -8,14 +11,18 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/evalsmoke"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/triage"
 )
 
@@ -222,4 +229,172 @@ func (g ghIssues) run(stdin io.Reader, args ...string) ([]byte, error) {
 	}
 
 	return data, nil
+}
+
+var (
+	// errEvalSmoke means the night's smoke found a problem; they are printed.
+	errEvalSmoke = errors.New("eval smoke")
+	// errNoPrevious means there is no previous night to compare with: the first night, or none kept.
+	errNoPrevious = errors.New("no previous night")
+)
+
+// evalLogLines is how much of eval-cli's output a failure shows.
+const evalLogLines = 30
+
+// evalSmoke runs TheHiveMCPEval's suite against this checkout on gates/eval.yaml's model, its
+// stack already up, and holds the result to the cap and to the previous night's pass rate (the
+// eval-smoke gate, nightly).
+func (e env) evalSmoke(ctx context.Context, args []string, out io.Writer) error {
+	set := flag.NewFlagSet("eval-smoke", flag.ContinueOnError)
+	dir := set.String("eval", os.Getenv("THEHIVEMCP_EVAL"), "the TheHiveMCPEval checkout, its stack up ($THEHIVEMCP_EVAL)")
+	outPath := set.String("out", "", "write the night's result as JSON to this file")
+	previousPath := set.String("previous", "", "the previous night's result, to hold the pass rate to (absent: not compared)")
+
+	err := set.Parse(args)
+	if err != nil {
+		return usageError{err.Error()}
+	}
+
+	config, err := evalsmoke.Load(filepath.Join(e.root, evalsmoke.Path))
+	if err != nil {
+		return fmt.Errorf("eval smoke: %w", err)
+	}
+
+	err = evalReady(*dir)
+	if err != nil {
+		return err
+	}
+
+	err = config.Preflight()
+	if err != nil {
+		return fmt.Errorf("eval smoke: %w", err)
+	}
+
+	result, err := e.runEval(ctx, *dir, config, out)
+	if err != nil {
+		return err
+	}
+
+	if *outPath != "" {
+		err = os.MkdirAll(filepath.Dir(*outPath), dirPerm)
+		if err != nil {
+			return fmt.Errorf("eval smoke: %w", err)
+		}
+
+		err = result.Write(*outPath)
+		if err != nil {
+			return fmt.Errorf("eval smoke: %w", err)
+		}
+	}
+
+	previous, err := readPrevious(*previousPath)
+	if err != nil && !errors.Is(err, errNoPrevious) {
+		return err
+	}
+
+	_, _ = fmt.Fprintln(out, evalsmoke.Summary(result, previous))
+
+	problems := config.Check(result, previous)
+	for _, p := range problems {
+		_, _ = fmt.Fprintln(out, p)
+	}
+
+	if len(problems) > 0 {
+		return fmt.Errorf("%w: %d problem(s)", errEvalSmoke, len(problems))
+	}
+
+	return nil
+}
+
+// evalReady says whether the smoke can run here: a TheHiveMCPEval checkout, uv to run its CLI,
+// and an OpenRouter key (on macOS the eval CLI reads it from the keychain).
+func evalReady(dir string) error {
+	if dir == "" {
+		return fmt.Errorf("%w: no TheHiveMCPEval checkout (set THEHIVEMCP_EVAL)", errCannotRun)
+	}
+
+	_, err := os.Stat(filepath.Join(dir, "pyproject.toml")) // #nosec G703 -- the TheHiveMCPEval checkout the night was given
+	if err != nil {
+		return fmt.Errorf("%w: %s is no TheHiveMCPEval checkout: %w", errCannotRun, dir, err)
+	}
+
+	_, err = exec.LookPath("uv")
+	if err != nil {
+		return fmt.Errorf("%w: uv is needed to run the eval CLI", errCannotRun)
+	}
+
+	if os.Getenv("OPENROUTER_API_KEY") == "" && runtime.GOOS != "darwin" {
+		return fmt.Errorf("%w: no OPENROUTER_API_KEY", errCannotRun)
+	}
+
+	return nil
+}
+
+// runEval runs the suite, then reads its columns and its true cost.
+func (e env) runEval(ctx context.Context, dir string, c evalsmoke.Config, out io.Writer) (evalsmoke.Result, error) {
+	_, _ = fmt.Fprintf(out, "eval smoke: %s on %s, %d cases, about $%.3f (cap $%.2f)\n", c.Suite, c.Model, c.Cases, c.Estimate(), c.Cap)
+
+	// A failing case makes eval-cli exit non-zero; the columns say how many passed, so only a run
+	// that leaves no column for the model is an error.
+	runOut, runErr := evalCLI(ctx, dir, "eval", cmdRun, c.Suite, "--local", e.root, "--model", c.Model)
+
+	columns, err := evalCLI(ctx, dir, "eval", "columns")
+	if err != nil {
+		return evalsmoke.Result{}, fmt.Errorf("eval smoke: %w\n%s", err, lastLines(runOut, evalLogLines))
+	}
+
+	result, err := evalsmoke.FromColumns([]byte(columns), c.Model)
+	if err != nil {
+		return evalsmoke.Result{}, fmt.Errorf("eval smoke: %w (the run: %w)\n%s", err, runErr, lastLines(runOut, evalLogLines))
+	}
+
+	cost, err := evalCLI(ctx, dir, "eval", "cost")
+	if err == nil {
+		usd, ok := evalsmoke.TrueCost([]byte(cost), c.Model)
+		if ok {
+			result.CostUSD = usd
+		}
+	}
+
+	result.Suite = c.Suite
+	result.Head = gitx.Head(ctx, e.root)
+	result.Recorded = time.Now().UTC().Truncate(time.Second)
+
+	return result, nil
+}
+
+// evalCLI runs `uv run eval-cli ARGS` in the TheHiveMCPEval checkout and returns its output.
+func evalCLI(ctx context.Context, dir string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "uv", append([]string{cmdRun, "eval-cli"}, args...)...) // #nosec G204 -- the eval CLI with the smoke's own arguments
+	cmd.Dir = dir
+
+	var stdout, stderr bytes.Buffer
+
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		return stdout.String() + stderr.String(), fmt.Errorf("eval-cli %s: %w: %s", strings.Join(args[:2], " "), err, lastLines(stderr.String(), evalLogLines))
+	}
+
+	return stdout.String(), nil
+}
+
+// readPrevious reads the previous night's result; none (the first night, or no artifact) is no
+// error, and nil.
+func readPrevious(p string) (*evalsmoke.Result, error) {
+	if p == "" {
+		return nil, errNoPrevious
+	}
+
+	r, err := evalsmoke.Read(p)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, errNoPrevious
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("eval smoke: %w", err)
+	}
+
+	return &r, nil
 }

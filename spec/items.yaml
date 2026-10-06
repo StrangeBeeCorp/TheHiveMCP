@@ -194,6 +194,21 @@ items:
       - cmd/harness/bench_test.go:TestWithoutABaseToRunOnlyTheAbsoluteBudgetsHold
     gates: [bench]
 
+  - id: EVL-001
+    title: Each night measures what a model does with main
+    status: active
+    rule: >-
+      Every night TheHiveMCPEval's mcp-tools suite runs against main on gates/eval.yaml's model,
+      every case of it, within its cost cap, and a pass rate that fell more than its max drop
+      under the previous night's is a finding; a night that cannot run says why, never a pass.
+    tests:
+      - internal/harness/evalsmoke/evalsmoke_test.go:TestANightIsHeldToItsCasesItsCapAndThePreviousNight
+      - cmd/harness/evalsmoke_test.go:TestTheEvalSmokeRunsTheSuiteAndHoldsItsResult
+      - cmd/harness/evalsmoke_test.go:TestANightThatFellUnderThePreviousOneFails
+      - cmd/harness/evalsmoke_test.go:TestAnEvalSmokeThatCannotRunSaysWhy
+      - cmd/harness/evalsmoke_test.go:TestANightOverItsCapIsNotStarted
+    gates: [eval-smoke]
+
   - id: PRF-002
     title: The server holds under many clients at once, and over time
     status: active

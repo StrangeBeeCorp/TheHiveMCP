@@ -414,6 +414,19 @@ gates:
       30 minutes of steady calls from 10 clients over their budget in gates/load.yaml: latency, a
       failed call, memory, or memory that keeps growing after the warmup
 
+  - id: eval-smoke
+    runs: >-
+      bin/harness eval-smoke --out .cache/harness/runs/eval/result.json
+      --previous .cache/harness/eval/previous/eval/result.json
+    docker: true
+    cadence: [nightly]
+    suites: ["*"]
+    budget_s: 3600
+    blocks: >-
+      TheHiveMCPEval's mcp-tools suite on main, on gates/eval.yaml's model: a night that ran part
+      of the suite, cost more than its cap, or whose pass rate fell more than its max drop under
+      the previous night's (no TheHiveMCPEval checkout, uv or OpenRouter key: it cannot run)
+
   - id: fuzz
     runs: >-
       make go CMD="test -run ^NoTest -fuzz ^FuzzUntrustedWrap -fuzztime 60s ./internal/utils" &&

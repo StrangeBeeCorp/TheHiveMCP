@@ -1,0 +1,18 @@
+# The eval smoke (bin/harness eval-smoke, the nightly eval-smoke gate): TheHiveMCPEval's suite run
+# against main's checkout, its stack up, on a cheap model. Its cost is held to the cap, and its pass
+# rate to the previous night's. Some regressions come from no pull request: a provider changes a
+# model, TheHive ships a new image. Pull requests run no eval; a person can start the nightly
+# workflow on a branch to measure one.
+#
+# The estimate per case: TheHiveMCPEval's mcp-tools cases take about 9,500 prompt and 400
+# completion tokens each; mimo-v2.6-flash costs $0.14 and $0.28 per million on OpenRouter, so
+# about $0.0015 a case and $0.053 a night. The first nights give the true cost (eval-cli eval
+# cost); raising the cap is a person's call.
+
+suite: mcp-tools
+model: mimo-v2.6-flash # a label of TheHiveMCPEval's configs/providers.yaml
+cases: 37
+cost_per_case_usd: 0.0015
+cap_usd: 0.10
+# The pass rate may fall this far under the previous night's (0.10: ten points, four cases).
+max_drop: 0.10

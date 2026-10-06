@@ -23,6 +23,7 @@
 //	harness bench [--base REF]  (the benchmarks at the merge base and at HEAD, against gates/bench.yaml)
 //	harness triage --runs DIR --run-url URL [--expect SHARD,...] [--dry-run]  (the night's failures as issues labelled nightly)
 //	harness next  (make next: a blocked agent, then the open nightly findings, the oldest first)
+//	harness eval-smoke [--eval DIR] [--out FILE] [--previous FILE]  (TheHiveMCPEval's suite on gates/eval.yaml's model, held to its cap and the previous night)
 package main
 
 import (
@@ -192,7 +193,7 @@ func stagedRun(args []string) bool {
 
 func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer) error {
 	if len(args) == 0 {
-		return usageError{"usage: harness run|select|list|check|docs|hook|pr|push|evidence|review-effort|canaries|structure|lint|fmt|package|sign-windows|integration|bench|mutation|triage|next|unseal (see cmd/harness/main.go)"}
+		return usageError{"usage: harness run|select|list|check|docs|hook|pr|push|evidence|review-effort|canaries|structure|lint|fmt|package|sign-windows|integration|bench|mutation|triage|next|eval-smoke|unseal (see cmd/harness/main.go)"}
 	}
 
 	if command, ok := standalone[args[0]]; ok {
@@ -227,6 +228,7 @@ func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer
 		"bench":          e.bench,
 		"mutation":       e.mutate,
 		"triage":         e.triageNight,
+		"eval-smoke":     e.evalSmoke,
 		"next":           func(ctx context.Context, _ []string, w io.Writer) error { return e.next(ctx, w) },
 		"unseal":         func(_ context.Context, a []string, w io.Writer) error { return e.unseal(a, w) },
 	}

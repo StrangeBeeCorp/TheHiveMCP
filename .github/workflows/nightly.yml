@@ -2,7 +2,8 @@ name: Nightly
 
 # Every night, main is checked whole: every ci gate over every file, the integration suite on each
 # supported TheHive, the nightly gates (fuzzing, the unit suite, the canaries), mutation testing
-# of every floored package, and the server under load and over 30 minutes. Some regressions come from no pull request: a new TheHive image, a new
+# of every floored package, the server under load and over 30 minutes, and TheHiveMCPEval's
+# mcp-tools suite on a cheap model (gates/eval.yaml). Some regressions come from no pull request: a new TheHive image, a new
 # vulnerability, a fuzz input found tonight. The last job files each failure as an issue labelled
 # nightly (bin/harness triage), and `make next` lists them. The docs gate fails when a gate whose
 # cadence includes nightly is missing here: a ci gate runs at night when its cadence says so.
@@ -196,8 +197,74 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  eval:
+    if: github.repository == 'StrangeBee/TheHiveMCP'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      # The eval stack's TheHive, Orchestrator and licensing images are private GHCR packages:
+      # each must grant this repository read access (its "Manage Actions access" setting).
+      packages: read
+      # The previous night's result, from that run's artifact.
+      actions: read
+    env:
+      THEHIVEMCP_EVAL: ${{ github.workspace }}/.cache/eval
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # TheHiveMCPEval is internal: EVAL_REPO_TOKEN reads it. Without the token, the checkout
+      # fails here, and the triage files the shard as one that recorded nothing.
+      - name: Check out TheHiveMCPEval
+        uses: actions/checkout@v4
+        with:
+          repository: StrangeBee/TheHiveMCPEval
+          token: ${{ secrets.EVAL_REPO_TOKEN }}
+          path: .cache/eval
+      - uses: astral-sh/setup-uv@v6
+      - name: Log in to ghcr.io
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # The stack the mcp-tools suite needs, and no more: TheHive, the Orchestrator, LiteLLM, and
+      # Cortex for its automation cases; no viewer. The suite builds the MCP server from this
+      # checkout itself (eval-cli eval run --local).
+      - name: Bring the eval stack up and seed it
+        working-directory: .cache/eval
+        run: make up CORTEX=1 NO_VIEWER=1 && uv run eval-cli seed load
+      - name: Memory after the stack came up
+        run: docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' | sort -k2 -h
+      # The previous night's result, for the pass rate's comparison: the latest nightly run on
+      # main that kept one. None on the first night, which is no error.
+      - name: The previous night's result
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for id in $(gh run list --workflow nightly.yml --branch main --limit 10 --json databaseId,status --jq '.[] | select(.status == "completed") | .databaseId'); do
+            if gh run download "$id" --name eval --dir .cache/harness/eval/previous 2>/dev/null; then echo "from run $id"; break; fi
+          done
+      - name: Eval smoke
+        run: bin/harness run --cadence nightly --all --gate eval-smoke
+      - name: Keep the results for the triage, and the night's eval result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval
+          path: .cache/harness/runs/
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Tear the eval stack down
+        if: always()
+        working-directory: .cache/eval
+        run: make stop
+
   triage:
-    needs: [checks, integration, nightly-gates, mutation, load]
+    needs: [checks, integration, nightly-gates, mutation, load, eval]
     # After failed shards too, but not a cancelled run: its shards recorded nothing, and nothing failed.
     if: ${{ !cancelled() && github.repository == 'StrangeBee/TheHiveMCP' }}
     runs-on: ubuntu-latest
@@ -219,7 +286,7 @@ jobs:
         run: >-
           bin/harness triage --runs night
           --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          --expect checks,integration-5.5.16,integration-5.8.0,nightly-gates,mutation,load
+          --expect checks,integration-5.5.16,integration-5.8.0,nightly-gates,mutation,load,eval
           ${{ github.ref != 'refs/heads/main' && '--dry-run' || '' }}
         env:
           GH_TOKEN: ${{ github.token }}
