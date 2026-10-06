@@ -155,6 +155,22 @@ func scopeChecksForOperation(params EntityParams) (allOf, anyOf []scopeCheck) {
 
 // ValidateParams validates the tool parameters for the requested operation and entity type.
 func (t *Tool) ValidateParams(params *EntityParams) error {
+	// Every other operation puts entity-ids or target-id in a TheHive URL path
+	// (the merge of several alerts sends them in its body, but they are IDs, never
+	// names). apply-template sends both in its body, and target-id is a template
+	// name, which may hold a slash. A *ToolError, not an error: a nil one must not
+	// become a non-nil interface.
+	if params.Operation != OperationApplyTemplate {
+		badID := tools.ValidatePathIDs("entity-ids entry", params.EntityIDs...)
+		if badID == nil && params.TargetID != "" {
+			badID = tools.ValidatePathIDs("target-id", params.TargetID)
+		}
+
+		if badID != nil {
+			return badID
+		}
+	}
+
 	switch params.Operation {
 	case OperationCreate:
 		return validateCreateParams(params)

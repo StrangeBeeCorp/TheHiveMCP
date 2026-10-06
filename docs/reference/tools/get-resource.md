@@ -98,13 +98,13 @@ usually the permissions allow-list at work, not a missing Cortex. The shipped re
 Unknown query parameters are rejected rather than ignored, so a misspelling (`?datatype=hash`) or a parameter borrowed from the other catalog
 (`?entityType=observable` on the analyzers resource) fails loudly instead of returning the whole unfiltered catalog as if it were a filtered answer.
 
-| Parameter    | Applies to            | Description                                                                                           |
-| ------------ | --------------------- | ----------------------------------------------------------------------------------------------------- |
-| `dataType`   | analyzers             | Only analyzers accepting that observable type (`hash`, `ip`, `domain`, `url`, …). Resolved by Cortex. |
-| `entityType` | responders            | Required. Entity kind the responder acts on (`case`, `alert`, `task`, `observable`).                  |
-| `entityId`   | responders            | Required. Identifier of that entity.                                                                  |
-| `offset`     | analyzers, responders | Index of the first entry to return. Defaults to `0`.                                                  |
-| `limit`      | analyzers, responders | Page size. Defaults to `50`, capped at `500`.                                                         |
+| Parameter    | Applies to            | Description                                                                                                                                                                                     |
+| ------------ | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dataType`   | analyzers             | Only analyzers accepting that observable type (`hash`, `ip`, `domain`, `url`, …). Resolved by Cortex. It goes into a URL path: a dot segment, slash, backslash or control character is refused. |
+| `entityType` | responders            | Required. Entity kind the responder acts on (`case`, `alert`, `task`, `observable`).                                                                                                            |
+| `entityId`   | responders            | Required. Identifier of that entity.                                                                                                                                                            |
+| `offset`     | analyzers, responders | Index of the first entry to return. Defaults to `0`.                                                                                                                                            |
+| `limit`      | analyzers, responders | Page size. Defaults to `50`, capped at `500`.                                                                                                                                                   |
 
 `dataType` is the cheap way to answer "what can I run on this observable?" — Cortex filters server-side instead of the catalog being fetched and sifted locally.
 
