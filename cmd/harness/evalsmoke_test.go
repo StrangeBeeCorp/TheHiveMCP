@@ -21,8 +21,8 @@ const (
 	previousFlag = "--previous"
 	evalConfig   = "suite: mcp-tools\nmodel: mimo-v2.6-flash\ncases: 37\ncost_per_case_usd: 0.0015\ncap_usd: 0.10\nmax_drop: 0.10\n"
 	// fakeUV stands in for `uv run eval-cli`, as TheHiveMCPEval prints: it records its arguments in
-	// $UV_CALLS; eval list shows the read and write phases' evaluations of every eval run so far
-	// (none before the first); eval columns and eval cost print $UV_COLUMNS_<PHASE> and $UV_COST_<PHASE> (exiting 1 when
+	// $UV_CALLS; eval list shows the read and write phases' evaluations of every eval run so far,
+	// and fails before the first, as on a fresh stack whose promptfoo database has no results yet; eval columns and eval cost print $UV_COLUMNS_<PHASE> and $UV_COST_<PHASE> (exiting 1 when
 	// it is empty); eval run exits $UV_RUN_EXIT.
 	fakeUV = `#!/bin/sh
 echo "$*" >> "$UV_CALLS"
@@ -30,7 +30,7 @@ phase=$(case "$5" in eval-Rd*) echo READ ;; eval-Wr*) echo WRITE ;; esac)
 case "$3 $4" in
   "eval list")
     n=$(cat "$UV_CALLS.runs" 2>/dev/null || echo 0)
-    [ "$n" -gt 0 ] || { echo "No evaluations found."; exit 0; }
+    [ "$n" -gt 0 ] || { echo "Query error: no such table: eval_results" >&2; exit 1; }
     printf 'Eval ID\n-----\n'
     i=1; while [ "$i" -le "$n" ]; do
       printf 'eval-Rd%s-2026-10-06T02:20:01  2026-10-06 04:20 CEST  20\neval-Wr%s-2026-10-06T02:31:44  2026-10-06 04:31 CEST  17\n' "$i" "$i"
@@ -110,6 +110,7 @@ func TestTheEvalSmokeRunsTheSuiteAndHoldsItsResult(t *testing.T) {
 	assert.True(t, r.OK)
 	assert.Len(t, r.Head, 40)
 	assert.Contains(t, log.String(), "mcp-tools on mimo-v2.6-flash: 35/37 passed (95%), $0.053; previous night 34/37 (95%, 2026-10-05)")
+	assert.Contains(t, log.String(), "no evaluation before the run:", "a fresh stack's failing list is no error")
 }
 
 // Failing cases make eval-cli exit non-zero; the evaluations still say how the night went, and a

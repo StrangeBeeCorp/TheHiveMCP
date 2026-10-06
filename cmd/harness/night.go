@@ -348,9 +348,13 @@ func evalReady(dir, goos string) error {
 func (e env) runEval(ctx context.Context, dir string, c evalsmoke.Config, out io.Writer) (evalsmoke.Result, error) {
 	_, _ = fmt.Fprintf(out, "eval smoke: %s on %s, %d cases, about $%.3f (cap $%.2f)\n", c.Suite, c.Model, c.Cases, c.Estimate(), c.Cap)
 
+	// On a fresh stack, before its first evaluation, promptfoo's database has no results table and
+	// eval list fails: there is no evaluation yet. After the run, a failing list is an error.
 	before, err := evalCLI(ctx, dir, "eval", "list")
 	if err != nil {
-		return evalsmoke.Result{}, fmt.Errorf("eval smoke: %w", err)
+		_, _ = fmt.Fprintln(out, "no evaluation before the run:", firstLine(err.Error()))
+
+		before = ""
 	}
 
 	// A failing case makes eval-cli exit non-zero: the evaluations say how many passed.
@@ -383,6 +387,13 @@ func (e env) runEval(ctx context.Context, dir string, c evalsmoke.Config, out io
 	result.Recorded = time.Now().UTC().Truncate(time.Second)
 
 	return result, nil
+}
+
+// firstLine is the first line of s.
+func firstLine(s string) string {
+	line, _, _ := strings.Cut(s, "\n")
+
+	return line
 }
 
 // runNote is how eval run ended, for an error that follows it.
