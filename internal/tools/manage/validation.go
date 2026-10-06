@@ -155,6 +155,17 @@ func scopeChecksForOperation(params EntityParams) (allOf, anyOf []scopeCheck) {
 
 // ValidateParams validates the tool parameters for the requested operation and entity type.
 func (t *Tool) ValidateParams(params *EntityParams) error {
+	// Every operation puts entity-ids and target-id in a TheHive URL path.
+	// A *ToolError, not an error: a nil one must not become a non-nil interface.
+	badID := tools.ValidatePathIDs("entity-ids entry", params.EntityIDs...)
+	if badID == nil && params.TargetID != "" {
+		badID = tools.ValidatePathIDs("target-id", params.TargetID)
+	}
+
+	if badID != nil {
+		return badID
+	}
+
 	switch params.Operation {
 	case OperationCreate:
 		return validateCreateParams(params)

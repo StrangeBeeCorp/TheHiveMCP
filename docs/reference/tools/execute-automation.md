@@ -26,6 +26,9 @@ observables with threat intelligence and run responders to perform automated act
 | `action-id`       | string | Conditional | Action ID (required for `get-action-status`)                                                               |
 | `parameters`      | object | No          | JSON object with automation-specific configuration                                                         |
 
+`entity-id`, `job-id` and every `job-ids` entry go into a TheHive URL path. They must be TheHive IDs (`~123456`, or the bare digits); anything else is
+refused before any call. A job's ID is the `_id` returned by `run-analyzer`, not its `cortexJobId`.
+
 ## Operations
 
 ### Running analyzers
@@ -115,7 +118,7 @@ Responders perform active responses on entities (block IP, send email, create ti
 ```json
 {
   "operation": "get-job-status",
-  "job-id": "AWxyz123"
+  "job-id": "~123456"
 }
 ```
 
@@ -137,7 +140,7 @@ one job could be read.
 ```json
 {
   "operation": "wait-for-jobs",
-  "job-ids": ["AWxyz123", "AWxyz456"],
+  "job-ids": ["~123456", "~123457"],
   "timeout-seconds": 45
 }
 ```

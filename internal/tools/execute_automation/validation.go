@@ -251,6 +251,17 @@ func validateGetJobStatusParams(params *ExecuteAutomationParams) error {
 		return tools.NewToolErrorf("job-id is required for get-job-status operations. Provide the job ID returned by run-analyzer")
 	}
 
+	return validateJobID("job-id", params.JobID)
+}
+
+// validateJobID holds a job ID to the shape of TheHive's job _id: get-job-status
+// and wait-for-jobs put it in the path of the job endpoint.
+func validateJobID(param, jobID string) error {
+	if !automationEntityIDPattern.MatchString(jobID) {
+		return tools.NewToolErrorf("invalid %s %q: must be a TheHive job ID such as ~123456", param, jobID).
+			Hint("Use the jobId returned by run-analyzer (the job's _id, not its cortexJobId)")
+	}
+
 	return nil
 }
 
@@ -333,6 +344,11 @@ func validateWaitForJobsParams(params *ExecuteAutomationParams) error {
 	for _, id := range params.JobIDs {
 		if id == "" {
 			return tools.NewToolErrorf("job-ids must not contain an empty ID")
+		}
+
+		err := validateJobID("job-ids entry", id)
+		if err != nil {
+			return err
 		}
 
 		if _, dup := seen[id]; !dup {
