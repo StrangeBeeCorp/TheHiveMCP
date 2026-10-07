@@ -94,4 +94,8 @@ hooks:
 integrity:
   # The tests a person accepted to remove or weaken, "path_test.go:TestName": why. The integrity
   # gate refuses any other test that is gone, now skips, or checks less than at the base.
-  allow: {}
+  allow:
+    "cmd/harness/pr_test.go:TestTheReviewOfAChangeCoversItRebasedButNotEdited": >-
+      Jean, 2026-10-07: a rebase keeps its review (DL-8152); a commit added after the review is
+      listed as not reviewed instead of refused, so the test of that refusal goes. Replaced by
+      TestTheReviewOfABranchCoversItRebasedAndListsWhatItDidNotRead and TestABranchNoReviewReadIsRefused.
