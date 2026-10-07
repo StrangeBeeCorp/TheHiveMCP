@@ -52,4 +52,4 @@ It runs the pr gates at that exact commit, records the evidence under `.cache/ha
 branch, never main. `bin/harness evidence --markdown` prints the Gate evidence section for the pull request. `make all` runs the same gates without recording or
 pushing.
 
-CI runs every gate again on the pull request, against TheHive 5.5 and 5.6, and a person merges it.
+CI runs every gate again on the pull request, against TheHive 5.5 and 5.8, and a person merges it.
