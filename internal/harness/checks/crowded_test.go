@@ -24,18 +24,23 @@ func TestCrowdedNamesWhatTheChangeLeftNearTheLimits(t *testing.T) {
 	t.Parallel()
 
 	files := map[string]string{
-		nearGo:            lines(450),
-		"pkg/fine.go":     lines(100),
-		cappedGo:          lines(560),
-		notesMD:           strings.Repeat("x\n", 600),
-		"full/a.go":       lines(10),
-		"full/b.go":       lines(10),
-		"full/c.go":       lines(10),
-		"full/c_test.go":  lines(10),
-		"fresh/new.go":    lines(10),
-		"fresh/sub/x.go":  lines(10),
-		"roomy/a.go":      lines(10),
-		"roomy/b_test.go": lines(10),
+		nearGo:               lines(450),
+		"pkg/fine.go":        lines(100),
+		cappedGo:             lines(560),
+		notesMD:              strings.Repeat("x\n", 600),
+		"full/a.go":          lines(10),
+		"full/b.go":          lines(10),
+		"full/c.go":          lines(10),
+		"full/c_test.go":     lines(10),
+		"fresh/new.go":       lines(10),
+		"fresh/sub/x.go":     lines(10),
+		"roomy/a.go":         lines(10),
+		"roomy/b_test.go":    lines(10),
+		"tested/a.go":        lines(10),
+		"tested/b.go":        lines(10),
+		"tested/c.go":        lines(10),
+		"tested/a_test.go":   lines(10),
+		"fixtures/x_test.go": lines(10),
 	}
 	read := func(f string) ([]byte, error) {
 		if c, ok := files[f]; ok {
@@ -54,7 +59,7 @@ func TestCrowdedNamesWhatTheChangeLeftNearTheLimits(t *testing.T) {
 
 	got := checks.Crowded(
 		[]string{nearGo, "pkg/fine.go", cappedGo, notesMD, "pkg/gone.go"},
-		[]string{"full/c.go", "full/c_test.go", "fresh/new.go", "roomy/b_test.go"},
+		[]string{"full/c.go", "full/c_test.go", "fresh/new.go", "roomy/b_test.go", "tested/a_test.go", "fixtures/x_test.go"},
 		all, read, lim)
 
 	assert.Equal(t, []checks.Finding{

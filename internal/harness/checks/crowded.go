@@ -60,8 +60,8 @@ func crowdedDirs(added, files []string, lim StructureLimits) []Finding {
 
 	for _, f := range added {
 		dir := path.Dir(f)
-		if seen[dir] || !matchesFile(lim.CodeFiles, f) {
-			continue
+		if seen[dir] || !matchesFile(lim.CodeFiles, f) || strings.HasSuffix(f, "_test.go") {
+			continue // a test does not count toward a directory's code files
 		}
 
 		seen[dir] = true
