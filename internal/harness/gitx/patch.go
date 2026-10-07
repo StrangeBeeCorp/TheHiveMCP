@@ -2,6 +2,8 @@ package gitx
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -29,6 +31,47 @@ func PatchID(ctx context.Context, root, revs string) string {
 	id, _, _ := strings.Cut(strings.TrimSpace(string(out)), " ")
 
 	return id
+}
+
+// noteIdentity signs the notes' own commits: they are the harness's record, not a person's work,
+// and need no identity configured where they are written (a CI checkout has none).
+var noteIdentity = []string{
+	"GIT_AUTHOR_NAME=TheHiveMCP harness", "GIT_AUTHOR_EMAIL=harness@localhost",
+	"GIT_COMMITTER_NAME=TheHiveMCP harness", "GIT_COMMITTER_EMAIL=harness@localhost",
+}
+
+// AddNote attaches data to commit as a git note under ref (refs/notes/...), replacing a note the
+// commit had there.
+func AddNote(ctx context.Context, root, ref, commit string, data []byte) error {
+	cmd := exec.CommandContext(ctx, "git", "notes", "--ref", ref, "add", "-f", "-F", "-", commit) // #nosec G204 -- a fixed git subcommand on the harness's own ref
+	cmd.Dir = root
+
+	cmd.Env = append(os.Environ(), noteIdentity...)
+	cmd.Stdin = strings.NewReader(string(data))
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git notes add: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+
+	return nil
+}
+
+// Note is the note commit carries under ref, or "" for none.
+func Note(ctx context.Context, root, ref, commit string) string {
+	out, err := run(ctx, root, "notes", "--ref", ref, "show", commit)
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(out)
+}
+
+// PushRef pushes ref to the same name on remote.
+func PushRef(ctx context.Context, root, remote, ref string) error {
+	_, err := run(ctx, root, "push", "-q", remote, ref+":"+ref)
+
+	return err
 }
 
 // Commit is one commit of a change. Author is its author's email and date, which a rebase keeps;

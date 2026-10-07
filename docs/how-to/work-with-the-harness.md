@@ -87,6 +87,10 @@ It runs the pr gates at that exact commit, records the evidence under `.cache/ha
 branch, never main. `bin/harness evidence --markdown` prints the Gate evidence section for the pull request. `make all` runs the same gates without recording or
 pushing.
 
+`make pr` also notes each run's gate times on its commit, with the machine's platform, processors and memory, under one ref per machine
+(`refs/notes/harness/<hash of the host name>`), and the push takes that ref along: the timings of every developer's machine reach origin, for the repository's
+dashboard. Read them with `git fetch origin 'refs/notes/harness/*:refs/notes/harness/*'` and `git notes --ref harness/<machine> show <commit>`.
+
 A rebase asks for no new review: `make pr FORCE=1` pushes the rebased branch on the review that read it before. The push pairs the branch's commits with the
 ones the review read, and lists two kinds in its output and in the Gate evidence, for whoever merges: a commit the rebase changed (it resolved a conflict in it)
 and a commit added since the review, which no review read. A branch none of whose commits a ready review read is refused.

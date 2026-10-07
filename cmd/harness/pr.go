@@ -84,6 +84,8 @@ func (e env) pr(ctx context.Context, args []string, out io.Writer) error {
 
 	_, _ = fmt.Fprintf(out, "evidence: %s\n", p)
 
+	e.note(ctx, ev, out)
+
 	switch rec.Verdict {
 	case runner.Fail:
 		return errFailed
@@ -105,6 +107,20 @@ func (e env) pr(ctx context.Context, args []string, out io.Writer) error {
 	}
 
 	return e.push(ctx, pushArgs, out)
+}
+
+// note records the run's gate times on its commit, under this machine's notes ref, which the push
+// takes along: the repository's dashboard charts them by machine. A note that cannot be written is
+// said, never a failure of the run.
+func (e env) note(ctx context.Context, ev evidence.Evidence, out io.Writer) {
+	data, err := ev.Note(evidence.ThisMachine(ctx))
+	if err == nil {
+		err = gitx.AddNote(ctx, e.root, evidence.NotesRef(), ev.Head, data)
+	}
+
+	if err != nil {
+		_, _ = fmt.Fprintln(out, "warning: the run's timings are not noted:", err)
+	}
 }
 
 // firstSnapshot reports whether the change creates the snapshot of what the model reads: the base

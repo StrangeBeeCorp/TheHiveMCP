@@ -107,6 +107,36 @@ func TestPrRunsTheGatesRecordsTheEvidenceAndPushes(t *testing.T) {
 	assert.Equal(t, head, kept[0].Head)
 }
 
+// make pr notes its gate times on the commit, under this machine's notes ref, and the push takes
+// the ref to origin with the branch: another clone reads them there.
+//
+//nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory
+func TestPrNotesItsTimingsAndPushesThem(t *testing.T) {
+	dir := shipRepo(t)
+	head := reviewed(t, dir, "ready")
+
+	out, err := harness(t, "pr")
+	require.NoError(t, err, out)
+
+	note := gitx.Note(t.Context(), dir, evidence.NotesRef(), head)
+	require.NotEmpty(t, note, "the run is noted on its commit: %s", out)
+
+	var n evidence.Note
+	require.NoError(t, json.Unmarshal([]byte(note), &n))
+	assert.Equal(t, head, n.Head)
+	require.Len(t, n.Gates, 1)
+	assert.Equal(t, "docs-check", n.Gates[0].Gate)
+	assert.Positive(t, n.Machine.CPUs)
+
+	remote := gittest.Git(t, dir, "ls-remote", "origin", evidence.NotesRef())
+	assert.NotEmpty(t, remote, "the notes ref reached origin")
+
+	clone := filepath.Join(t.TempDir(), "clone")
+	gittest.Git(t, dir, "clone", "-q", gittest.Git(t, dir, "remote", "get-url", "origin"), clone)
+	gittest.Git(t, clone, "fetch", "-q", "origin", evidence.NotesRef()+":"+evidence.NotesRef())
+	assert.Equal(t, note, gitx.Note(t.Context(), clone, evidence.NotesRef(), head), "another clone reads the same timings")
+}
+
 //nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory
 func TestPrPushesNothingWhenAGateFailsOrTheReviewIsNotReady(t *testing.T) {
 	dir := shipRepo(t)
