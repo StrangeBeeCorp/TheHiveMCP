@@ -2,7 +2,7 @@
 name: develop-feature
 description:
   How to build a change in TheHiveMCP, the Go MCP server for TheHive. Covers where tools, resources and permissions live, the schema and trust-boundary rules
-  model-facing output must keep, testing on TheHive 5.5 and 5.6, and what a PR must update.
+  model-facing output must keep, testing on TheHive 5.5 and 5.8, and what a PR must update.
 ---
 
 # Develop a feature in TheHiveMCP
@@ -33,7 +33,7 @@ description:
    - any test → `references/testing.md`
 4. **Test.** Use `make check-fast` while you iterate: it runs the gates your branch's changed paths select (`docs/reference/gates.md`); lint and the unit tests
    cover the uncommitted files and the last commit's, and `make pr` and CI run them on everything. Run `make test-integration RUN=<regexp>` for anything that
-   calls TheHive. It must pass on 5.5 and on 5.6: CI runs both.
+   calls TheHive. It must pass on 5.5 and on 5.8: CI runs both.
 5. **Update the docs in the same PR:**
    - a tool's behaviour or parameters → `docs/reference/tools/<tool>.md`, plus its summary under "MCP Tools" in `README.md`
    - a permission key → `docs/reference/permissions.md` and the example profiles
@@ -51,7 +51,8 @@ description:
   `tools.NewToolError(...).Hint(...)`. Error messages and hints are written by us, so they reach the model unwrapped: never put entity text in them.
 - **Say what was cut.** Truncated or paged output must say so. `search-entities` returns `hasMore` and `nextOffset`, and the automation catalogs return
   `truncated`. A full page must never look like the complete result.
-- **Support TheHive 5.5 and 5.6.** A feature that exists only on 5.6 must be gated by version, and its docs must say "5.6+".
+- **Support TheHive 5.5 to 5.8.** A feature that exists only on a later version must be gated by version, and its docs must say since which one (for example
+  "5.6+").
 - **Keep the filter doc's layout.** `internal/resources/docs/filter-dsl.md` is excluded from the markdown formatters because its compact JSON lines are what the
   model sees. Do not reflow it.
 - **Keep text and code in sync.** Tool descriptions and `facts/*.txt` must list only fields that are actually filterable, and only operations that actually
