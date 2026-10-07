@@ -66,6 +66,22 @@ func TestEachReviewedCommitPairsWithOneCommit(t *testing.T) {
 	}
 }
 
+// Of two reviews, the one that leaves fewer commits unread covers the branch: a stacked pull
+// request's own review, not the review of a pull request below it, which read more of the stack's
+// commits but none of this branch's.
+func TestTheClosestReviewLeavesTheFewestCommitsUnread(t *testing.T) {
+	t.Parallel()
+
+	below := Coverage{Replayed: 27, Added: make([]gitx.Commit, 63)}
+	own := Coverage{Replayed: 2, Added: make([]gitx.Commit, 1)}
+	assert.True(t, own.Closer(below))
+	assert.False(t, below.Closer(own))
+
+	rebased := Coverage{Replayed: 1, Rebased: make([]gitx.Commit, 1), Added: make([]gitx.Commit, 1)}
+	assert.True(t, own.Closer(rebased), "as many added: fewer changed by a rebase")
+	assert.False(t, own.Closer(own), "no closer than itself")
+}
+
 // A branch none of whose commits the review read is not covered: its commits are all added.
 func TestAReviewOfOtherCommitsCoversNothing(t *testing.T) {
 	t.Parallel()

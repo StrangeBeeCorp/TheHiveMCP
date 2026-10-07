@@ -22,6 +22,17 @@ type Coverage struct {
 // covered.
 func (c Coverage) Covers() bool { return c.Replayed+len(c.Rebased) > 0 }
 
+// Closer reports whether c covers the branch more closely than o: fewer commits added since the
+// review, then fewer changed by a rebase. A review of a pull request lower in a stack reads some of
+// the branch's commits, but leaves this branch's own unread.
+func (c Coverage) Closer(o Coverage) bool {
+	if len(c.Added) != len(o.Added) {
+		return len(c.Added) < len(o.Added)
+	}
+
+	return len(c.Rebased) < len(o.Rebased)
+}
+
 // Cover pairs the commits a review read (judged) with the branch's commits now (current). A
 // commit with the same patch is replayed as the review read it; then one with the same subject,
 // author and author date, which a rebase keeps, is the same commit changed by the rebase; any

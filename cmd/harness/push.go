@@ -165,8 +165,8 @@ type covering struct {
 }
 
 // reviewOf finds the review of head: the review state's when it judged head; else the ready
-// review, the state's or one an earlier push kept, that read most of the branch's commits before a
-// rebase (evidence.Cover). A rebase asks for no new review: the commits it changed, and those added
+// review, the state's or one an earlier push kept, that leaves the fewest of the branch's commits
+// unread (evidence.Cover, Coverage.Closer). A rebase asks for no new review: the commits it changed, and those added
 // since, are listed for whoever merges. The first result is what PushAllowed judges.
 func (e env) reviewOf(ctx context.Context, out io.Writer, gitDir, head string) (*evidence.Review, covering, error) {
 	current, err := evidence.ReadReview(gitDir)
@@ -195,7 +195,7 @@ func (e env) reviewOf(ctx context.Context, out io.Writer, gitDir, head string) (
 
 	for _, r := range kept {
 		c, ok := e.coverage(ctx, r, head)
-		if ok && (best.coverage == nil || c.Replayed+len(c.Rebased) > best.coverage.Replayed+len(best.coverage.Rebased)) {
+		if ok && (best.coverage == nil || c.Closer(*best.coverage)) {
 			found := r
 			best = covering{review: &found, coverage: &c}
 		}
