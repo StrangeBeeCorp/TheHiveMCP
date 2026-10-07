@@ -16,6 +16,8 @@ import (
 const (
 	session    = "11111111-2222-3333-4444-555555555555"
 	claudeCode = "CLAUDECODE"
+	sessionVar = "CLAUDE_CODE_SESSION_ID"
+	effortVar  = "CLAUDE_EFFORT"
 )
 
 // transcript writes a session's transcript under home's Claude Code projects, in project.
@@ -59,7 +61,7 @@ not json
 {"message":{"model":"<synthetic>"}}
 `, 0)
 
-	got := hooks.Trailers(env(map[string]string{claudeCode: "1", "CLAUDE_CODE_SESSION_ID": session, "CLAUDE_EFFORT": "xhigh"}), home, checkoutWithSkill(t))
+	got := hooks.Trailers(env(map[string]string{claudeCode: "1", sessionVar: session, effortVar: "xhigh"}), home, checkoutWithSkill(t))
 	assert.Equal(t, []string{
 		"Agent-Model: claude-opus-5-5",
 		"Agent-Effort: xhigh",
@@ -72,14 +74,27 @@ not json
 func TestWhatASessionCannotTellIsUnknown(t *testing.T) {
 	t.Parallel()
 
-	got := hooks.Trailers(env(map[string]string{claudeCode: "1", "CLAUDE_CODE_SESSION_ID": session}), t.TempDir(), t.TempDir())
+	got := hooks.Trailers(env(map[string]string{claudeCode: "1", sessionVar: session}), t.TempDir(), t.TempDir())
 	assert.Equal(t, []string{"Agent-Model: unknown", "Agent-Effort: unknown", "Skills-Used: none"}, got)
+}
+
+// A transcript that cannot be read to its end tells nothing for sure: the model and the skills are
+// unknown, not what was read before the failure.
+func TestATranscriptReadInPartIsUnknown(t *testing.T) {
+	t.Parallel()
+
+	home := t.TempDir()
+	// A directory where the transcript should be: it opens, and reading it fails.
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".claude", "projects", "-repo", session+".jsonl"), 0o750))
+
+	got := hooks.Trailers(env(map[string]string{claudeCode: "1", sessionVar: session, effortVar: "high"}), home, t.TempDir())
+	assert.Equal(t, []string{"Agent-Model: unknown", "Agent-Effort: high", "Skills-Used: unknown"}, got)
 }
 
 // A person's commit, outside Claude Code, carries none.
 func TestAPersonsCommitCarriesNoTrailer(t *testing.T) {
 	t.Parallel()
 
-	assert.Empty(t, hooks.Trailers(env(map[string]string{"CLAUDE_EFFORT": "high"}), t.TempDir(), t.TempDir()))
+	assert.Empty(t, hooks.Trailers(env(map[string]string{effortVar: "high"}), t.TempDir(), t.TempDir()))
 	assert.Empty(t, hooks.Trailers(env(map[string]string{claudeCode: "0"}), t.TempDir(), t.TempDir()))
 }

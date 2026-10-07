@@ -141,9 +141,6 @@ func lastLines(s string, n int) string {
 	return strings.Join(lines, "\n")
 }
 
-// snapshot is the checkout as it is now, for what an agent changed since its first tool call
-// (hooks.Changes).
-// The sealed tests are judged too, though git ignores them.
 // trailers adds an agent's trailers (hooks.Trailers) to a commit message, from .githooks'
 // prepare-commit-msg: args are git's, the message file and its source. A person's commit, a merge
 // and a squash are left as they are.
@@ -202,6 +199,8 @@ func (e env) crowded(ctx context.Context, changed, added []string) []string {
 	return notes
 }
 
+// snapshot is the checkout as it is now, for what an agent changed since its first tool call
+// (hooks.Changes). The sealed tests are judged too, though git ignores them.
 func (e env) snapshot(ctx context.Context) (hooks.Snapshot, error) {
 	files, err := gitx.Contents(ctx, e.root, policy.SealedDir)
 	if err != nil {
