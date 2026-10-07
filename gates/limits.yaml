@@ -8,20 +8,21 @@ structure:
   # What counts as code: a pattern with a slash matches the path, one without the file name.
   code_files: ["*.go", "*.sh", "*.py", "*.js", "*.mjs", "*.ts", "*.mk", Makefile, Dockerfile, "Dockerfile.*", ".githooks/*", "bin/*"]
   # The files that were already over the limit when the gate arrived (2026-10-01), capped at their
-  # size then (the Makefile with the line that includes scripts/harness.mk). A cap may only go
-  # down: the gate asks for a lower cap when a file shrinks, and for its removal once the file is
-  # under the limit.
+  # size then (the Makefile with the line that includes scripts/harness.mk), or at main's when the
+  # stack moved onto release 1.2.0 (2026-10-07: manage_test.go, dynamic_resources.go and
+  # models.go grew there). A cap may only go down: the gate asks for a lower cap when a file
+  # shrinks, and for its removal once the file is under the limit.
   caps:
-    internal/tools/manage/manage_test.go: 1024
+    internal/tools/manage/manage_test.go: 1069
     internal/tools/search/search_test.go: 920
     internal/resources/static_resources.go: 891
     bootstrap/tool_schema_test.go: 718
-    internal/resources/dynamic_resources.go: 689
+    internal/resources/dynamic_resources.go: 695
     scripts/lint.sh: 677
     internal/utils/parsers.go: 635
+    internal/tools/manage/models.go: 603
     Makefile: 597
     internal/utils/parsers_test.go: 594
-    internal/tools/manage/models.go: 586
     bootstrap/http_test.go: 580
     internal/testutils/container.go: 543
   # The top-level entries the repository may have. A new one is a deliberate change: add it here.
