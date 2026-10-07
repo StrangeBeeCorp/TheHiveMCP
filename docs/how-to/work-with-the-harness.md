@@ -66,7 +66,10 @@ The hooks of `.claude/settings.json` send every tool call to `bin/harness hook`:
   make sends it back with the command that restores the file;
 - an agent does not stop red: after six red stops it writes `.cache/harness/BLOCKED.md` with what it tried and what it needs;
 - an agent whose green stop leaves a file at 90 % of its line limit, a full directory or a new one is asked once to split it or to file it with
-  `bin/harness debt`.
+  `bin/harness debt`;
+- a commit made from a Claude Code session carries three trailers, `Agent-Model`, `Agent-Effort` and `Skills-Used`, read from the session's environment and
+  transcript (`.githooks/prepare-commit-msg`): git history then says which models, efforts and skills wrote the code. What the session cannot tell is `unknown`;
+  a person's commit carries none.
 
 Claude Code's own permission rules refuse a push, a merge and an approval from a Claude session. [ADR-0004](../explanation/adr/0004-judge-outcomes.md) explains
 why the harness judges what changed rather than the commands typed.

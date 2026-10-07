@@ -193,7 +193,7 @@ func stagedRun(args []string) bool {
 
 func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer) error {
 	if len(args) == 0 {
-		return usageError{"usage: harness run|select|list|check|docs|hook|pr|push|evidence|review-effort|canaries|structure|lint|fmt|package|sign-windows|integration|bench|mutation|triage|debt|next|eval-smoke|unseal (see cmd/harness/main.go)"}
+		return usageError{"usage: harness run|select|list|check|docs|hook|pr|push|evidence|review-effort|canaries|structure|lint|fmt|package|sign-windows|integration|bench|mutation|triage|debt|next|trailers|eval-smoke|unseal (see cmd/harness/main.go)"}
 	}
 
 	if command, ok := standalone[args[0]]; ok {
@@ -229,6 +229,7 @@ func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer
 		"mutation":       e.mutate,
 		"triage":         e.triageNight,
 		"debt":           e.debt,
+		"trailers":       e.trailers,
 		"eval-smoke":     e.evalSmoke,
 		"next":           func(ctx context.Context, _ []string, w io.Writer) error { return e.next(ctx, w) },
 		"unseal":         func(_ context.Context, a []string, w io.Writer) error { return e.unseal(a, w) },

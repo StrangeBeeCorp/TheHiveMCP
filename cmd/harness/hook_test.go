@@ -155,3 +155,62 @@ func TestACoderThatChangesATestIsSentBack(t *testing.T) {
 
 	assert.Nil(t, hook(t, "subagent-stop", coder), "restored: the stop is green")
 }
+
+// trailersSession is a Claude Code session whose transcript, under a fake home, used one skill.
+func trailersSession(t *testing.T) {
+	t.Helper()
+
+	home := t.TempDir()
+	p := filepath.Join(home, ".claude", "projects", "-repo", "s-1.jsonl")
+	require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o750))
+	require.NoError(t, os.WriteFile(p, []byte(`{"message":{"model":"claude-opus-5-5"},"attributionSkill":"develop-feature"}`+"\n"), 0o600))
+
+	t.Setenv("HOME", home)
+	t.Setenv("CLAUDECODE", "1")
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "s-1")
+	t.Setenv("CLAUDE_EFFORT", "high")
+}
+
+// A commit message from a Claude Code session gets its trailers after the message, through git
+// (prepare-commit-msg calls this); a merge and a squash are left alone, and a commit run again
+// replaces the trailers rather than adding them twice.
+//
+//nolint:paralleltest // trailersSession sets HOME and CLAUDECODE
+func TestAnAgentsCommitMessageGetsItsTrailers(t *testing.T) {
+	trailersSession(t)
+
+	dir := gittest.Repo(t, nil)
+	msg := filepath.Join(t.TempDir(), "COMMIT_EDITMSG")
+	require.NoError(t, os.WriteFile(msg, []byte("[DL-1] feat(x): a change\n\nWhy it is made.\n"), 0o600))
+
+	e := env{root: dir}
+	require.NoError(t, e.trailers(t.Context(), []string{msg, "message"}, nil))
+	require.NoError(t, e.trailers(t.Context(), []string{msg, "message"}, nil))
+
+	got, err := os.ReadFile(msg) // #nosec G304 -- the test's own message file
+	require.NoError(t, err)
+	assert.Equal(t, "[DL-1] feat(x): a change\n\nWhy it is made.\n\n"+
+		"Agent-Model: claude-opus-5-5\nAgent-Effort: high\nSkills-Used: develop-feature\n", string(got))
+
+	merge := filepath.Join(t.TempDir(), "MERGE_MSG")
+	require.NoError(t, os.WriteFile(merge, []byte("Merge branch 'x'\n"), 0o600))
+	require.NoError(t, e.trailers(t.Context(), []string{merge, "merge"}, nil))
+
+	got, err = os.ReadFile(merge) // #nosec G304 -- the test's own message file
+	require.NoError(t, err)
+	assert.Equal(t, "Merge branch 'x'\n", string(got), "a merge is left alone")
+}
+
+// A person's commit, outside Claude Code, gets no trailer.
+func TestAPersonsCommitMessageIsLeftAlone(t *testing.T) {
+	trailersSession(t)
+	t.Setenv("CLAUDECODE", "")
+
+	msg := filepath.Join(t.TempDir(), "COMMIT_EDITMSG")
+	require.NoError(t, os.WriteFile(msg, []byte("fix: a person's change\n"), 0o600))
+	require.NoError(t, env{root: gittest.Repo(t, nil)}.trailers(t.Context(), []string{msg}, nil))
+
+	got, err := os.ReadFile(msg) // #nosec G304 -- the test's own message file
+	require.NoError(t, err)
+	assert.Equal(t, "fix: a person's change\n", string(got))
+}

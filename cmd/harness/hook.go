@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/checks"
@@ -142,6 +144,44 @@ func lastLines(s string, n int) string {
 // snapshot is the checkout as it is now, for what an agent changed since its first tool call
 // (hooks.Changes).
 // The sealed tests are judged too, though git ignores them.
+// trailers adds an agent's trailers (hooks.Trailers) to a commit message, from .githooks'
+// prepare-commit-msg: args are git's, the message file and its source. A person's commit, a merge
+// and a squash are left as they are.
+func (e env) trailers(ctx context.Context, args []string, _ io.Writer) error {
+	if len(args) < 1 {
+		return usageError{"usage: harness trailers <commit message file> [source]"}
+	}
+
+	if len(args) > 1 && (args[1] == "merge" || args[1] == "squash") {
+		return nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("trailers: %w", err)
+	}
+
+	add := hooks.Trailers(os.Getenv, home)
+	if len(add) == 0 {
+		return nil
+	}
+
+	gitArgs := []string{"interpret-trailers", "--in-place", "--if-exists", "replace"}
+	for _, t := range add {
+		gitArgs = append(gitArgs, "--trailer", t)
+	}
+
+	cmd := exec.CommandContext(ctx, "git", append(gitArgs, args[0])...) // #nosec G204 G702 -- git with the trailers and the file git gave
+	cmd.Dir = e.root
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("trailers: git interpret-trailers: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+
+	return nil
+}
+
 // crowded is what an agent's change left near the structure limits (checks.Crowded), as "path:
 // why" for its stop; nothing when the checkout cannot be listed.
 func (e env) crowded(ctx context.Context, changed, added []string) []string {
