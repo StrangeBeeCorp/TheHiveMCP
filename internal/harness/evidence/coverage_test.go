@@ -103,13 +103,13 @@ func TestTheGateEvidenceListsWhatTheReviewDidNotRead(t *testing.T) {
 	}}
 
 	md := Markdown(ev, nil)
-	assert.Contains(t, md, "**Review:** the review of `9876543` read this branch before a rebase. Of its 6 commits, 4 are as it read them, "+
+	assert.Contains(t, md, "**Review:** the review of `9876543` read this branch at an earlier commit. Of its 6 commits, 4 are as it read them, "+
 		"1 was changed by the rebase, and 1 was added since and is not reviewed: read those two closely.")
 	assert.Contains(t, md, "- changed by the rebase: `aaaaaaa` fix: round 1")
 	assert.Contains(t, md, "- added since the review: `bbbbbbb` chore: the restack's fallout")
 
 	ev.Coverage = &Coverage{Review: reviewSHA, Replayed: 5}
-	assert.Contains(t, Markdown(ev, nil), "**Review:** the review of `9876543` read this branch before a rebase. Of its 5 commits, 5 are as it read them.")
+	assert.Contains(t, Markdown(ev, nil), "**Review:** the review of `9876543` read this branch at an earlier commit. Of its 5 commits, 5 are as it read them.")
 
 	ev.Coverage = &Coverage{Review: reviewSHA, Replayed: 1, Added: []gitx.Commit{{SHA: "bbbbbbb222", Subject: "docs: link"}}}
 	assert.Contains(t, Markdown(ev, nil), "Of its 2 commits, 1 is as it read them, and 1 was added since")

@@ -178,7 +178,7 @@ func TestTheReviewOfABranchCoversItRebasedAndListsWhatItDidNotRead(t *testing.T)
 
 	out, err = harness(t, "pr", "--force")
 	require.NoError(t, err, out)
-	assert.Contains(t, out, "covers "+head[:7]+" after a rebase: 0 commit(s) as it read them, 1 changed by the rebase, 1 added since and not reviewed")
+	assert.Contains(t, out, "covers "+head[:7]+", which it did not judge: 0 commit(s) as it read them, 1 changed by the rebase, 1 added since and not reviewed")
 	assert.Contains(t, pushed(t, dir), head, "no new review was needed")
 
 	ev, err := evidence.Read(dir, head)

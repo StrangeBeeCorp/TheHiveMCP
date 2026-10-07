@@ -7,9 +7,9 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx"
 )
 
-// Coverage is how a review of a branch covers the branch after a rebase: its commits as the review
-// read them (Replayed), replayed with a resolved conflict (Rebased), or added since and never
-// reviewed (Added). A rebase asks for no new review: these lists are for whoever merges.
+// Coverage is how a review of a branch covers it at a later commit, rebased or not: its commits as
+// the review read them (Replayed), replayed with a resolved conflict (Rebased), or added since and
+// never reviewed (Added). A rebase asks for no new review: these lists are for whoever merges.
 type Coverage struct {
 	// Review is the commit the review judged.
 	Review   string        `json:"review"`
@@ -83,8 +83,8 @@ func Cover(judged, current []gitx.Commit) Coverage {
 // identity is what a rebase keeps of a commit, whatever its patch becomes.
 func identity(c gitx.Commit) string { return c.Subject + "\x00" + c.Author }
 
-// coverageNote is the Gate evidence's paragraph on a review that read the branch before a rebase,
-// with the commits it did not read as they are now.
+// coverageNote is the Gate evidence's paragraph on a review that read the branch at an earlier
+// commit, with the commits it did not read as they are now.
 func coverageNote(c Coverage) string {
 	var b strings.Builder
 
@@ -95,7 +95,7 @@ func coverageNote(c Coverage) string {
 		verb = "is"
 	}
 
-	fmt.Fprintf(&b, "\n**Review:** the review of `%s` read this branch before a rebase. Of its %d commits, %d %s as it read them",
+	fmt.Fprintf(&b, "\n**Review:** the review of `%s` read this branch at an earlier commit. Of its %d commits, %d %s as it read them",
 		short(c.Review), total, c.Replayed, verb)
 
 	switch {

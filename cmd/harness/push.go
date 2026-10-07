@@ -206,7 +206,7 @@ func (e env) reviewOf(ctx context.Context, out io.Writer, gitDir, head string) (
 	}
 
 	c := best.coverage
-	_, _ = fmt.Fprintf(out, "the review of %.7s covers %.7s after a rebase: %d commit(s) as it read them, %d changed by the rebase, %d added since and not reviewed\n",
+	_, _ = fmt.Fprintf(out, "the review of %.7s covers %.7s, which it did not judge: %d commit(s) as it read them, %d changed by the rebase, %d added since and not reviewed\n",
 		best.review.Head, head, c.Replayed, len(c.Rebased), len(c.Added))
 
 	for _, k := range c.Rebased {
