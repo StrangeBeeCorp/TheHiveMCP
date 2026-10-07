@@ -65,7 +65,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        thehive: ["5.5.2", "5.6.3"]
+        thehive: ["5.5.16", "5.8.0"]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -188,7 +188,7 @@ jobs:
         run: >-
           bin/harness triage --runs night
           --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          --expect checks,integration-5.5.2,integration-5.6.3,nightly-gates,mutation
+          --expect checks,integration-5.5.16,integration-5.8.0,nightly-gates,mutation
           ${{ github.ref != 'refs/heads/main' && '--dry-run' || '' }}
         env:
           GH_TOKEN: ${{ github.token }}

@@ -30,7 +30,7 @@ besides tests), with `--json` for scripts.
 ## Every night
 
 `.github/workflows/nightly.yml` checks main whole at 02:17 UTC, or when started by hand: every ci gate over every file, the integration suite on TheHive 5.5 and
-5.6, fuzzing, the unit suite, the canaries, and mutation testing of every package with a floor. Its last job, `bin/harness triage`, files each gate that fails
+5.8, fuzzing, the unit suite, the canaries, and mutation testing of every package with a floor. Its last job, `bin/harness triage`, files each gate that fails
 or cannot run as an issue labelled `nightly`, comments on the issue each night it still does, and closes it once it passes. Started by hand on another branch,
 it runs that branch and only prints what it would file. To see what to work on:
 
