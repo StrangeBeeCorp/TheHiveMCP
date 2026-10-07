@@ -89,26 +89,14 @@ func coverageNote(c Coverage) string {
 	var b strings.Builder
 
 	total := c.Replayed + len(c.Rebased) + len(c.Added)
+	fmt.Fprintf(&b, "\n**Review:** the review of `%s` read this branch at an earlier commit. Of its %d commits: %d as it read them, "+
+		"%d changed by a rebase, %d added since and not reviewed.", short(c.Review), total, c.Replayed, len(c.Rebased), len(c.Added))
 
-	verb := "are"
-	if c.Replayed == 1 {
-		verb = "is"
+	if len(c.Rebased)+len(c.Added) > 0 {
+		b.WriteString(" Read the ones below closely.")
 	}
 
-	fmt.Fprintf(&b, "\n**Review:** the review of `%s` read this branch at an earlier commit. Of its %d commits, %d %s as it read them",
-		short(c.Review), total, c.Replayed, verb)
-
-	switch {
-	case len(c.Rebased) > 0 && len(c.Added) > 0:
-		fmt.Fprintf(&b, ", %d was changed by the rebase, and %d was added since and is not reviewed: read those two closely.\n",
-			len(c.Rebased), len(c.Added))
-	case len(c.Rebased) > 0:
-		fmt.Fprintf(&b, ", and %d was changed by the rebase: read it closely.\n", len(c.Rebased))
-	case len(c.Added) > 0:
-		fmt.Fprintf(&b, ", and %d was added since and is not reviewed: read it closely.\n", len(c.Added))
-	default:
-		b.WriteString(".\n")
-	}
+	b.WriteString("\n")
 
 	for _, k := range c.Rebased {
 		fmt.Fprintf(&b, "- changed by the rebase: `%s` %s\n", short(k.SHA), k.Subject)
