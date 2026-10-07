@@ -78,8 +78,14 @@ func coverageNote(c Coverage) string {
 	var b strings.Builder
 
 	total := c.Replayed + len(c.Rebased) + len(c.Added)
-	fmt.Fprintf(&b, "\n**Review:** the review of `%s` read this branch before a rebase. Of its %d commits, %d are as it read them",
-		short(c.Review), total, c.Replayed)
+
+	verb := "are"
+	if c.Replayed == 1 {
+		verb = "is"
+	}
+
+	fmt.Fprintf(&b, "\n**Review:** the review of `%s` read this branch before a rebase. Of its %d commits, %d %s as it read them",
+		short(c.Review), total, c.Replayed, verb)
 
 	switch {
 	case len(c.Rebased) > 0 && len(c.Added) > 0:

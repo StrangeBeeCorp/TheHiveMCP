@@ -15,6 +15,8 @@ const (
 
 	roundOne = "fix: round 1"
 	fixLint  = "fix: lint"
+
+	reviewSHA = "9876543fed"
 )
 
 // The review read three commits. After a rebase, one is replayed as it was, one with a resolved
@@ -79,7 +81,7 @@ func TestTheGateEvidenceListsWhatTheReviewDidNotRead(t *testing.T) {
 	t.Parallel()
 
 	ev := Evidence{Head: "1234567abc", Base: "abcdef0123", Branch: "feat/x", Coverage: &Coverage{
-		Review: "9876543fed", Replayed: 4,
+		Review: reviewSHA, Replayed: 4,
 		Rebased: []gitx.Commit{{SHA: "aaaaaaa111", Subject: roundOne}},
 		Added:   []gitx.Commit{{SHA: "bbbbbbb222", Subject: "chore: the restack's fallout"}},
 	}}
@@ -90,8 +92,11 @@ func TestTheGateEvidenceListsWhatTheReviewDidNotRead(t *testing.T) {
 	assert.Contains(t, md, "- changed by the rebase: `aaaaaaa` fix: round 1")
 	assert.Contains(t, md, "- added since the review: `bbbbbbb` chore: the restack's fallout")
 
-	ev.Coverage = &Coverage{Review: "9876543fed", Replayed: 5}
+	ev.Coverage = &Coverage{Review: reviewSHA, Replayed: 5}
 	assert.Contains(t, Markdown(ev, nil), "**Review:** the review of `9876543` read this branch before a rebase. Of its 5 commits, 5 are as it read them.")
+
+	ev.Coverage = &Coverage{Review: reviewSHA, Replayed: 1, Added: []gitx.Commit{{SHA: "bbbbbbb222", Subject: "docs: link"}}}
+	assert.Contains(t, Markdown(ev, nil), "Of its 2 commits, 1 is as it read them, and 1 was added since")
 
 	ev.Coverage = nil
 	assert.NotContains(t, Markdown(ev, nil), "**Review:**", "a review of HEAD itself needs no note")
