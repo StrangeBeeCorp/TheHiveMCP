@@ -161,7 +161,7 @@ func (e env) trailers(ctx context.Context, args []string, _ io.Writer) error {
 		return fmt.Errorf("trailers: %w", err)
 	}
 
-	add := hooks.Trailers(os.Getenv, home)
+	add := hooks.Trailers(os.Getenv, home, e.root)
 	if len(add) == 0 {
 		return nil
 	}

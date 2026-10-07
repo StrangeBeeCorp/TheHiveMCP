@@ -3,6 +3,7 @@ package hooks_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,27 +31,39 @@ func transcript(t *testing.T, home, project, content string, age time.Duration) 
 // env is a lookup over a map, as os.Getenv is over the process.
 func env(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
 
-// A commit made from a Claude Code session carries its model (the latest of the transcript), its
-// reasoning effort (CLAUDE_EFFORT), and the skills it used (sorted, once each); a session's newest
-// transcript is read when it has several (one per working directory).
+// checkoutWithSkill is a checkout that defines one skill of its own, develop-feature.
+func checkoutWithSkill(t *testing.T) string {
+	t.Helper()
+
+	root := t.TempDir()
+	writeFile(t, root, ".claude/skills/develop-feature/SKILL.md", "# develop-feature\n")
+
+	return root
+}
+
+// A commit made from a Claude Code session carries its model (the latest real one of the
+// transcript), its reasoning effort (CLAUDE_EFFORT), and the skills it used: the repository's own by
+// name, sorted, once each, the user's plugins' only counted, for the public mirror. A session's newest
+// transcript is read when it has several (one per working directory), whatever the length of its lines.
 func TestAnAgentsCommitCarriesItsModelEffortAndSkills(t *testing.T) {
 	t.Parallel()
 
 	home := t.TempDir()
 	transcript(t, home, "-old-dir", `{"message":{"model":"claude-old"}}`+"\n", time.Hour)
 	transcript(t, home, "-repo", `{"message":{"role":"user","content":"go"}}
-{"message":{"model":"claude-opus-5-5"},"attributionSkill":"sb-personal:review"}
-{"message":{"model":"<synthetic>"}}
+{"message":{"model":"claude-sonnet-5-5"},"attributionSkill":"sb-personal:review"}
+{"message":{"content":"`+strings.Repeat("x", 20<<20)+`"}}
 {"message":{"model":"claude-opus-5-5"},"attributionSkill":"develop-feature"}
 {"message":{"model":"claude-opus-5-5"},"attributionSkill":"sb-personal:review"}
 not json
+{"message":{"model":"<synthetic>"}}
 `, 0)
 
-	got := hooks.Trailers(env(map[string]string{claudeCode: "1", "CLAUDE_CODE_SESSION_ID": session, "CLAUDE_EFFORT": "xhigh"}), home)
+	got := hooks.Trailers(env(map[string]string{claudeCode: "1", "CLAUDE_CODE_SESSION_ID": session, "CLAUDE_EFFORT": "xhigh"}), home, checkoutWithSkill(t))
 	assert.Equal(t, []string{
 		"Agent-Model: claude-opus-5-5",
 		"Agent-Effort: xhigh",
-		"Skills-Used: develop-feature, sb-personal:review",
+		"Skills-Used: develop-feature (+1 from the user's plugins)",
 	}, got)
 }
 
@@ -59,7 +72,7 @@ not json
 func TestWhatASessionCannotTellIsUnknown(t *testing.T) {
 	t.Parallel()
 
-	got := hooks.Trailers(env(map[string]string{claudeCode: "1", "CLAUDE_CODE_SESSION_ID": session}), t.TempDir())
+	got := hooks.Trailers(env(map[string]string{claudeCode: "1", "CLAUDE_CODE_SESSION_ID": session}), t.TempDir(), t.TempDir())
 	assert.Equal(t, []string{"Agent-Model: unknown", "Agent-Effort: unknown", "Skills-Used: none"}, got)
 }
 
@@ -67,6 +80,6 @@ func TestWhatASessionCannotTellIsUnknown(t *testing.T) {
 func TestAPersonsCommitCarriesNoTrailer(t *testing.T) {
 	t.Parallel()
 
-	assert.Empty(t, hooks.Trailers(env(map[string]string{"CLAUDE_EFFORT": "high"}), t.TempDir()))
-	assert.Empty(t, hooks.Trailers(env(map[string]string{claudeCode: "0"}), t.TempDir()))
+	assert.Empty(t, hooks.Trailers(env(map[string]string{"CLAUDE_EFFORT": "high"}), t.TempDir(), t.TempDir()))
+	assert.Empty(t, hooks.Trailers(env(map[string]string{claudeCode: "0"}), t.TempDir(), t.TempDir()))
 }

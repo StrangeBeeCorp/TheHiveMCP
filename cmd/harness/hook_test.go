@@ -179,7 +179,7 @@ func trailersSession(t *testing.T) {
 func TestAnAgentsCommitMessageGetsItsTrailers(t *testing.T) {
 	trailersSession(t)
 
-	dir := gittest.Repo(t, nil)
+	dir := gittest.Repo(t, map[string]string{".claude/skills/develop-feature/SKILL.md": "# develop-feature\n"})
 	msg := filepath.Join(t.TempDir(), "COMMIT_EDITMSG")
 	require.NoError(t, os.WriteFile(msg, []byte("[DL-1] feat(x): a change\n\nWhy it is made.\n"), 0o600))
 
