@@ -215,6 +215,34 @@ func Changes(ctx context.Context, root string, in Input, list Lister) ([]string,
 	return out, nil
 }
 
+// Touched are the files an agent changed since its first tool call, and of them the ones it added:
+// none for an agent with no snapshot, or one the checkout could not be read for.
+func Touched(ctx context.Context, root string, in Input, list Lister) (changedFiles, added []string) {
+	before, found, err := readSnapshot(root, in)
+	if err != nil || !found {
+		return nil, nil
+	}
+
+	now, err := list(ctx)
+	if err != nil {
+		return nil, nil
+	}
+
+	for _, rel := range changed(before.Files, now.Files) {
+		if _, ok := now.Files[rel]; !ok {
+			continue // removed: nothing left to split
+		}
+
+		changedFiles = append(changedFiles, rel)
+
+		if _, ok := before.Files[rel]; !ok {
+			added = append(added, rel)
+		}
+	}
+
+	return changedFiles, added
+}
+
 // restore is the command that puts rel back as the agent found it: the copy kept of a file git
 // cannot restore, git's own for one HEAD holds, and a removal for a file that was not there.
 func restore(root, actor, rel string, before Snapshot) string {

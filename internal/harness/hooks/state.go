@@ -29,6 +29,9 @@ type State struct {
 	// Started holds each agent whose first tool call kept a snapshot, until its green stop: a
 	// snapshot gone before then was deleted, and the stop cannot judge what the agent changed.
 	Started map[string]bool `json:"started,omitempty"`
+	// Asked holds, per agent, the paths its stops already asked it to split or file as debt: it is
+	// asked once, not held.
+	Asked map[string][]string `json:"asked,omitempty"`
 }
 
 // Last is a check-fast result with the fingerprint of what it judged.
@@ -58,6 +61,10 @@ func load(root string) State {
 
 	if st.Started == nil {
 		st.Started = map[string]bool{}
+	}
+
+	if st.Asked == nil {
+		st.Asked = map[string][]string{}
 	}
 
 	return st

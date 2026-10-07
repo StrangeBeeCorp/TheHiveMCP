@@ -20,6 +20,9 @@ import (
 // exploreType is a read-only agent type.
 const exploreType = "Explore"
 
+// handlerGo is a code file of the checkout.
+const handlerGo = "internal/tools/search/handler.go"
+
 // checkout is a fake one: its listing is what the test says it is now.
 type checkout struct{ now hooks.Snapshot }
 
@@ -136,6 +139,46 @@ func TestAStopIsRedUntilTheChangeIsUndone(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, got, "the green stop forgot the snapshot: a later run starts from what it finds")
 	}
+}
+
+// An agent whose green stop leaves a file near the structure limits is asked once to split it or
+// file it as debt, with what it changed and added; its next stop goes through. The main session
+// keeps no snapshot and is never asked; a stop with nothing crowded is not held.
+func TestAnAgentIsAskedOnceAboutWhatItLeftNearTheLimits(t *testing.T) {
+	t.Parallel()
+
+	root, c := t.TempDir(), started()
+
+	var seen [][]string
+
+	crowded := func(changed, added []string) []string {
+		seen = append(seen, changed, added)
+
+		return []string{handlerGo + ": 470 of 500 lines"}
+	}
+	s := hooks.Stopper{Root: root, MaxRounds: 6, Check: (&fakeCheck{}).run, Fingerprint: same, List: c.list, Crowded: crowded}
+	in := hooks.Input{SessionID: "s", AgentID: "a", AgentType: coderType}
+
+	hooks.Remember(t.Context(), root, in, c.list)
+	c.set(handlerGo, "x")
+	c.set("internal/tools/search/new.go", "y")
+
+	v := decode(t, s.Stop(t.Context(), in))
+	assert.Equal(t, "block", v["decision"])
+	assert.Contains(t, v["reason"], "handler.go: 470 of 500 lines")
+	assert.Contains(t, v["reason"], "bin/harness debt --path")
+	assert.Equal(t, [][]string{{handlerGo, "internal/tools/search/new.go"}, {"internal/tools/search/new.go"}}, seen)
+
+	assert.Empty(t, s.Stop(t.Context(), in).Stdout, "asked once: the next stop goes through")
+
+	main := hooks.Input{SessionID: "s"}
+	assert.Empty(t, s.Stop(t.Context(), main).Stdout, "the main session is not asked")
+
+	quiet := hooks.Stopper{Root: t.TempDir(), MaxRounds: 6, Check: (&fakeCheck{}).run, Fingerprint: same, List: c.list,
+		Crowded: func(_, _ []string) []string { return nil }}
+	other := hooks.Input{SessionID: "s", AgentID: "b", AgentType: coderType}
+	hooks.Remember(t.Context(), quiet.Root, other, c.list)
+	assert.Empty(t, quiet.Stop(t.Context(), other).Stdout, "nothing crowded: not held")
 }
 
 // A file the role may not write that git cannot restore (a test the Tester has not committed, for

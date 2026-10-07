@@ -53,6 +53,7 @@ func (e env) hook(ctx context.Context, args []string, stdin io.Reader, out io.Wr
 			Root: e.root, MaxRounds: e.limits.Hooks.MaxRedRounds, Check: e.stopCheck,
 			Fingerprint: func(ctx context.Context) (string, error) { return gitx.Fingerprint(ctx, e.root) },
 			List:        e.snapshot,
+			Crowded:     func(changed, added []string) []string { return e.crowded(ctx, changed, added) },
 		}.Stop(ctx, in)
 	case "session-start":
 		o = hooks.SessionStart(ctx, e.root, in)
@@ -141,6 +142,26 @@ func lastLines(s string, n int) string {
 // snapshot is the checkout as it is now, for what an agent changed since its first tool call
 // (hooks.Changes).
 // The sealed tests are judged too, though git ignores them.
+// crowded is what an agent's change left near the structure limits (checks.Crowded), as "path:
+// why" for its stop; nothing when the checkout cannot be listed.
+func (e env) crowded(ctx context.Context, changed, added []string) []string {
+	files, err := gitx.Files(ctx, e.root)
+	if err != nil {
+		return nil
+	}
+
+	tree := checks.DirTree{Root: e.root, Names: files}
+
+	found := checks.Crowded(changed, added, files, tree.Read, e.limits.Structure)
+
+	notes := make([]string, 0, len(found))
+	for _, f := range found {
+		notes = append(notes, f.Path+": "+f.Msg)
+	}
+
+	return notes
+}
+
 func (e env) snapshot(ctx context.Context) (hooks.Snapshot, error) {
 	files, err := gitx.Contents(ctx, e.root, policy.SealedDir)
 	if err != nil {

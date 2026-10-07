@@ -1,12 +1,12 @@
 package main
 
-// The nightly workflow's own commands: triage files the night's findings, next lists them, and
-// eval-smoke runs TheHiveMCPEval's suite against main.
+// The commands on the repository's issues and nights: triage files the night's findings, debt
+// files what a change found out of its scope, next lists both, and eval-smoke runs TheHiveMCPEval's
+// suite against main.
 
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -17,20 +17,20 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/evalsmoke"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/issues"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/triage"
 )
 
 // blockedPath is where an agent that stayed red for its rounds writes why (internal/harness/hooks).
 const blockedPath = ".cache/harness/BLOCKED.md"
 
-// errNoGH means gh is not there to read or write the findings.
-var errNoGH = errors.New("gh is needed for the nightly findings (install it and run gh auth login)")
+// errNoGH means gh is not there to read or write the issues.
+var errNoGH = issues.ErrNoGH
 
 // triageNight files the night's failures as GitHub issues labelled nightly, comments on those
 // still failing and closes those that pass again (the nightly workflow's last job).
@@ -60,11 +60,11 @@ func (e env) triageNight(ctx context.Context, args []string, out io.Writer) erro
 		return fmt.Errorf("triage: %w", err)
 	}
 
-	gh := ghIssues{ctx: ctx, dir: e.root}
+	gh := issues.GH{Ctx: ctx, Dir: e.root}
 
-	open, err := gh.list()
+	open, err := gh.List(triage.Label)
 	if err != nil {
-		return err
+		return fmt.Errorf("triage: %w", err)
 	}
 
 	actions := triage.Plan(outcomes, open, *runURL)
@@ -77,16 +77,16 @@ func (e env) triageNight(ctx context.Context, args []string, out io.Writer) erro
 	}
 
 	if slices.ContainsFunc(actions, func(a triage.Action) bool { return a.Kind == triage.Open }) {
-		err = gh.label()
+		err = gh.Label(triage.Label, "B60205", "A finding of the nightly run, filed and closed by bin/harness triage")
 		if err != nil {
-			return err
+			return fmt.Errorf("triage: %w", err)
 		}
 	}
 
 	for _, a := range actions {
-		err = gh.apply(a)
+		err = gh.Apply(a)
 		if err != nil {
-			return err
+			return fmt.Errorf("triage: %w", err)
 		}
 	}
 
@@ -103,132 +103,96 @@ func describe(a triage.Action) string {
 	return fmt.Sprintf("%s #%d", a.Kind, a.Issue)
 }
 
-// next lists the open findings, the oldest first, after an agent's BLOCKED.md if there is one
-// (make next: what to work on).
+// next lists the open findings, the oldest first, after an agent's BLOCKED.md if there is one, and
+// then the open debt (make next: what to work on).
 func (e env) next(ctx context.Context, out io.Writer) error {
 	blocked, err := os.ReadFile(filepath.Join(e.root, blockedPath)) // #nosec G304 -- this checkout's own cache
 	if err == nil {
 		_, _ = fmt.Fprintf(out, "An agent is blocked (%s):\n\n%s\n", blockedPath, strings.TrimSpace(string(blocked)))
 	}
 
-	issues, err := ghIssues{ctx: ctx, dir: e.root}.listForNext()
+	gh := issues.GH{Ctx: ctx, Dir: e.root}
+
+	findings, err := gh.Oldest(triage.Label)
 	if err != nil {
-		return err
+		return fmt.Errorf("next: %w", err)
 	}
 
-	if len(issues) == 0 {
+	if len(findings) == 0 {
 		_, _ = fmt.Fprintln(out, "No open nightly finding.")
-
-		return nil
+	} else {
+		listIssues(out, fmt.Sprintf("%d open nightly finding(s), the oldest first:", len(findings)), findings)
 	}
 
-	_, _ = fmt.Fprintf(out, "%d open nightly finding(s), the oldest first:\n", len(issues))
+	debt, err := gh.Oldest(issues.DebtLabel)
+	if err != nil {
+		return fmt.Errorf("next: %w", err)
+	}
 
-	for _, i := range issues {
-		_, _ = fmt.Fprintf(out, "  #%d  %s  (since %s)  %s\n", i.Number, i.Title, i.CreatedAt.Format(time.DateOnly), i.URL)
+	if len(debt) > 0 {
+		listIssues(out, fmt.Sprintf("%d open debt issue(s), the oldest first:", len(debt)), debt)
 	}
 
 	return nil
 }
 
-// ghIssues reads and writes the nightly findings with gh, in the repository of dir.
-type ghIssues struct {
-	ctx context.Context //nolint:containedctx // one triage's calls share its context
-	dir string
+func listIssues(out io.Writer, heading string, found []issues.Listed) {
+	_, _ = fmt.Fprintln(out, heading)
+
+	for _, i := range found {
+		_, _ = fmt.Fprintf(out, "  #%d  %s  (since %s)  %s\n", i.Number, i.Title, i.CreatedAt.Format(time.DateOnly), i.URL)
+	}
 }
 
-// listed is an issue as `gh issue list --json` prints it.
-type listed struct {
-	triage.Issue
+// debt files what a change found out of its scope as a GitHub issue labelled debt: a file or a
+// directory to split, a cleanup. A path already filed is not filed again, and a branch files at most
+// issues.MaxDebtPerBranch: past that, the work is the branch's own.
+func (e env) debt(ctx context.Context, args []string, out io.Writer) error {
+	fs := flag.NewFlagSet("debt", flag.ContinueOnError)
+	path := fs.String("path", "", "the file or directory the work is about")
+	why := fs.String("why", "", "what needs doing, and why it is out of this change's scope")
 
-	URL       string    `json:"url"`
-	CreatedAt time.Time `json:"createdAt"`
-}
-
-func (g ghIssues) list() ([]triage.Issue, error) {
-	found, err := g.query("number,title,body")
+	err := fs.Parse(args)
 	if err != nil {
-		return nil, err
+		return usageError{err.Error()}
 	}
 
-	issues := make([]triage.Issue, 0, len(found))
-	for _, l := range found {
-		issues = append(issues, l.Issue)
+	title := strings.TrimSpace(strings.Join(fs.Args(), " "))
+	if title == "" || *path == "" || strings.TrimSpace(*why) == "" {
+		return usageError{`debt: bin/harness debt --path <path> --why "<what needs doing>" "<title>"`}
 	}
 
-	return issues, nil
-}
+	d := issues.Debt{Title: title, Path: *path, Why: *why, Branch: gitx.Branch(ctx, e.root), Head: gitx.Head(ctx, e.root)}
+	gh := issues.GH{Ctx: ctx, Dir: e.root}
 
-func (g ghIssues) listForNext() ([]listed, error) {
-	found, err := g.query("number,title,url,createdAt")
+	open, err := gh.List(issues.DebtLabel)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("debt: %w", err)
 	}
 
-	slices.SortFunc(found, func(a, b listed) int { return a.CreatedAt.Compare(b.CreatedAt) })
+	if i, ok := issues.Filed(open, d.Path); ok {
+		_, _ = fmt.Fprintf(out, "%s is filed already: #%d %s\n", d.Path, i.Number, i.Title)
 
-	return found, nil
-}
+		return nil
+	}
 
-func (g ghIssues) query(fields string) ([]listed, error) {
-	data, err := g.run(nil, "issue", "list", "--label", triage.Label, "--state", "open", "--limit", "500", "--json", fields)
+	if n := issues.FiledFrom(open, d.Branch); n >= issues.MaxDebtPerBranch {
+		return usageError{fmt.Sprintf("debt: %s filed %d debt issues already: the rest of the work is this branch's own", d.Branch, n)}
+	}
+
+	err = gh.Label(issues.DebtLabel, issues.DebtColor, issues.DebtDescription)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("debt: %w", err)
 	}
 
-	var found []listed
-
-	err = json.Unmarshal(data, &found)
+	url, err := gh.Create(d.IssueTitle(), issues.DebtLabel, d.Body())
 	if err != nil {
-		return nil, fmt.Errorf("read gh's issue list: %w", err)
+		return fmt.Errorf("debt: %w", err)
 	}
 
-	return found, nil
-}
+	_, _ = fmt.Fprintln(out, "filed:", url)
 
-// label makes sure the nightly label exists before an issue carries it.
-func (g ghIssues) label() error {
-	_, err := g.run(nil, "label", "create", triage.Label, "--force", "--color", "B60205", "--description", "A finding of the nightly run, filed and closed by bin/harness triage")
-
-	return err
-}
-
-func (g ghIssues) apply(a triage.Action) error {
-	var err error
-
-	switch a.Kind {
-	case triage.Open:
-		_, err = g.run(strings.NewReader(a.Body), "issue", "create", "--title", a.Title, "--label", triage.Label, "--body-file", "-")
-	case triage.Comment:
-		_, err = g.run(strings.NewReader(a.Body), "issue", "comment", strconv.Itoa(a.Issue), "--body-file", "-")
-	case triage.Close:
-		_, err = g.run(nil, "issue", "close", strconv.Itoa(a.Issue), "--comment", a.Body)
-	}
-
-	return err
-}
-
-// run runs gh with the body on stdin, and returns its output.
-func (g ghIssues) run(stdin io.Reader, args ...string) ([]byte, error) {
-	_, err := exec.LookPath("gh")
-	if err != nil {
-		return nil, errNoGH
-	}
-
-	cmd := exec.CommandContext(g.ctx, "gh", args...) // #nosec G204 -- gh with the triage's own arguments; bodies go on stdin
-	cmd.Dir = g.dir
-	cmd.Stdin = stdin
-
-	var stderr bytes.Buffer
-
-	cmd.Stderr = &stderr
-
-	data, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("gh %s: %w: %s", strings.Join(args[:2], " "), err, strings.TrimSpace(stderr.String()))
-	}
-
-	return data, nil
+	return nil
 }
 
 var (

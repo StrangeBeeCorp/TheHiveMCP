@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx/gittest"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/runner"
 )
 
@@ -19,11 +21,16 @@ const (
 	urlFlag  = "--run-url"
 	nightURL = "https://github.com/o/r/actions/runs/9"
 	// fakeGH records each call's arguments and stdin in $GH_CALLS, answers issue list with
-	// $GH_ISSUES, and fails every other call with $GH_FAIL when it is set.
+	// $GH_ISSUES (with $GH_DEBT, or none, for the debt label), prints an issue's URL on create, and
+	// fails every other call with $GH_FAIL when it is set.
 	fakeGH = `#!/bin/sh
 { echo "ARGS $*"; if [ "$1" = issue ] && [ "$2" != list ] && [ "$2" != close ]; then cat; echo; fi; } >> "$GH_CALLS"
-if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; exit 0; fi
+if [ "$1 $2" = "issue list" ]; then
+  case "$*" in *"--label debt "*) printf '%s' "${GH_DEBT:-[]}" ;; *) printf '%s' "$GH_ISSUES" ;; esac
+  exit 0
+fi
 if [ -n "$GH_FAIL" ]; then echo "$GH_FAIL" >&2; exit 1; fi
+if [ "$1 $2" = "issue create" ]; then echo "https://github.com/o/r/issues/7"; fi
 `
 )
 
@@ -171,4 +178,105 @@ func TestNextWithoutGHSaysSo(t *testing.T) {
 
 	err := env{root: t.TempDir()}.next(t.Context(), &bytes.Buffer{})
 	require.ErrorIs(t, err, errNoGH)
+}
+
+// debtRepo is a checkout on a work branch, with a fake gh whose open debt issues are debt.
+func debtRepo(t *testing.T, debt string) (string, string) {
+	t.Helper()
+
+	calls := withFakeGH(t, "[]")
+	t.Setenv("GH_DEBT", debt)
+
+	root := gittest.Repo(t, map[string]string{aGo: "package a\n"})
+	gittest.Git(t, root, "checkout", "-q", "-b", "feat/x")
+
+	return root, calls
+}
+
+const (
+	debtPath  = "--path"
+	debtWhy   = "--why"
+	debtTitle = "split a"
+	tooLong   = "too long"
+	aGo       = "internal/a.go"
+)
+
+// debt files what a change found out of its scope as an issue labelled debt, saying what, where,
+// why and on which branch, and creates the label first.
+//
+//nolint:paralleltest // withFakeGH sets PATH
+func TestDebtFilesAnIssueLabelledDebt(t *testing.T) {
+	root, calls := debtRepo(t, "[]")
+
+	var out bytes.Buffer
+
+	require.NoError(t, env{root: root}.debt(t.Context(), []string{debtPath, aGo, debtWhy, "470 of 500 lines", debtTitle}, &out))
+	assert.Equal(t, "filed: https://github.com/o/r/issues/7\n", out.String())
+
+	recorded := readCalls(t, calls)
+	assert.Contains(t, recorded, "ARGS label create debt --force")
+	assert.Contains(t, recorded, "ARGS issue create --title debt: split a --label debt --body-file -")
+	assert.Contains(t, recorded, "**Path:** `internal/a.go`")
+	assert.Contains(t, recorded, "**Why:** 470 of 500 lines")
+	assert.Contains(t, recorded, "**Found on:** `feat/x`")
+}
+
+// A path already filed is not filed again: debt names the open issue.
+//
+//nolint:paralleltest // withFakeGH sets PATH
+func TestDebtFilesAPathOnce(t *testing.T) {
+	root, calls := debtRepo(t, `[{"number": 3, "title": "debt: split a", "body": "**Path:** `+"`internal/a.go`"+`\n"}]`)
+
+	var out bytes.Buffer
+
+	require.NoError(t, env{root: root}.debt(t.Context(), []string{debtPath, aGo, debtWhy, tooLong, debtTitle}, &out))
+	assert.Equal(t, "internal/a.go is filed already: #3 debt: split a\n", out.String())
+	assert.NotContains(t, readCalls(t, calls), "issue create")
+}
+
+// A branch files at most three debt issues: past that, the work is the branch's own.
+//
+//nolint:paralleltest // withFakeGH sets PATH
+func TestABranchFilesAtMostThreeDebtIssues(t *testing.T) {
+	filed := `{"number": %d, "title": "debt: t", "body": "**Path:** ` + "`p%d`" + `\n**Found on:** ` + "`feat/x`" + ` at x.\n"}`
+	root, calls := debtRepo(t, "["+fmt.Sprintf(filed, 1, 1)+","+fmt.Sprintf(filed, 2, 2)+","+fmt.Sprintf(filed, 3, 3)+"]")
+
+	err := env{root: root}.debt(t.Context(), []string{debtPath, aGo, debtWhy, tooLong, debtTitle}, &bytes.Buffer{})
+	require.ErrorAs(t, err, &usageError{})
+	assert.Contains(t, err.Error(), "feat/x filed 3 debt issues already")
+	assert.NotContains(t, readCalls(t, calls), "issue create")
+}
+
+// debt needs a path, a reason and a title: what is filed must say what to do, where and why.
+//
+//nolint:paralleltest // withFakeGH sets PATH
+func TestDebtNeedsAPathAReasonAndATitle(t *testing.T) {
+	root, calls := debtRepo(t, "[]")
+
+	for _, args := range [][]string{
+		{debtWhy, tooLong, debtTitle},
+		{debtPath, aGo, debtTitle},
+		{debtPath, aGo, debtWhy, tooLong},
+		{debtPath, aGo, debtWhy, "  ", debtTitle},
+	} {
+		err := env{root: root}.debt(t.Context(), args, &bytes.Buffer{})
+		require.ErrorAs(t, err, &usageError{}, "%v", args)
+	}
+
+	assert.Empty(t, readCalls(t, calls), "nothing was asked of gh")
+}
+
+// make next lists the open debt after the nightly findings, the oldest first.
+func TestNextListsTheOpenDebtToo(t *testing.T) {
+	withFakeGH(t, "[]")
+	t.Setenv("GH_DEBT", `[
+		{"number": 12, "title": "debt: split search", "url": "u12", "createdAt": "2026-10-07T09:00:00Z"},
+		{"number": 11, "title": "debt: flaky user setup", "url": "u11", "createdAt": "2026-10-06T09:00:00Z"}]`)
+
+	var out bytes.Buffer
+
+	require.NoError(t, env{root: t.TempDir()}.next(t.Context(), &out))
+	assert.Equal(t, "No open nightly finding.\n2 open debt issue(s), the oldest first:\n"+
+		"  #11  debt: flaky user setup  (since 2026-10-06)  u11\n"+
+		"  #12  debt: split search  (since 2026-10-07)  u12\n", out.String())
 }

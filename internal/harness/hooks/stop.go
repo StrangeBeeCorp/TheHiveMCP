@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -74,7 +75,15 @@ type Stopper struct {
 	Now func() time.Time
 	// List reads the checkout for the changes an agent's role may not make (Changes); nil skips them.
 	List Lister
+	// Crowded names, as "path: why", what the agent's change left near the structure limits
+	// (checks.Crowded), from the files it changed and those it added; nil skips it.
+	Crowded func(changed, added []string) []string
 }
+
+// debtHelp is how an agent is asked about what it left near the limits.
+const debtHelp = "Before you stop: your change left these near the structure limits.\n- %s\n" +
+	"If splitting them belongs to your task, split them now. If it does not, do not squeeze code where it does not belong: file it, " +
+	"so it is not lost, with\n  bin/harness debt --path <path> --why \"<what needs doing>\" \"<title>\"\nThen stop: you are asked once."
 
 // Stop runs check-fast when an agent stops (Stop, SubagentStop) and applies the red-round rule.
 // A checkout that has not changed since the last run reuses its result, so stopping again without
@@ -117,6 +126,8 @@ func (s Stopper) Stop(ctx context.Context, in Input) Output {
 		return note("harness: check-fast could not run: " + err.Error())
 	}
 
+	crowded := s.crowded(ctx, in)
+
 	var out Output
 
 	err = update(s.Root, func(st *State) error {
@@ -127,10 +138,21 @@ func (s Stopper) Stop(ctx context.Context, in Input) Output {
 		judged := withChanges(c, changes, unjudged)
 		out = s.apply(st, in, judged, static)
 
-		if !judged.Red && !judged.Incomplete {
-			Forget(s.Root, in)
-			delete(st.Started, in.Actor())
+		if judged.Red || judged.Incomplete {
+			return nil
 		}
+
+		// Green: an agent is asked once about what it left near the limits, its snapshot kept for the
+		// stop after.
+		if ask := notAsked(st, in.Actor(), crowded); len(ask) > 0 {
+			out = block(fmt.Sprintf(debtHelp, strings.Join(ask, "\n- ")))
+
+			return nil
+		}
+
+		Forget(s.Root, in)
+		delete(st.Started, in.Actor())
+		delete(st.Asked, in.Actor())
 
 		return nil
 	})
@@ -139,6 +161,36 @@ func (s Stopper) Stop(ctx context.Context, in Input) Output {
 	}
 
 	return out
+}
+
+// crowded is what an implementing agent's change left near the structure limits; nothing for the
+// main session, which keeps no snapshot, and for a reviewer, which changes nothing.
+func (s Stopper) crowded(ctx context.Context, in Input) []string {
+	if s.Crowded == nil || s.List == nil || !in.Role().Agent() || in.Role().ReadOnly() {
+		return nil
+	}
+
+	changedFiles, added := Touched(ctx, s.Root, in, s.List)
+	if len(changedFiles) == 0 {
+		return nil
+	}
+
+	return s.Crowded(changedFiles, added)
+}
+
+// notAsked are the notes the agent was not asked about yet, now recorded as asked.
+func notAsked(st *State, actor string, notes []string) []string {
+	var ask []string
+
+	for _, n := range notes {
+		if !slices.Contains(st.Asked[actor], n) {
+			ask = append(ask, n)
+		}
+	}
+
+	st.Asked[actor] = append(st.Asked[actor], ask...)
+
+	return ask
 }
 
 // readOnly holds a reviewer to the one rule it has: it changes nothing. It is sent back to undo a

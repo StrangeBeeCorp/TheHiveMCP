@@ -41,8 +41,20 @@ would file. To see what to work on:
 make next
 ```
 
-It shows a blocked agent's `.cache/harness/BLOCKED.md` first, then the open nightly findings, the oldest first. Each finding says how to run its gate again:
-`make gate ID=<gate> CADENCE=nightly`.
+It shows a blocked agent's `.cache/harness/BLOCKED.md` first, then the open nightly findings, the oldest first, then the open debt. Each finding says how to run
+its gate again: `make gate ID=<gate> CADENCE=nightly`.
+
+## File what is out of scope
+
+A change often finds work it should not do: a file to split, a package to reorganise, a flaky test. Squeezing code where it does not belong to stay under the
+structure limits is worse than leaving the work for later. File it instead, from an agent or by hand:
+
+```sh
+bin/harness debt --path internal/tools/search/handler.go --why "470 of 500 lines: the parsing belongs in its own file" "split the search handler"
+```
+
+It opens a GitHub issue labelled `debt` with the path, the reason and the branch it was found on. A path already filed is not filed twice, and a branch files at
+most three: past that, the work is the branch's own. Close a debt issue from the pull request that does the work.
 
 ## With Claude Code
 
@@ -52,7 +64,9 @@ The hooks of `.claude/settings.json` send every tool call to `bin/harness hook`:
   baselines and the default permission profile to people;
 - when an agent stops, `make check-fast` runs, and every file the agent changed is judged by its role again, whatever command changed it. A change it may not
   make sends it back with the command that restores the file;
-- an agent does not stop red: after six red stops it writes `.cache/harness/BLOCKED.md` with what it tried and what it needs.
+- an agent does not stop red: after six red stops it writes `.cache/harness/BLOCKED.md` with what it tried and what it needs;
+- an agent whose green stop leaves a file at 90 % of its line limit, a full directory or a new one is asked once to split it or to file it with
+  `bin/harness debt`.
 
 Claude Code's own permission rules refuse a push, a merge and an approval from a Claude session. [ADR-0004](../explanation/adr/0004-judge-outcomes.md) explains
 why the harness judges what changed rather than the commands typed.

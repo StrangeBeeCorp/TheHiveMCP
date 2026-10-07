@@ -228,6 +228,7 @@ func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer
 		"bench":          e.bench,
 		"mutation":       e.mutate,
 		"triage":         e.triageNight,
+		"debt":           e.debt,
 		"eval-smoke":     e.evalSmoke,
 		"next":           func(ctx context.Context, _ []string, w io.Writer) error { return e.next(ctx, w) },
 		"unseal":         func(_ context.Context, a []string, w io.Writer) error { return e.unseal(a, w) },
