@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/evidence"
@@ -118,7 +119,8 @@ func TestPrNotesItsTimingsAndPushesThem(t *testing.T) {
 	out, err := harness(t, "pr")
 	require.NoError(t, err, out)
 
-	note := gitx.Note(t.Context(), dir, evidence.NotesRef(), head)
+	ref := evidence.NotesRef(t.Context(), dir)
+	note := gitx.Note(t.Context(), dir, ref, head)
 	require.NotEmpty(t, note, "the run is noted on its commit: %s", out)
 
 	var n evidence.Note
@@ -128,13 +130,64 @@ func TestPrNotesItsTimingsAndPushesThem(t *testing.T) {
 	assert.Equal(t, "docs-check", n.Gates[0].Gate)
 	assert.Positive(t, n.Machine.CPUs)
 
-	remote := gittest.Git(t, dir, "ls-remote", "origin", evidence.NotesRef())
+	remote := gittest.Git(t, dir, "ls-remote", "origin", ref)
 	assert.NotEmpty(t, remote, "the notes ref reached origin")
 
 	clone := filepath.Join(t.TempDir(), "clone")
 	gittest.Git(t, dir, "clone", "-q", gittest.Git(t, dir, "remote", "get-url", "origin"), clone)
-	gittest.Git(t, clone, "fetch", "-q", "origin", evidence.NotesRef()+":"+evidence.NotesRef())
-	assert.Equal(t, note, gitx.Note(t.Context(), clone, evidence.NotesRef(), head), "another clone reads the same timings")
+	gittest.Git(t, clone, "fetch", "-q", "origin", ref+":"+ref)
+	assert.Equal(t, note, gitx.Note(t.Context(), clone, ref, head), "another clone reads the same timings")
+}
+
+// Two clones that write one notes ref (a copied config, say) merge it: the second push adds to
+// what origin holds instead of being refused, and origin keeps both runs' timings.
+//
+//nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory
+func TestTwoClonesWritingOneNotesRefMergeIt(t *testing.T) {
+	dir := shipRepo(t)
+	first := reviewed(t, dir, "ready")
+
+	out, err := harness(t, "pr")
+	require.NoError(t, err, out)
+
+	ref := evidence.NotesRef(t.Context(), dir)
+
+	other := filepath.Join(t.TempDir(), "other")
+	gittest.Git(t, dir, "clone", "-q", "-b", "work", gittest.Git(t, dir, "remote", "get-url", "origin"), other)
+	gittest.Git(t, other, "config", "harness.notes-id", strings.TrimPrefix(ref, evidence.NotesPrefix))
+	gittest.Write(t, other, map[string]string{"docs/other.md": "# from the other clone\n"})
+	gittest.Git(t, other, "add", "-A")
+	gittest.Commit(t, other)
+	t.Chdir(other)
+
+	second := reviewed(t, other, "ready")
+
+	out, err = harness(t, "pr")
+	require.NoError(t, err, out)
+	assert.NotContains(t, out, "warning: the timings' notes are not pushed", "the second push merged, not refused")
+
+	check := filepath.Join(t.TempDir(), "check")
+	gittest.Git(t, other, "clone", "-q", gittest.Git(t, other, "remote", "get-url", "origin"), check)
+	gittest.Git(t, check, "fetch", "-q", "origin", ref+":"+ref)
+	assert.NotEmpty(t, gitx.Note(t.Context(), check, ref, first), "the first clone's run is still on origin")
+	assert.NotEmpty(t, gitx.Note(t.Context(), check, ref, second), "and the second's")
+}
+
+// A notes push origin refuses is said, and the branch is pushed all the same.
+//
+//nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory
+func TestANotesPushOriginRefusesOnlyWarns(t *testing.T) {
+	dir := shipRepo(t)
+	origin := gittest.Git(t, dir, "remote", "get-url", "origin")
+	hook := filepath.Join(origin, "hooks", "pre-receive")
+	require.NoError(t, os.WriteFile(hook, []byte("#!/bin/sh\nwhile read -r old new ref; do case \"$ref\" in refs/notes/*) echo no notes here >&2; exit 1 ;; esac; done\n"), 0o700)) // #nosec G306 -- the test's own hook, executable
+
+	head := reviewed(t, dir, "ready")
+
+	out, err := harness(t, "pr")
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "warning: the timings' notes are not pushed")
+	assert.Contains(t, pushed(t, dir), head, "the branch reached origin")
 }
 
 //nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory
@@ -157,6 +210,7 @@ func TestPrPushesNothingWhenAGateFailsOrTheReviewIsNotReady(t *testing.T) {
 	require.ErrorIs(t, err, evidence.ErrNotShippable)
 	assert.Equal(t, runner.Pass, recorded(t, dir, head), "the gates passed")
 	assert.Empty(t, pushed(t, dir), "but the review did not")
+	assert.Empty(t, gittest.Git(t, dir, "ls-remote", "origin", "refs/notes/*"), "a refused push takes no notes either")
 }
 
 //nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory

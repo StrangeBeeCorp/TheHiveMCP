@@ -3,23 +3,29 @@ package evidence
 import (
 	"bufio"
 	"context"
-	"crypto/sha256"
+	"crypto/rand"
 	"encoding/hex"
 	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx"
 )
 
-// NotesPrefix is where make pr's notes live: one ref per machine, refs/notes/harness/<machine>,
-// so that two machines never push over each other's notes.
+// NotesPrefix is where make pr's notes live: one ref per clone, refs/notes/harness/<its id>, so
+// that two clones rarely write the same ref, and merge it when they do (gitx.PushNotes).
 const NotesPrefix = "refs/notes/harness/"
+
+// notesIDKey is the git config key a clone's notes id is kept under, drawn once at random: it
+// names no machine and no person.
+const notesIDKey = "harness.notes-id"
 
 const (
 	bytesPerGB = 1 << 30
 	kbPerGB    = 1 << 20
-	machineID  = 8 // bytes of the host name's hash a machine's ref is named by
+	notesIDLen = 8 // random bytes of a clone's notes id
 )
 
 // ThisMachine is the machine make pr runs on.
@@ -27,16 +33,26 @@ func ThisMachine(ctx context.Context) Machine {
 	return Machine{OS: runtime.GOOS, Arch: runtime.GOARCH, CPUs: runtime.NumCPU(), MemoryGB: memoryGB(ctx), CI: os.Getenv("CI") != ""}
 }
 
-// NotesRef is this machine's notes ref: named by a hash of the host name, which it does not publish.
-func NotesRef() string {
-	host, err := os.Hostname()
-	if err != nil || host == "" {
-		host = "unknown"
+// NotesRef is this clone's notes ref, named by its notes id, drawn at random the first time and
+// kept in its git config. "" when the id can be neither read nor kept.
+func NotesRef(ctx context.Context, root string) string {
+	id := gitx.ConfigValue(ctx, root, notesIDKey)
+	if id == "" {
+		b := make([]byte, notesIDLen)
+
+		_, err := rand.Read(b)
+		if err != nil {
+			return ""
+		}
+
+		id = hex.EncodeToString(b)
+
+		if gitx.SetConfig(ctx, root, notesIDKey, id) != nil {
+			return ""
+		}
 	}
 
-	sum := sha256.Sum256([]byte(host))
-
-	return NotesPrefix + hex.EncodeToString(sum[:machineID])
+	return NotesPrefix + id
 }
 
 // memoryGB is the machine's memory, rounded to the GB; 0 when it cannot be read.

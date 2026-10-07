@@ -87,10 +87,10 @@ func (e env) push(ctx context.Context, args []string, out io.Writer) error {
 		return fmt.Errorf("push: %w", err)
 	}
 
-	// This machine's notes ref goes with the branch: make pr's timings, for the dashboard. Only this
-	// machine writes it; a notes push that fails is said, and the branch is pushed all the same.
-	if gitx.Note(ctx, e.root, evidence.NotesRef(), head) != "" {
-		err = gitx.PushRef(ctx, e.root, pushRemote, evidence.NotesRef())
+	// This clone's notes ref goes with the branch: make pr's timings, for the dashboard, merged with
+	// what origin holds under it. A notes push that fails is said; the branch is pushed all the same.
+	if ref := evidence.NotesRef(ctx, e.root); ref != "" && gitx.Note(ctx, e.root, ref, head) != "" {
+		err = gitx.PushNotes(ctx, e.root, pushRemote, ref)
 		if err != nil {
 			_, _ = fmt.Fprintln(out, "warning: the timings' notes are not pushed:", err)
 		}

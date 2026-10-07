@@ -67,9 +67,44 @@ func Note(ctx context.Context, root, ref, commit string) string {
 	return strings.TrimSpace(out)
 }
 
-// PushRef pushes ref to the same name on remote.
-func PushRef(ctx context.Context, root, remote, ref string) error {
+// fetchedNotes holds remote's notes while they are merged into the local ones: outside refs/notes,
+// so no notes command reads it as notes of its own.
+const fetchedNotes = "refs/harness/fetched-notes"
+
+// PushNotes pushes the notes ref to the same name on remote, after merging what remote holds
+// there: another clone that writes the same ref then adds to it rather than being refused.
+func PushNotes(ctx context.Context, root, remote, ref string) error {
+	_, fetchErr := run(ctx, root, "fetch", "-q", remote, "+"+ref+":"+fetchedNotes)
+	if fetchErr == nil {
+		cmd := exec.CommandContext(ctx, "git", "notes", "--ref", ref, "merge", "-q", "-s", "cat_sort_uniq", fetchedNotes) // #nosec G204 -- fixed git subcommands on the harness's own refs
+		cmd.Dir = root
+
+		cmd.Env = append(os.Environ(), noteIdentity...)
+
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("git notes merge: %w: %s", err, strings.TrimSpace(string(out)))
+		}
+	}
+
 	_, err := run(ctx, root, "push", "-q", remote, ref+":"+ref)
+
+	return err
+}
+
+// ConfigValue is the checkout's git config value for key, or "".
+func ConfigValue(ctx context.Context, root, key string) string {
+	out, err := run(ctx, root, "config", "--get", key)
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(out)
+}
+
+// SetConfig sets key in the checkout's git config (the clone's, which its worktrees share).
+func SetConfig(ctx context.Context, root, key, value string) error {
+	_, err := run(ctx, root, "config", key, value)
 
 	return err
 }

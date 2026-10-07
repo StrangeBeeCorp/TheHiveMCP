@@ -10,17 +10,24 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx/gittest"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/runner"
 )
 
-// A machine's notes ref is named by a hash of its host name, which it does not publish; its memory
-// is read from /proc/meminfo on Linux.
-func TestAMachineIsNamedByAHashAndMeasured(t *testing.T) {
+// A clone's notes ref is named by an id drawn at random once and kept in its git config: the same
+// clone keeps it, another clone draws its own, and neither names the machine. Memory is read from
+// /proc/meminfo on Linux.
+func TestAClonesNotesRefIsItsOwnAndTheMachineIsMeasured(t *testing.T) {
 	t.Parallel()
 
-	ref := NotesRef()
+	first, second := gittest.Repo(t, nil), gittest.Repo(t, nil)
+
+	ref := NotesRef(t.Context(), first)
 	assert.Regexp(t, `^refs/notes/harness/[0-9a-f]{16}$`, ref)
-	assert.Equal(t, ref, NotesRef(), "the same machine, the same ref")
+	assert.Equal(t, ref, NotesRef(t.Context(), first), "the same clone, the same ref")
+	assert.Equal(t, ref, NotesPrefix+gittest.Git(t, first, "config", "--get", notesIDKey), "kept in the clone's config")
+	assert.NotEqual(t, ref, NotesRef(t.Context(), second), "another clone, another ref")
+	assert.Empty(t, NotesRef(t.Context(), t.TempDir()), "no repository, no id kept: no ref")
 
 	host, _ := os.Hostname()
 	if host != "" {

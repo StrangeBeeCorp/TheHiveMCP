@@ -113,9 +113,16 @@ func (e env) pr(ctx context.Context, args []string, out io.Writer) error {
 // takes along: the repository's dashboard charts them by machine. A note that cannot be written is
 // said, never a failure of the run.
 func (e env) note(ctx context.Context, ev evidence.Evidence, out io.Writer) {
+	ref := evidence.NotesRef(ctx, e.root)
+	if ref == "" {
+		_, _ = fmt.Fprintln(out, "warning: the run's timings are not noted: this clone has no notes id, and none could be kept")
+
+		return
+	}
+
 	data, err := ev.Note(evidence.ThisMachine(ctx))
 	if err == nil {
-		err = gitx.AddNote(ctx, e.root, evidence.NotesRef(), ev.Head, data)
+		err = gitx.AddNote(ctx, e.root, ref, ev.Head, data)
 	}
 
 	if err != nil {
