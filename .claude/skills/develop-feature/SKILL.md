@@ -51,8 +51,9 @@ description:
    `configs/providers.yaml`. Without `--judge`, the model grades itself. The run is tagged `MCP local`, so it can never be published as release evidence.
 7. **Gate and ship.** Run `make all` before the review. Once the review is ready for HEAD, `make pr` runs the pr gates at that exact commit, records the
    evidence (`bin/harness evidence --markdown` prints it for the pull request; add `--base origin/<its base>` for a stacked one) and pushes; from an agent's
-   session it refuses without both, and `make pr` is the only way it pushes. After a rebase, the review of the same change still counts: `make pr FORCE=1`.
-   Agents never merge: a person does. CI runs the gates of `gates/registry.yaml` again on the pull request.
+   session it refuses without both, and `make pr` is the only way it pushes. After a rebase, the review that read the branch still counts: `make pr FORCE=1`
+   lists the commits the rebase changed and those added since, for whoever merges. Agents never merge: a person does. CI runs the gates of `gates/registry.yaml`
+   again on the pull request.
 
 ## Rules for model-facing code
 

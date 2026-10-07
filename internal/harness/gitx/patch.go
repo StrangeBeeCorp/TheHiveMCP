@@ -30,3 +30,39 @@ func PatchID(ctx context.Context, root, revs string) string {
 
 	return id
 }
+
+// Commit is one commit of a change. Author is its author's email and date, which a rebase keeps;
+// PatchID is that of its own diff, which a rebase keeps unless it resolves a conflict in it.
+type Commit struct {
+	SHA     string `json:"sha"`
+	Subject string `json:"subject"`
+	Author  string `json:"author"`
+	PatchID string `json:"patch_id"`
+}
+
+// unitSep separates the fields of git log's format: no subject holds it.
+const unitSep = "\x1f"
+
+// Commits lists the commits of a revision range, "base..head", oldest first, merges left out. It
+// is nil when the range is empty or git cannot read it.
+func Commits(ctx context.Context, root, revs string) []Commit {
+	log, err := run(ctx, root, "log", "--reverse", "--no-merges", "--format=%H"+unitSep+"%s"+unitSep+"%ae %aI", "--end-of-options", revs)
+	log = strings.TrimSpace(log)
+
+	if err != nil || log == "" {
+		return nil
+	}
+
+	var commits []Commit
+
+	for line := range strings.SplitSeq(log, "\n") {
+		f := strings.Split(line, unitSep)
+		if len(f) != 3 { //nolint:mnd // the format's three fields
+			continue
+		}
+
+		commits = append(commits, Commit{SHA: f[0], Subject: f[1], Author: f[2], PatchID: PatchID(ctx, root, f[0]+"^.."+f[0])})
+	}
+
+	return commits
+}

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -146,37 +147,69 @@ func TestPrRefusesAnUncommittedTreeAndMain(t *testing.T) {
 	assert.Contains(t, err.Error(), "changes only when a person merges")
 }
 
-// A stacked pull request is rebased when the one below it changes. The review state has moved on
-// to another branch by then: the review the first push kept still covers the same change on the
-// new base, and nothing else.
+// A stacked pull request is rebased when the base moves. The review state has moved on to another
+// branch by then: the review the first push kept still covers the branch's commits, replayed as it
+// read them, replayed with a resolved conflict, or added since. A rebase asks for no new review;
+// the push and the evidence list what the review did not read, for whoever merges.
 //
 //nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory
-func TestTheReviewOfAChangeCoversItRebasedButNotEdited(t *testing.T) {
+func TestTheReviewOfABranchCoversItRebasedAndListsWhatItDidNotRead(t *testing.T) {
 	dir := shipRepo(t)
 	reviewed(t, dir, "ready")
 
 	out, err := harness(t, "pr")
 	require.NoError(t, err, out)
 
+	// main changes the line the branch edits: the rebase stops on a conflict, resolved by hand.
 	gittest.Git(t, dir, "checkout", "-q", "main")
-	commitFiles(t, dir, map[string]string{"docs/b.md": "# below\n"})
+	commitFiles(t, dir, map[string]string{docA: "# a, upstream\n", "docs/b.md": "# below\n"})
 	gittest.Git(t, dir, "push", "-q", "origin", "main")
 	gittest.Git(t, dir, "checkout", "-q", "work")
-	gittest.Git(t, dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "rebase", "-q", "origin/main")
+	conflict := exec.CommandContext(t.Context(), "git", "-c", "user.name=t", "-c", "user.email=t@example.com", "rebase", "-q", "origin/main")
+	conflict.Dir = dir
+	require.Error(t, conflict.Run(), "the rebase conflicts")
+	gittest.Write(t, dir, map[string]string{docA: "# a, upstream and edited\n"})
+	gittest.Git(t, dir, "add", docA)
+	gittest.Git(t, dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "core.editor=true", "rebase", "--continue")
+	commitFiles(t, dir, map[string]string{"docs/c.md": "# added after the review\n"})
 	require.NoError(t, os.Remove(filepath.Join(dir, ".git", evidence.ReviewPath)), "the review state moved on")
 
-	rebased := gitx.Head(t.Context(), dir)
+	head := gitx.Head(t.Context(), dir)
 
 	out, err = harness(t, "pr", "--force")
 	require.NoError(t, err, out)
-	assert.Contains(t, out, "covers "+rebased[:7]+": the same change, rebased onto origin/main")
-	assert.Contains(t, pushed(t, dir), rebased)
+	assert.Contains(t, out, "covers "+head[:7]+" after a rebase: 0 commit(s) as it read them, 1 changed by the rebase, 1 added since and not reviewed")
+	assert.Contains(t, pushed(t, dir), head, "no new review was needed")
 
-	commitFiles(t, dir, map[string]string{docA: "# a, edited again\n"})
+	ev, err := evidence.Read(dir, head)
+	require.NoError(t, err)
+	require.NotNil(t, ev.Coverage, "the evidence records what the review did not read")
+	assert.Len(t, ev.Coverage.Rebased, 1)
+	require.Len(t, ev.Coverage.Added, 1)
+	assert.Equal(t, head, ev.Coverage.Added[0].SHA)
+}
 
-	_, err = harness(t, "pr", "--force")
-	require.ErrorIs(t, err, evidence.ErrNotShippable, "an edit is a new change")
-	assert.Contains(t, pushed(t, dir), rebased, "origin keeps the reviewed commit")
+// A branch none of whose commits a ready review read is refused, whatever reviews the checkout
+// kept for other branches.
+//
+//nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory
+func TestABranchNoReviewReadIsRefused(t *testing.T) {
+	dir := shipRepo(t)
+	reviewed(t, dir, "ready")
+
+	out, err := harness(t, "pr")
+	require.NoError(t, err, out)
+
+	gittest.Git(t, dir, "checkout", "-q", "-b", "other", "main")
+	gittest.Write(t, dir, map[string]string{"docs/other.md": "# another change\n"})
+	gittest.Git(t, dir, "add", "-A")
+	gittest.Git(t, dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false",
+		"-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "docs: another branch's change")
+	require.NoError(t, os.Remove(filepath.Join(dir, ".git", evidence.ReviewPath)))
+
+	_, err = harness(t, "pr")
+	require.ErrorIs(t, err, evidence.ErrNotShippable, "the kept review read work's commits, not other's")
+	assert.Empty(t, gittest.Git(t, dir, "ls-remote", "origin", "refs/heads/other"))
 }
 
 //nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory

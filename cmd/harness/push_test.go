@@ -65,8 +65,9 @@ func TestAPushWithTheEvidenceAndAReadyReviewOfHEADGoesAhead(t *testing.T) {
 
 	shipped, err := e.shippable(t.Context(), &out, shipHead, gitDir, true)
 	require.NoError(t, err)
-	require.NotNil(t, shipped, "the review that lets it ship, for the push to keep")
-	assert.Equal(t, shipHead, shipped.Head)
+	require.NotNil(t, shipped.review, "the review that lets it ship, for the push to keep")
+	assert.Equal(t, shipHead, shipped.review.Head)
+	assert.Nil(t, shipped.coverage, "a review of HEAD itself covers it whole")
 	assert.Empty(t, out.String())
 
 	_, err = e.shippable(t.Context(), &out, moved, gitDir, true)

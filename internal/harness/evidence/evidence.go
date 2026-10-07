@@ -40,6 +40,9 @@ type Evidence struct {
 	// change against it, while Base is what selected the gates. Only bin/harness evidence --base
 	// sets it: make pr's record never holds it.
 	Against string `json:"against,omitempty"`
+	// Coverage, when set, is how the review that let head ship read the branch before a rebase: the
+	// push records it, and it lists the commits that review did not read as they are now.
+	Coverage *Coverage `json:"coverage,omitempty"`
 }
 
 func path(root, head string) string {

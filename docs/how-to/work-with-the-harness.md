@@ -65,8 +65,12 @@ Once the adversarial review is ready for HEAD:
 make pr
 ```
 
-It runs the pr gates at that exact commit, records the evidence under `.cache/harness/evidence/`, checks that the review covers the same commit, and pushes the
+It runs the pr gates at that exact commit, records the evidence under `.cache/harness/evidence/`, checks that the review covers the branch, and pushes the
 branch, never main. `bin/harness evidence --markdown` prints the Gate evidence section for the pull request. `make all` runs the same gates without recording or
 pushing.
+
+A rebase asks for no new review: `make pr FORCE=1` pushes the rebased branch on the review that read it before. The push pairs the branch's commits with the
+ones the review read, and lists two kinds in its output and in the Gate evidence, for whoever merges: a commit the rebase changed (it resolved a conflict in it)
+and a commit added since the review, which no review read. A branch none of whose commits a ready review read is refused.
 
 CI runs every gate again on the pull request, against TheHive 5.5 and 5.8, and a person merges it.

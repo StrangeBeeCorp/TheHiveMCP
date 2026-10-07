@@ -119,7 +119,7 @@ func TestAReviewNotYetKeptCoversTheBranchRebased(t *testing.T) {
 
 	out, err := harness(t, "pr")
 	require.NoError(t, err, out)
-	assert.Contains(t, out, "covers "+rebased[:7]+": the same change, rebased onto origin/main")
+	assert.Contains(t, out, "covers "+rebased[:7]+" after a rebase: 1 commit(s) as it read them, 0 changed by the rebase, 0 added since and not reviewed")
 	assert.Contains(t, pushed(t, dir), rebased)
 }
 

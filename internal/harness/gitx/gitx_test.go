@@ -236,6 +236,32 @@ func TestResolveNamesTheCommitARefNames(t *testing.T) {
 	assert.Empty(t, gitx.Resolve(t.Context(), dir, "HEAD^{tree}"), "a tree is not a commit")
 }
 
+// The commits of a range, oldest first: each with its subject, its author and author date (which a
+// rebase keeps), and the patch id of its own change (which a rebase keeps unless it resolves a
+// conflict in it).
+func TestCommitsListsARangesCommitsWithTheirOwnPatch(t *testing.T) {
+	t.Parallel()
+
+	dir, start := base(t)
+	gittest.Write(t, dir, map[string]string{docA: "# a, the first commit\n"})
+	gittest.Git(t, dir, "add", "-A")
+	gittest.Commit(t, dir)
+	gittest.Write(t, dir, map[string]string{newDoc: "# new\n"})
+	gittest.Git(t, dir, "add", "-A")
+	gittest.Commit(t, dir)
+
+	commits := gitx.Commits(t.Context(), dir, start+"..HEAD")
+	require.Len(t, commits, 2)
+	assert.Equal(t, gitx.Head(t.Context(), dir), commits[1].SHA, "oldest first")
+	assert.Equal(t, "x", commits[0].Subject)
+	assert.Contains(t, commits[0].Author, "t@example.com ")
+	assert.Equal(t, gitx.PatchID(t.Context(), dir, commits[0].SHA+"^.."+commits[0].SHA), commits[0].PatchID)
+	assert.NotEqual(t, commits[0].PatchID, commits[1].PatchID)
+
+	assert.Empty(t, gitx.Commits(t.Context(), dir, "HEAD..HEAD"), "an empty range")
+	assert.Empty(t, gitx.Commits(t.Context(), dir, "nowhere..HEAD"), "a range git cannot read")
+}
+
 func TestPatchIDNamesAChangeWhateverItSitsOn(t *testing.T) {
 	t.Parallel()
 

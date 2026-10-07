@@ -94,6 +94,10 @@ func Markdown(ev Evidence, flags []Flag) string {
 		}
 	}
 
+	if ev.Coverage != nil {
+		b.WriteString(coverageNote(*ev.Coverage))
+	}
+
 	switch {
 	case ev.Base == "" && ev.Against == "":
 		b.WriteString("\n**Model-facing: unknown.** There was no base to compare with, so the changed paths are not known: " +

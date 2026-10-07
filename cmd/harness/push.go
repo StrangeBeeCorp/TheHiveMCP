@@ -36,10 +36,10 @@ func pushTarget(branch string) (string, error) {
 }
 
 // push pushes the branch checked out to origin, under its own name. The pr gates must have
-// passed at HEAD (make pr) and the adversarial review must be ready for HEAD, or for the same
-// change before a rebase, or the push is refused. A person who says so (--person, which the
+// passed at HEAD (make pr) and the adversarial review must be ready for HEAD, or have read the
+// branch's commits before a rebase, or the push is refused. A person who says so (--person, which the
 // permission rules of .claude/settings.json refuse to Claude in the form it writes) gets the same
-// checks as warnings. A push keeps the review that let it ship (evidence.Keep), for that change's
+// checks as warnings. A push keeps the review that let it ship (evidence.Keep), for the branch's
 // next rebase.
 //
 // This stops mistakes and shortcuts, not a determined forger: the policy refuses an edit of the
@@ -60,7 +60,9 @@ func (e env) push(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 
-	shipped, err := e.shippable(ctx, out, gitx.Head(ctx, e.root), gitx.GitDir(ctx, e.root), !*person)
+	head := gitx.Head(ctx, e.root)
+
+	shipped, err := e.shippable(ctx, out, head, gitx.GitDir(ctx, e.root), !*person)
 	if err != nil {
 		return err
 	}
@@ -80,11 +82,7 @@ func (e env) push(ctx context.Context, args []string, out io.Writer) error {
 		return fmt.Errorf("git push: %w", err)
 	}
 
-	if shipped == nil {
-		return nil
-	}
-
-	err = evidence.Keep(e.root, *shipped)
+	err = e.keep(head, shipped)
 	if err != nil {
 		return fmt.Errorf("push: %w", err)
 	}
@@ -94,16 +92,16 @@ func (e env) push(ctx context.Context, args []string, out io.Writer) error {
 
 // shippable checks the evidence and the review of head (the review state is under gitDir) before
 // a push: strict refuses, otherwise the problems are warnings. It returns the ready review that
-// covers head, for the push to keep, or nil.
-func (e env) shippable(ctx context.Context, out io.Writer, head, gitDir string, strict bool) (*evidence.Review, error) {
+// covers head, for the push to keep and record, or none.
+func (e env) shippable(ctx context.Context, out io.Writer, head, gitDir string, strict bool) (covering, error) {
 	ev, err := evidence.Read(e.root, head)
 	if err != nil {
-		return nil, fmt.Errorf("push: %w", err)
+		return covering{}, fmt.Errorf("push: %w", err)
 	}
 
-	review, covering, err := e.reviewOf(ctx, out, gitDir, head)
+	review, covers, err := e.reviewOf(ctx, out, gitDir, head)
 	if err != nil {
-		return nil, fmt.Errorf("push: %w", err)
+		return covering{}, fmt.Errorf("push: %w", err)
 	}
 
 	gates := make([]string, 0, len(e.reg.At("pr")))
@@ -113,65 +111,128 @@ func (e env) shippable(ctx context.Context, out io.Writer, head, gitDir string, 
 
 	warnings, err := evidence.PushAllowed(head, ev, review, gates, strict)
 	if err != nil {
-		return nil, fmt.Errorf("push refused: %w (a person who means to push anyway passes --person)", err)
+		return covering{}, fmt.Errorf("push refused: %w (a person who means to push anyway passes --person)", err)
 	}
 
 	for _, w := range warnings {
 		_, _ = fmt.Fprintln(out, "warning:", w)
 	}
 
-	return covering, nil
+	return covers, nil
 }
 
-// reviewOf finds the review of head: the review state's when it judged head; else a ready
-// review, the state's or one an earlier push kept, that judged the same change on an older base,
-// which a rebase leaves as it was (gitx.PatchID). The first result is what PushAllowed judges;
-// the second is the covering review as it was recorded, or nil when none covers head.
-func (e env) reviewOf(ctx context.Context, out io.Writer, gitDir, head string) (*evidence.Review, *evidence.Review, error) {
+// keep records, once head is pushed, the review that let it ship, for the next rebase, and how it
+// covers head in head's evidence, for the pull request's Gate evidence.
+func (e env) keep(head string, shipped covering) error {
+	if shipped.review == nil {
+		return nil
+	}
+
+	err := evidence.Keep(e.root, *shipped.review)
+	if err != nil {
+		return fmt.Errorf("keep the review: %w", err)
+	}
+
+	if shipped.coverage == nil {
+		return nil
+	}
+
+	ev, err := evidence.Read(e.root, head)
+	if err != nil {
+		return fmt.Errorf("record the review's coverage: %w", err)
+	}
+
+	// A person's push may have no evidence to record the coverage in.
+	if ev == nil {
+		return nil
+	}
+
+	ev.Coverage = shipped.coverage
+
+	_, err = ev.Write(e.root)
+	if err != nil {
+		return fmt.Errorf("record the review's coverage: %w", err)
+	}
+
+	return nil
+}
+
+// covering is the ready review that lets head ship: as it was recorded, for the push to keep, and
+// how it read the branch when it judged an older commit (nil: it judged head itself).
+type covering struct {
+	review   *evidence.Review
+	coverage *evidence.Coverage
+}
+
+// reviewOf finds the review of head: the review state's when it judged head; else the ready
+// review, the state's or one an earlier push kept, that read most of the branch's commits before a
+// rebase (evidence.Cover). A rebase asks for no new review: the commits it changed, and those added
+// since, are listed for whoever merges. The first result is what PushAllowed judges.
+func (e env) reviewOf(ctx context.Context, out io.Writer, gitDir, head string) (*evidence.Review, covering, error) {
 	current, err := evidence.ReadReview(gitDir)
 	if err != nil {
-		return nil, nil, fmt.Errorf("find the review of %.7s: %w", head, err)
+		return nil, covering{}, fmt.Errorf("find the review of %.7s: %w", head, err)
 	}
 
 	if current != nil && current.Head == head {
 		if current.Ready() {
-			return current, current, nil
+			return current, covering{review: current}, nil
 		}
 
-		return current, nil, nil
+		return current, covering{}, nil
 	}
 
 	kept, err := evidence.Kept(e.root)
 	if err != nil {
-		return nil, nil, fmt.Errorf("find the review of %.7s: %w", head, err)
+		return nil, covering{}, fmt.Errorf("find the review of %.7s: %w", head, err)
 	}
 
 	if current != nil {
 		kept = append([]evidence.Review{*current}, kept...)
 	}
 
+	var best covering
+
 	for _, r := range kept {
-		if r.Ready() && e.sameChange(ctx, r, head) {
-			_, _ = fmt.Fprintf(out, "the review of %.7s covers %.7s: the same change, rebased onto %s\n", r.Head, head, r.Base)
-
-			found, rebased := r, r
-			rebased.Head = head
-
-			return &rebased, &found, nil
+		c, ok := e.coverage(ctx, r, head)
+		if ok && (best.coverage == nil || c.Replayed+len(c.Rebased) > best.coverage.Replayed+len(best.coverage.Rebased)) {
+			found := r
+			best = covering{review: &found, coverage: &c}
 		}
 	}
 
-	return current, nil, nil
-}
-
-// sameChange reports whether head, compared with the review's base as it is now, makes the change
-// the review read: from its merge base to the commit it judged.
-func (e env) sameChange(ctx context.Context, r evidence.Review, head string) bool {
-	if r.Base == "" || r.MergeBase == "" || r.Head == "" {
-		return false
+	if best.review == nil {
+		return current, covering{}, nil
 	}
 
-	judged := gitx.PatchID(ctx, e.root, r.MergeBase+".."+r.Head)
+	c := best.coverage
+	_, _ = fmt.Fprintf(out, "the review of %.7s covers %.7s after a rebase: %d commit(s) as it read them, %d changed by the rebase, %d added since and not reviewed\n",
+		best.review.Head, head, c.Replayed, len(c.Rebased), len(c.Added))
 
-	return judged != "" && judged == gitx.PatchID(ctx, e.root, gitx.Remote(ctx, e.root, r.Base)+"..."+head)
+	for _, k := range c.Rebased {
+		_, _ = fmt.Fprintf(out, "  changed by the rebase: %.7s %s\n", k.SHA, k.Subject)
+	}
+
+	for _, k := range c.Added {
+		_, _ = fmt.Fprintf(out, "  added since the review: %.7s %s\n", k.SHA, k.Subject)
+	}
+
+	rebased := *best.review
+	rebased.Head = head
+
+	return &rebased, best, nil
+}
+
+// coverage pairs the commits a ready review read, from its merge base to the commit it judged,
+// with head's commits since the review's base as it is now; false when the review is not ready,
+// is incomplete, or read none of them.
+func (e env) coverage(ctx context.Context, r evidence.Review, head string) (evidence.Coverage, bool) {
+	if !r.Ready() || r.Base == "" || r.MergeBase == "" || r.Head == "" {
+		return evidence.Coverage{}, false
+	}
+
+	c := evidence.Cover(gitx.Commits(ctx, e.root, r.MergeBase+".."+r.Head), gitx.Commits(ctx, e.root, gitx.Remote(ctx, e.root, r.Base)+".."+head))
+	c.Review = r.Head
+
+	return c, c.Covers()
 }
