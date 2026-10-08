@@ -19,9 +19,11 @@ func Render(reg *registry.Registry) string {
 	b.WriteString("# Gates\n\n")
 	b.WriteString("<!-- Generated from gates/registry.yaml by `make harness-docs`. Do not edit: the docs gate fails when this page drifts. -->\n\n")
 	b.WriteString(Wrap("A gate is one check with a verdict. The changed paths select suites, and a gate runs at its cadences when one of its suites is "+
-		"selected (`*`: whatever changed). A path that no suite claims selects every suite. Run one gate with `make gate ID=<gate>`.") + "\n\n")
+		"selected (`*`: whatever changed). A path that no suite claims selects every suite. Run one gate with `make gate ID=<gate>`. "+
+		"To take a change through the gates, see [Work with the harness](../how-to/work-with-the-harness.md); to act on a vulnerability, see "+
+		"[Handle a CVE](../how-to/handle-a-cve.md).") + "\n\n")
 	b.WriteString(cadenceTable())
-	b.WriteString("\n## Gates\n\n")
+	b.WriteString("\n## Every gate\n\n")
 
 	rows := make([][]string, 0, len(reg.Gates))
 	for _, g := range reg.Gates {
@@ -116,22 +118,30 @@ func Wrap(text string) string {
 	return strings.Join(lines, "\n")
 }
 
-// words splits on spaces outside code spans.
+// words splits on spaces outside code spans and link texts, as prettier keeps both whole.
 func words(text string) []string {
 	var (
 		out []string
 		cur strings.Builder
 	)
 
-	inCode := false
+	inCode, inLink := false, false
 
 	for _, r := range text {
 		switch {
+		case r == '[' && !inCode:
+			inLink = true
+
+			cur.WriteRune(r)
+		case r == ']' && !inCode:
+			inLink = false
+
+			cur.WriteRune(r)
 		case r == '`':
 			inCode = !inCode
 
 			cur.WriteRune(r)
-		case r == ' ' && !inCode:
+		case r == ' ' && !inCode && !inLink:
 			if cur.Len() > 0 {
 				out = append(out, cur.String())
 				cur.Reset()

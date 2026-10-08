@@ -41,6 +41,33 @@ THEHIVE_ORGANISATION=your-org  # Optional, defaults to user's own organisation
 # AUTH_VALIDATION_CACHE_TTL=60s
 ```
 
+### A fuller example
+
+```bash
+# .env file - Base configuration
+THEHIVE_URL=https://thehive.example.com
+THEHIVE_API_KEY=<thehive_api_key>
+THEHIVE_ORGANISATION=<thehive_organisation>  # Optional, defaults to user's own organisation
+# THEHIVE_REQUEST_TIMEOUT=2m  # Optional, maximum wait for TheHive to answer one request
+PERMISSIONS_CONFIG=docs/reference/permissions-examples/analyst.yaml  # Optional, defaults to read-only
+MCP_BIND_HOST=0.0.0.0  # Exposes the server to the network: requires a TLS-terminating, authenticating reverse proxy in front
+MCP_PORT=8082
+# HTTP transport security (defaults shown):
+# THEHIVE_URL_ALLOWLIST=https://thehive-eu.example.com,https://thehive-us.example.com  # X-TheHive-Url targets (defaults to THEHIVE_URL only)
+# ALLOW_ENV_CREDENTIAL_FALLBACK=false  # Set to true ONLY for single-user deployments where requests may omit credentials
+# AUTH_VALIDATION_CACHE_TTL=60s
+LOG_LEVEL=INFO
+# Permissions options (choose one):
+# PERMISSIONS_CONFIG=read_only                              # Default: safe read-only access
+# PERMISSIONS_CONFIG=admin                                  # Full access (development/testing only)
+# PERMISSIONS_CONFIG=docs/reference/permissions-examples/analyst.yaml # Custom permissions file
+
+# Optional Cortex configuration:
+# CORTEX_ID=local               # Default Cortex instance ID (defaults to 'local')
+```
+
+Every variable, flag and header is listed in [the configuration reference](../reference/configuration.md).
+
 ### 2. Deploy
 
 ```bash
@@ -51,7 +78,7 @@ docker compose -f deployment/examples/docker-compose.basic.yml up -d
 docker compose -f deployment/examples/docker-compose.basic.yml ps
 ```
 
-## How it works
+## What the compose file starts
 
 The [`docker-compose.basic.yml`](../../deployment/examples/docker-compose.basic.yml) provides:
 
@@ -60,7 +87,7 @@ The [`docker-compose.basic.yml`](../../deployment/examples/docker-compose.basic.
 - **Environment or header configuration**
 - **Health checks** and auto-restart
 
-## Usage
+## Connect an MCP client
 
 MCP clients connect to `http://your-server:8082/mcp` and can:
 
@@ -68,8 +95,22 @@ MCP clients connect to `http://your-server:8082/mcp` and can:
 - Override with HTTP headers per request
 - Access all MCP tools (search, manage, execute, resources)
 
+### Override settings per request
+
+**HTTP Headers** (HTTP transport only):
+
+```bash
+curl -X POST http://localhost:8082/mcp \
+  -H "Authorization: Bearer different-api-key" \
+  -H "X-TheHive-Org: other-org" \
+  -H "X-TheHive-Url: https://other-thehive.com" \
+  -d '{"method":"initialize",...}'
+```
+
+The headers and their rules are in [the configuration reference](../reference/configuration.md#per-request-headers).
+
 ## Next steps
 
 - For local development: [stdio Example](stdio-local.md)
 - For LibreChat integration: [LibreChat Example](librechat.md)
-- For custom permissions: [Permissions Guide](../reference/permissions.md)
+- For custom permissions: [Configure permissions](configure-permissions.md)

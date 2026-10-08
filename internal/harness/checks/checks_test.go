@@ -169,6 +169,18 @@ func ciRunning(scripts ...string) string {
 
 // docsRepo is a repository with the docs given (by path), a ci.yml, a few code files, the
 // registry above and the gates page (generated from it unless page is set).
+// linkedPages are the pages the generated gates page links to.
+var linkedPages = map[string]string{
+	"docs/how-to/work-with-the-harness.md": "# Work with the harness\n",
+	"docs/how-to/handle-a-cve.md":          "# Handle a CVE\n",
+}
+
+func withLinkedPages(files map[string]string) map[string]string {
+	maps.Copy(files, linkedPages)
+
+	return files
+}
+
 func docsRepo(t *testing.T, docs map[string]string, ci, page string) (string, []string, *registry.Registry) {
 	t.Helper()
 
@@ -179,6 +191,7 @@ func docsRepo(t *testing.T, docs map[string]string, ci, page string) (string, []
 		"internal/resources/facts/a.go": "package facts\n",
 		"gates/registry.yaml":           docsRegistry,
 	}
+	maps.Copy(files, linkedPages)
 	maps.Copy(files, docs)
 	root, names := repo(t, files)
 	reg, err := registry.Load(filepath.Join(root, "gates", "registry.yaml"))
@@ -231,7 +244,7 @@ func TestDocsChecksEveryEntryPage(t *testing.T) {
 	gone := "- see `internal/confirmation/`.\n"
 	pages := map[string]string{
 		agentsMD: gone, readme: gone, "CLAUDE.md": gone, ".claude/agents/coder.md": gone,
-		"docs/history.md": gone, ".claude/settings.json": "`internal/confirmation/`\n",
+		"docs/explanation/history.md": gone, ".claude/settings.json": "`internal/confirmation/`\n",
 	}
 	root, files, reg := docsRepo(t, pages, ciRunning("bin/harness run --cadence ci --gate lint"), "")
 	found, err := checks.Docs(checks.DirTree{Root: root, Names: files}, reg)
@@ -260,7 +273,7 @@ func TestTheCIWorkflowCheckReadsTheStepsThatRun(t *testing.T) {
 		{ID: "lint", Cadence: []string{"ci"}}, {ID: "fmt", Cadence: []string{"ci"}}, {ID: "sast", Cadence: []string{"ci"}},
 		{ID: "vulncheck", Cadence: []string{"ci"}}, {ID: "leaks", Cadence: []string{"ci"}},
 	}}
-	root, files := repo(t, map[string]string{checks.CIWorkflow: ci, gatesdoc.Path: gatesdoc.Render(reg)})
+	root, files := repo(t, withLinkedPages(map[string]string{checks.CIWorkflow: ci, gatesdoc.Path: gatesdoc.Render(reg)}))
 
 	found, err := checks.Docs(checks.DirTree{Root: root, Names: files}, reg)
 	require.NoError(t, err)
@@ -284,11 +297,11 @@ func TestTheNightlyWorkflowRunsEveryNightlyGate(t *testing.T) {
 		{ID: "lint", Cadence: []string{"ci", "nightly"}}, {ID: "fuzz", Cadence: []string{"nightly"}},
 	}}
 	ci := ciRunning("bin/harness run --cadence ci --gate lint")
-	root, files := repo(t, map[string]string{
+	root, files := repo(t, withLinkedPages(map[string]string{
 		checks.CIWorkflow:      ci,
 		checks.NightlyWorkflow: ciRunning("bin/harness run --cadence nightly --gate lint --gate ghost"),
 		gatesdoc.Path:          gatesdoc.Render(reg),
-	})
+	}))
 
 	found, err := checks.Docs(checks.DirTree{Root: root, Names: files}, reg)
 	require.NoError(t, err)
@@ -297,7 +310,7 @@ func TestTheNightlyWorkflowRunsEveryNightlyGate(t *testing.T) {
 		`.github/workflows/nightly.yml: runs gate "ghost", which gates/registry.yaml does not define`,
 	}, strings.Split(messages(found), "\n"))
 
-	missing, names := repo(t, map[string]string{checks.CIWorkflow: ci, gatesdoc.Path: gatesdoc.Render(reg)})
+	missing, names := repo(t, withLinkedPages(map[string]string{checks.CIWorkflow: ci, gatesdoc.Path: gatesdoc.Render(reg)}))
 	_, err = checks.Docs(checks.DirTree{Root: missing, Names: names}, reg)
 	require.Error(t, err, "nightly gates and no nightly workflow")
 }

@@ -32,7 +32,8 @@ var (
 )
 
 // Docs checks that the documentation agents and people start from stays true: every repository
-// path it names exists, docs/reference/gates.md matches the registry, and ci.yml runs every ci gate.
+// path it names exists, the pages keep their Diataxis folders, sections and links (DocsLayout),
+// docs/reference/gates.md matches the registry, and ci.yml runs every ci gate.
 func Docs(tree Tree, reg *registry.Registry) ([]Finding, error) {
 	var out []Finding
 
@@ -55,6 +56,13 @@ func Docs(tree Tree, reg *registry.Registry) ([]Finding, error) {
 
 		out = append(out, missingPaths(tree, f, content, tops)...)
 	}
+
+	layout, err := DocsLayout(tree)
+	if err != nil {
+		return nil, err
+	}
+
+	out = append(out, layout...)
 
 	page, err := tree.Read(gatesdoc.Path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {

@@ -8,7 +8,7 @@ There are two ways to run the server locally:
 - **Docker (recommended).** It avoids unsigned-binary prompts and works identically from the terminal, VS Code, and any other MCP host. This is the path this
   guide uses.
 - **Native binary (alternative).** A single downloaded executable. On macOS, this triggers a Gatekeeper prompt that blocks GUI hosts (VS Code, Claude Desktop).
-  See [Alternative: Native Binary](#alternative-native-binary) for the workaround.
+  See [Use the native binary instead of Docker](#use-the-native-binary-instead-of-docker) for the workaround.
 
 ## Prerequisites
 
@@ -183,24 +183,13 @@ Summarize observable activity for case #1234
 
 ---
 
-## Alternative: Native binary
+## Use the native binary instead of Docker
 
 If you can't or don't want to use Docker, download the binary for your platform from the [README](../../README.md#get-started).
 
 ### macOS: Clear the Gatekeeper quarantine
 
-macOS binaries are currently unsigned. When a GUI host (VS Code, Claude Desktop) or Gatekeeper tries to launch the binary, you get:
-
-> "Apple could not verify 'thehivemcp-darwin-arm64' is free of malware…"
-
-Running it directly from the terminal works because the shell bypasses this check—but MCP hosts don't. Remove the quarantine attribute once, after downloading:
-
-```bash
-xattr -d com.apple.quarantine /path/to/thehivemcp-darwin-arm64
-chmod +x /path/to/thehivemcp-darwin-arm64
-```
-
-(Alternatively: **System Settings → Privacy & Security → "Open Anyway"** after the first blocked launch.) The binary will then launch from any host.
+The steps are in [Run the unsigned binary on macOS](run-the-unsigned-binary-on-macos.md).
 
 ### Register the native binary
 

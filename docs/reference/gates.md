@@ -3,7 +3,8 @@
 <!-- Generated from gates/registry.yaml by `make harness-docs`. Do not edit: the docs gate fails when this page drifts. -->
 
 A gate is one check with a verdict. The changed paths select suites, and a gate runs at its cadences when one of its suites is selected (`*`: whatever changed).
-A path that no suite claims selects every suite. Run one gate with `make gate ID=<gate>`.
+A path that no suite claims selects every suite. Run one gate with `make gate ID=<gate>`. To take a change through the gates, see
+[Work with the harness](../how-to/work-with-the-harness.md); to act on a vulnerability, see [Handle a CVE](../how-to/handle-a-cve.md).
 
 | Cadence   | When                                                            |
 | --------- | --------------------------------------------------------------- |
@@ -14,7 +15,7 @@ A path that no suite claims selects every suite. Run one gate with `make gate ID
 | `ci`      | GitHub Actions, on every pull request and every push to `main`  |
 | `nightly` | the nightly run                                                 |
 
-## Gates
+## Every gate
 
 | Gate            | Cadence                             | Suites                                          | Runs                                                                                                                                                                                                                                                                                                                                                                                | Budget | Blocks when                                                                                                                                                                                                                                                                                                                                                   |
 | --------------- | ----------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

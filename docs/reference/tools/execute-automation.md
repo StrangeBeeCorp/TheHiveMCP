@@ -199,7 +199,7 @@ Before using automation, discover available analyzers and responders:
 > catalog with `get-resource` (see [Automation Discovery](#automation-discovery)) to get the exact IDs, entity-type compatibility, and parameters your
 > deployment supports.
 
-## Notes
+## Scope, Cortex routing and asynchronous jobs
 
 - **Scope.** The permission filter applies to the entity the automation acts on—the observable for `run-analyzer`, and the target entity for `run-responder` /
   `get-action-status`. For `get-job-status` and `wait-for-jobs`, each job's target observable is resolved and scope-checked before its report is returned;

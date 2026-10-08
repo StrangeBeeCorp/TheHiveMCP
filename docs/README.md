@@ -1,7 +1,7 @@
 # TheHiveMCP Documentation
 
 TheHiveMCP is a Model Context Protocol server that lets an AI assistant operate [TheHive](https://strangebee.com/thehive/) — searching cases and alerts,
-managing entities, and running Cortex automation — through natural language. For the project overview, install paths, and configuration reference, start at the
+managing entities, and running Cortex automation — through natural language. For the project overview and install paths, start at the
 [main README](../README.md). This directory holds the deeper documentation, organized by what you are trying to do.
 
 ## Tutorial
@@ -20,6 +20,10 @@ Goal-oriented recipes for a specific task. They assume you already know the basi
 - **[Work with the harness](how-to/work-with-the-harness.md)** — take a change from the first edit to the pull request: `make check-fast`, the Claude Code
   hooks, `make pr`.
 - **[Handle a CVE](how-to/handle-a-cve.md)** — what to do with a Renovate `security` pull request, a failing `vulncheck` gate, or a CVE in an image.
+- **[Configure permissions](how-to/configure-permissions.md)** — start the server with a permission profile, in each deployment mode, and troubleshoot a refused
+  call.
+- **[Run the unsigned binary on macOS](how-to/run-the-unsigned-binary-on-macos.md)** — clear the Gatekeeper quarantine so a GUI host can launch the binary.
+- **[Cut a release](../RELEASING.md)** — the re-test policy, release notes and checklist for a vX.Y.Z tag.
 
 Worked deployment examples for specific hosts:
 
@@ -35,15 +39,23 @@ Information-oriented, neutral description of the tools and their contracts. Look
 - **[manage-entities](reference/tools/manage-entities.md)** — create, update, delete, comment, promote, merge, and apply templates.
 - **[execute-automation](reference/tools/execute-automation.md)** — run Cortex analyzers and responders and check their status.
 - **[get-resource](reference/tools/get-resource.md)** — browse schemas, metadata, and docs through the `hive://` resource system.
-- **[Tool annotations](reference/tools/annotations.md)** — the `readOnlyHint`/`destructiveHint`/`idempotentHint`/`openWorldHint` each tool advertises, and why.
-- **[Permissions](reference/permissions.md)** — the permission profile format, tool filters, and the untrusted-data boundary.
-- **[Configuration parameters](../README.md#configuration)** — environment variables, flags, and HTTP headers (in the main README).
+- **[Tool annotations](reference/tools/annotations.md)** — the `readOnlyHint`/`destructiveHint`/`idempotentHint`/`openWorldHint` each tool advertises.
+- **[Permissions](reference/permissions.md)** — the permission profile format, tool filters, and the enforcement guarantees.
+- **[Permission profile examples](reference/permissions-examples/)** — the `read-only`, `analyst` and `admin` YAML profiles
+  ([read-only.yaml](reference/permissions-examples/read-only.yaml), [analyst.yaml](reference/permissions-examples/analyst.yaml),
+  [admin.yaml](reference/permissions-examples/admin.yaml)).
+- **[Configuration reference](reference/configuration.md)** — environment variables, flags, HTTP headers, their priority, and the built-in permission profiles.
 - **[Gates](reference/gates.md)** — every check the harness runs, when it runs and what makes it fail (generated from `gates/registry.yaml`).
+- **[The nightly run and the gate-time notes](reference/nightly.md)** — what the nightly run checks, the metric thresholds, and the format of the notes
+  `make pr` records.
 
 ## Explanation
 
 Understanding-oriented discussion of the reasoning behind the project.
 
+- **[Why the tools carry these annotations](explanation/tool-annotations.md)** — why each tool advertises its `readOnlyHint`, `destructiveHint`,
+  `idempotentHint` and `openWorldHint`, and why annotations are not permissions.
+- **[The untrusted-data boundary](explanation/untrusted-data-boundary.md)** — why TheHive field values returned to the model are wrapped, deny-by-default.
 - **[ADR-0001 — Accuracy and security testing policy](explanation/adr/0001-security-and-accuracy-testing-policy.md)** — what's tested, how, and why.
 - **[ADR-0002 — Two scope-resolution paths](explanation/adr/0002-scope-resolution-two-paths.md)** — why the permission scope check resolves user-supplied IDs
   and expansion hits differently.

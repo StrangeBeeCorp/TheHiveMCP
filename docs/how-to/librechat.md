@@ -2,7 +2,7 @@
 
 This example shows how to run TheHiveMCP with **LibreChat** using Anthropic models for AI-powered TheHive operations.
 
-## Overview
+## What this stack contains
 
 This setup provides a web-based chat interface where users can interact with TheHive through natural language using Claude models. The configuration includes:
 
@@ -27,7 +27,8 @@ Create `.env` file with only the required variable:
 ANTHROPIC_API_KEY=sk-ant-your-anthropic-key-here
 ```
 
-The Docker Compose file already includes all other necessary configuration with hardcoded values for development use.
+The Docker Compose file already includes all other necessary configuration with hardcoded values for development use. Every variable, flag and header is listed
+in [the configuration reference](../reference/configuration.md).
 
 ### 2. Start services
 
@@ -49,7 +50,7 @@ docker compose -f deployment/examples/docker-compose.librechat.yml ps
    - API Key
    - Organisation name
 
-## How it works
+## What the compose file starts
 
 The [`librechat.yaml`](../../deployment/examples/librechat.yaml) configuration enables per-user TheHive credentials. It defines custom user variables that
 LibreChat will prompt for and pass as headers to TheHiveMCP.
@@ -86,4 +87,4 @@ The stack includes:
 
 - For simpler deployment: [Remote Docker Example](remote-docker.md)
 - For local development: [stdio Example](stdio-local.md)
-- For custom permissions: [Permissions Guide](../reference/permissions.md)
+- For custom permissions: [Configure permissions](configure-permissions.md)

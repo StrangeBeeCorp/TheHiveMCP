@@ -27,15 +27,23 @@ its tests against a live TheHive. A path no suite claims runs everything. To run
 `bin/harness structure` shows the largest code files and the fullest directories against the structure limits (500 lines a file, 14 code files a directory
 besides tests), with `--json` for scripts.
 
-## Every night
+## Test options
 
-`.github/workflows/nightly.yml` checks main whole at 02:17 UTC, or when started by hand: every ci gate over every file, the integration suite on TheHive 5.5 and
-5.8, fuzzing, the unit suite, the canaries, mutation testing of every package with a floor, and the server under load: 20 clients at once over HTTP against a
-TheHive stub and 10 against TheHive 5.5 and 5.8, then 30 minutes of steady calls, held to `gates/load.yaml`, and TheHiveMCPEval's `mcp-tools` suite on
-`mimo-v2.6-flash`, whose cost is capped and whose pass rate may not fall under the previous night's (`gates/eval.yaml`). Pull requests run no eval: to measure
-one, start the nightly workflow on its branch. Its last job, `bin/harness triage`, files each gate that fails or cannot run as an issue labelled `nightly`,
-comments on the issue each night it still does, and closes it once it passes. Started by hand on another branch, it runs that branch and only prints what it
-would file. To see what to work on:
+- Coverage is off by default. Add `COVERAGE=1` to either test target to write `coverage.out` and print a per-function report:
+  - `make test COVERAGE=1`
+  - `make test-integration COVERAGE=1`
+
+**Integration test TheHive version:** the integration suite (`make test-integration`) boots a live TheHive + Elasticsearch stack via docker compose
+(`docker-compose.test.yml`). CI runs `make test-integration` as a matrix against the oldest and newest supported TheHive versions (currently 5.5 and 5.8), so a
+compatibility break at either end fails the PR. The image is a single source of truth: set `THEHIVE_TEST_IMAGE` to override it locally (e.g.
+`THEHIVE_TEST_IMAGE=strangebee/thehive:5.5.16 make test-integration`); unset, it defaults to `strangebee/thehive:5.8.0`.
+
+## Work the nightly findings
+
+The nightly run files each gate that fails or cannot run as an issue labelled `nightly`; what it checks and the thresholds it holds are in
+[the nightly reference](../reference/nightly.md).
+
+To see what to work on:
 
 ```sh
 make next
@@ -43,13 +51,6 @@ make next
 
 It shows a blocked agent's `.cache/harness/BLOCKED.md` first, then the open nightly findings, the oldest first, then the metrics past their threshold, then the
 open debt. Each finding says how to run its gate again: `make gate ID=<gate> CADENCE=nightly`.
-
-After the findings, `bin/harness metrics` holds the dashboard's metrics to `gates/metrics.yaml`: the night's coverage may not fall more than 2 points from the
-previous night's (once it has, its issue stays open until coverage is back within 2 points of the level it fell from), main's CI may not grow more than 25 %
-over the four weeks before, no finding or debt issue may stay open past 14 days, and a release must come within 60 days. A threshold crossed files an issue
-labelled `metrics`, commented on each night it stays crossed and closed on the first night the metric is back under it. A metric the night could not measure, or
-could not compare, is said on its issue, which it neither files nor closes. Each night that changed its issues keeps its values as the run's `metrics` artifact,
-for the next night to compare with, and a drop's issue keeps the level the drop is measured from, for a night that cannot download them.
 
 ## File what is out of scope
 
@@ -63,7 +64,7 @@ bin/harness debt --path internal/tools/search/handler.go --why "470 of 500 lines
 It opens a GitHub issue labelled `debt` with the path, the reason and the branch it was found on. A path already filed is not filed twice, and a branch files at
 most three: past that, the work is the branch's own. Close a debt issue from the pull request that does the work.
 
-## With Claude Code
+## What the Claude Code hooks enforce
 
 The hooks of `.claude/settings.json` send every tool call to `bin/harness hook`:
 
@@ -94,13 +95,8 @@ It runs the pr gates at that exact commit, records the evidence under `.cache/ha
 branch, never main. `bin/harness evidence --markdown` prints the Gate evidence section for the pull request. `make all` runs the same gates without recording or
 pushing.
 
-`make pr` also notes each run's gate times on its commit, with the machine's platform, processors and memory, under one ref per clone
-(`refs/notes/harness/<id>`, an id drawn at random once and kept as `harness.notes-id` in the clone's git config), and the push takes that ref along, merged with
-what origin holds under it: the timings of every developer's machine reach origin, for the repository's dashboard. A notes push that fails is a warning; the
-branch is pushed all the same. Read them with `git fetch origin 'refs/notes/harness/*:refs/notes/harness/*'` and `git notes --ref harness/<id> show <commit>`. A
-note is one JSON object per line: one run, or several when two clones noted the same commit. They describe developers' machines, so they go to origin only:
-`.githooks/pre-push` (`make dev-setup`) refuses a push that would take `refs/notes/harness/*` to another remote, the public mirror's `git push --mirror`
-included.
+`make pr` also notes each run's gate times on its commit; the format and how to read the notes are in
+[the nightly reference](../reference/nightly.md#gate-time-notes).
 
 A rebase asks for no new review: `make pr FORCE=1` pushes the rebased branch on the review that read it before. The push pairs the branch's commits with the
 ones the review read, and lists two kinds in its output and in the Gate evidence, for whoever merges: a commit the rebase changed (it resolved a conflict in it)

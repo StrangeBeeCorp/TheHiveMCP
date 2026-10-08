@@ -550,7 +550,7 @@ An operation accepts multiple `entity-ids` and applies to each:
 }
 ```
 
-## Notes
+## Schemas, permissions and auditing
 
 - **Field definitions.** Required, optional, and updatable fields per entity are defined by the schema resources, not this page — read `hive://schema/{entity}`
   and its `/create` and `/update` variants (via [`get-resource`](get-resource.md)) before building `entity-data`. Filtering an unknown or wrong-typed field
@@ -559,5 +559,6 @@ An operation accepts multiple `entity-ids` and applies to each:
   outside a configured filter is reported as "not found or not within the scope" and nothing is mutated. See the [permissions reference](../permissions.md).
 - **Auditing.** All operations are logged by TheHive.
 
-For task-oriented walkthroughs (running an investigation, mapping TTPs), see the [first-investigation tutorial](../../tutorial/first-investigation.md). Find
-entities to act on with [`search-entities`](search-entities.md), and enrich observables with [`execute-automation`](execute-automation.md).
+For a first read-only walkthrough, see the [first-investigation tutorial](../../tutorial/first-investigation.md); mapping TTPs is covered under
+[Creating procedures](#creating-procedures-requires-parent-casealert) on this page. Find entities to act on with [`search-entities`](search-entities.md), and
+enrich observables with [`execute-automation`](execute-automation.md).
