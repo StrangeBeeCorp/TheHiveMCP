@@ -9,13 +9,16 @@ it opens a pull request at once, whatever its schedule, with no three-day wait, 
 lists the CVEs that have no fixed version yet.
 
 1. Read the advisory the pull request links: what is vulnerable, and whether our code reaches it. `make vulncheck` answers the second question for Go.
-2. CI runs every gate on the pull request. A person reviews and merges it, as any other.
-3. If our code reached the vulnerable function, cut a patch release (`RELEASING.md`) and say so under `### Security` in `CHANGELOG.md`.
+2. Check the fixed version is the maintainers' own: a security pull request skips the three-day wait that gives a compromised release time to be noticed, so
+   look at its release notes and tag on the module's own repository before merging.
+3. CI runs the gates the change selects on the pull request. A person reviews and merges it, as any other.
+4. If our code reached the vulnerable function, cut a patch release (`RELEASING.md`) and say so under `### Security` in `CHANGELOG.md`.
 
 ## A failing `vulncheck` gate
 
-`govulncheck` (`make vulncheck`) runs at every pull request, in CI and every night. It fails when a known vulnerability is reachable from our code, through a
-direct dependency or an indirect one, and names the call path. At night, the triage files it as an issue labelled `nightly`.
+`govulncheck` (`make vulncheck`) runs on a pull request that changes Go code or `go.mod` (the suites that select the gate), on every push to main, and every
+night. It fails when a known vulnerability is reachable from our code, through a direct dependency or an indirect one, and names the call path. A CVE published
+against code no pull request touches is caught by the next push to main or the next night, where the triage files it as an issue labelled `nightly`.
 
 1. Upgrade the module that carries the fix: `go get <module>@<fixed version>`, then `go mod tidy`, on a branch of its own. If the fix is in the Go toolchain
    itself, bump the Go version: the `go` directive and the `golang` images move together (Renovate groups them as `go version`).
@@ -27,8 +30,8 @@ direct dependency or an indirect one, and names the call path. At night, the tri
 
 The server's image is `gcr.io/distroless/static-debian12`, pinned by digest: a static Go binary and almost no system package, so a CVE in a Debian package
 rarely reaches it. Renovate updates the digest in its `dependency pins` group, with no wait. `make dockersec` (trivy config, in the `dockerlint` gate) holds the
-Dockerfiles to their HIGH and CRITICAL misconfiguration checks at every pull request. When a base image's CVE does matter, merge Renovate's digest pull request,
-or bump the digest by hand with `docker buildx imagetools inspect <image>:<tag>`, and cut a patch release.
+Dockerfiles to their HIGH and CRITICAL misconfiguration checks on a pull request that changes them, and every night. When a base image's CVE does matter, merge
+Renovate's digest pull request, or bump the digest by hand with `docker buildx imagetools inspect <image>:<tag>`, and cut a patch release.
 
 ## Report a vulnerability
 
