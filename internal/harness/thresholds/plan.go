@@ -2,7 +2,9 @@ package thresholds
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/runner"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/triage"
@@ -65,6 +67,14 @@ func Plan(c Config, outcomes []triage.Outcome, open []triage.Issue, runURL strin
 			actions = append(actions, triage.Action{Kind: triage.Comment, Issue: issue.Number, Body: "Not measured in " + runURL + ": " + o.Summary + "."})
 		case o.Verdict == runner.Pass && tracked:
 			actions = append(actions, triage.Action{Kind: triage.Close, Issue: issue.Number, Body: "Back under its threshold in " + runURL + ": " + o.Summary + "."})
+		}
+	}
+
+	// An issue whose threshold left gates/metrics.yaml (removed, or renamed) has nothing left to
+	// hold it open.
+	for _, id := range slices.Sorted(maps.Keys(byID)) {
+		if _, kept := why[id]; !kept {
+			actions = append(actions, triage.Action{Kind: triage.Close, Issue: byID[id].Number, Body: "Its threshold `" + id + "` is no longer in `" + Path + "`, as of " + runURL + "."})
 		}
 	}
 

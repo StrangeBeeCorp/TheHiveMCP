@@ -266,3 +266,15 @@ func copyFile(t *testing.T, from, to string) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(to, data, 0o600)) // #nosec G703 -- the test's own file
 }
+
+// An issue whose threshold left gates/metrics.yaml is closed: nothing holds it open any more.
+func TestAnIssueWhoseThresholdLeftTheFileIsClosed(t *testing.T) {
+	t.Parallel()
+
+	c := Config{Thresholds: []Threshold{{ID: "ci-slowdown", Metric: CIMinutes, MaxRisePercent: new(25.0)}}}
+	open := []triage.Issue{{Number: 5, Body: "<!-- metrics-threshold: ci-time -->"}, {Number: 6, Body: "<!-- nightly-finding: checks/lint -->"}}
+
+	actions := Plan(c, nil, open, runURL)
+	require.Len(t, actions, 1, "the nightly finding is not the thresholds' to close")
+	assert.Equal(t, triage.Action{Kind: triage.Close, Issue: 5, Body: "Its threshold `ci-time` is no longer in `gates/metrics.yaml`, as of RUN."}, actions[0])
+}
