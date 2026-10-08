@@ -107,14 +107,28 @@ func known(metric string) bool {
 }
 
 // Value is a metric tonight, and the baseline its own data compares it with (CI's time over the
-// weeks before); NaN for what is not known.
+// weeks before); NaN for what is not known. Reference is the level a max_drop is measured from
+// while its threshold stays crossed: the level before the drop, so that the issue stays open until
+// the metric is back within its limit of it.
 type Value struct {
-	Now      float64 `json:"now"`
-	Baseline float64 `json:"baseline,omitempty"`
+	Now       float64 `json:"now"`
+	Baseline  float64 `json:"baseline,omitempty"`
+	Reference float64 `json:"reference,omitempty"`
+}
+
+// from is the level a drop is measured from: the reference the night carried, else its value.
+func (v Value) from() float64 {
+	if v.Reference > 0 {
+		return v.Reference
+	}
+
+	return v.Now
 }
 
 // Evaluate holds tonight's values to the thresholds. previous holds the last night's values, for a
-// max_drop. A metric not measured tonight cannot be held to anything: its finding cannot run.
+// max_drop. A metric not measured tonight, a drop with no night before it and a rise with no
+// baseline cannot be held to anything: their finding cannot run, which comments on an open issue
+// and closes none.
 func Evaluate(c Config, tonight map[string]Value, previous map[string]Value) []triage.Outcome {
 	out := make([]triage.Outcome, 0, len(c.Thresholds))
 
@@ -142,22 +156,56 @@ func Evaluate(c Config, tonight map[string]Value, previous map[string]Value) []t
 func drop(t Threshold, v Value, previous map[string]Value) (runner.Verdict, string) {
 	last, ok := previous[t.Metric]
 	if !ok || math.IsNaN(last.Now) {
-		return runner.Pass, fmt.Sprintf("%s is %.1f; no previous night to compare it with", t.Metric, v.Now)
+		return runner.Unavailable, fmt.Sprintf("%s is %.1f; no previous night to compare it with", t.Metric, v.Now)
 	}
 
-	fell := last.Now - v.Now
+	from := last.from()
+	fell := from - v.Now
 
-	return verdict(fell > *t.MaxDrop), fmt.Sprintf("%s is %.1f, %.1f the night before: a drop of %.1f, for at most %.1f", t.Metric, v.Now, last.Now, fell, *t.MaxDrop)
+	return verdict(fell > *t.MaxDrop), fmt.Sprintf("%s is %.1f, from %.1f: a drop of %.1f, for at most %.1f", t.Metric, v.Now, from, fell, *t.MaxDrop)
 }
 
 func rise(t Threshold, v Value) (runner.Verdict, string) {
 	if math.IsNaN(v.Baseline) || v.Baseline <= 0 {
-		return runner.Pass, fmt.Sprintf("%s is %.1f; no baseline to compare it with", t.Metric, v.Now)
+		return runner.Unavailable, fmt.Sprintf("%s is %.1f; no baseline to compare it with", t.Metric, v.Now)
 	}
 
 	rose := (v.Now - v.Baseline) / v.Baseline * hundred
 
 	return verdict(rose > *t.MaxRisePercent), fmt.Sprintf("%s is %.1f, against %.1f before: %+.0f %%, for at most +%.0f %%", t.Metric, v.Now, v.Baseline, rose, *t.MaxRisePercent)
+}
+
+// Carry is what tonight leaves for the next night to compare with: tonight's values, the last
+// night's for a metric not measured tonight (one blind night must not erase the level a drop is
+// measured from), and, for a max_drop still crossed, the level before the drop.
+func Carry(c Config, tonight, previous map[string]Value, outcomes []triage.Outcome) map[string]Value {
+	next := map[string]Value{}
+
+	for k, v := range tonight {
+		if !math.IsNaN(v.Now) {
+			next[k] = v
+		} else if last, ok := previous[k]; ok {
+			next[k] = last
+		}
+	}
+
+	crossed := map[string]bool{}
+
+	for _, o := range outcomes {
+		crossed[o.Gate] = o.Verdict == runner.Fail
+	}
+
+	for _, t := range c.Thresholds {
+		v, measured := tonight[t.Metric]
+		if t.MaxDrop == nil || !crossed[t.ID] || !measured || math.IsNaN(v.Now) {
+			continue
+		}
+
+		v.Reference = previous[t.Metric].from()
+		next[t.Metric] = v
+	}
+
+	return next
 }
 
 func verdict(crossed bool) runner.Verdict {

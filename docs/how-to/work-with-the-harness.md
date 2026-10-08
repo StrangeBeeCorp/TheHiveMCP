@@ -45,10 +45,11 @@ It shows a blocked agent's `.cache/harness/BLOCKED.md` first, then the open nigh
 open debt. Each finding says how to run its gate again: `make gate ID=<gate> CADENCE=nightly`.
 
 After the findings, `bin/harness metrics` holds the dashboard's metrics to `gates/metrics.yaml`: the night's coverage may not fall more than 2 points from the
-previous night's, main's CI may not grow more than 25 % over the four weeks before, no finding or debt issue may stay open past 14 days, and a release must come
-within 60 days. A threshold crossed files an issue labelled `metrics`, commented on each night it stays crossed and closed on the first night the metric is back
-under it. A metric the night could not measure is said on its issue, and files none. Each night keeps its values as the run's `metrics` artifact, for the next
-night to compare with.
+previous night's (once it has, its issue stays open until coverage is back within 2 points of the level it fell from), main's CI may not grow more than 25 %
+over the four weeks before, no finding or debt issue may stay open past 14 days, and a release must come within 60 days. A threshold crossed files an issue
+labelled `metrics`, commented on each night it stays crossed and closed on the first night the metric is back under it. A metric the night could not measure, or
+could not compare, is said on its issue, which it neither files nor closes. Each night that changed its issues keeps its values as the run's `metrics` artifact,
+for the next night to compare with.
 
 ## File what is out of scope
 

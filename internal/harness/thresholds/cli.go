@@ -93,11 +93,23 @@ func Run(n Night, out io.Writer) error {
 		_, _ = fmt.Fprintf(out, "%-8s %s: %s\n", o.Verdict, o.Gate, o.Summary)
 	}
 
-	err = writeValues(n.Out, tonight)
+	err = n.change(c, outcomes, out)
+	if err != nil {
+		return err
+	}
+
+	// Written last: a night whose issues could not be changed leaves no values, and the next night
+	// compares with the last one that did, so a crossing it could not file is filed then.
+	err = writeValues(n.Out, Carry(c, tonight, last, outcomes))
 	if err != nil {
 		return fmt.Errorf("metrics: %w", err)
 	}
 
+	return nil
+}
+
+// change files, comments on and closes the metrics issues as the outcomes say; a dry run prints it.
+func (n Night) change(c Config, outcomes []triage.Outcome, out io.Writer) error {
 	open, err := n.Issues.List(Label)
 	if err != nil {
 		return fmt.Errorf("metrics: %w", err)

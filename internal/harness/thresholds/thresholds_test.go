@@ -48,8 +48,8 @@ func TestTheThresholdsAreLoadedAndHeldToTheirShape(t *testing.T) {
 }
 
 // Each kind of limit, crossed and not: a maximum, a drop since the previous night, and a rise over
-// the metric's own baseline. Without a previous night or a baseline there is nothing to cross; a
-// metric not measured cannot be held to anything.
+// the metric's own baseline. Without a previous night, a baseline or a value tonight, nothing can
+// be held: the finding cannot run, which closes no issue.
 func TestEachKindOfLimitIsHeld(t *testing.T) {
 	t.Parallel()
 
@@ -79,10 +79,13 @@ func TestEachKindOfLimitIsHeld(t *testing.T) {
 
 	first := map[string]Value{Coverage: {Now: 10}, CIMinutes: {Now: 99, Baseline: math.NaN()}, OldestFindingDays: {Now: math.NaN()}}
 	got := verdicts(first, nil)
-	assert.Equal(t, runner.Pass, got[idCov], "no previous night")
-	assert.Equal(t, runner.Pass, got["ci"], "no baseline")
+	assert.Equal(t, runner.Unavailable, got[idCov], "no previous night")
+	assert.Equal(t, runner.Unavailable, got["ci"], "no baseline")
 	assert.Equal(t, runner.Unavailable, got[idAge], "not measured")
 
 	o := Evaluate(c, crossed, map[string]Value{Coverage: {Now: 64}})[1]
-	assert.Equal(t, "coverage is 61.9, 64.0 the night before: a drop of 2.1, for at most 2.0", o.Summary)
+	assert.Equal(t, "coverage is 61.9, from 64.0: a drop of 2.1, for at most 2.0", o.Summary)
+
+	o = Evaluate(c, map[string]Value{Coverage: {Now: 61.9}}, map[string]Value{Coverage: {Now: 61.9, Reference: 64.8}})[1]
+	assert.Equal(t, runner.Fail, o.Verdict, "still crossed: measured from the level before the drop, not from last night")
 }

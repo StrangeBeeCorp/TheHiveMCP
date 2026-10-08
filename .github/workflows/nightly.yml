@@ -325,14 +325,16 @@ jobs:
           done
       # The metrics past their threshold are filed, commented on and closed as metrics issues.
       - name: Hold the metrics to their thresholds
+        if: ${{ !cancelled() }}
         run: >-
           bin/harness metrics --runs night --previous .cache/harness/metrics/previous/metrics.json
           --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           ${{ github.ref != 'refs/heads/main' && '--dry-run' || '' }}
         env:
           GH_TOKEN: ${{ github.token }}
+      # None when the metrics step failed: the next night compares with the last night that kept them.
       - name: Keep tonight's metrics for the next night
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: metrics

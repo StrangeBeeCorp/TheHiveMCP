@@ -3,6 +3,7 @@ package thresholds
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"math"
 	"os"
 	"path/filepath"
@@ -18,8 +19,14 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/triage"
 )
 
-// fakeIssues keeps the metrics issues in memory, as GitHub would.
+var errGitHub = errors.New("HTTP 502: bad gateway")
+
+// runURL is the night every test run is said to come from.
+const runURL = "RUN"
+
+// fakeIssues keeps the metrics issues in memory, as GitHub would, or fails every change.
 type fakeIssues struct {
+	fail    bool
 	open    []triage.Issue
 	labels  []string
 	applied []triage.Action
@@ -40,6 +47,10 @@ func (f *fakeIssues) Label(name, _, _ string) error {
 }
 
 func (f *fakeIssues) ApplyAs(a triage.Action, label string) error {
+	if f.fail {
+		return errGitHub
+	}
+
 	if label != Label {
 		return nil
 	}
@@ -86,9 +97,10 @@ func night(t *testing.T, coverage float64) string {
 	return filepath.Dir(filepath.Dir(filepath.Dir(dir)))
 }
 
-// A threshold crossed on a night files one metrics issue, the night after it is still crossed
-// comments on it, and the first night under it closes it: what DL-8158 is done for. Each night
-// reads the values the night before wrote.
+// A threshold crossed on a night files one metrics issue, a night it is still crossed comments on
+// it, and the first night under it closes it: what DL-8158 is done for. Each night reads the values
+// the night before wrote; a drop stays crossed until the metric is back within its limit of the
+// level it fell from, not merely once it stops falling.
 func TestAThresholdCrossedFilesOneIssueAndTheNightUnderClosesIt(t *testing.T) {
 	t.Parallel()
 
@@ -101,13 +113,13 @@ func TestAThresholdCrossedFilesOneIssueAndTheNightUnderClosesIt(t *testing.T) {
 	run := func(coverage float64, previous string) string {
 		var out bytes.Buffer
 
-		require.NoError(t, Run(Night{Root: root, Data: data, Runs: night(t, coverage), Previous: previous, Out: values, RunURL: "RUN", Issues: gh}, &out))
+		require.NoError(t, Run(Night{Root: root, Data: data, Runs: night(t, coverage), Previous: previous, Out: values, RunURL: runURL, Issues: gh}, &out))
 
 		return out.String()
 	}
 
 	run(64.8, "")
-	assert.Empty(t, gh.applied, "the first night has nothing to compare coverage with")
+	assert.Empty(t, gh.applied, "the first night has nothing to compare coverage with, and files nothing")
 
 	saved := filepath.Join(t.TempDir(), "previous.json")
 	copyFile(t, values, saved)
@@ -117,20 +129,74 @@ func TestAThresholdCrossedFilesOneIssueAndTheNightUnderClosesIt(t *testing.T) {
 	require.Len(t, gh.open, 1)
 	assert.Equal(t, "metrics: coverage-drop past its threshold", gh.open[0].Title)
 	assert.Contains(t, gh.open[0].Body, "<!-- metrics-threshold: coverage-drop -->")
-	assert.Contains(t, gh.open[0].Body, "coverage is 61.0, 64.8 the night before: a drop of 3.8, for at most 2.0, in RUN.")
+	assert.Contains(t, gh.open[0].Body, "coverage is 61.0, from 64.8: a drop of 3.8, for at most 2.0, in RUN.")
 	assert.Contains(t, gh.open[0].Body, "tests were removed")
 	assert.Equal(t, []string{Label}, gh.labels)
 	assert.Contains(t, out, "FAIL     coverage-drop")
 
 	copyFile(t, values, saved)
-	run(58.0, saved)
-	require.Len(t, gh.open, 1, "still crossed: one issue, commented on")
+	run(61.0, saved)
+	require.Len(t, gh.open, 1, "no further drop, but still 3.8 under the level it fell from: one issue, commented on")
 	assert.Equal(t, triage.Comment, gh.applied[len(gh.applied)-1].Kind)
 
 	copyFile(t, values, saved)
-	run(58.5, saved)
-	assert.Empty(t, gh.open, "back under: closed")
+	run(63.0, saved)
+	assert.Empty(t, gh.open, "back within 2 points of 64.8: closed")
 	assert.Equal(t, triage.Close, gh.applied[len(gh.applied)-1].Kind)
+}
+
+// A night with nothing to compare with comments on an open issue and closes none, and a night that
+// could not measure a metric keeps the last night's value of it for the next.
+func TestANightWithNothingToCompareClosesNothing(t *testing.T) {
+	t.Parallel()
+
+	gh := &fakeIssues{open: []triage.Issue{{Number: 9, Body: "<!-- metrics-threshold: coverage-drop -->"}}}
+	values := filepath.Join(t.TempDir(), "metrics.json")
+	data := dashboard.Data{Now: time.Now(), Local: dashboard.LocalRun{Coverage: -1}}
+
+	require.NoError(t, Run(Night{Root: repo(t), Data: data, Runs: night(t, 60), Out: values, RunURL: runURL, Issues: gh}, &bytes.Buffer{}))
+	require.Len(t, gh.open, 1, "no previous night: not closed")
+	assert.Equal(t, triage.Comment, gh.applied[0].Kind)
+
+	previous := filepath.Join(t.TempDir(), "previous.json")
+	require.NoError(t, writeValues(previous, map[string]Value{Coverage: {Now: 61, Reference: 64.8}}))
+	require.NoError(t, Run(Night{Root: repo(t), Data: data, Runs: t.TempDir(), Previous: previous, Out: values, RunURL: runURL, Issues: gh}, &bytes.Buffer{}))
+
+	kept, err := readValues(values)
+	require.NoError(t, err)
+	assert.Equal(t, Value{Now: 61, Reference: 64.8}, kept[Coverage], "no coverage log tonight: the last night's level is kept")
+}
+
+// A night whose issues could not be changed leaves no values: the next night compares with the
+// last one that did, so a crossing it could not file is filed then.
+func TestANightThatCouldNotFileLeavesNoValues(t *testing.T) {
+	t.Parallel()
+
+	previous := filepath.Join(t.TempDir(), "previous.json")
+	require.NoError(t, writeValues(previous, map[string]Value{Coverage: {Now: 64.8}}))
+
+	values := filepath.Join(t.TempDir(), "metrics.json")
+	gh := &fakeIssues{fail: true}
+
+	err := Run(Night{Root: repo(t), Data: dashboard.Data{Now: time.Now()}, Runs: night(t, 60), Previous: previous, Out: values, RunURL: runURL, Issues: gh}, &bytes.Buffer{})
+	require.Error(t, err)
+	assert.NoFileExists(t, values)
+}
+
+// Tonight's values: a metric whose source was not read is unknown, not 0; the coverage is the
+// night's log's, this clone's last make pr's only when no night was given.
+func TestTonightsValuesAreUnknownWhenTheirSourceWasNotRead(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	issuesUnread := dashboard.Data{Now: now, Missing: map[string]string{dashboard.SourceIssues: "gh issue list failed"}}
+	assert.True(t, math.IsNaN(Values(issuesUnread, "")[OldestFindingDays].Now), "the issues were not read")
+	assert.Zero(t, Values(dashboard.Data{Now: now}, "")[OldestFindingDays].Now, "read, and none open")
+
+	local := dashboard.Data{Now: now, Local: dashboard.LocalRun{Coverage: 66.2}}
+	assert.InDelta(t, 66.2, Values(local, "")[Coverage].Now, 0.01, "no night: this clone's last make pr")
+	assert.True(t, math.IsNaN(Values(local, t.TempDir())[Coverage].Now), "a night without a coverage log: unknown, not the local run's")
+	assert.InDelta(t, 60, Values(local, night(t, 60))[Coverage].Now, 0.01)
 }
 
 // A dry run prints what would change and changes nothing; an issue the thresholds do not own is
@@ -146,7 +212,7 @@ func TestADryRunChangesNothingAndForeignIssuesAreLeftAlone(t *testing.T) {
 
 	var out bytes.Buffer
 
-	require.NoError(t, Run(Night{Root: repo(t), Data: data, Out: filepath.Join(t.TempDir(), "m.json"), RunURL: "RUN", Dry: true, Issues: gh}, &out))
+	require.NoError(t, Run(Night{Root: repo(t), Data: data, Out: filepath.Join(t.TempDir(), "m.json"), RunURL: runURL, Dry: true, Issues: gh}, &out))
 	assert.Empty(t, gh.applied)
 	assert.Contains(t, out.String(), "UNAVAILABLE finding-age: oldest_finding_days could not be measured tonight")
 	assert.Contains(t, out.String(), "comment #4")

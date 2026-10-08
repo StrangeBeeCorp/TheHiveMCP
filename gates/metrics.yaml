@@ -2,8 +2,9 @@
 # a threshold crossed files one GitHub issue labelled metrics, commented on each night it stays
 # crossed and closed on the first night the metric is back under it. make dashboard shows the
 # metrics over time. A threshold names one metric and one limit: max (the highest value), max_drop
-# (the points it may fall since the previous night) or max_rise_percent (how far it may rise over
-# its own baseline).
+# (the points it may fall since the previous night; once crossed, it stays crossed until the
+# metric is back within that many points of the level it fell from) or max_rise_percent (how far
+# it may rise over its own baseline).
 thresholds:
   - id: coverage-drop
     metric: coverage
