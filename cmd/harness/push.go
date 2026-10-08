@@ -16,6 +16,8 @@ import (
 const (
 	// pushRemote is the one remote anything is pushed to. The public mirror is a person's to update.
 	pushRemote = "origin"
+	// gitPush is git's subcommand.
+	gitPush = "push"
 	// mainBranch changes only when a person merges a pull request.
 	mainBranch = "main"
 	// personUsage is the help of --person, the flag only a person types.
@@ -67,7 +69,7 @@ func (e env) push(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 
-	gitArgs := []string{"push", "-u", pushRemote, "HEAD:refs/heads/" + branch}
+	gitArgs := []string{gitPush, "-u", pushRemote, "HEAD:refs/heads/" + branch}
 	if *force {
 		gitArgs = append(gitArgs, "--force-with-lease")
 	}

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# make pr's timing notes (refs/notes/harness/*) describe developers' machines: they go to origin,
+# the private repository, and to no other remote, the public mirror above all. A push that would
+# take one elsewhere, as `git push --mirror` does, is refused whole, a person's as an agent's.
+remote=$1
+while read -r _ _ ref _; do
+  case $ref in
+    refs/notes/harness/*)
+      if [ "$remote" != origin ]; then
+        echo "pre-push: $ref goes to origin only, never to $remote: push its branches and tags by name" >&2
+        exit 1
+      fi
+      ;;
+  esac
+done
+exit 0

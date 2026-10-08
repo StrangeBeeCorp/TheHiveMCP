@@ -11,8 +11,9 @@ import (
 // NoteSchema is the version of a make pr run's git note, for the dashboard that reads them.
 const NoteSchema = 1
 
-// Note is what make pr shares of a run (git notes, refs/notes/harness/<machine>): when, where, and
-// how long each gate took. Logs, summaries and paths stay on the machine.
+// Note is what make pr shares of a run (git notes, refs/notes/harness/<clone id>): when, where, and
+// how long each gate took. Logs, summaries and paths stay on the machine. A note is one Note per
+// line: a merge of two clones' notes on one commit (gitx.PushNotes) keeps both lines.
 type Note struct {
 	Schema  int            `json:"schema"`
 	Head    string         `json:"head"`

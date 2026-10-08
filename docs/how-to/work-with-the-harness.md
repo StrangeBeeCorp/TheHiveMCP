@@ -90,8 +90,10 @@ pushing.
 `make pr` also notes each run's gate times on its commit, with the machine's platform, processors and memory, under one ref per clone
 (`refs/notes/harness/<id>`, an id drawn at random once and kept as `harness.notes-id` in the clone's git config), and the push takes that ref along, merged with
 what origin holds under it: the timings of every developer's machine reach origin, for the repository's dashboard. A notes push that fails is a warning; the
-branch is pushed all the same. Read them with `git fetch origin 'refs/notes/harness/*:refs/notes/harness/*'` and `git notes --ref harness/<id> show <commit>`.
-They describe developers' machines: the public mirror's sync pushes branches and tags, never `refs/notes/harness/*`.
+branch is pushed all the same. Read them with `git fetch origin 'refs/notes/harness/*:refs/notes/harness/*'` and `git notes --ref harness/<id> show <commit>`. A
+note is one JSON object per line: one run, or several when two clones noted the same commit. They describe developers' machines, so they go to origin only:
+`.githooks/pre-push` (`make dev-setup`) refuses a push that would take `refs/notes/harness/*` to another remote, the public mirror's `git push --mirror`
+included.
 
 A rebase asks for no new review: `make pr FORCE=1` pushes the rebased branch on the review that read it before. The push pairs the branch's commits with the
 ones the review read, and lists two kinds in its output and in the Gate evidence, for whoever merges: a commit the rebase changed (it resolved a conflict in it)
