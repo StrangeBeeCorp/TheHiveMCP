@@ -2,7 +2,6 @@ package change
 
 import (
 	"cmp"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -66,45 +65,6 @@ func Moves(d Diff, renames Renames, lim checks.StructureLimits, before, after fu
 	})
 
 	return moves
-}
-
-// Markers counts the //nolint directives and the TODO comments the change adds to code files.
-type Markers struct {
-	Nolint int
-	TODO   int
-}
-
-var (
-	// nolintRe is a //nolint directive: the word follows the comment's slashes, then a colon, a
-	// space or the end of the line.
-	nolintRe = regexp.MustCompile(`//nolint(?:[:\s]|$)`)
-	// todoRe is a TODO after a comment opener on the line.
-	todoRe = regexp.MustCompile(`(?://|#|/\*).*\bTODO\b`)
-)
-
-// Mark counts the markers in the lines the change adds to the files code accepts. It reads each
-// line's text, not its syntax: a marker written in a string after a comment opener ("// TODO")
-// counts too.
-func Mark(d Diff, code func(string) bool) Markers {
-	var m Markers
-
-	for file, added := range d {
-		if !code(file) {
-			continue
-		}
-
-		for _, l := range added {
-			if strings.HasSuffix(file, ".go") && nolintRe.MatchString(l.Text) {
-				m.Nolint++
-			}
-
-			if todoRe.MatchString(l.Text) {
-				m.TODO++
-			}
-		}
-	}
-
-	return m
 }
 
 // Requires lists the modules a go.mod requires, with their versions, "// indirect" kept.

@@ -56,7 +56,7 @@ func Measure(ctx context.Context, root, against string, profile []byte, lim chec
 		_, _, code := lim.LineLimit(f, content)
 
 		return ok && code
-	})
+	}, onBranch)
 
 	was, _ := onBase(goMod)
 	now, _ := onBranch(goMod)

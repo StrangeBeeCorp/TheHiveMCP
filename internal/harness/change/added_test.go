@@ -68,22 +68,38 @@ func TestMovesListTheFilesTheChangeBringsNearTheirLimit(t *testing.T) {
 	}, Moves(d, Renames{movedGo: "origin.go"}, lim, files(was), files(now)))
 }
 
-// A //nolint directive counts in Go files, a TODO after a comment opener in any code file; the
-// words with no comment opener before them, or in a file that is not code, do not.
+// markedGo is a Go file with markers in comments, in strings, and on a line the change leaves.
+const markedGo = "package a\n\n" +
+	"var x = 1 //nolint:mnd // why\n" + // 3
+	"//nolint\n" + // 4
+	"var s = \"//nolint:x // TODO: in a string\"\n" + // 5
+	"// TODO: later\n" + // 6
+	"var r = `\n// TODO: in a raw string\n`\n" + // 7-9
+	"/* a block\nTODO: inside it */\n" + // 10-11
+	"// TODOs are not one\n" + // 12
+	"// TODO: not added\n" // 13
+
+// In a Go file, the //nolint directives and the TODOs in the comments of the added lines count,
+// not the words in a string or on a line the change leaves; in another code file, a TODO after a
+// comment opener counts; a file that is not code, or a Go file gone at HEAD, counts nothing.
 func TestMarkCountsTheNolintAndTODOTheChangeAdds(t *testing.T) {
 	t.Parallel()
 
+	var goLines []Line
+	for n := 3; n <= 12; n++ {
+		goLines = append(goLines, Line{N: n})
+	}
+
 	d := Diff{
-		aGoFile: {
-			{Text: "x := 1 //nolint:mnd // why"}, {Text: "//nolint"}, {Text: `s := "//nolint"`}, {Text: "// TODO: later"},
-			{Text: `t := "TODO"`}, {Text: "// TODOs are counted elsewhere"},
-		},
+		aGoFile:    goLines,
+		"gone.go":  {{N: 1}},
 		"run.sh":   {{Text: "# TODO fix"}, {Text: "echo //nolint"}},
 		"notes.md": {{Text: "// TODO"}},
 	}
 	code := func(f string) bool { return f != "notes.md" }
+	read := func(f string) ([]byte, bool) { return []byte(markedGo), f == aGoFile }
 
-	assert.Equal(t, Markers{Nolint: 2, TODO: 2}, Mark(d, code))
+	assert.Equal(t, Markers{Nolint: 2, TODO: 3}, Mark(d, code, read))
 }
 
 // The dependencies added are the modules the branch requires and the base does not: a version
