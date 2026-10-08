@@ -11,6 +11,7 @@ floors:
   cmd/harness: 71
   internal/analyzers: 95
   internal/harness/bench: 96
+  internal/harness/change: 98
   internal/harness/checks: 92
   internal/harness/coverage: 91
   internal/harness/dashboard: 91

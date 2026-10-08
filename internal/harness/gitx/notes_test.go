@@ -73,3 +73,22 @@ func TestPushNotesMergesWhatTheRemoteHolds(t *testing.T) {
 
 	require.Error(t, gitx.PushNotes(t.Context(), first, filepath.Join(t.TempDir(), "absent"), notesRef))
 }
+
+// The diff is the branch's own change since its merge base, with no context; with no shared
+// history there is no change to show.
+func TestDiffIsTheBranchSinceItsMergeBase(t *testing.T) {
+	t.Parallel()
+
+	dir := gittest.Repo(t, map[string]string{"a.txt": "first\n"})
+	gittest.Git(t, dir, "checkout", "-q", "-b", "work")
+	gittest.Write(t, dir, map[string]string{"a.txt": "first\ntwo\n"})
+	gittest.Git(t, dir, "add", "-A")
+	gittest.Commit(t, dir)
+
+	patch, err := gitx.Diff(t.Context(), dir, "main")
+	require.NoError(t, err)
+	assert.Contains(t, patch, "+++ b/a.txt\n@@ -1,0 +2 @@ first\n+two\n")
+
+	_, err = gitx.Diff(t.Context(), dir, "no-such-ref")
+	require.ErrorIs(t, err, gitx.ErrNoMergeBase)
+}

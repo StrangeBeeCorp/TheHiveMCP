@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/change"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/checks"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/evidence"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx"
@@ -77,14 +79,10 @@ func (e env) pr(ctx context.Context, args []string, out io.Writer) error {
 		FirstSnapshot: firstSnapshot(ctx, e.root, sel.Base),
 	}
 
-	p, err := ev.Write(e.root)
+	err = e.record(ctx, ev, out)
 	if err != nil {
-		return fmt.Errorf("record the evidence: %w", err)
+		return err
 	}
-
-	_, _ = fmt.Fprintf(out, "evidence: %s\n", p)
-
-	e.note(ctx, ev, out)
 
 	switch rec.Verdict {
 	case runner.Fail:
@@ -107,6 +105,26 @@ func (e env) pr(ctx context.Context, args []string, out io.Writer) error {
 	}
 
 	return e.push(ctx, pushArgs, out)
+}
+
+// record writes the evidence of the run, keeps the coverage profile it wrote beside it for the
+// pull request's change metrics, and notes its gate times. Only the evidence must be written.
+func (e env) record(ctx context.Context, ev evidence.Evidence, out io.Writer) error {
+	p, err := ev.Write(e.root)
+	if err != nil {
+		return fmt.Errorf("record the evidence: %w", err)
+	}
+
+	_, _ = fmt.Fprintf(out, "evidence: %s\n", p)
+
+	_, err = evidence.KeepProfile(e.root, ev.Head, ev.Started)
+	if err != nil {
+		_, _ = fmt.Fprintln(out, "warning: the change metrics will have no diff coverage:", err)
+	}
+
+	e.note(ctx, ev, out)
+
+	return nil
 }
 
 // note records the run's gate times on its commit, under this machine's notes ref, which the push
@@ -191,7 +209,7 @@ func (e env) showEvidence(ctx context.Context, args []string, out io.Writer) err
 
 	if *md {
 		_, _ = io.WriteString(out, evidence.Markdown(*ev, evidence.Flags(ev.Changed, classOf)))
-		return nil
+		return e.changeMetrics(ctx, cmp.Or(*against, ev.Base), head, out)
 	}
 
 	data, err := json.MarshalIndent(ev, "", "  ")
@@ -200,6 +218,29 @@ func (e env) showEvidence(ctx context.Context, args []string, out io.Writer) err
 	}
 
 	_, _ = fmt.Fprintln(out, string(data))
+
+	return nil
+}
+
+// changeMetrics prints the Change metrics section: what the change since against does, measured
+// on its merge base and on head, with the coverage profile make pr kept for head. With no base,
+// there is no change to measure.
+func (e env) changeMetrics(ctx context.Context, against, head string, out io.Writer) error {
+	if against == "" {
+		return nil
+	}
+
+	profile, err := evidence.Profile(e.root, head)
+	if err != nil {
+		return fmt.Errorf("evidence: %w", err)
+	}
+
+	m, err := change.Measure(ctx, e.root, against, profile, e.limits.Structure)
+	if err != nil {
+		return fmt.Errorf("evidence: %w", err)
+	}
+
+	_, _ = io.WriteString(out, "\n"+change.Markdown(m))
 
 	return nil
 }

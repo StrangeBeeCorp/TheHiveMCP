@@ -184,3 +184,48 @@ func TestPrForAPersonShipsWithAWarning(t *testing.T) {
 	assert.Contains(t, out, "warning:")
 	assert.Contains(t, pushed(t, dir), head)
 }
+
+// changeRegistry's one gate writes the unit suite's profile, as the coverage gate does: B's block
+// ran, A's did not.
+const changeRegistry = `
+scopes: {edit: a, stop: a, commit: a, pr: a, ci: a, nightly: a}
+suites:
+  - {id: everything, review: high, paths: ["**"]}
+gates:
+  - {id: coverage, runs: "printf 'mode: set\\nexample.com/m/a.go:4.14,6.2 1 1\\n' > coverage.out", cadence: [pr], suites: ["*"], budget_s: 10, blocks: x}
+`
+
+// make pr keeps its run's coverage profile with the evidence, and the Gate evidence of a pull
+// request adds the metrics of its own change: the share of its statements the tests ran, the file
+// it brings near its limit, and what it adds.
+//
+//nolint:paralleltest // t.Chdir: the harness finds its repository from the working directory
+func TestThePullRequestShowsTheMetricsOfItsOwnChange(t *testing.T) {
+	dir := shipRepo(t)
+	commitFiles(t, dir, map[string]string{
+		registryPath: changeRegistry, ignoreFile: ".cache/\ncoverage.out\n",
+		limitsPath: "hooks: {max_red_rounds: 6}\nstructure: {max_lines: 10, code_files: ['*.go']}\n",
+		"go.mod":   "module example.com/m\n\nrequire example.com/dep v1.0.0\n",
+		"a.go":     "package m\n\n// A is one. TODO: say why.\nfunc A() int {\n\treturn 1\n}\n\nvar _ = 1 //nolint:gochecknoglobals // a test\n",
+	})
+	head := reviewed(t, dir, "ready")
+
+	_, err := harness(t, "pr", "--push=false")
+	require.NoError(t, err)
+
+	profile, err := evidence.Profile(dir, head)
+	require.NoError(t, err)
+	assert.Contains(t, string(profile), "a.go:4.14,6.2 1 1", "the run's profile, kept under its commit")
+
+	out, err := harness(t, "evidence", "--markdown", "--base", "origin/main")
+	require.NoError(t, err)
+
+	for _, want := range []string{
+		"### Change metrics", "(its merge base with `origin/main`) to `" + head[:7] + "`",
+		"| Diff coverage | **100.0 %**: the unit tests ran 1 of the 1 statements the change touches |",
+		"| `//nolint` added | 1 |", "| TODO comments added | 1 |", "| Dependencies added | `example.com/dep v1.0.0` |",
+		"| `a.go` | new | 8 | 10 |",
+	} {
+		assert.Contains(t, out, want)
+	}
+}

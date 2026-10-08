@@ -147,3 +147,18 @@ func countLines(content []byte) int {
 func validText(content []byte) bool {
 	return utf8.Valid(content)
 }
+
+// LineLimit is a code file's length in lines and the length it may reach: its cap, else
+// max_lines. ok is false for a file the structure gate does not hold to a length.
+func (lim StructureLimits) LineLimit(f string, content []byte) (lines, limit int, ok bool) {
+	if isBinary(content) || !matchesFile(lim.CodeFiles, f) {
+		return 0, 0, false
+	}
+
+	limit, capped := lim.Caps[f]
+	if !capped {
+		limit = lim.MaxLines
+	}
+
+	return countLines(content), limit, true
+}

@@ -94,8 +94,14 @@ make pr
 ```
 
 It runs the pr gates at that exact commit, records the evidence under `.cache/harness/evidence/`, checks that the review covers the branch, and pushes the
-branch, never main. `bin/harness evidence --markdown` prints the Gate evidence section for the pull request. `make all` runs the same gates without recording or
-pushing.
+branch, never main. `bin/harness evidence --markdown` prints the Gate evidence section for the pull request (add `--base origin/<its base>` for a stacked one),
+followed by its Change metrics, measured on the merge base and on the branch:
+
+- the diff coverage: the share of the changed non-test Go statements that the unit tests ran, from the coverage profile `make pr` keeps beside the evidence;
+- the code files the change lengthens to within a quarter of their size limit, before and after;
+- the `//nolint` directives, the TODO comments and the dependencies it adds.
+
+`make all` runs the same gates without recording or pushing.
 
 `make pr` also notes each run's gate times on its commit; the format and how to read the notes are in
 [the nightly reference](../reference/nightly.md#gate-time-notes).

@@ -100,3 +100,24 @@ func TestSizesRankWhatIsClosestToItsLimit(t *testing.T) {
 	assert.Equal(t, 2, files, "huge.go held by its cap, and the long test")
 	assert.Equal(t, 1, dirs)
 }
+
+// A code file's limit is its cap, else max_lines; a file the gate does not hold to a length has
+// none.
+func TestLineLimitIsTheCapElseMaxLines(t *testing.T) {
+	t.Parallel()
+
+	lim := checks.StructureLimits{MaxLines: 10, CodeFiles: []string{goPattern}, Caps: map[string]int{"big.go": 40}}
+
+	lines, limit, ok := lim.LineLimit("a.go", []byte("a\nb"))
+	assert.True(t, ok)
+	assert.Equal(t, []int{2, 10}, []int{lines, limit})
+
+	_, limit, _ = lim.LineLimit("big.go", nil)
+	assert.Equal(t, 40, limit)
+
+	_, _, ok = lim.LineLimit("a.md", []byte("a\n"))
+	assert.False(t, ok, "not code")
+
+	_, _, ok = lim.LineLimit("bin.go", []byte{0, 1})
+	assert.False(t, ok, "binary")
+}
