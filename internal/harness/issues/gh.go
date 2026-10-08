@@ -78,11 +78,16 @@ func (g GH) Create(title, label, body string) (string, error) {
 
 // Apply carries out one of the triage's actions.
 func (g GH) Apply(a triage.Action) error {
+	return g.ApplyAs(a, triage.Label)
+}
+
+// ApplyAs carries out an action on the issues labelled label: an issue it opens carries it.
+func (g GH) ApplyAs(a triage.Action, label string) error {
 	var err error
 
 	switch a.Kind {
 	case triage.Open:
-		_, err = g.Create(a.Title, triage.Label, a.Body)
+		_, err = g.Create(a.Title, label, a.Body)
 	case triage.Comment:
 		_, err = g.Run(strings.NewReader(a.Body), "issue", "comment", strconv.Itoa(a.Issue), "--body-file", "-")
 	case triage.Close:

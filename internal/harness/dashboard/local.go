@@ -67,11 +67,9 @@ func readLocal(root string) (LocalRun, error) {
 
 	r := LocalRun{Head: rec.Head, Started: rec.Started, Verdict: rec.Verdict, Coverage: -1}
 
-	scanLog(filepath.Join(dir, "coverage.log"), func(line string) {
-		if m := coverageTotal.FindStringSubmatch(line); m != nil {
-			r.Coverage, _ = strconv.ParseFloat(m[1], 64)
-		}
-	})
+	if total, ok := CoverageOf(filepath.Join(dir, "coverage.log")); ok {
+		r.Coverage = total
+	}
 
 	scanLog(filepath.Join(dir, "mutation.log"), func(line string) {
 		if m := mutationLine.FindStringSubmatch(line); m != nil {
@@ -82,6 +80,19 @@ func readLocal(root string) (LocalRun, error) {
 	})
 
 	return r, nil
+}
+
+// CoverageOf is the total statement coverage a coverage log prints; false when it prints none.
+func CoverageOf(log string) (float64, bool) {
+	total := -1.0
+
+	scanLog(log, func(line string) {
+		if m := coverageTotal.FindStringSubmatch(line); m != nil {
+			total, _ = strconv.ParseFloat(m[1], 64)
+		}
+	})
+
+	return total, total >= 0
 }
 
 // scanLog calls each for every line of a log, however long (a test's output may print a schema on

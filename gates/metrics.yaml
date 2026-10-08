@@ -1,0 +1,23 @@
+# The repository's metrics the nightly holds to a threshold (bin/harness metrics, in its triage job):
+# a threshold crossed files one GitHub issue labelled metrics, commented on each night it stays
+# crossed and closed on the first night the metric is back under it. make dashboard shows the
+# metrics over time. A threshold names one metric and one limit: max (the highest value), max_drop
+# (the points it may fall since the previous night) or max_rise_percent (how far it may rise over
+# its own baseline).
+thresholds:
+  - id: coverage-drop
+    metric: coverage
+    max_drop: 2
+    why: a night's coverage falling by more than 2 points means tests were removed or code was added untested, whatever each package's floor says.
+  - id: ci-time
+    metric: ci_minutes
+    max_rise_percent: 25
+    why: main's CI growing by a quarter against the four weeks before is a slower loop for everyone, and usually one test or one gate that changed.
+  - id: finding-age
+    metric: oldest_finding_days
+    max: 14
+    why: a nightly finding or a debt issue open for two weeks is no longer being worked on.
+  - id: release-gap
+    metric: days_since_release
+    max: 60
+    why: two months without a release means users run code that main has long fixed.

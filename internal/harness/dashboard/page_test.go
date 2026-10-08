@@ -108,7 +108,7 @@ func TestThePageIsDrawnFromTheDataAndSaysWhatItCouldNotRead(t *testing.T) {
 			MachineLabel: "darwin/arm64, 15 CPUs"}},
 		GitHub: GitHubData{
 			PRs:  []PR{{Number: 1, Base: mainBranch, Merged: now.AddDate(0, 0, -1), FirstCommit: now.AddDate(0, 0, -3), Grade: 9, ReviewTokens: 50000, Fixed: 2}},
-			CI:   []Run{{Created: now.AddDate(0, 0, -1), Updated: now.AddDate(0, 0, -1).Add(10 * time.Minute), Conclusion: success, Branch: mainBranch, Event: "push", Attempt: 1}},
+			CI:   []Run{{Created: now.AddDate(0, 0, -1), Updated: now.AddDate(0, 0, -1).Add(10 * time.Minute), Conclusion: success, Branch: mainBranch, Event: eventPush, Attempt: 1}},
 			Debt: []Issue{{Number: 7, Title: "debt: a flaky test", Created: now.AddDate(0, 0, -4)}},
 		},
 		Tree:    TreeData{Layers: Layers{Unit: 5, Integration: 2}},

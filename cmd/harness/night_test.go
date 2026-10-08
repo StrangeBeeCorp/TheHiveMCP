@@ -21,12 +21,12 @@ const (
 	urlFlag  = "--run-url"
 	nightURL = "https://github.com/o/r/actions/runs/9"
 	// fakeGH records each call's arguments and stdin in $GH_CALLS, answers issue list with
-	// $GH_ISSUES (with $GH_DEBT, or none, for the debt label), prints an issue's URL on create, and
+	// $GH_ISSUES (with $GH_DEBT and $GH_METRICS, or none, for the debt and metrics labels), prints an issue's URL on create, and
 	// fails every other call with $GH_FAIL when it is set.
 	fakeGH = `#!/bin/sh
 { echo "ARGS $*"; if [ "$1" = issue ] && [ "$2" != list ] && [ "$2" != close ]; then cat; echo; fi; } >> "$GH_CALLS"
 if [ "$1 $2" = "issue list" ]; then
-  case "$*" in *"--label debt "*) printf '%s' "${GH_DEBT:-[]}" ;; *) printf '%s' "$GH_ISSUES" ;; esac
+  case "$*" in *"--label debt "*) printf '%s' "${GH_DEBT:-[]}" ;; *"--label metrics "*) printf '%s' "${GH_METRICS:-[]}" ;; *) printf '%s' "$GH_ISSUES" ;; esac
   exit 0
 fi
 if [ -n "$GH_FAIL" ]; then echo "$GH_FAIL" >&2; exit 1; fi
@@ -278,5 +278,20 @@ func TestNextListsTheOpenDebtToo(t *testing.T) {
 	require.NoError(t, env{root: t.TempDir()}.next(t.Context(), &out))
 	assert.Equal(t, "No open nightly finding.\n2 open debt issue(s), the oldest first:\n"+
 		"  #11  debt: flaky user setup  (since 2026-10-06)  u11\n"+
+		"  #12  debt: split search  (since 2026-10-07)  u12\n", out.String())
+}
+
+// The metrics past their threshold are listed before the debt. Not parallel: withFakeGH sets PATH.
+func TestNextListsTheMetricsPastTheirThreshold(t *testing.T) {
+	withFakeGH(t, "[]")
+	t.Setenv("GH_METRICS", `[{"number": 21, "title": "metrics: ci-time past its threshold", "url": "u21", "createdAt": "2026-10-07T09:00:00Z"}]`)
+	t.Setenv("GH_DEBT", `[{"number": 12, "title": "debt: split search", "url": "u12", "createdAt": "2026-10-07T09:00:00Z"}]`)
+
+	var out bytes.Buffer
+
+	require.NoError(t, env{root: t.TempDir()}.next(t.Context(), &out))
+	assert.Equal(t, "No open nightly finding.\n1 open metric(s) past their threshold, the oldest first:\n"+
+		"  #21  metrics: ci-time past its threshold  (since 2026-10-07)  u21\n"+
+		"1 open debt issue(s), the oldest first:\n"+
 		"  #12  debt: split search  (since 2026-10-07)  u12\n", out.String())
 }

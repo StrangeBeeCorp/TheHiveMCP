@@ -290,8 +290,13 @@ jobs:
     permissions:
       contents: read
       issues: write
+      # The last night's metrics, from that run's artifact; the CI runs the metrics read.
+      actions: read
     steps:
+      # The whole history and its tags, for the metrics' commits and releases.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       # bin/harness builds itself in the Go image with these dirs mounted as the runner's user.
       - name: Prepare cache dirs
         run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools
@@ -308,3 +313,29 @@ jobs:
           ${{ github.ref != 'refs/heads/main' && '--dry-run' || '' }}
         env:
           GH_TOKEN: ${{ github.token }}
+      # The last night's metrics, for the thresholds that compare with it (gates/metrics.yaml): the
+      # latest nightly run on main that kept them. None on the first night is no error.
+      - name: The last night's metrics
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for id in $(gh run list --workflow nightly.yml --branch main --limit 30 --json databaseId,status --jq '.[] | select(.status == "completed") | .databaseId'); do
+            gh run download "$id" --name metrics --dir .cache/harness/metrics/previous 2>/dev/null && { echo "from run $id"; break; }
+          done
+      # The metrics past their threshold are filed, commented on and closed as metrics issues.
+      - name: Hold the metrics to their thresholds
+        run: >-
+          bin/harness metrics --runs night --previous .cache/harness/metrics/previous/metrics.json
+          --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          ${{ github.ref != 'refs/heads/main' && '--dry-run' || '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Keep tonight's metrics for the next night
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrics
+          path: .cache/harness/metrics/metrics.json
+          if-no-files-found: ignore
+          retention-days: 30

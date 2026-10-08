@@ -18,6 +18,8 @@ const (
 	recentRuns = 30
 	// mainBranch is the branch the page measures.
 	mainBranch = "main"
+	// eventPush is the event of a run a push to a branch started.
+	eventPush = "push"
 	// success is a run's conclusion when it passed.
 	success   = "success"
 	daysAWeek = 7
@@ -150,7 +152,7 @@ func mainRuns(d Data) []Run {
 	var runs []Run
 
 	for _, r := range d.GitHub.CI {
-		if r.Branch == mainBranch && r.Event == "push" && r.Conclusion != "" && !r.Created.Before(d.Since) {
+		if r.Branch == mainBranch && r.Event == eventPush && r.Conclusion != "" && !r.Created.Before(d.Since) {
 			runs = append(runs, r)
 		}
 	}
@@ -243,6 +245,60 @@ func modelOf(c Commit) string {
 	}
 
 	return c.Model
+}
+
+// Measures are the numbers the nightly holds to gates/metrics.yaml's thresholds; NaN for one the
+// data cannot give.
+type Measures struct {
+	// CIRecent is the median minutes of main's green CI runs over the last week; CIBefore, over the
+	// four weeks before it.
+	CIRecent, CIBefore float64
+	// OldestFindingDays is how long the oldest open nightly finding or debt issue has been open, 0
+	// for none.
+	OldestFindingDays float64
+	// DaysSinceRelease is how long ago the last release tag was made.
+	DaysSinceRelease float64
+}
+
+// recentWeeks and beforeWeeks are the two spans CI's time is compared over.
+const (
+	recentWeeks = 1
+	beforeWeeks = 4
+)
+
+// Measure computes the measures from the data the page is drawn from.
+func Measure(d Data) Measures {
+	m := Measures{CIRecent: math.NaN(), CIBefore: math.NaN(), DaysSinceRelease: math.NaN()}
+
+	recent := d.Now.AddDate(0, 0, -daysAWeek*recentWeeks)
+	before := recent.AddDate(0, 0, -daysAWeek*beforeWeeks)
+
+	var last, previous []float64
+
+	for _, r := range mainRuns(d) {
+		switch {
+		case r.Conclusion != success:
+		case !r.Created.Before(recent):
+			last = append(last, runMinutes(r))
+		case !r.Created.Before(before):
+			previous = append(previous, runMinutes(r))
+		}
+	}
+
+	m.CIRecent, m.CIBefore = median(last), median(previous)
+
+	if age := ages(d.Now, slices.Concat(d.GitHub.Findings, d.GitHub.Debt)); len(age) > 0 {
+		m.OldestFindingDays = slices.Max(age)
+	}
+
+	for _, t := range d.Tags {
+		since := d.Now.Sub(t.When).Hours() / 24 //nolint:mnd // hours in a day
+		if math.IsNaN(m.DaysSinceRelease) || since < m.DaysSinceRelease {
+			m.DaysSinceRelease = since
+		}
+	}
+
+	return m
 }
 
 // releasesPerMonth is how many v* tags the window holds, per 30 days.

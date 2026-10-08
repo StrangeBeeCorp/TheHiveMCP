@@ -13,7 +13,7 @@ floors:
   internal/harness/bench: 96
   internal/harness/checks: 92
   internal/harness/coverage: 91
-  internal/harness/dashboard: 87
+  internal/harness/dashboard: 91
   internal/harness/evidence: 89
   internal/harness/gatesdoc: 56
   internal/harness/gitx: 81
@@ -26,6 +26,7 @@ floors:
   internal/harness/release: 90
   internal/harness/runner: 90
   internal/harness/stack: 90
+  internal/harness/thresholds: 90
   internal/permissions: 85
   internal/resources: 20
   internal/surface: 80

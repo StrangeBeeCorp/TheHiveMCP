@@ -23,6 +23,7 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/evalsmoke"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/issues"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/thresholds"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/triage"
 )
 
@@ -124,13 +125,15 @@ func (e env) next(ctx context.Context, out io.Writer) error {
 		listIssues(out, fmt.Sprintf("%d open nightly finding(s), the oldest first:", len(findings)), findings)
 	}
 
-	debt, err := gh.Oldest(issues.DebtLabel)
-	if err != nil {
-		return fmt.Errorf("next: %w", err)
-	}
+	for _, l := range []struct{ label, what string }{{thresholds.Label, "metric(s) past their threshold"}, {issues.DebtLabel, "debt issue(s)"}} {
+		found, err := gh.Oldest(l.label)
+		if err != nil {
+			return fmt.Errorf("next: %w", err)
+		}
 
-	if len(debt) > 0 {
-		listIssues(out, fmt.Sprintf("%d open debt issue(s), the oldest first:", len(debt)), debt)
+		if len(found) > 0 {
+			listIssues(out, fmt.Sprintf("%d open %s, the oldest first:", len(found), l.what), found)
+		}
 	}
 
 	return nil

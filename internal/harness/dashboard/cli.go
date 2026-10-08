@@ -58,24 +58,7 @@ func Command(ctx context.Context, root string, args []string, out io.Writer) err
 		return ErrUsage
 	}
 
-	now := time.Now()
-
-	main := mainBranch
-	if gitx.HasRef(ctx, root, "origin/"+mainBranch) {
-		main = "origin/" + mainBranch
-	}
-
-	var gh GitHub
-
-	_, err = exec.LookPath("gh")
-	if err == nil {
-		gh = ghCLI{dir: root}
-	}
-
-	d := Collect(ctx, Options{
-		Root: root, Main: main, Since: now.AddDate(0, 0, -daysAWeek**weeks), Now: now,
-		GitHub: gh, Getenv: os.Getenv, HTTP: &http.Client{Timeout: httpTimeout},
-	})
+	d := Collect(ctx, OptionsFor(ctx, root, time.Now(), *weeks))
 
 	p := filepath.Join(root, *dest)
 
@@ -95,6 +78,27 @@ func Command(ctx context.Context, root string, args []string, out io.Writer) err
 	}
 
 	return nil
+}
+
+// OptionsFor reads the checkout at root over the weeks before now: origin/main when there is one,
+// gh when it is installed, Jira's variables from the environment.
+func OptionsFor(ctx context.Context, root string, now time.Time, weeks int) Options {
+	main := mainBranch
+	if gitx.HasRef(ctx, root, "origin/"+mainBranch) {
+		main = "origin/" + mainBranch
+	}
+
+	var gh GitHub
+
+	_, err := exec.LookPath("gh")
+	if err == nil {
+		gh = ghCLI{dir: root}
+	}
+
+	return Options{
+		Root: root, Main: main, Since: now.AddDate(0, 0, -daysAWeek*weeks), Now: now,
+		GitHub: gh, Getenv: os.Getenv, HTTP: &http.Client{Timeout: httpTimeout},
+	}
 }
 
 func write(p string, page Page) error {

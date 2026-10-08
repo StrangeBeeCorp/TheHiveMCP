@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"html"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -145,4 +146,35 @@ func TestTheSectionsSayWhichSourceTheyCouldNotRead(t *testing.T) {
 	quality := page[strings.Index(page, `id="quality"`):strings.Index(page, `id="delivery"`)]
 	assert.Contains(t, quality, html.EscapeString(SourceLocal)+" could not be read:</b> no make pr run")
 	assert.NotContains(t, quality, html.EscapeString(SourceNotes), "a section names only its own sources")
+}
+
+// The measures the nightly holds to its thresholds: CI's last week against the four before, the
+// oldest open finding, the days since the last release; NaN for what the data cannot give.
+func TestTheMeasuresOfTheThresholds(t *testing.T) {
+	t.Parallel()
+
+	now := at("2026-10-08T12:00:00Z")
+	green := func(daysAgo, minutes int) Run {
+		c := now.AddDate(0, 0, -daysAgo)
+		return Run{Created: c, Updated: c.Add(time.Duration(minutes) * time.Minute), Conclusion: success, Branch: mainBranch, Event: eventPush}
+	}
+
+	d := Data{Since: now.AddDate(0, 0, -42), Now: now,
+		GitHub: GitHubData{
+			CI:       []Run{green(1, 12), green(3, 14), green(10, 10), green(20, 9), green(40, 50), {Created: now.AddDate(0, 0, -2), Conclusion: failure, Branch: mainBranch, Event: eventPush}},
+			Findings: []Issue{{Created: now.AddDate(0, 0, -16)}},
+			Debt:     []Issue{{Created: now.AddDate(0, 0, -3)}},
+		},
+		Tags: []Tag{{When: now.AddDate(0, 0, -30)}, {When: now.AddDate(0, 0, -5)}},
+	}
+
+	m := Measure(d)
+	assert.InDelta(t, 13, m.CIRecent, 0.01, "12 and 14 minutes in the last week; the red run is left out")
+	assert.InDelta(t, 9.5, m.CIBefore, 0.01, "10 and 9 in the four weeks before; 40 days ago is older still")
+	assert.InDelta(t, 16, m.OldestFindingDays, 0.01)
+	assert.InDelta(t, 5, m.DaysSinceRelease, 0.01, "the latest tag")
+
+	empty := Measure(Data{Now: now})
+	assert.True(t, math.IsNaN(empty.CIRecent) && math.IsNaN(empty.DaysSinceRelease))
+	assert.Zero(t, empty.OldestFindingDays, "no open finding")
 }
