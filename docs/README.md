@@ -19,6 +19,7 @@ Goal-oriented recipes for a specific task. They assume you already know the basi
 - **[Run on Windows from source](how-to/run-on-windows-from-source.md)** — compile the server locally to sidestep the SmartScreen "unknown publisher" prompt.
 - **[Work with the harness](how-to/work-with-the-harness.md)** — take a change from the first edit to the pull request: `make check-fast`, the Claude Code
   hooks, `make pr`.
+- **[Handle a CVE](how-to/handle-a-cve.md)** — what to do with a Renovate `security` pull request, a failing `vulncheck` gate, or a CVE in an image.
 
 Worked deployment examples for specific hosts:
 

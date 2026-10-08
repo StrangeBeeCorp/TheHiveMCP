@@ -5,6 +5,11 @@
     "group:allNonMajor"
   ],
   "minimumReleaseAge": "3 days",
+  "osvVulnerabilityAlerts": true,
+  "dependencyDashboardOSVVulnerabilitySummary": "unresolved",
+  "vulnerabilityAlerts": {
+    "labels": ["security"]
+  },
   "prHourlyLimit": 0,
   "branchConcurrentLimit": 0,
   "postUpdateOptions": ["gomodTidy"],
