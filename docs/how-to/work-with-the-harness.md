@@ -49,7 +49,7 @@ previous night's (once it has, its issue stays open until coverage is back withi
 over the four weeks before, no finding or debt issue may stay open past 14 days, and a release must come within 60 days. A threshold crossed files an issue
 labelled `metrics`, commented on each night it stays crossed and closed on the first night the metric is back under it. A metric the night could not measure, or
 could not compare, is said on its issue, which it neither files nor closes. Each night that changed its issues keeps its values as the run's `metrics` artifact,
-for the next night to compare with.
+for the next night to compare with, and a drop's issue keeps the level the drop is measured from, for a night that cannot download them.
 
 ## File what is out of scope
 

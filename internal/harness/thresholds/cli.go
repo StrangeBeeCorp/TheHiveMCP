@@ -88,19 +88,28 @@ func Run(n Night, out io.Writer) error {
 		return fmt.Errorf("metrics: %w", err)
 	}
 
+	open, err := n.Issues.List(Label)
+	if err != nil {
+		return fmt.Errorf("metrics: %w", err)
+	}
+
+	recall(c, last, open)
+
 	outcomes := Evaluate(c, tonight, last)
 	for _, o := range outcomes {
 		_, _ = fmt.Fprintf(out, "%-8s %s: %s\n", o.Verdict, o.Gate, o.Summary)
 	}
 
-	err = n.change(c, outcomes, out)
+	next := Carry(c, tonight, last, outcomes)
+
+	err = n.change(Plan(c, outcomes, open, n.RunURL, levels(c, next)), out)
 	if err != nil {
 		return err
 	}
 
 	// Written last: a night whose issues could not be changed leaves no values, and the next night
 	// compares with the last one that did, so a crossing it could not file is filed then.
-	err = writeValues(n.Out, Carry(c, tonight, last, outcomes))
+	err = writeValues(n.Out, next)
 	if err != nil {
 		return fmt.Errorf("metrics: %w", err)
 	}
@@ -108,14 +117,40 @@ func Run(n Night, out io.Writer) error {
 	return nil
 }
 
-// change files, comments on and closes the metrics issues as the outcomes say; a dry run prints it.
-func (n Night) change(c Config, outcomes []triage.Outcome, out io.Writer) error {
-	open, err := n.Issues.List(Label)
-	if err != nil {
-		return fmt.Errorf("metrics: %w", err)
+// recall gives a drop the level its open issue is measured from, on a night without the last
+// night's value of it (its artifact expired, or could not be downloaded): the issue then still
+// closes only once the metric is back within its limit of that level.
+func recall(c Config, last map[string]Value, open []triage.Issue) {
+	for _, t := range c.Thresholds {
+		if v, ok := last[t.Metric]; t.MaxDrop == nil || (ok && !math.IsNaN(v.Now)) {
+			continue
+		}
+
+		for _, i := range open {
+			if level, ok := levelOf(i); ok && thresholdOf(i) == t.ID {
+				last[t.Metric] = Value{Now: level, Reference: level}
+			}
+		}
+	}
+}
+
+// levels are, for each drop that stays crossed, the level it is measured from, by threshold.
+func levels(c Config, next map[string]Value) map[string]float64 {
+	out := map[string]float64{}
+
+	for _, t := range c.Thresholds {
+		if v, ok := next[t.Metric]; ok && t.MaxDrop != nil && v.Reference > 0 {
+			out[t.ID] = v.Reference
+		}
 	}
 
-	actions := Plan(c, outcomes, open, n.RunURL)
+	return out
+}
+
+// change files, comments on and closes the metrics issues; a dry run prints it.
+func (n Night) change(actions []triage.Action, out io.Writer) error {
+	var err error
+
 	for _, a := range actions {
 		_, _ = fmt.Fprintf(out, "%s %s\n", a.Kind, cmpOr(a.Title, fmt.Sprintf("#%d", a.Issue)))
 	}

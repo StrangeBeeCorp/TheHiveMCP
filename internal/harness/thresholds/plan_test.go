@@ -129,6 +129,7 @@ func TestAThresholdCrossedFilesOneIssueAndTheNightUnderClosesIt(t *testing.T) {
 	require.Len(t, gh.open, 1)
 	assert.Equal(t, "metrics: coverage-drop past its threshold", gh.open[0].Title)
 	assert.Contains(t, gh.open[0].Body, "<!-- metrics-threshold: coverage-drop -->")
+	assert.Contains(t, gh.open[0].Body, "<!-- metrics-from: 64.8 -->", "the issue keeps the level its drop is measured from")
 	assert.Contains(t, gh.open[0].Body, "coverage is 61.0, from 64.8: a drop of 3.8, for at most 2.0, in RUN.")
 	assert.Contains(t, gh.open[0].Body, "tests were removed")
 	assert.Equal(t, []string{Label}, gh.labels)
@@ -165,6 +166,30 @@ func TestANightWithNothingToCompareClosesNothing(t *testing.T) {
 	kept, err := readValues(values)
 	require.NoError(t, err)
 	assert.Equal(t, Value{Now: 61, Reference: 64.8}, kept[Coverage], "no coverage log tonight: the last night's level is kept")
+}
+
+// A night without the last night's values (its artifact expired, or the download failed) reads
+// the level from the drop's open issue: the issue stays open until the metric is back within its
+// limit of it, and the next night keeps that level.
+func TestAnOpenDropKeepsItsLevelWithoutTheLastNight(t *testing.T) {
+	t.Parallel()
+
+	gh := &fakeIssues{next: 9, open: []triage.Issue{{Number: 9, Body: "<!-- metrics-threshold: coverage-drop -->\n<!-- metrics-from: 64.8 -->\ncoverage is 61.0"}}}
+	values := filepath.Join(t.TempDir(), "metrics.json")
+	run := func(coverage float64) {
+		require.NoError(t, Run(Night{Root: repo(t), Data: dashboard.Data{Now: time.Now()}, Runs: night(t, coverage), Out: values, RunURL: runURL, Issues: gh}, &bytes.Buffer{}))
+	}
+
+	run(61.5)
+	require.Len(t, gh.open, 1, "61.5 is 3.3 under 64.8: still crossed")
+	assert.Equal(t, triage.Comment, gh.applied[0].Kind)
+
+	kept, err := readValues(values)
+	require.NoError(t, err)
+	assert.Equal(t, Value{Now: 61.5, Reference: 64.8}, kept[Coverage])
+
+	run(63.0)
+	assert.Empty(t, gh.open, "back within 2 points of 64.8")
 }
 
 // A night whose issues could not be changed leaves no values: the next night compares with the
@@ -274,7 +299,7 @@ func TestAnIssueWhoseThresholdLeftTheFileIsClosed(t *testing.T) {
 	c := Config{Thresholds: []Threshold{{ID: "ci-slowdown", Metric: CIMinutes, MaxRisePercent: new(25.0)}}}
 	open := []triage.Issue{{Number: 5, Body: "<!-- metrics-threshold: ci-time -->"}, {Number: 6, Body: "<!-- nightly-finding: checks/lint -->"}}
 
-	actions := Plan(c, nil, open, runURL)
+	actions := Plan(c, nil, open, runURL, nil)
 	require.Len(t, actions, 1, "the nightly finding is not the thresholds' to close")
 	assert.Equal(t, triage.Action{Kind: triage.Close, Issue: 5, Body: "Its threshold `ci-time` is no longer in `gates/metrics.yaml`, as of RUN."}, actions[0])
 }
