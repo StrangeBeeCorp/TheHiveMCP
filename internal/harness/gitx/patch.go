@@ -150,12 +150,12 @@ func Commits(ctx context.Context, root, revs string) []Commit {
 var ErrNoMergeBase = errors.New("no merge base")
 
 // Diff is the patch of the branch since its merge base with base, with no context lines: what
-// HEAD adds and removes, renames shown as a delete and an add.
+// HEAD adds and removes, a moved file shown as a rename with only the lines that changed in it.
 func Diff(ctx context.Context, root, base string) (string, error) {
 	mb := MergeBase(ctx, root, base)
 	if mb == "" {
 		return "", fmt.Errorf("%w with %s", ErrNoMergeBase, base)
 	}
 
-	return run(ctx, root, "-c", "core.quotePath=false", "diff", "-U0", "--no-color", "--no-ext-diff", noRenames, mb, "HEAD")
+	return run(ctx, root, "-c", "core.quotePath=false", "diff", "-U0", "--no-color", "--no-ext-diff", "-M", mb, "HEAD")
 }

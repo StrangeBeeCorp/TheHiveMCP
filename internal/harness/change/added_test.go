@@ -41,6 +41,7 @@ func TestMovesListTheFilesTheChangeBringsNearTheirLimit(t *testing.T) {
 	}{
 		{near, 70, 80, true}, {added, -1, 75, true}, {capped, 150, 190, true}, {"short.go", 10, 74, true},
 		{"shrunk.go", 99, 90, true}, {"doc.md", 1, 400, true}, {"gone.go", 50, -1, true}, {"same.go", 99, 99, false},
+		{"origin.go", 60, -1, false}, {movedGo, -1, 75, true},
 	}
 
 	d, was, now := Diff{}, map[string]int{}, map[string]int{}
@@ -62,12 +63,13 @@ func TestMovesListTheFilesTheChangeBringsNearTheirLimit(t *testing.T) {
 	assert.Equal(t, []Move{
 		{Path: capped, Before: 150, After: 190, Limit: 200},
 		{Path: near, Before: 70, After: 80, Limit: 100},
-		{Path: added, Before: 0, After: 75, Limit: 100},
-	}, Moves(d, lim, files(was), files(now)))
+		{Path: movedGo, Before: 60, After: 75, Limit: 100},
+		{Path: added, Before: 0, After: 75, Limit: 100, New: true},
+	}, Moves(d, Renames{movedGo: "origin.go"}, lim, files(was), files(now)))
 }
 
-// A //nolint directive counts in Go files, a TODO in a comment in any code file; the words in a
-// string, or in a file that is not code, do not.
+// A //nolint directive counts in Go files, a TODO after a comment opener in any code file; the
+// words with no comment opener before them, or in a file that is not code, do not.
 func TestMarkCountsTheNolintAndTODOTheChangeAdds(t *testing.T) {
 	t.Parallel()
 

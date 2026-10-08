@@ -13,19 +13,34 @@ import (
 
 const aGo = "package m\n\n// A is one.\nfunc A() int {\n\treturn 1\n}\n"
 
+// oldGo is ten lines with a TODO and a //nolint of its own.
+const oldGo = "package m\n\n// TODO: old.\nvar _ = 1 //nolint:gochecknoglobals // old\n\n//\n//\n//\n//\n//\n"
+
 // branch is a repository whose work branch, from main, lengthens a.go, adds a dependency, a
-// //nolint and a TODO: its root.
+// //nolint and a TODO, and moves old.go to moved.go with one line more. main then moves on with a
+// TODO and a dependency of its own, which are not the branch's: its root.
 func branch(t *testing.T) string {
 	t.Helper()
 
-	dir := gittest.Repo(t, map[string]string{"go.mod": "module example.com/m\n", aGoFile: aGo})
+	dir := gittest.Repo(t, map[string]string{"go.mod": "module example.com/m\n", aGoFile: aGo, "old.go": oldGo})
 	gittest.Git(t, dir, "checkout", "-q", "-b", "work")
+	gittest.Git(t, dir, "mv", "old.go", movedGo)
 	gittest.Write(t, dir, map[string]string{
 		"go.mod": "module example.com/m\n\nrequire example.com/dep v1.0.0\n",
 		aGoFile:  aGo + "\n// B is two. TODO: say why.\nfunc B() int {\n\treturn 2 //nolint:mnd // a test\n}\n",
+		movedGo:  oldGo + "// one more\n",
 	})
 	gittest.Git(t, dir, "add", "-A")
 	gittest.Commit(t, dir)
+
+	gittest.Git(t, dir, "checkout", "-q", "main")
+	gittest.Write(t, dir, map[string]string{
+		"go.mod":  "module example.com/m\n\nrequire example.com/other v2.0.0\n",
+		"main.go": "package m\n\n// TODO: main's own.\n",
+	})
+	gittest.Git(t, dir, "add", "-A")
+	gittest.Commit(t, dir)
+	gittest.Git(t, dir, "checkout", "-q", "work")
 
 	return dir
 }
@@ -43,12 +58,16 @@ func TestMeasureMeasuresTheBranchSinceItsMergeBase(t *testing.T) {
 	m, err := Measure(t.Context(), dir, "main", []byte(profile), lim)
 	require.NoError(t, err)
 
-	assert.Equal(t, gittest.Git(t, dir, "rev-parse", "main"), m.From)
+	assert.Equal(t, gittest.Git(t, dir, "rev-parse", "main~1"), m.From, "the merge base, not main as it is now")
 	assert.Equal(t, gitx.Head(t.Context(), dir), m.Head)
-	assert.Equal(t, &Coverage{Statements: 1}, m.Coverage, "only B changed, and the tests did not run it")
-	assert.Equal(t, []Move{{Path: aGoFile, Before: 6, After: 11, Limit: 12}}, m.Moves)
-	assert.Equal(t, Markers{Nolint: 1, TODO: 1}, m.Markers)
-	assert.Equal(t, []string{"example.com/dep v1.0.0"}, m.Deps)
+	assert.Equal(t, &Coverage{Statements: 1, Unmeasured: []string{movedGo}}, m.Coverage,
+		"only B's statements changed, and the tests did not run them; moved.go's added line has none")
+	assert.Equal(t, []Move{
+		{Path: aGoFile, Before: 6, After: 11, Limit: 12},
+		{Path: movedGo, Before: 10, After: 11, Limit: 12},
+	}, m.Moves, "the moved file is measured from its old path")
+	assert.Equal(t, Markers{Nolint: 1, TODO: 1}, m.Markers, "neither the moved file's markers nor main's")
+	assert.Equal(t, []string{"example.com/dep v1.0.0"}, m.Deps, "not main's dependency")
 
 	m, err = Measure(t.Context(), dir, "main", nil, lim)
 	require.NoError(t, err)
@@ -82,13 +101,17 @@ func TestMarkdownSaysWhatTheChangeDoes(t *testing.T) {
 	m := Metrics{
 		Against: "origin/main", From: "1111111aaaa", Head: "2222222bbbb",
 		Coverage: &Coverage{Statements: 8, Covered: 6, Unmeasured: []string{"c.go"}},
-		Moves:    []Move{{Path: aGoFile, Before: 400, After: 480, Limit: 500}, {Path: bGoFile, After: 400, Limit: 500}},
-		Markers:  Markers{Nolint: 1, TODO: 2}, Deps: []string{"example.com/dep v1.0.0"},
+		Moves: []Move{
+			{Path: aGoFile, Before: 400, After: 480, Limit: 500}, {Path: bGoFile, After: 400, Limit: 500, New: true},
+			{Path: "empty.go", After: 400, Limit: 500},
+		},
+		Markers: Markers{Nolint: 1, TODO: 2}, Deps: []string{"example.com/dep v1.0.0"},
 	}
 
 	out := Markdown(m)
 	for _, want := range []string{
-		"### Change metrics\n\nThis pull request's own change, from `1111111` (its merge base with `origin/main`) to `2222222`.",
+		"### Change metrics\n\nThe change from `1111111` (its merge base with `origin/main`) to `2222222`.",
+		"| `empty.go` | 0 | 400 | 500 |",
 		"| Diff coverage | **75.0 %**: the unit tests ran 6 of the 8 statements the change touches; 1 changed Go file(s) have no statement in the profile: `c.go` |",
 		"| `//nolint` added | 1 |", "| TODO comments added | 2 |", "| Dependencies added | `example.com/dep v1.0.0` |",
 		"| `a.go` | 400 | 480 | 500 |", "| `b.go` | new | 400 | 500 |",
@@ -101,6 +124,9 @@ func TestMarkdownSaysWhatTheChangeDoes(t *testing.T) {
 	assert.Contains(t, out, "| Dependencies added | none |")
 	assert.Contains(t, out, "No code file it lengthens ends within a quarter of its size limit.")
 
-	out = Markdown(Metrics{})
+	out = Markdown(Metrics{Against: "0123456789abcdef0123456789abcdef01234567"})
 	assert.Contains(t, out, "| Diff coverage | not measured: `make pr` kept no coverage profile for this commit |")
+	assert.Contains(t, out, "(its merge base with `0123456`)", "a recorded base's commit id is shortened")
+
+	assert.Equal(t, "### Change metrics\n\nNot measured: no merge base.\n\n", Unmeasured(gitx.ErrNoMergeBase))
 }

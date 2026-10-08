@@ -1,6 +1,7 @@
 package change
 
 import (
+	"cmp"
 	"regexp"
 	"slices"
 	"sort"
@@ -9,12 +10,14 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/checks"
 )
 
-// Move is a code file the change brings closer to its size limit: its length on the base (0 for
-// a new file) and on the branch, against its cap or max_lines.
+// Move is a code file the change brings closer to its size limit: its length on the base (at its
+// path there, for a file it moves) and on the branch, against its cap or max_lines. New is a file
+// the base did not have.
 type Move struct {
 	Path          string
 	Before, After int
 	Limit         int
+	New           bool
 }
 
 // nearShare is how close to its limit, in quarters, a file that grows must come to be listed:
@@ -25,8 +28,9 @@ const (
 )
 
 // Moves lists the files the change makes longer that end at least three quarters of the way to
-// their limit, the closest first. before and after read a file on the base and on the branch.
-func Moves(d Diff, lim checks.StructureLimits, before, after func(string) ([]byte, bool)) []Move {
+// their limit, the closest first. before and after read a file on the base and on the branch; a
+// file the change moves is read on the base at its old path.
+func Moves(d Diff, renames Renames, lim checks.StructureLimits, before, after func(string) ([]byte, bool)) []Move {
 	var moves []Move
 
 	for file, added := range d {
@@ -41,12 +45,14 @@ func Moves(d Diff, lim checks.StructureLimits, before, after func(string) ([]byt
 		}
 
 		was := 0
-		if old, existed := before(file); existed {
+
+		old, existed := before(cmp.Or(renames[file], file))
+		if existed {
 			was, _, _ = lim.LineLimit(file, old)
 		}
 
 		if lines > was {
-			moves = append(moves, Move{Path: file, Before: was, After: lines, Limit: limit})
+			moves = append(moves, Move{Path: file, Before: was, After: lines, Limit: limit, New: !existed})
 		}
 	}
 
@@ -72,11 +78,13 @@ var (
 	// nolintRe is a //nolint directive: the word follows the comment's slashes, then a colon, a
 	// space or the end of the line.
 	nolintRe = regexp.MustCompile(`//nolint(?:[:\s]|$)`)
-	// todoRe is a TODO in a comment.
+	// todoRe is a TODO after a comment opener on the line.
 	todoRe = regexp.MustCompile(`(?://|#|/\*).*\bTODO\b`)
 )
 
-// Mark counts the markers in the lines the change adds to the files code accepts.
+// Mark counts the markers in the lines the change adds to the files code accepts. It reads each
+// line's text, not its syntax: a marker written in a string after a comment opener ("// TODO")
+// counts too.
 func Mark(d Diff, code func(string) bool) Markers {
 	var m Markers
 

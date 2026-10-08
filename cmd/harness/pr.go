@@ -57,6 +57,7 @@ func (e env) pr(ctx context.Context, args []string, out io.Writer) error {
 	}
 
 	e.changed, e.base = sel.Paths, sel.Base
+	e.clearProfile(out)
 
 	rec, err := e.runGates(ctx, "pr", e.reg.At("pr"), sel, runFlags{stream: os.Getenv("CI") != ""}, out)
 	if err != nil {
@@ -107,6 +108,15 @@ func (e env) pr(ctx context.Context, args []string, out io.Writer) error {
 	return e.push(ctx, pushArgs, out)
 }
 
+// clearProfile removes the coverage profile a previous run left, so that the one record keeps is
+// this run's. A profile it cannot remove is said: the change metrics may then read a stale one.
+func (e env) clearProfile(out io.Writer) {
+	err := evidence.ClearProfile(e.root)
+	if err != nil {
+		_, _ = fmt.Fprintln(out, "warning: the change metrics may read an earlier run's coverage:", err)
+	}
+}
+
 // record writes the evidence of the run, keeps the coverage profile it wrote beside it for the
 // pull request's change metrics, and notes its gate times. Only the evidence must be written.
 func (e env) record(ctx context.Context, ev evidence.Evidence, out io.Writer) error {
@@ -117,7 +127,7 @@ func (e env) record(ctx context.Context, ev evidence.Evidence, out io.Writer) er
 
 	_, _ = fmt.Fprintf(out, "evidence: %s\n", p)
 
-	_, err = evidence.KeepProfile(e.root, ev.Head, ev.Started)
+	_, err = evidence.KeepProfile(e.root, ev.Head)
 	if err != nil {
 		_, _ = fmt.Fprintln(out, "warning: the change metrics will have no diff coverage:", err)
 	}
@@ -209,7 +219,9 @@ func (e env) showEvidence(ctx context.Context, args []string, out io.Writer) err
 
 	if *md {
 		_, _ = io.WriteString(out, evidence.Markdown(*ev, evidence.Flags(ev.Changed, classOf)))
-		return e.changeMetrics(ctx, cmp.Or(*against, ev.Base), head, out)
+		e.changeMetrics(ctx, cmp.Or(*against, ev.Base), head, out)
+
+		return nil
 	}
 
 	data, err := json.MarshalIndent(ev, "", "  ")
@@ -224,25 +236,26 @@ func (e env) showEvidence(ctx context.Context, args []string, out io.Writer) err
 
 // changeMetrics prints the Change metrics section: what the change since against does, measured
 // on its merge base and on head, with the coverage profile make pr kept for head. With no base,
-// there is no change to measure.
-func (e env) changeMetrics(ctx context.Context, against, head string, out io.Writer) error {
+// there is no change to measure. A change it cannot measure is said in the section, never a
+// failure: the Gate evidence above it is already printed, and stays whole.
+func (e env) changeMetrics(ctx context.Context, against, head string, out io.Writer) {
 	if against == "" {
-		return nil
+		return
 	}
 
 	profile, err := evidence.Profile(e.root, head)
-	if err != nil {
-		return fmt.Errorf("evidence: %w", err)
+
+	var m change.Metrics
+	if err == nil {
+		m, err = change.Measure(ctx, e.root, against, profile, e.limits.Structure)
 	}
 
-	m, err := change.Measure(ctx, e.root, against, profile, e.limits.Structure)
+	section := change.Markdown(m)
 	if err != nil {
-		return fmt.Errorf("evidence: %w", err)
+		section = change.Unmeasured(err)
 	}
 
-	_, _ = io.WriteString(out, "\n"+change.Markdown(m))
-
-	return nil
+	_, _ = io.WriteString(out, "\n"+section)
 }
 
 // classOf names the protected class of a path, for the red flags of the pull request.

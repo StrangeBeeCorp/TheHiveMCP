@@ -36,7 +36,7 @@ func Measure(ctx context.Context, root, against string, profile []byte, lim chec
 		return func(p string) ([]byte, bool) { return gitx.At(ctx, root, rev, p) }
 	}
 	onBase, onBranch := at(m.From), at(m.Head)
-	d := ParseDiff(patch)
+	d, renames := ParseDiff(patch)
 
 	if profile != nil {
 		gomod, _ := onBranch(goMod)
@@ -50,7 +50,7 @@ func Measure(ctx context.Context, root, against string, profile []byte, lim chec
 		m.Coverage = &c
 	}
 
-	m.Moves = Moves(d, lim, onBase, onBranch)
+	m.Moves = Moves(d, renames, lim, onBase, onBranch)
 	m.Markers = Mark(d, func(f string) bool {
 		content, ok := onBranch(f)
 		_, _, code := lim.LineLimit(f, content)

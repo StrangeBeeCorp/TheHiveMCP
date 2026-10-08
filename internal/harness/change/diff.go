@@ -16,15 +16,20 @@ type Line struct {
 	Text string
 }
 
-// Diff is the lines a change adds, by the path of the file at HEAD. A deleted file has none.
+// Diff is the lines a change adds, by the path of the file at HEAD. A deleted file has none, and
+// a file moved as it was has none either.
 type Diff map[string][]Line
 
-// ParseDiff reads a patch written with no context lines (git diff -U0).
-func ParseDiff(patch string) Diff {
-	d := Diff{}
+// Renames maps the path of a file the change moves, at HEAD, to its path on the base.
+type Renames map[string]string
+
+// ParseDiff reads a patch written with no context lines and with renames detected (git diff -U0
+// -M): the lines it adds, and the files it moves.
+func ParseDiff(patch string) (Diff, Renames) {
+	d, renames := Diff{}, Renames{}
 
 	var (
-		file       string
+		file, from string
 		next, left int
 	)
 
@@ -40,6 +45,11 @@ func ParseDiff(patch string) Diff {
 			d[file] = append(d[file], Line{N: next, Text: text[1:]})
 			next++
 			left--
+		case strings.HasPrefix(text, "rename from "):
+			from = unquote(strings.TrimPrefix(text, "rename from "))
+		case strings.HasPrefix(text, "rename to ") && from != "":
+			renames[unquote(strings.TrimPrefix(text, "rename to "))] = from
+			from = ""
 		case strings.HasPrefix(text, "+++ "):
 			file = newPath(strings.TrimPrefix(text, "+++ "))
 		case strings.HasPrefix(text, "@@ ") && file != "":
@@ -47,20 +57,27 @@ func ParseDiff(patch string) Diff {
 		}
 	}
 
-	return d
+	return d, renames
 }
 
-// newPath is the path a "+++" header names, without its "b/", or "" for /dev/null. git quotes a
-// path with a tab, a quote or a newline in it.
+// newPath is the path a "+++" header names, without its "b/", or "" for /dev/null.
 func newPath(header string) string {
-	unquoted, err := strconv.Unquote(header)
-	if err == nil {
-		header = unquoted
-	}
-
-	p, ok := strings.CutPrefix(header, "b/")
+	p, ok := strings.CutPrefix(unquote(header), "b/")
 	if !ok {
 		return ""
+	}
+
+	return p
+}
+
+// unquote is a path as git writes it in a header: quoted when it holds a tab, a quote or a
+// newline, and followed by a tab in a "+++" line when it holds a space.
+func unquote(p string) string {
+	p = strings.TrimSuffix(p, "\t")
+
+	unquoted, err := strconv.Unquote(p)
+	if err == nil {
+		return unquoted
 	}
 
 	return p

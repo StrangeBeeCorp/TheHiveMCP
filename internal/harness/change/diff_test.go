@@ -9,6 +9,7 @@ import (
 const (
 	aGoFile = "a.go"
 	bGoFile = "b.go"
+	movedGo = "moved.go"
 )
 
 // The diff keeps each added line with its number in the new file, whatever the hunk header says:
@@ -39,12 +40,31 @@ diff --git "a/sp\tace.go" "b/sp\tace.go"
 +++ "b/sp\tace.go"
 @@ -0,0 +1 @@
 +package sp
+diff --git a/my file.go b/my file.go
+` + "--- a/my file.go\t\n+++ b/my file.go\t\n" + `@@ -1,0 +2 @@
++// a space
+diff --git a/old.go b/moved.go
+similarity index 100%
+rename from old.go
+rename to moved.go
+diff --git a/was.go b/"edi\"ted.go"
+similarity index 90%
+rename from was.go
+rename to "edi\"ted.go"
+--- a/was.go
++++ "b/edi\"ted.go"
+@@ -4,0 +5 @@
++// added
 `
 
+	d, renames := ParseDiff(patch)
 	assert.Equal(t, Diff{
 		aGoFile:      {{N: 3, Text: "\treturn 1"}, {N: 19, Text: "+++ not a header"}, {N: 20, Text: "second"}},
 		"sp\tace.go": {{N: 1, Text: "package sp"}},
-	}, ParseDiff(patch))
+		"my file.go": {{N: 2, Text: "// a space"}},
+		`edi"ted.go`: {{N: 5, Text: "// added"}},
+	}, d, "a file moved as it was adds no line; a path with a space loses the tab git writes after it")
+	assert.Equal(t, Renames{movedGo: "old.go", `edi"ted.go`: "was.go"}, renames)
 }
 
 func TestAHunkHeaderItCannotReadAddsNothing(t *testing.T) {
@@ -56,6 +76,12 @@ func TestAHunkHeaderItCannotReadAddsNothing(t *testing.T) {
 		assert.Zero(t, start, header)
 	}
 
-	assert.Empty(t, ParseDiff("+++ b/a.go\n@@ -1 +a @@\n+x\n"))
-	assert.Empty(t, ParseDiff("+++ c/a.go\n@@ -0,0 +1 @@\n+x\n"), "a header without b/ names no file")
+	d, _ := ParseDiff("+++ b/a.go\n@@ -1 +a @@\n+x\n")
+	assert.Empty(t, d)
+
+	d, _ = ParseDiff("+++ c/a.go\n@@ -0,0 +1 @@\n+x\n")
+	assert.Empty(t, d, "a header without b/ names no file")
+
+	_, renames := ParseDiff("rename to b.go\n")
+	assert.Empty(t, renames, "a rename names where it comes from first")
 }

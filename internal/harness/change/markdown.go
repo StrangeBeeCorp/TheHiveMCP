@@ -2,6 +2,7 @@ package change
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -12,12 +13,22 @@ func short(sha string) string {
 	return sha[:min(len(sha), shortSHA)]
 }
 
+// sha is a full commit id, as make pr records its base.
+var sha = regexp.MustCompile(`^[0-9a-f]{40}$`)
+
+// heading is the title of the section.
+const heading = "### Change metrics\n\n"
+
 // Markdown renders the metrics as the "Change metrics" section of a pull request.
 func Markdown(m Metrics) string {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "### Change metrics\n\nThis pull request's own change, from `%s` (its merge base with `%s`) to `%s`.\n\n",
-		short(m.From), m.Against, short(m.Head))
+	against := m.Against
+	if sha.MatchString(against) {
+		against = short(against)
+	}
+
+	fmt.Fprintf(&b, heading+"The change from `%s` (its merge base with `%s`) to `%s`.\n\n", short(m.From), against, short(m.Head))
 	b.WriteString("| Metric | This change |\n|---|---|\n")
 	fmt.Fprintf(&b, "| Diff coverage | %s |\n", coverageCell(m.Coverage))
 	fmt.Fprintf(&b, "| `//nolint` added | %d |\n", m.Markers.Nolint)
@@ -34,7 +45,7 @@ func Markdown(m Metrics) string {
 
 	for _, mv := range m.Moves {
 		before := "new"
-		if mv.Before > 0 {
+		if !mv.New {
 			before = strconv.Itoa(mv.Before)
 		}
 
@@ -44,6 +55,11 @@ func Markdown(m Metrics) string {
 	b.WriteString("\n")
 
 	return b.String()
+}
+
+// Unmeasured is the section when the change could not be measured: it says why.
+func Unmeasured(err error) string {
+	return heading + "Not measured: " + err.Error() + ".\n\n"
 }
 
 func coverageCell(c *Coverage) string {

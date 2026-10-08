@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -228,4 +230,17 @@ func TestThePullRequestShowsTheMetricsOfItsOwnChange(t *testing.T) {
 	} {
 		assert.Contains(t, out, want)
 	}
+
+	out, err = harness(t, "evidence", "--markdown")
+	require.NoError(t, err)
+	assert.Contains(t, out, "(its merge base with `"+gittest.Git(t, dir, "rev-parse", "--short=7", "origin/main")+"`)",
+		"with no --base, the base make pr compared with")
+
+	p := filepath.Join(dir, evidence.Dir, head+".coverage.out")
+	require.NoError(t, os.WriteFile(p, []byte("mode: set\ncut sh"), 0o600))
+
+	out, err = harness(t, "evidence", "--markdown", "--base", "origin/main")
+	require.NoError(t, err, "a change it cannot measure is said, not a failure")
+	assert.Contains(t, out, "### Gate evidence")
+	assert.Contains(t, out, "### Change metrics\n\nNot measured: change metrics: not a coverage profile")
 }
