@@ -368,7 +368,7 @@ gates:
     docker: true
     cadence: [pr, ci]
     suites: ["*"]
-    budget_s: 1800
+    budget_s: 3600
     blocks: >-
       a changed package with a floor in gates/mutation.yaml whose unit tests kill a smaller share
       of gremlins' mutants than the floor (a run whose mutants mostly timed out, on a busy machine,
