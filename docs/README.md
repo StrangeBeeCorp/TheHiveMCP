@@ -45,6 +45,7 @@ Information-oriented, neutral description of the tools and their contracts. Look
   ([read-only.yaml](reference/permissions-examples/read-only.yaml), [analyst.yaml](reference/permissions-examples/analyst.yaml),
   [admin.yaml](reference/permissions-examples/admin.yaml)).
 - **[Configuration reference](reference/configuration.md)** — environment variables, flags, HTTP headers, their priority, and the built-in permission profiles.
+- **[Make targets](reference/make-targets.md)** — the Makefile's targets, grouped: build, run and test, quality and security, the harness, Docker, dependencies.
 - **[Gates](reference/gates.md)** — every check the harness runs, when it runs and what makes it fail (generated from `gates/registry.yaml`).
 - **[The nightly run and the gate-time notes](reference/nightly.md)** — what the nightly run checks, the metric thresholds, and the format of the notes
   `make pr` records.

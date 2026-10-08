@@ -180,9 +180,11 @@ gates:
     budget_s: 20
     static: true
     blocks: >-
-      a path named in AGENTS.md, README.md, CLAUDE.md or .claude/ that does not exist, a stale
-      docs/reference/gates.md, a ci gate that ci.yml does not run, or a nightly gate that
-      nightly.yml does not run
+      a path named in AGENTS.md, README.md, CLAUDE.md or .claude/ that does not exist, a page under
+      docs/ outside tutorial, how-to, reference, explanation or evaluation (Diataxis), a page over
+      120 lines with fewer than two section headings, a relative link in docs/ or .github/ to a
+      file that is not there, a stale docs/reference/gates.md, a ci gate that ci.yml does not run,
+      or a nightly gate that nightly.yml does not run
 
   - id: go-source
     builtin: go-source

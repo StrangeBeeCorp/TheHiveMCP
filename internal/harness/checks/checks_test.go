@@ -220,6 +220,24 @@ func TestDocsAcceptsTrueReferences(t *testing.T) {
 	assert.Empty(t, found)
 }
 
+// The docs gate itself refuses a page outside the documentation's folders and a broken link: the
+// layout checks run inside Docs, not beside it.
+func TestTheDocsGateHoldsTheDocumentationsLayout(t *testing.T) {
+	t.Parallel()
+
+	root, files, reg := docsRepo(t, map[string]string{
+		"docs/notes.md":    "# Notes\n",
+		"docs/how-to/a.md": "# A\n[gone](missing.md)\n",
+	}, ciRunning("bin/harness run --cadence ci --gate lint"), "")
+	found, err := checks.Docs(checks.DirTree{Root: root, Names: files}, reg)
+	require.NoError(t, err)
+
+	got := messages(found)
+	assert.Contains(t, got, "docs/notes.md: outside the documentation's folders")
+	assert.Contains(t, got, "docs/how-to/a.md:2: links to missing.md, which is not in the repository")
+	assert.Len(t, found, 2)
+}
+
 func TestDocsFindsDrift(t *testing.T) {
 	t.Parallel()
 

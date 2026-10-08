@@ -11,7 +11,9 @@ Point git at the tracked commit hook:
 make dev-setup
 ```
 
-Each commit then runs the commit gates on exactly what it carries. A Claude Code session says so when a checkout's commits do not run them.
+This points git at the tracked hooks in `.githooks/` (`git config core.hooksPath .githooks`): `pre-commit` runs `make pre-commit`, the commit gates on exactly
+what the commit will carry. It rewrites no file, and `--no-verify` bypasses it: it is a fast local signal, while the authoritative gate stays CI. A Claude Code
+session says so when a checkout's commits do not run them. Every make target is listed in [the make targets reference](../reference/make-targets.md).
 
 ## While you work
 

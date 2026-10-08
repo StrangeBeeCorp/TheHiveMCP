@@ -312,7 +312,7 @@ Cases, alerts and tasks also support `actions` (responder runs). Observables sup
 }
 ```
 
-## Debugging a search: rawFilters and field discovery
+## Debugging a search, the filter grammar and related tools
 
 - **`rawFilters` echo.** The applied filter is echoed back in every response. When results are unexpected, inspect `rawFilters` to see exactly what was sent to
   TheHive.

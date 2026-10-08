@@ -445,7 +445,8 @@ All development operations run in Docker containers. The loop:
 - `make dev-setup` - Point the repository at its tracked commit hook (once per clone)
 - `make check-fast` - The gates your changed paths select, in about a minute: the loop to run while you work
 - `make pr` - The pr gates at HEAD, recorded, then the push of the branch (never main)
-- `make help` - Display all available targets
+- `make help` - Display all available targets; [the make targets reference](docs/reference/make-targets.md) groups them (build, run, lint, security, Docker,
+  dependencies)
 
 Every gate, its cadences and what makes it block are in [docs/reference/gates.md](docs/reference/gates.md). CI runs the same gates through `bin/harness`.
 [Work with the harness](docs/how-to/work-with-the-harness.md) walks through a change from the first edit to the pull request, with the commit hook, the test

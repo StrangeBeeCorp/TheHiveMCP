@@ -1,8 +1,6 @@
 package checks
 
 import (
-	"bufio"
-	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -24,8 +22,9 @@ const (
 	minSections = 2
 )
 
-// mdLink is a markdown link's target: [text](target), the anchor apart.
-var mdLink = regexp.MustCompile(`\]\(([^)\s#]*)(#[^)\s]*)?\)`)
+// mdLink is a markdown link's target: [text](target), [text](<target>) or [text](target "title"),
+// the anchor apart. Group 1 is an angle-bracketed target (anchor included), group 2 a bare one.
+var mdLink = regexp.MustCompile(`\]\(\s*(?:<([^>]*)>|([^)\s#<]*))(?:#[^)\s]*)?(?:\s+"[^"]*")?\s*\)`)
 
 // DocsLayout checks the documentation's shape: every page under docs/ sits in a Diataxis folder, a
 // long page has section headings, and a relative link in docs/ or .github/ reaches a file.
@@ -71,68 +70,82 @@ func placed(f string) []Finding {
 		}
 	}
 
-	return []Finding{{Path: f, Msg: "outside the documentation's folders: move it to docs/tutorial, docs/how-to, docs/reference or docs/explanation (Diataxis)"}}
+	return []Finding{{Path: f, Msg: "outside the documentation's folders: move it to docs/" + strings.Join(docsFolders, ", docs/") +
+		" (Diataxis's four kinds, and evaluation/ for published evidence)"}}
 }
 
-// sectioned refuses a long page with too few section headings to search by.
-func sectioned(f string, content []byte) []Finding {
-	lines, sections := 0, 0
+// markdownLine is a line of a page, and whether it sits in a fenced code block.
+type markdownLine struct {
+	text   string
+	fenced bool
+}
+
+// readLines splits a page into lines, however long, each marked in or out of a fenced code block;
+// a fence line itself counts as fenced.
+func readLines(content []byte) []markdownLine {
+	var out []markdownLine
+
 	fenced := false
 
-	sc := bufio.NewScanner(bytes.NewReader(content))
-	sc.Buffer(make([]byte, 0, 64*1024), 1<<20) //nolint:mnd // a markdown line is short
-
-	for sc.Scan() {
-		lines++
-
-		t := strings.TrimSpace(sc.Text())
+	for text := range strings.SplitSeq(string(content), "\n") {
+		t := strings.TrimSpace(text)
 		if strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~") {
 			fenced = !fenced
+			out = append(out, markdownLine{text: text, fenced: true})
 
 			continue
 		}
 
-		if !fenced && strings.HasPrefix(t, "## ") {
+		out = append(out, markdownLine{text: text, fenced: fenced})
+	}
+
+	if n := len(out); n > 0 && out[n-1].text == "" {
+		out = out[:n-1] // the newline that ends the last line
+	}
+
+	return out
+}
+
+// sectioned refuses a long page with too few section headings to search by.
+func sectioned(f string, content []byte) []Finding {
+	lines := readLines(content)
+	sections := 0
+
+	for _, l := range lines {
+		if !l.fenced && strings.HasPrefix(strings.TrimSpace(l.text), "## ") {
 			sections++
 		}
 	}
 
-	if lines > longPage && sections < minSections {
-		return []Finding{{Path: f, Msg: fmt.Sprintf("%d lines and %d section heading(s): a page over %d lines needs at least %d ## headings to be searched by", lines, sections, longPage, minSections)}}
+	if len(lines) > longPage && sections < minSections {
+		return []Finding{{Path: f, Msg: fmt.Sprintf("%d lines and %d section heading(s): a page over %d lines needs at least %d ## headings to be searched by", len(lines), sections, longPage, minSections)}}
 	}
 
 	return nil
 }
 
-// brokenLinks finds the relative links of a page whose target is not in the tree.
+// brokenLinks finds the relative links of a page whose target is not in the tree. A link in a
+// fenced block or a code span is an example, not a link.
 func brokenLinks(tree Tree, f string, content []byte) []Finding {
 	var out []Finding
 
-	fenced := false
-
-	sc := bufio.NewScanner(bytes.NewReader(content))
-	sc.Buffer(make([]byte, 0, 64*1024), 1<<20) //nolint:mnd // a markdown line is short
-
-	for line := 1; sc.Scan(); line++ {
-		text := sc.Text()
-		if t := strings.TrimSpace(text); strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~") {
-			fenced = !fenced
-
+	for i, l := range readLines(content) {
+		if l.fenced {
 			continue
 		}
 
-		if fenced {
-			continue
-		}
+		for _, m := range mdLink.FindAllStringSubmatch(inlineCode.ReplaceAllString(l.text, ""), -1) {
+			target := m[2]
+			if m[1] != "" {
+				target, _, _ = strings.Cut(m[1], "#")
+			}
 
-		for _, m := range mdLink.FindAllStringSubmatch(text, -1) {
-			target := m[1]
 			if target == "" || strings.Contains(target, "://") || strings.HasPrefix(target, "mailto:") {
 				continue // an anchor in the page, or a link out of the repository
 			}
 
 			if !tree.Exists(linkedFile(f, target)) {
-				out = append(out, Finding{Path: fmt.Sprintf("%s:%d", f, line), Msg: "links to " + target + ", which is not in the repository"})
+				out = append(out, Finding{Path: fmt.Sprintf("%s:%d", f, i+1), Msg: "links to " + target + ", which is not in the repository"})
 			}
 		}
 	}

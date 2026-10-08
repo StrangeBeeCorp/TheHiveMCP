@@ -30,3 +30,15 @@ func TestWrapFillsLinesWithoutBreakingCode(t *testing.T) {
 		assert.Equal(t, 0, strings.Count(line, "`")%2, "a code span is split across lines: %q", line)
 	}
 }
+
+// A link's text is kept whole on one line, as prettier keeps it: the generated page then stays as
+// prettier leaves it.
+func TestWrapKeepsALinksTextWhole(t *testing.T) {
+	t.Parallel()
+
+	text := strings.Repeat("word ", 30) + "see [Work with the harness](../how-to/work-with-the-harness.md) and " + strings.Repeat("more ", 30)
+
+	for line := range strings.SplitSeq(gatesdoc.Wrap(text), "\n") {
+		assert.Equal(t, strings.Count(line, "["), strings.Count(line, "]"), "a link's text split across lines: %q", line)
+	}
+}
