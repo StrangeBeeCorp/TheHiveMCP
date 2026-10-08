@@ -100,3 +100,18 @@ ones the review read, and lists two kinds in its output and in the Gate evidence
 and a commit added since the review, which no review read. A branch none of whose commits a ready review read is refused.
 
 CI runs every gate again on the pull request, against TheHive 5.5 and 5.8, and a person merges it.
+
+## See the repository's health
+
+```sh
+make dashboard
+```
+
+It builds one page, `.cache/dashboard/index.html`, and opens it: who and which models contribute (the commits' trailers, `Co-Authored-By` before them), how long
+the gates take on CI and on every developer's machine (the notes of `make pr`), the tests per layer, merges and releases, lead times, quality (pull request
+grades, the last local run's coverage and mutation scores, files against the structure limits, `//nolint` and TODO counts) and DORA-style measures of main.
+`make dashboard WEEKS=52` looks further back than the default 26 weeks. Every number is read when the page is built, from git, `gh` and the tree, in about ten
+seconds; a source it cannot read is named at the top and in the sections it feeds, and never stops the build.
+
+Jira's lead times need `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` and `JIRA_JQL` (the done tickets to chart, such as
+`project = DL AND statusCategory = Done AND resolved >= -26w`) in the environment; without them that chart is left out, and the page says so.

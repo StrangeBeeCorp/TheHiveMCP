@@ -19,6 +19,10 @@ gate: ## Run one gate now, whatever changed (list: docs/reference/gates.md) ##@ 
 next: ## What to work on: a blocked agent, then the open nightly findings, the oldest first ##@ make next
 	@bin/harness next
 
+.PHONY: dashboard
+dashboard: ## The repository's health page, from git, gh and the tree, opened in the browser ##@ make dashboard [WEEKS=26]
+	@bin/harness dashboard --open $(if $(WEEKS),--weeks $(WEEKS))
+
 .PHONY: harness-docs
 harness-docs: ## Regenerate docs/reference/gates.md from gates/registry.yaml ##@ make harness-docs
 	@bin/harness docs

@@ -41,6 +41,7 @@ import (
 	"time"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/checks"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/dashboard"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gatesdoc"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/registry"
@@ -193,7 +194,7 @@ func stagedRun(args []string) bool {
 
 func dispatch(ctx context.Context, args []string, stdin io.Reader, out io.Writer) error {
 	if len(args) == 0 {
-		return usageError{"usage: harness run|select|list|check|docs|hook|pr|push|evidence|review-effort|canaries|structure|lint|fmt|package|sign-windows|integration|bench|mutation|triage|debt|next|trailers|eval-smoke|unseal (see cmd/harness/main.go)"}
+		return usageError{"usage: harness run|select|list|check|docs|hook|pr|push|evidence|review-effort|canaries|structure|lint|fmt|package|sign-windows|integration|bench|mutation|triage|debt|next|dashboard|trailers|eval-smoke|unseal (see cmd/harness/main.go)"}
 	}
 
 	if command, ok := standalone[args[0]]; ok {
@@ -250,6 +251,14 @@ var standalone = map[string]func(env, context.Context, []string, io.Writer) erro
 	cmdPackage:     env.packageCmd,
 	cmdSign:        env.signWindows,
 	cmdIntegration: env.integration,
+	"dashboard": func(e env, ctx context.Context, args []string, out io.Writer) error {
+		err := dashboard.Command(ctx, e.root, args, out)
+		if errors.Is(err, dashboard.ErrUsage) {
+			return usageError{err.Error()}
+		}
+
+		return err //nolint:wrapcheck // the dashboard's errors say what failed
+	},
 }
 
 // The commands that select gates from the changed paths.

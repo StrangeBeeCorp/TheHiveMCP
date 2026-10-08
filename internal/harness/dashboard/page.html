@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Repository health</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --series: #2a78d6;
+  --warn-bg: #fff4dc; --warn-ink: #6b4a00;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --series: #3987e5;
+    --warn-bg: #2e2510; --warn-ink: #f5d48a;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --series: #3987e5;
+  --warn-bg: #2e2510; --warn-ink: #f5d48a;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1080px; margin: 0 auto; padding: 24px 16px 64px; }
+header h1 { font-size: 26px; margin: 0 0 4px; }
+header p, .lead, .note { color: var(--ink-2); margin: 0; }
+nav { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 14px 0 0; font-size: 14px; }
+nav a { color: var(--ink-2); }
+section { margin-top: 36px; }
+h2 { font-size: 20px; margin: 0 0 4px; }
+h3 { font-size: 15px; margin: 0 0 2px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-top: 16px; }
+.tile, .block { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.tile .label { color: var(--ink-2); font-size: 13px; }
+.tile .value { font-size: 26px; font-weight: 600; margin: 2px 0; }
+.tile .note { font-size: 12px; color: var(--muted); }
+.blocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 16px; margin-top: 16px; }
+.block.tiles-block { grid-column: 1 / -1; }
+.block.tiles-block .tiles { margin-top: 8px; }
+.notice { background: var(--warn-bg); color: var(--warn-ink); border-radius: 8px; padding: 8px 12px; margin-top: 10px; font-size: 14px; }
+.notice b::before { content: "⚠ "; }
+.notice ul { margin: 4px 0 0; padding-left: 20px; overflow-wrap: anywhere; }
+.chart { width: 100%; height: auto; display: block; margin-top: 8px; overflow: visible; }
+.chart .bar { fill: var(--series); }
+.chart .hit { fill: transparent; }
+.chart .mark:hover .bar { opacity: 0.8; }
+.chart .grid { stroke: var(--grid); stroke-width: 1; }
+.chart .axis { stroke: var(--axis); stroke-width: 1; }
+.chart text { font: 13px system-ui, -apple-system, "Segoe UI", sans-serif; }
+.chart .tick { fill: var(--muted); font-variant-numeric: tabular-nums; }
+.chart .label { fill: var(--ink-2); }
+.chart .value { fill: var(--ink); font-variant-numeric: tabular-nums; }
+.empty { color: var(--muted); font-size: 14px; margin-top: 8px; }
+table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+th { text-align: left; color: var(--ink-2); font-weight: 600; border-bottom: 1px solid var(--axis); padding: 4px 6px; }
+td { border-bottom: 1px solid var(--grid); padding: 4px 6px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+details { margin-top: 6px; font-size: 13px; color: var(--ink-2); }
+.scroll { overflow-x: auto; }
+#tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--page); padding: 4px 8px; border-radius: 6px; font-size: 12px; display: none; max-width: 320px; }
+footer { margin-top: 40px; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>{{.Repo}}: repository health</h1>
+  <p>At {{.Head}}, from {{.Window}}. Built {{.Built}}.</p>
+  <nav>{{range .Sections}}<a href="#{{.ID}}">{{.Title}}</a>{{end}}</nav>
+  {{if .Missing}}<div class="notice"><b>Not read, so some sections are partial:</b><ul>{{range .Missing}}<li>{{.Source}}: {{.Why}}</li>{{end}}</ul></div>{{end}}
+</header>
+<div class="tiles">{{range .Tiles}}<div class="tile"><div class="label">{{.Label}}</div><div class="value">{{.Value}}</div><div class="note">{{.Note}}</div></div>{{end}}</div>
+{{range .Sections}}
+<section id="{{.ID}}">
+  <h2>{{.Title}}</h2>
+  <p class="lead">{{.Lead}}</p>
+  {{range .Notices}}<div class="notice"><b>{{.Source}} could not be read:</b> {{.Why}}</div>{{end}}
+  <div class="blocks">
+  {{range .Blocks}}
+    {{if eq .Kind "tiles"}}
+    <div class="block tiles-block">{{if .Title}}<h3>{{.Title}}</h3>{{end}}
+      <div class="tiles">{{range .Tiles}}<div class="tile"><div class="label">{{.Label}}</div><div class="value">{{.Value}}</div><div class="note">{{.Note}}</div></div>{{end}}</div>
+    </div>
+    {{else}}
+    <div class="block">
+      <h3>{{.Title}}</h3>{{if .Note}}<p class="note">{{.Note}}</p>{{end}}
+      {{if eq .Kind "table"}}
+        {{if .Rows}}<div class="scroll"><table><tr>{{range .Head}}<th>{{.}}</th>{{end}}</tr>{{range .Rows}}<tr>{{range .}}<td>{{.}}</td>{{end}}</tr>{{end}}</table></div>{{else}}<p class="empty">Nothing to show.</p>{{end}}
+      {{else}}
+        {{if .Items}}{{if eq .Kind "bars"}}{{bars .Items}}{{else}}{{hbars .Items}}{{end}}
+        <details><summary>Table</summary><table><tr><th>{{if eq .Kind "bars"}}Week of{{else}}Item{{end}}</th><th>Value</th></tr>{{range .Items}}<tr><td>{{.Label}}</td><td>{{.Text}}</td></tr>{{end}}</table></details>
+        {{else}}<p class="empty">Nothing to show.</p>{{end}}
+      {{end}}
+    </div>
+    {{end}}
+  {{end}}
+  </div>
+</section>
+{{end}}
+<footer>make dashboard · every number is read when the page is built; nothing is stored.</footer>
+</main>
+<div id="tip" role="tooltip"></div>
+<script>
+const tip = document.getElementById("tip");
+document.querySelectorAll(".mark").forEach(function (m) {
+  m.addEventListener("pointermove", function (e) {
+    tip.textContent = m.dataset.tip;
+    tip.style.display = "block";
+    tip.style.left = Math.min(e.clientX + 12, window.innerWidth - tip.offsetWidth - 8) + "px";
+    tip.style.top = (e.clientY + 14) + "px";
+  });
+  m.addEventListener("pointerleave", function () { tip.style.display = "none"; });
+});
+</script>
+</body>
+</html>
