@@ -68,7 +68,7 @@ func barsSVG(items []Item) template.HTML {
 	slot := float64(chartW-padLeft) / float64(len(items))
 	base := float64(chartH - padBottom)
 
-	fmt.Fprintf(&b, `<svg class="chart" viewBox="0 0 %d %d" role="img" aria-label="%s">`, chartW, chartH, html.EscapeString(fmt.Sprintf("%d weeks, up to %s", len(items), items[0].Text)))
+	fmt.Fprintf(&b, `<svg class="chart" viewBox="0 0 %d %d" role="img" aria-label="%s">`, chartW, chartH, html.EscapeString(fmt.Sprintf("%d weeks, up to %s", len(items), maxText(items, top))))
 	fmt.Fprintf(&b, `<line class="grid" x1="%d" x2="%d" y1="%d" y2="%d"/>`, padLeft, chartW, padTop, padTop)
 	fmt.Fprintf(&b, `<text class="tick" x="%d" y="%d" text-anchor="end">%s</text>`, padLeft-tickGap, padTop+tickRise, html.EscapeString(maxText(items, top)))
 	fmt.Fprintf(&b, `<line class="axis" x1="%d" x2="%d" y1="%.1f" y2="%.1f"/>`, padLeft, chartW, base, base)

@@ -34,6 +34,7 @@ func readNotes(ctx context.Context, root string) ([]NoteRun, error) {
 	git := func(stdin io.Reader, args ...string) ([]byte, error) {
 		cmd := exec.CommandContext(ctx, "git", args...) // #nosec G204 -- git with the dashboard's own arguments
 		cmd.Dir = root
+		cmd.WaitDelay = waitDelay
 		cmd.Stdin = stdin
 
 		out, err := cmd.Output()

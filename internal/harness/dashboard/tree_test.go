@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/checks"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx/gittest"
 )
 
 // A test is an integration test when its calls reach StartTheHiveContainer: through testutils'
@@ -77,4 +78,32 @@ func TestTheLastLocalRunGivesCoverageAndMutation(t *testing.T) {
 	assert.Equal(t, "new", r.Head, "the latest run")
 	assert.InDelta(t, 64.8, r.Coverage, 0.01, "found after a 2 MiB line")
 	assert.Equal(t, []Mutation{{Package: "internal/utils", Efficacy: 84, Floor: 81}}, r.Mutation)
+}
+
+// A tracked file deleted from the working tree is skipped, as the structure gate skips it; the
+// other tests are still counted.
+func TestADeletedFileLeavesTheOtherTestsCounted(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a_test.go"), []byte("package a\nfunc TestA(t *testing.T) {}\n"), 0o600))
+
+	l, err := countLayers(checks.DirTree{Root: dir, Names: []string{"a_test.go", "gone_test.go"}})
+	require.NoError(t, err)
+	assert.Equal(t, Layers{Unit: 1}, l)
+}
+
+// A canary manifest that cannot be read is said; the tree's other numbers are kept.
+func TestAnUnreadableCanaryManifestIsSaid(t *testing.T) {
+	t.Parallel()
+
+	limits, err := os.ReadFile(filepath.Join("..", "..", "..", "gates", "limits.yaml"))
+	require.NoError(t, err)
+
+	dir := gittest.Repo(t, map[string]string{"gates/limits.yaml": string(limits), "a_test.go": "package a\nfunc TestA(t *testing.T) {}\n"})
+
+	d, err := readTree(t.Context(), dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "the canaries")
+	assert.Equal(t, 1, d.Layers.Unit, "the tests are still counted")
 }

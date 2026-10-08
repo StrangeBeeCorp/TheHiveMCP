@@ -55,6 +55,7 @@ func readGit(ctx context.Context, o Options) (history, error) {
 	git := func(args ...string) (string, error) {
 		cmd := exec.CommandContext(ctx, "git", args...) // #nosec G204 -- git with the dashboard's own arguments
 		cmd.Dir = o.Root
+		cmd.WaitDelay = waitDelay
 
 		out, err := cmd.Output()
 		if err != nil {

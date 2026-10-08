@@ -149,3 +149,11 @@ func TestThePageIsDrawnFromTheDataAndSaysWhatItCouldNotRead(t *testing.T) {
 	assert.Contains(t, page, "debt: a flaky test")
 	assert.Contains(t, page, "Not read, so some sections are partial")
 }
+
+// A chart's label names its largest value, not its first.
+func TestAChartsLabelNamesItsLargestValue(t *testing.T) {
+	t.Parallel()
+
+	svg := string(barsSVG([]Item{{Value: 0, Text: "0"}, {Value: 5, Text: "5"}, {Value: 12, Text: "12"}}))
+	assert.Contains(t, svg, `aria-label="3 weeks, up to 12"`)
+}

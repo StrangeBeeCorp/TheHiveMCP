@@ -23,6 +23,7 @@
 //	harness bench [--base REF]  (the benchmarks at the merge base and at HEAD, against gates/bench.yaml)
 //	harness triage --runs DIR --run-url URL [--expect SHARD,...] [--dry-run]  (the night's failures as issues labelled nightly)
 //	harness next  (make next: a blocked agent, then the open nightly findings, the oldest first)
+//	harness dashboard [--weeks N] [--out PATH] [--open]  (make dashboard: the repository's health on one page)
 //	harness eval-smoke [--eval DIR] [--out FILE] [--previous FILE]  (TheHiveMCPEval's suite on gates/eval.yaml's model, held to its cap and the previous night)
 package main
 

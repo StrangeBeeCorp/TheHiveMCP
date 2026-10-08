@@ -3,10 +3,12 @@ package dashboard
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"path"
 	"path/filepath"
 	"slices"
@@ -70,10 +72,11 @@ func readTree(ctx context.Context, root string) (TreeData, error) {
 		return d, err
 	}
 
-	d.Layers.Canaries = canaries(root, tree)
 	d.Nolint, d.TODO = waivers(tree)
 
-	return d, nil
+	d.Layers.Canaries, err = canaries(root, tree)
+
+	return d, err
 }
 
 // nearLimit counts the files at 90 % of their limit, or of their cap, or over it.
@@ -90,19 +93,19 @@ func nearLimit(files []checks.FileSize) int {
 	return n
 }
 
-// canaries counts the canaries the manifest holds, 0 when it cannot be read.
-func canaries(root string, tree checks.Tree) int {
+// canaries counts the canaries the manifest holds.
+func canaries(root string, tree checks.Tree) (int, error) {
 	reg, err := registry.Load(filepath.Join(root, "gates", "registry.yaml"))
 	if err != nil {
-		return 0
+		return 0, fmt.Errorf("the canaries: %w", err)
 	}
 
 	c, err := checks.LoadCanaries(tree, reg)
 	if err != nil {
-		return 0
+		return 0, fmt.Errorf("the canaries: %w", err)
 	}
 
-	return len(c)
+	return len(c), nil
 }
 
 // waivers counts the //nolint directives and the TODOs of the Go files.
@@ -182,6 +185,10 @@ func parseDirs(tree checks.Tree) (map[string]*goFiles, error) {
 		}
 
 		data, err := tree.Read(name)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue // deleted from the working tree, not yet from the index
+		}
+
 		if err != nil {
 			return nil, fmt.Errorf("parse the tests: %w", err)
 		}

@@ -25,6 +25,10 @@ const (
 // sourceTimeout bounds each source: the page is built in under a minute, whatever answers late.
 const sourceTimeout = 40 * time.Second
 
+// waitDelay bounds how long a command's output is waited for once it was stopped: a helper it
+// started (git fetch's transport) may still hold its pipes.
+const waitDelay = 2 * time.Second
+
 // Options say where the page reads from.
 type Options struct {
 	// Root is the checkout.
