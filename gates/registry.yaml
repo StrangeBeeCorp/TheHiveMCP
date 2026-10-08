@@ -142,7 +142,7 @@ suites:
       - .claude/skills/**
   - id: meta
     review: low
-    about: Repository metadata that no test reads
+    about: Repository metadata no gate reads (renovate.json's security settings are held by a unit test, which every change runs)
     paths:
       - LICENSE
       - NOTICE
