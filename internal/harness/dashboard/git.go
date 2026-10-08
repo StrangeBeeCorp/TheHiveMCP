@@ -175,8 +175,8 @@ func trailers(c *Commit, msg string) {
 	c.Model = modelName(c.Model)
 }
 
-// context drops what a model's name says of its context window, "(1M context)".
-var contextNote = regexp.MustCompile(`\s*\([^)]*\)`)
+// contextNote drops what a model's name says of its context window: "(1M context)", "[1m]".
+var contextNote = regexp.MustCompile(`\s*(\([^)]*\)|\[[^\]]*\])`)
 
 // modelName gives a model one name, whichever way a commit wrote it: the trailer's ID,
 // claude-opus-5-5, and Co-Authored-By's name, Claude Opus 5.5 (1M context), are both Claude Opus
@@ -193,6 +193,7 @@ func modelName(s string) string {
 
 	for _, p := range parts {
 		switch {
+		case p == "":
 		case len(p) == len("20251001") && isDigits(p): // a release date
 		case isDigits(p):
 			version = append(version, p)

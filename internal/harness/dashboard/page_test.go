@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	_ "time/tzdata" // Europe/Paris, whatever the image holds
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,8 +46,8 @@ func TestMainsRunsGiveFailureRestoreAndFlakes(t *testing.T) {
 	base := at("2026-10-01T10:00:00Z")
 	runs := []Run{
 		{Created: base, Updated: base.Add(10 * time.Minute), Conclusion: success, Attempt: 1},
-		{Created: base.Add(time.Hour), Updated: base.Add(70 * time.Minute), Conclusion: "failure", Attempt: 1},
-		{Created: base.Add(2 * time.Hour), Updated: base.Add(130 * time.Minute), Conclusion: "failure", Attempt: 1},
+		{Created: base.Add(time.Hour), Updated: base.Add(70 * time.Minute), Conclusion: failure, Attempt: 1},
+		{Created: base.Add(2 * time.Hour), Updated: base.Add(130 * time.Minute), Conclusion: failure, Attempt: 1},
 		{Created: base.Add(3 * time.Hour), Updated: base.Add(4 * time.Hour), Conclusion: success, Attempt: 2},
 	}
 
@@ -71,6 +72,24 @@ func TestASeriesHasEveryWeekOfTheWindow(t *testing.T) {
 	assert.Equal(t, []float64{2, 0, 1}, []float64{items[0].Value, items[1].Value, items[2].Value})
 }
 
+// Across a change of time (Paris goes back an hour on 25 October 2026) the weeks still start on
+// Monday at midnight, and an entry late on Sunday stays in its week.
+func TestAWeekAcrossAChangeOfTimeStaysMondayToMonday(t *testing.T) {
+	t.Parallel()
+
+	paris, err := time.LoadLocation("Europe/Paris")
+	require.NoError(t, err)
+
+	since := time.Date(2026, 10, 19, 12, 0, 0, 0, paris)
+	sunday := time.Date(2026, 11, 1, 23, 30, 0, 0, paris)
+
+	items := weekly(since, since.AddDate(0, 0, 14), []time.Time{sunday}, func(t time.Time) time.Time { return t },
+		func(in []time.Time) float64 { return float64(len(in)) }, count)
+	require.Len(t, items, 3)
+	assert.Equal(t, []string{"Oct 19", "Oct 26", "Nov 2"}, []string{items[0].Label, items[1].Label, items[2].Label})
+	assert.Equal(t, []float64{0, 1, 0}, []float64{items[0].Value, items[1].Value, items[2].Value}, "Sunday 23:30 is in the week of Oct 26")
+}
+
 // The page is drawn from the data: its headline numbers, its sections, the sources it could not
 // read in the sections they feed, and every text escaped.
 func TestThePageIsDrawnFromTheDataAndSaysWhatItCouldNotRead(t *testing.T) {
@@ -84,8 +103,8 @@ func TestThePageIsDrawnFromTheDataAndSaysWhatItCouldNotRead(t *testing.T) {
 			{Author: "Bo <script>", When: now},
 		},
 		Merges: []time.Time{now.AddDate(0, 0, -1)},
-		Tags:   []Tag{{Name: "v1.1.0", When: now.AddDate(0, 0, -2)}, {Name: "v1.0.0", When: now.AddDate(0, 0, -12)}},
-		Notes: []NoteRun{{Note: evidence.Note{Started: now, Seconds: 600, Gates: []evidence.GateTime{{Gate: "integration", Seconds: 345}}},
+		Tags:   []Tag{{Name: tagNew, When: now.AddDate(0, 0, -2)}, {Name: "v1.0.0", When: now.AddDate(0, 0, -12)}},
+		Notes: []NoteRun{{Note: evidence.Note{Started: now, Seconds: 600, Gates: []evidence.GateTime{{Gate: gateIT, Seconds: 345}}},
 			MachineLabel: "darwin/arm64, 15 CPUs"}},
 		GitHub: GitHubData{
 			PRs:  []PR{{Number: 1, Base: mainBranch, Merged: now.AddDate(0, 0, -1), FirstCommit: now.AddDate(0, 0, -3), Grade: 9, ReviewTokens: 50000, Fixed: 2}},

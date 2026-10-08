@@ -12,8 +12,6 @@ import (
 )
 
 const (
-	day  = 24 * time.Hour
-	week = 7 * day
 	// topItems is how many items a breakdown shows before folding the rest into "Other".
 	topItems = 7
 	// recentRuns is how many runs a headline takes its median from.
@@ -45,11 +43,11 @@ func weekly[T any](since, now time.Time, entries []T, when func(T) time.Time, va
 
 	var items []Item
 
-	for w := start; !w.After(now); w = w.Add(week) {
+	for w := start; !w.After(now); w = w.AddDate(0, 0, daysAWeek) {
 		var in []T
 
 		for _, e := range entries {
-			if t := when(e); !t.Before(w) && t.Before(w.Add(week)) {
+			if t := when(e); !t.Before(w) && t.Before(w.AddDate(0, 0, daysAWeek)) {
 				in = append(in, e)
 			}
 		}

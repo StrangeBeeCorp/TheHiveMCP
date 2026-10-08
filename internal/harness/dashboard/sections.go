@@ -44,7 +44,7 @@ func quality(d Data, prs []PR) []Block {
 	}
 
 	tiles := Block{Kind: kindTiles, Tiles: []Tile{
-		{Label: "Mean grade", Value: fmt.Sprintf("%.1f/10", mean), Note: fmt.Sprintf("of %d graded pull requests", int(graded))},
+		{Label: "Mean grade", Value: decimal(mean, "/10"), Note: fmt.Sprintf("of %d graded pull requests", int(graded))},
 		{Label: "Coverage", Value: cov, Note: "statements, last make pr: " + run},
 		{Label: "Files near their limit", Value: strconv.Itoa(d.Tree.NearLimit), Note: "at 90 % of their line limit or over"},
 		{Label: "//nolint", Value: strconv.Itoa(d.Tree.Nolint), Note: "waivers of the linters in Go files"},
@@ -142,7 +142,7 @@ func delivery(d Data, runs []Run, prs []PR) []Block {
 		{Kind: kindTiles, Title: "Nightly, review, flaky, findings", Tiles: []Tile{
 			{Label: "Nightly pass rate", Value: percent(hundred - failureRate(nightly)), Note: fmt.Sprintf("of %d nightly runs", len(nightly))},
 			{Label: "Review cost", Value: thousands(median(tokens)), Note: fmt.Sprintf("median tokens, %d reviewed pull requests", len(tokens))},
-			{Label: "Review yield", Value: fmt.Sprintf("%.1f", yield), Note: "findings fixed per 100k tokens"},
+			{Label: "Review yield", Value: decimal(yield, ""), Note: "findings fixed per 100k tokens"},
 			{Label: "Flaky", Value: strconv.Itoa(flakyRuns(runs)), Note: fmt.Sprintf("main runs green only on a retry; %d open flaky-test issues", flakyIssues)},
 			{Label: "Open findings", Value: strconv.Itoa(len(open)), Note: "nightly findings and debt, the oldest " + days(oldest)},
 		}},
@@ -152,6 +152,15 @@ func delivery(d Data, runs []Run, prs []PR) []Block {
 		},
 		{Kind: kindTable, Title: "Open findings and debt", Head: []string{"Issue", "Title", "Open for"}, Rows: findings},
 	}
+}
+
+// decimal is a value with one decimal and its unit, "–" when there is none.
+func decimal(v float64, unit string) string {
+	if math.IsNaN(v) {
+		return "–"
+	}
+
+	return fmt.Sprintf("%.1f%s", v, unit)
 }
 
 func hours(h float64) string {

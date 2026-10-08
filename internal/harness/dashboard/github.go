@@ -34,7 +34,7 @@ const (
 const (
 	ciWorkflow      = "ci.yml"
 	nightlyWorkflow = "nightly.yml"
-	runLimit        = "300"
+	runLimit        = 1000
 	issueLimit      = "500"
 )
 
@@ -100,7 +100,7 @@ const prQuery = `query($owner: String!, $name: String!, $endCursor: String) {
 }`
 
 // readGitHub asks gh for each part at once; a part that fails is named, the others are kept.
-func readGitHub(ctx context.Context, gh GitHub) (GitHubData, map[string]error) {
+func readGitHub(ctx context.Context, gh GitHub, since time.Time) (GitHubData, map[string]error) {
 	if gh == nil {
 		return GitHubData{}, map[string]error{SourceGitHub: errNoGH}
 	}
@@ -128,11 +128,11 @@ func readGitHub(ctx context.Context, gh GitHub) (GitHubData, map[string]error) {
 		return err
 	})
 	part(SourceCI, func() (err error) {
-		d.CI, err = readRuns(ctx, gh, ciWorkflow)
+		d.CI, err = readRuns(ctx, gh, ciWorkflow, since)
 		return err
 	})
 	part(SourceNightly, func() (err error) {
-		d.Nightly, err = readRuns(ctx, gh, nightlyWorkflow)
+		d.Nightly, err = readRuns(ctx, gh, nightlyWorkflow, since)
 		return err
 	})
 	part(SourceIssues, func() error {
@@ -222,9 +222,14 @@ func reviewOf(body string) (grade, tokens, fixed int) {
 	return grade, tokens, fixed
 }
 
-func readRuns(ctx context.Context, gh GitHub, workflow string) ([]Run, error) {
-	out, err := gh.Run(ctx, "run", "list", "--workflow", workflow, "--limit", runLimit,
-		"--json", "createdAt,updatedAt,conclusion,attempt,headBranch,event")
+// errCutShort means gh's list stopped before the window's start: the earliest weeks are left out.
+var errCutShort = errors.New("cut short")
+
+// readRuns lists the workflow's runs of pushes to main, the newest first, and says so when the
+// list stops before since: its earliest weeks would read as weeks without runs.
+func readRuns(ctx context.Context, gh GitHub, workflow string, since time.Time) ([]Run, error) {
+	out, err := gh.Run(ctx, "run", "list", "--workflow", workflow, "--branch", mainBranch, "--limit", strconv.Itoa(runLimit),
+		"--created", ">="+since.Format(time.DateOnly), "--json", "createdAt,updatedAt,conclusion,attempt,headBranch,event")
 	if err != nil {
 		return nil, fmt.Errorf("the runs of %s: %w", workflow, err)
 	}
@@ -234,6 +239,10 @@ func readRuns(ctx context.Context, gh GitHub, workflow string) ([]Run, error) {
 	err = json.Unmarshal(out, &runs)
 	if err != nil {
 		return nil, fmt.Errorf("read gh's runs of %s: %w", workflow, err)
+	}
+
+	if len(runs) >= runLimit && runs[len(runs)-1].Created.After(since) {
+		return runs, fmt.Errorf("the runs of %s are %w at the newest %d, back to %s", workflow, errCutShort, runLimit, runs[len(runs)-1].Created.Format(time.DateOnly))
 	}
 
 	return runs, nil

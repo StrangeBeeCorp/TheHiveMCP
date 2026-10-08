@@ -96,7 +96,7 @@ func Collect(ctx context.Context, o Options) Data {
 		func(ctx context.Context) {
 			var errs map[string]error
 
-			d.GitHub, errs = readGitHub(ctx, o.GitHub)
+			d.GitHub, errs = readGitHub(ctx, o.GitHub, o.Since)
 			for source, err := range errs {
 				miss(source, err)
 			}

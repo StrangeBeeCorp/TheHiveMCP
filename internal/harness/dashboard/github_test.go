@@ -42,7 +42,7 @@ func TestGitHubIsReadPartByPart(t *testing.T) {
 		"issue list --label debt":    `[]`,
 	}
 
-	d, errs := readGitHub(t.Context(), gh)
+	d, errs := readGitHub(t.Context(), gh, at("2026-09-01T00:00:00Z"))
 
 	require.Len(t, d.PRs, 2)
 	assert.Equal(t, PR{
@@ -57,11 +57,33 @@ func TestGitHubIsReadPartByPart(t *testing.T) {
 	require.Len(t, errs, 1, "only the nightly runs failed")
 	require.ErrorIs(t, errs[SourceNightly], errNoAnswer)
 
-	_, errs = readGitHub(t.Context(), nil)
+	_, errs = readGitHub(t.Context(), nil, time.Time{})
 	require.ErrorIs(t, errs[SourceGitHub], errNoGH)
 
-	_, errs = readGitHub(t.Context(), fakeGH{"api graphql": "{not json"})
+	_, errs = readGitHub(t.Context(), fakeGH{"api graphql": "{not json"}, time.Time{})
 	require.Error(t, errs[SourcePRs])
+}
+
+// A list of runs that stops before the window's start is kept, and said to be cut short: its
+// earliest weeks would otherwise read as weeks without runs.
+func TestARunListCutShortIsSaid(t *testing.T) {
+	t.Parallel()
+
+	runs := make([]string, runLimit)
+	for i := range runs {
+		runs[i] = `{"createdAt":"2026-10-01T10:00:00Z","conclusion":"success","headBranch":"main","event":"push"}`
+	}
+
+	gh := fakeGH{"run list --workflow ci.yml --branch main": "[" + strings.Join(runs, ",") + "]"}
+
+	got, err := readRuns(t.Context(), gh, ciWorkflow, at("2026-04-01T00:00:00Z"))
+	require.ErrorIs(t, err, errCutShort)
+	assert.Contains(t, err.Error(), "back to 2026-10-01")
+	assert.Len(t, got, runLimit, "the runs read are kept")
+
+	got, err = readRuns(t.Context(), gh, ciWorkflow, at("2026-10-01T12:00:00Z"))
+	require.NoError(t, err, "the list reaches the window's start")
+	assert.Len(t, got, runLimit)
 }
 
 func at(s string) time.Time {

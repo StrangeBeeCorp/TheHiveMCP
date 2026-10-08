@@ -13,7 +13,7 @@ import (
 const opus55 = "Claude Opus 5.5"
 
 // One model has one name, however a commit wrote it: the trailer's ID, Co-Authored-By's name with
-// its context window, or a dated ID.
+// its context window, or a dated ID; a malformed one never stops the build.
 func TestAModelHasOneNameHoweverACommitWroteIt(t *testing.T) {
 	t.Parallel()
 
@@ -24,6 +24,9 @@ func TestAModelHasOneNameHoweverACommitWroteIt(t *testing.T) {
 		"claude-haiku-4-5-20251001":    "Claude Haiku 4.5",
 		"claude-fable-5-1":             "Claude Fable 5.1",
 		"Claude Fable 5":               "Claude Fable 5",
+		"claude-opus-4-7[1m]":          "Claude Opus 4.7",
+		"claude-":                      "Claude",
+		"-":                            "",
 		"":                             "",
 	} {
 		assert.Equal(t, want, modelName(in), in)
