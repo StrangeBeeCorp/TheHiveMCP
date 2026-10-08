@@ -16,7 +16,7 @@ import (
 
 // A clone's notes ref is named by an id drawn at random once and kept in its git config: the same
 // clone keeps it, another clone draws its own, and neither names the machine. Memory is read from
-// /proc/meminfo on Linux.
+// /proc/meminfo on Linux, from hw.memsize on macOS.
 func TestAClonesNotesRefIsItsOwnAndTheMachineIsMeasured(t *testing.T) {
 	t.Parallel()
 
@@ -38,6 +38,8 @@ func TestAClonesNotesRefIsItsOwnAndTheMachineIsMeasured(t *testing.T) {
 	require.NoError(t, os.WriteFile(p, []byte("MemFree:  1000 kB\nMemTotal:       8152000 kB\n"), 0o600))
 	assert.Equal(t, 8, linuxMemoryGB(p), "8 152 000 kB is about 8 GB")
 	assert.Equal(t, 0, linuxMemoryGB(filepath.Join(t.TempDir(), "absent")))
+	assert.Equal(t, 16, memsizeGB("17179869184\n"), "macOS's hw.memsize is in bytes")
+	assert.Equal(t, 0, memsizeGB("unknown"))
 
 	m := ThisMachine(t.Context())
 	assert.Positive(t, m.CPUs)

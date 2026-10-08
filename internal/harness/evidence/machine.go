@@ -64,17 +64,22 @@ func memoryGB(ctx context.Context) int {
 			return 0
 		}
 
-		b, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
-		if err != nil {
-			return 0
-		}
-
-		return int((b + bytesPerGB/2) / bytesPerGB)
+		return memsizeGB(string(out))
 	case "linux":
 		return linuxMemoryGB("/proc/meminfo")
 	}
 
 	return 0
+}
+
+// memsizeGB reads macOS's hw.memsize, in bytes.
+func memsizeGB(s string) int {
+	b, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+	if err != nil {
+		return 0
+	}
+
+	return int((b + bytesPerGB/2) / bytesPerGB)
 }
 
 // linuxMemoryGB reads MemTotal from a /proc/meminfo, in kB.
