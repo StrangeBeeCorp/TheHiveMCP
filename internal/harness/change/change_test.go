@@ -17,8 +17,8 @@ const aGo = "package m\n\n// A is one.\nfunc A() int {\n\treturn 1\n}\n"
 const oldGo = "package m\n\n// TODO: old.\nvar _ = 1 //nolint:gochecknoglobals // old\n\n//\n//\n//\n//\n//\n"
 
 // branch is a repository whose work branch, from main, lengthens a.go, adds a dependency, a
-// //nolint and a TODO, and moves old.go to moved.go with one line more. main then moves on with a
-// TODO and a dependency of its own, which are not the branch's: its root.
+// //nolint and a TODO, and moves old.go to moved.go with one line more. Then main moves on with
+// its own TODO and dependency, which are not the branch's: its root.
 func branch(t *testing.T) string {
 	t.Helper()
 
@@ -27,7 +27,7 @@ func branch(t *testing.T) string {
 	gittest.Git(t, dir, "mv", "old.go", movedGo)
 	gittest.Write(t, dir, map[string]string{
 		"go.mod": "module example.com/m\n\nrequire example.com/dep v1.0.0\n",
-		aGoFile:  aGo + "\n// B is two. TODO: say why.\nfunc B() int {\n\treturn 2 //nolint:mnd // a test\n}\n",
+		aGoFile:  aGo + "\n// TODO: say why B is two.\nfunc B() int {\n\treturn 2 //nolint:mnd // a test\n}\n",
 		movedGo:  oldGo + "// one more\n",
 	})
 	gittest.Git(t, dir, "add", "-A")

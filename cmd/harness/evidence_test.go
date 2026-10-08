@@ -208,7 +208,7 @@ func TestThePullRequestShowsTheMetricsOfItsOwnChange(t *testing.T) {
 		registryPath: changeRegistry, ignoreFile: ".cache/\ncoverage.out\n",
 		limitsPath: "hooks: {max_red_rounds: 6}\nstructure: {max_lines: 10, code_files: ['*.go']}\n",
 		"go.mod":   "module example.com/m\n\nrequire example.com/dep v1.0.0\n",
-		"a.go":     "package m\n\n// A is one. TODO: say why.\nfunc A() int {\n\treturn 1\n}\n\nvar _ = 1 //nolint:gochecknoglobals // a test\n",
+		"a.go":     "package m\n\n// TODO: say why A is one.\nfunc A() int {\n\treturn 1\n}\n\nvar _ = 1 //nolint:gochecknoglobals // a test\n",
 	})
 	head := reviewed(t, dir, "ready")
 

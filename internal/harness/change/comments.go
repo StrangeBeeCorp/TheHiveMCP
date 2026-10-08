@@ -17,16 +17,18 @@ var (
 	// nolintRe is a //nolint directive: a comment that starts with the word, then a colon, a
 	// space or its end.
 	nolintRe = regexp.MustCompile(`^//nolint(?:[:\s]|$)`)
-	// todoWord is a TODO in a comment's text.
-	todoWord = regexp.MustCompile(`\bTODO\b`)
-	// todoRe is a TODO after a comment opener on a line of a file that is not Go.
-	todoRe = regexp.MustCompile(`(?://|#|/\*).*\bTODO\b`)
+	// todoWord is a comment line that starts with TODO, past its opener or a block comment's
+	// leading "*": a comment that only mentions the word is not one.
+	todoWord = regexp.MustCompile(`^(?://|/\*)?\s*\*?\s*TODO\b`)
+	// todoRe is a comment opener followed by TODO, on a line of a file that is not Go.
+	todoRe = regexp.MustCompile(`(?://|#|/\*)\s*TODO\b`)
 )
 
-// Mark counts the markers in the lines the change adds to the files code accepts. In a Go file,
-// read at HEAD, only its comments count, as the Go scanner finds them: a "// TODO" inside a
-// string is not one. Another code file has no parser here, so a TODO after a comment opener on an
-// added line counts.
+// Mark counts the markers in the lines the change adds to the files code accepts. A TODO is a
+// comment that starts with the word; one that only mentions it is not. In a Go file, read at
+// HEAD, only its comments count, as the Go scanner finds them: a "// TODO" inside a string is not
+// one. Another code file has no parser here, so a comment opener followed by TODO on an added line
+// counts.
 func Mark(d Diff, code func(string) bool, read func(string) ([]byte, bool)) Markers {
 	var m Markers
 

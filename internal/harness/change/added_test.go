@@ -76,12 +76,13 @@ const markedGo = "package a\n\n" +
 	"// TODO: later\n" + // 6
 	"var r = `\n// TODO: in a raw string\n`\n" + // 7-9
 	"/* a block\nTODO: inside it */\n" + // 10-11
-	"// TODOs are not one\n" + // 12
+	"// a TODO it only mentions is not one\n" + // 12
 	"// TODO: not added\n" // 13
 
-// In a Go file, the //nolint directives and the TODOs in the comments of the added lines count,
-// not the words in a string or on a line the change leaves; in another code file, a TODO after a
-// comment opener counts; a file that is not code, or a Go file gone at HEAD, counts nothing.
+// In a Go file, the //nolint directives and the comments that start with TODO on the added lines
+// count, not a comment that only mentions the word, a string, or a line the change leaves; in
+// another code file, a comment opener followed by TODO counts; a file that is not code, or a Go
+// file gone at HEAD, counts nothing.
 func TestMarkCountsTheNolintAndTODOTheChangeAdds(t *testing.T) {
 	t.Parallel()
 
@@ -93,7 +94,7 @@ func TestMarkCountsTheNolintAndTODOTheChangeAdds(t *testing.T) {
 	d := Diff{
 		aGoFile:    goLines,
 		"gone.go":  {{N: 1}},
-		"run.sh":   {{Text: "# TODO fix"}, {Text: "echo //nolint"}},
+		"run.sh":   {{Text: "# TODO fix"}, {Text: "echo //nolint # mentions a TODO"}},
 		"notes.md": {{Text: "// TODO"}},
 	}
 	code := func(f string) bool { return f != "notes.md" }
