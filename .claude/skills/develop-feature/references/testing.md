@@ -19,7 +19,7 @@
 - `RequirePermissionDenied`, `RequireScopeDenied` and `RequireConformsToOutputSchema` are the assertions for permissions, scope and schema.
 - `GetMCPTestClientWithPermissions(t, testutils.PermissionsFixture(t, "analyst.yaml"))` builds a client with a given permission profile. Pass `""` for the
   default read-only profile.
-- `MockInputCase`, `MockInputAlert`, `MockInputObservable`, … build fixtures to create through the raw thehive4go client
+- `MockInputCase`, `MockInputAlert`, `MockInputCaseTemplate` and `MockInputTask` build fixtures to create through the raw thehive4go client
   (`hiveClient.CaseAPI.CreateCase(authContext)...`).
 - Assertions use testify `require` and `assert`.
 
