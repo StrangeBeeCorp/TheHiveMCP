@@ -85,9 +85,6 @@ jobs:
       - name: Benchmarks against the base and their budgets
         run: bin/harness run --cadence ci --gate bench
 
-      - name: Mutation testing of the changed packages
-        run: bin/harness run --cadence ci --gate mutation
-
       - name: Run SAST
         run: bin/harness run --cadence ci --gate sast
 

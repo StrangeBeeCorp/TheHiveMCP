@@ -362,10 +362,13 @@ gates:
       absolute budget there: the time the server adds to a TheHive call (a search through the
       in-process client against a TheHive stub), wrapping a page of results, the filter transforms
 
+  # Mutation runs at night only: a pull request that touches every floored package mutates them
+  # all, which takes over an hour on a CI runner. This gate mutates the changed packages; the
+  # canaries run it on their one-package patches, and the nightly runs mutation-all.
   - id: mutation
     runs: bin/harness mutation
     docker: true
-    cadence: [pr, ci]
+    cadence: [nightly]
     suites: ["*"]
     budget_s: 3600
     blocks: >-

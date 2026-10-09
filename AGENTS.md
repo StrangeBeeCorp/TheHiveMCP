@@ -43,9 +43,9 @@ A test that does **not** require a container will run under `make test` and must
 
 ### What the gates hold tests to
 
-At pr and in CI, a changed test may not get weaker (the integrity gate), each package keeps its coverage floor (`gates/coverage.yaml`) and, where it has one,
-its mutation floor (`gates/mutation.yaml`, gremlins), the unit tests run under the race detector, and the hot paths' benchmarks stay within
-`gates/bench.yaml`. `.claude/skills/develop-feature/references/testing.md` says what each one asks.
+At pr and in CI, a changed test may not get weaker (the integrity gate), each package keeps its coverage floor (`gates/coverage.yaml`), the unit tests run
+under the race detector, and the hot paths' benchmarks stay within `gates/bench.yaml`. Each night, every package with a mutation floor
+(`gates/mutation.yaml`, gremlins) is held to it. `.claude/skills/develop-feature/references/testing.md` says what each one asks.
 
 ## Configuration
 

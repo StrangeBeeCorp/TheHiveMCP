@@ -39,8 +39,9 @@
   not lose its own checks or gain a skip while it is kept. A test file may not leave CI's build (linux/amd64, no cgo) by its build constraint or its name
   (`_windows_test.go`, a leading `_`). A person who accepts it adds `path_test.go:TestName: why` (or `:build`) to `integrity.allow` in `gates/limits.yaml`.
 - **Coverage:** each package keeps the unit-test coverage floor of `gates/coverage.yaml`. Test the code you add; raise a floor when its package gains tests.
-- **Mutation:** a changed package with a floor in `gates/mutation.yaml` must kill that share of gremlins' mutants (`bin/harness mutation`). A mutant that lives
-  is a behaviour no test pins: the gate names the lines, and gremlins' report is in `.cache/harness/mutation/`.
+- **Mutation (nightly):** a package with a floor in `gates/mutation.yaml` must kill that share of gremlins' mutants. The nightly holds every one to it;
+  `bin/harness mutation` checks the packages you changed, before you push. A mutant that lives is a behaviour no test pins: the gate names the lines, and
+  gremlins' report is in `.cache/harness/mutation/`.
 - **Race and benchmarks:** `make test-race` must stay clean, and `bin/harness bench` holds the hot paths to `gates/bench.yaml` against the base.
 - **Fuzzing:** `FuzzUntrustedWrap`, `FuzzFilterDSL`, `FuzzPermissionProfile` and `FuzzRetypeDateFields` run their seeds with the unit tests and fuzz nightly. An
   input the fuzzer finds lands in the package's `testdata/fuzz/`: fix the code and commit it as a seed.

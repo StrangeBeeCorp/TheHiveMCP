@@ -157,7 +157,7 @@ jobs:
       - name: Prepare cache dirs
         run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools
       - name: Mutation testing of every floored package
-        run: bin/harness run --cadence nightly --all --gate mutation-all
+        run: bin/harness run --cadence nightly --all --gate mutation-all --gate mutation
       - name: Keep the results for the triage
         if: always()
         uses: actions/upload-artifact@v4
