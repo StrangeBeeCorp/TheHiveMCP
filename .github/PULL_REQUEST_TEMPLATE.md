@@ -16,6 +16,6 @@
 
 ## Checklist
 
-- [ ] Tests pass (`make test`)
+- [ ] `make pr` passed at HEAD; its Gate evidence and Change metrics (`bin/harness evidence --markdown`) are pasted below
 - [ ] Docs updated if behavior changed
 - [ ] User-facing / breaking / security impact noted for the release notes

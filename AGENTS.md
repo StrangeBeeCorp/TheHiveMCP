@@ -22,7 +22,7 @@ It builds an MCP server (`bootstrap.GetMCPServerAndRegisterTools`) and serves it
 Run `make help-xml` to get all available commands, their purpose, and how to use them.
 Start by running `make help-xml` at the start of any session that will modify code.
 
-All targets run in Docker; no local Go install needed.
+All targets run in Docker; no local Go install needed. The one exception is `make dev`, a hot-reloading server that needs a host Go and `air`.
 
 While you work, run `make check-fast`: it runs the gates your changed paths select, in about a minute. The gates, their cadences and what makes each
 one block are listed in `docs/reference/gates.md`, generated from `gates/registry.yaml`. The git pre-commit hook runs `make pre-commit`

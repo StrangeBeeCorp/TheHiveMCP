@@ -2,10 +2,6 @@
 // shared entity constants used across the TheHiveMCP server.
 package types
 
-import (
-	"github.com/StrangeBeeCorp/thehive4go/thehive"
-)
-
 // CtxKey is the type for keys stored in request contexts.
 type CtxKey string
 
@@ -23,9 +19,6 @@ const HiveClientCtxKey CtxKey = "hive_client"
 
 // PermissionsCtxKey is the context key holding the resolved permissions.
 const PermissionsCtxKey CtxKey = "permissions"
-
-// RequestIDCtxKey is the context key holding the request ID.
-const RequestIDCtxKey CtxKey = "request_id"
 
 // AuthErrorCtxKey is the context key holding an authentication error.
 const AuthErrorCtxKey CtxKey = "auth_error"
@@ -189,15 +182,6 @@ const (
 	EntityTypeAction       = "action"
 )
 
-// OutputEntity is a union type representing possible output entities
-type OutputEntity interface {
-	thehive.OutputAlert |
-		thehive.OutputCase |
-		thehive.OutputTask |
-		thehive.OutputObservable |
-		map[string]any
-}
-
 // DefaultFields maps each entity type to the default set of fields returned for it.
 var DefaultFields = map[string][]string{
 	EntityTypeAlert: {fieldID, fieldTitle, fieldCreatedAt, fieldSeverity, fieldStatus},
@@ -244,6 +228,3 @@ func DefaultSortField(entityType string) string {
 
 	return GeneralDefaultSortField
 }
-
-// DateFormat is the timestamp layout used for TheHive date fields.
-const DateFormat = "2006-01-02T15:04:05"

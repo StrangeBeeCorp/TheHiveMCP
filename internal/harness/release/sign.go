@@ -32,7 +32,7 @@ type Signer struct {
 // The sign tool's version, and the timestamp authority Azure Artifact Signing signs against.
 const (
 	signVersion  = "0.9.1-*"
-	timestampURL = "http://timestamp.acs.microsoft.com" // NOSONAR: RFC 3161 timestamping is http by design: the token is signed
+	timestampURL = "http://timestamp.acs.microsoft.com" // RFC 3161 timestamping is http by design: the token is signed
 )
 
 // Sign checks that every binary exists, then signs them with the provider.

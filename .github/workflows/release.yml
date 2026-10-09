@@ -23,22 +23,9 @@ jobs:
     # target, so set a real provider once one clears.
     env:
       SIGNING_PROVIDER: ${{ vars.SIGNING_PROVIDER || 'none' }}
-      # Never auto-download a Go toolchain into GOMODCACHE: setup-go installs the
-      # pinned version into the tool cache, and `local` keeps every build step
-      # from re-materializing a toolchain@… dir that collides with the cache
-      # restore (`tar: … File exists`, DL-6329 release run).
-      GOTOOLCHAIN: local
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          # Pin the concrete patch (keep in sync with the `toolchain` directive
-          # in go.mod). Combined with the job-level GOTOOLCHAIN=local, this keeps
-          # the toolchain out of GOMODCACHE so the module-cache restore doesn't
-          # collide with it.
-          go-version: '1.26.8'
-
+      # The binaries build in the Makefile's Go image (bin/harness too): no Go on the runner.
       # 1. Build every release binary (produces build/thehivemcp-windows-*.exe).
       - name: Build all release binaries
         run: make build-all
@@ -141,9 +128,11 @@ jobs:
           file: ./deployment/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
+          # latest moves only with a release tag: a manual run from a branch pushes its SNAPSHOT
+          # tag alone.
           tags: |
             ${{ steps.meta.outputs.IMAGE_BASE }}:${{ steps.version.outputs.VERSION }}
-            ${{ steps.meta.outputs.IMAGE_BASE }}:latest
+            ${{ startsWith(github.ref, 'refs/tags/') && format('{0}:latest', steps.meta.outputs.IMAGE_BASE) || '' }}
           build-args: |
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
             GIT_COMMIT=${{ github.sha }}
@@ -153,6 +142,9 @@ jobs:
 
   release:
     name: Create Release
+    # A release is cut from a tag only: a manual run from a branch builds and pushes its snapshot,
+    # and creates no release named after the branch.
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     needs: [build, docker-image]
     steps:

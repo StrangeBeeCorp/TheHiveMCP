@@ -147,7 +147,6 @@ suites:
       - LICENSE
       - NOTICE
       - renovate.json
-      - .sonarcloud.properties
       - .air.toml
       - .env.template
 
@@ -311,12 +310,12 @@ gates:
     blocks: a known vulnerability reachable from our code
 
   - id: dockerlint
-    runs: make dockerlint dockersec
+    runs: make dockersec
     docker: true
     cadence: [pr, ci, nightly]
     suites: [packaging]
     budget_s: 300
-    blocks: a hadolint finding in one of the Dockerfiles, or a HIGH or CRITICAL misconfiguration trivy finds in one
+    blocks: a HIGH or CRITICAL misconfiguration trivy finds in one of the Dockerfiles (hadolint lints them in the lint gate)
 
   - id: secrets
     runs: make secrets
@@ -332,7 +331,7 @@ gates:
     cadence: [pr, ci, nightly]
     suites: [surface, trust, tools, server, tests]
     budget_s: 2700
-    blocks: a failing test against a live TheHive (CI runs it on 5.5 and 5.6)
+    blocks: a failing test against a live TheHive (CI runs it on 5.5 and 5.8)
 
   - id: coverage
     runs: make test COVERAGE=1 && make go CMD="run ./cmd/coverage --profile coverage.out --floors gates/coverage.yaml"
@@ -404,7 +403,7 @@ gates:
     blocks: >-
       the server over HTTP, 10 clients at once against the integration stack's TheHive, alone on
       it, over its budget in gates/load.yaml: latency, a failed call or memory (the nightly runs it
-      on 5.5 and 5.6)
+      on 5.5 and 5.8)
 
   - id: soak
     runs: make go CMD="run ./cmd/load --run soak"

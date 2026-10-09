@@ -20,29 +20,8 @@ dist/
 # Coverage files
 coverage.out
 
-# Release artifacts (temporary files)
-RELEASE_NOTES.md
-
-# Deployment directories
-deployment/demo/data-node/
-deployment/demo/images/
-deployment/demo/logs/
-deployment/demo/uploads/
-
-# Python cache files
+# Editor settings
 .vscode/
-.pytest_cache/
-*/__pycache__/*
-*.pyc
-.ruff_cache/
-.mypy_cache/
-
-# Go module directory
-mcp-go/
-
-# Integration test specific files
-evaluation_results/id_mapping.json
-integration_test/data/test_questions.json
 
 # Runtime-materialised TheHive test license (from THEHIVE_TEST_LICENSE); never
 # committed — the raw JWT is a dev-mode secret. See docker-compose.license.yml.
@@ -56,14 +35,9 @@ key.md
 .claude/worktrees/
 .claude/logs/
 .claude/last-prompt-ts
-.claude/.lint-verified
 # The Tester's sealed tests of the task in progress, which the Coder may not read: never committed.
 .claude/sealed/
 CLAUDE.local.md
 
 # The harness's build cache and run logs (bin/harness, .cache/harness/runs/).
 .cache/
-
-extension/
-
-mcp-cli.py

@@ -116,16 +116,6 @@ bin_ext = $(if $(filter windows-%,$(1)),.exe,)
 all: ## The pr gates on the whole branch, as make pr runs them, without recording or pushing ##@ make all
 	bin/harness run --cadence pr
 
-.PHONY: lint-makefile
-lint-makefile: ## Check the Makefile's syntax and hygiene (checkmake) ##@ make lint-makefile
-	@echo $(BGreen)----------------------$(Color_Off)
-	@echo $(BGreen)-- Linting Makefile --$(Color_Off)
-	@echo $(BGreen)----------------------$(Color_Off)
-	@make --dry-run -n all > /dev/null || exit 1
-	@echo "Syntax OK"
-	@bin/harness lint Makefile scripts/harness.mk scripts/release.mk || exit 1
-	@echo "checkmake OK"
-
 .PHONY: fmt
 fmt: ## Auto-format the whole repo (Go, shell, markdown) before committing ##@ make fmt
 	@echo $(BGreen)-------------$(Color_Off)
@@ -229,32 +219,29 @@ sast: ## Find insecure code patterns via SAST (gosec) ##@ make sast
 	@echo $(BGreen)---------------------------$(Color_Off)
 	@echo $(BGreen)-- Running SAST Analysis --$(Color_Off)
 	@echo $(BGreen)---------------------------$(Color_Off)
-	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install github.com/securego/gosec/v2/cmd/gosec@v2.26.1 && gosec ./...'
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION) && gosec ./...'
 
-# Every Dockerfile in the repo. hadolint lints each — the production image plus
-# the MCPB and LibreChat helper images — so a misconfig regression in any of them
-# turns the build red, not just the one we ship.
+# Every Dockerfile in the repo. trivy scans each — the production image plus the
+# MCPB and LibreChat helper images — so a misconfig regression in any of them
+# turns the build red, not just the one we ship. hadolint lints them in the lint
+# gate (bin/harness lint), at the version internal/harness/lint/images.go pins.
 DOCKERFILES := deployment/Dockerfile scripts/Dockerfile.mcpb deployment/examples/Dockerfile.librechat
 
-.PHONY: dockerlint
-dockerlint: ## Catch Dockerfile hygiene issues in all images (hadolint) ##@ make dockerlint
-	@echo $(BGreen)---------------------------$(Color_Off)
-	@echo $(BGreen)-- Linting Dockerfiles   --$(Color_Off)
-	@echo $(BGreen)---------------------------$(Color_Off)
-	@for f in $(DOCKERFILES); do \
-		echo "hadolint $$f"; \
-		docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < $$f || exit 1; \
-	done
-	@echo "Dockerfiles OK"
-
 # hadolint checks Dockerfile hygiene but has no rule for "container runs as
-# root"; trivy config does (DS-0002), matching SonarCloud's docker:S6471. We scan
+# root"; trivy config does (DS-0002). We scan
 # each Dockerfile for HIGH+ misconfigs only: the LOW findings here are just the
 # missing-HEALTHCHECK check (DS-0026), which is noise for a short-lived CI packer
 # and a thin config-overlay image. The named volume caches trivy's checks bundle
 # (a per-run network download otherwise); like GO_TOOLS_CACHE it is linux-native
 # and populated in-container, so it is not bind-mounted from the host.
 TRIVY_CACHE := -v thehivemcp-trivy-cache:/root/.cache/trivy
+# The security tools, each pinned once here, where Renovate's Makefile managers
+# (renovate.json) track them: the images by their _IMAGE name, the Go tools by
+# their _VERSION name.
+TRIVY_IMAGE := aquasec/trivy:0.72.0
+GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1
+GOSEC_VERSION := v2.26.1
+GOVULNCHECK_VERSION := v1.3.0
 .PHONY: dockersec
 dockersec: ## Scan Dockerfiles for HIGH+ security misconfigs (trivy) ##@ make dockersec
 	@echo $(BGreen)---------------------------$(Color_Off)
@@ -262,7 +249,7 @@ dockersec: ## Scan Dockerfiles for HIGH+ security misconfigs (trivy) ##@ make do
 	@echo $(BGreen)---------------------------$(Color_Off)
 	@for f in $(DOCKERFILES); do \
 		echo "trivy config $$f"; \
-		docker run --rm -v $(CURDIR):/scan -w /scan $(CA_MOUNT) $(TRIVY_CACHE) aquasec/trivy:0.72.0 \
+		docker run --rm -v $(CURDIR):/scan -w /scan $(CA_MOUNT) $(TRIVY_CACHE) $(TRIVY_IMAGE) \
 			config --quiet --exit-code 1 --severity HIGH,CRITICAL "$$f" || exit 1; \
 	done
 	@echo "Dockerfiles security OK"
@@ -272,7 +259,7 @@ secrets: ## Detect committed secrets in the working tree (gitleaks) ##@ make sec
 	@echo $(BGreen)---------------------------$(Color_Off)
 	@echo $(BGreen)-- Scanning for secrets  --$(Color_Off)
 	@echo $(BGreen)---------------------------$(Color_Off)
-	docker run --rm -v $(CURDIR):/repo -w /repo $(GIT_WORKTREE_MOUNT) zricethezav/gitleaks:v8.30.1 dir --redact --verbose --config /repo/.gitleaks.toml .
+	docker run --rm -v $(CURDIR):/repo -w /repo $(GIT_WORKTREE_MOUNT) $(GITLEAKS_IMAGE) dir --redact --verbose --config /repo/.gitleaks.toml .
 
 .PHONY: build
 build: ## Build the binary for your current host OS/arch ##@ make build (output: build/thehivemcp-<os>-<arch>)
@@ -430,7 +417,7 @@ vulncheck: ## Check dependencies for known CVEs (govulncheck) ##@ make vulncheck
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Security Vulnerability  --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
-	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@v1.3.0 && govulncheck ./...'
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) && govulncheck ./...'
 
 .PHONY: lint
 lint: ## Check the whole repo for lint issues, read-only ##@ make lint
@@ -445,13 +432,6 @@ lint-fix: ## Auto-apply safe lint fixes across the whole repo ##@ make lint-fix
 	@echo $(BGreen)-- Linter Checks with auto-fix --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	bin/harness lint --all --fix
-
-.PHONY: updatedep
-updatedep: ## Upgrade Go deps to latest and tidy go.mod/go.sum ##@ make updatedep
-	@echo $(BGreen)-----------------------$(Color_Off)
-	@echo $(BGreen)-- Update Dependencies --$(Color_Off)
-	@echo $(BGreen)-----------------------$(Color_Off)
-	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) sh -c 'go get -u ./... && go mod tidy'
 
 .PHONY: dev-setup
 dev-setup: ## Point git at the tracked .githooks: each commit runs the harness's commit gates ##@ make dev-setup

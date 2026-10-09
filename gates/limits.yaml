@@ -31,7 +31,6 @@ structure:
     - .golangci.yml
     - .markdownlint.jsonc
     - .prettierrc.json
-    - .sonarcloud.properties
     - AGENTS.md
     - CHANGELOG.md
     - CLAUDE.md

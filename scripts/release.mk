@@ -31,10 +31,6 @@ package-from-built: pre-dist mcpb-ci-nobuild ## Release CI: package existing (si
 	@bin/harness package tarballs --version "$(VERSION)" --build "$(BUILDDIR)" --dist "$(DISTDIR)" \
 		--name "$(BINARY_NAME)" --targets "$(RELEASE_TARGETS)"
 
-.PHONY: version
-version: ## Print the version string baked into builds ##@ make version
-	@echo $(VERSION)
-
 .PHONY: mcpb-build-image
 mcpb-build-image: ## Internal: build the MCPB packaging image (dep of mcpb-*) ##@ make mcpb-build-image (usually run automatically)
 	@echo $(BGreen)-----------------------------$(Color_Off)
@@ -53,9 +49,6 @@ mcpb-local: build mcpb-build-image ## Build + package a single MCPB for your hos
 # target; override it to a subset for a fast packaging smoke-test (see
 # mcpb-smoke and the ci.yml mcpb-package job).
 MCPB_TARGETS ?= $(RELEASE_TARGETS)
-
-.PHONY: mcpb-ci
-mcpb-ci: build-all mcpb-ci-nobuild ## Build all + package MCPB for every architecture ##@ make mcpb-ci
 
 # mcpb-smoke exercises the MCPB packaging path (container permissions, manifest
 # generation, non-empty output) for a single target — fast enough to run on

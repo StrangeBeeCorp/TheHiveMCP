@@ -1,9 +1,29 @@
-.env
-**/*.env
-Dockerfile
-docker-compose.yml
-bin/
-tmp/.env
-**/*.env
+# The build context of deployment/Dockerfile, which copies it whole (COPY . .) to build
+# cmd/server and cmd/healthcheck. Only Go sources, go.mod, go.sum and the files the server
+# embeds (internal/resources, internal/permissions/embedded) are needed: everything else stays
+# out, so that no local file reaches an image layer and the context stays small.
+
+# Version control, local state and build outputs
+.git
+.cache/
+.claude/
+build/
+dist/
 bin/
 tmp/
+coverage.out
+
+# Local configuration and credentials
+**/.env
+**/.env.*
+**/*.env
+**/*.lic.local
+
+# What the image does not build from
+docs/
+baselines/
+gates/
+spec/
+.github/
+.githooks/
+deployment/examples/

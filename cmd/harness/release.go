@@ -120,7 +120,7 @@ const (
 	composeFile     = "docker-compose.test.yml"
 	licenseOverride = "docker-compose.license.yml"
 	licenseFile     = "internal/testutils/testdata/.test-license.lic.local"
-	theHiveURL      = "http://localhost:9000" // NOSONAR: the dev stack's TheHive serves http only, on this machine
+	theHiveURL      = "http://localhost:9000" // the dev stack's TheHive serves http only, on this machine
 	readyWait       = 6 * time.Minute
 	readyPoll       = 5 * time.Second
 )

@@ -86,40 +86,6 @@ func MockInputAlert() *thehive.InputCreateAlert {
 	}
 }
 
-// MockInputUser returns a valid InputCreateUser for testing.
-func MockInputUser() *thehive.InputCreateUser {
-	return &thehive.InputCreateUser{
-		Login:        "testuser",
-		Name:         "Test User",
-		Profile:      adminOrg,
-		Email:        new("testuser@thehive.local"),
-		Password:     new("password123"),
-		Organisation: new("test-org"),
-	}
-}
-
-// MockInputOrganisation returns a valid InputCreateOrganisation for testing.
-func MockInputOrganisation() *thehive.InputCreateOrganisation {
-	return &thehive.InputCreateOrganisation{
-		Name:           "Test Organisation",
-		Description:    "This is a test organisation",
-		TaskRule:       new("BacklogTasks"),
-		ObservableRule: new("ObservableStrictTLP"),
-		Locked:         new(false),
-	}
-}
-
-// MockInputUserOrganisation returns a valid slice of InputUserOrganisation for testing.
-func MockInputUserOrganisation() []thehive.InputUserOrganisation {
-	return []thehive.InputUserOrganisation{
-		{
-			Organisation: "test-org",
-			Profile:      adminOrg,
-			Default:      new(true),
-		},
-	}
-}
-
 // MockInputCaseTemplate returns a valid InputCaseTemplate for testing.
 func MockInputCaseTemplate() *thehive.InputCreateCaseTemplate {
 	return &thehive.InputCreateCaseTemplate{
@@ -141,31 +107,4 @@ func MockInputTask() *thehive.InputCreateTask {
 		EndDate:     thehive.PtrInt64(1609545600),
 		Mandatory:   new(false),
 	}
-}
-
-// MockInputAnalyzerJob returns a valid InputJob for testing Cortex analyzer functionality.
-func MockInputAnalyzerJob() *thehive.InputJob {
-	job := thehive.NewInputJob("file_hash", "cortex-1", "artifact-123")
-	job.SetParameters(map[string]any{
-		"timeout": 300,
-		"config": map[string]any{
-			"check_tlp": true,
-		},
-	})
-
-	return job
-}
-
-// MockInputObservable returns a valid InputObservable for testing.
-func MockInputObservable() *thehive.InputCreateObservable {
-	observable := thehive.NewInputCreateObservable("domain")
-	observable.SetData(thehive.StringAsInputObservableData(new("example.com")))
-	observable.SetMessage("Suspicious domain observed")
-	observable.SetIoc(true)
-	observable.SetTlp(2)
-	observable.SetPap(1)
-	observable.SetSighted(false)
-	observable.SetTags([]string{"malware", "phishing"})
-
-	return observable
 }

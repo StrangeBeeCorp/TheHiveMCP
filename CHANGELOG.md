@@ -8,6 +8,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`:latest` moves only with a release.** A manual run of the release workflow from a branch pushed its snapshot image under `:latest` too, and created a
+  GitHub release named after the branch. `:latest` is now pushed for a `vX.Y.Z` tag only, and a branch run publishes its `SNAPSHOT-<date>` image alone.
+- **The image's build context leaves local files out.** `.dockerignore` listed duplicate and missing entries and let `.git`, the harness cache, `build/` and the
+  worktrees into the context that `deployment/Dockerfile` copies whole. It now keeps only what the server is built from.
+
 ## [1.2.0] - 2026-10-06
 
 **Upgrading from 1.1.x:** four changes can turn a working setup into an error. Each is described in full below.
