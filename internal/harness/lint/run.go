@@ -180,9 +180,15 @@ func (r Runner) write(f File) error {
 		return fmt.Errorf("write %s: %w", f.Path, err)
 	}
 
-	err = os.WriteFile(p, f.Content, fragmentPerm) // #nosec G306 -- read by the tool's container user; holds no secret
+	tmp := p + ".tmp"
+
+	err = os.WriteFile(tmp, f.Content, fragmentPerm) // #nosec G306 -- read by the tool's container user; holds no secret
 	if err == nil {
-		err = os.Chmod(p, fragmentPerm) // WriteFile's mode is masked by the umask
+		err = os.Chmod(tmp, fragmentPerm) // WriteFile's mode is masked by the umask
+	}
+
+	if err == nil {
+		err = os.Rename(tmp, p)
 	}
 
 	if err != nil {
