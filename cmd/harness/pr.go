@@ -15,7 +15,6 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/evidence"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/policy"
-	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/runner"
 )
 
 // pr runs the pr cadence's gates at the exact commit checked out, records the evidence, and on a
@@ -85,11 +84,9 @@ func (e env) pr(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 
-	switch rec.Verdict {
-	case runner.Fail:
-		return errFailed
-	case runner.Incomplete:
-		return errIncomplete
+	err = verdictError(rec.Verdict)
+	if err != nil {
+		return err
 	}
 
 	if !*push {

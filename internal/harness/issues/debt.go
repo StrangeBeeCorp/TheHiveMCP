@@ -44,7 +44,7 @@ func (d Debt) Body() string {
 
 	fmt.Fprintf(&b, pathLine+"\n\n", d.Path)
 	fmt.Fprintf(&b, "**Why:** %s\n\n", strings.TrimSpace(d.Why))
-	fmt.Fprintf(&b, branchLine+" at `%s`.\n\n", d.Branch, short(d.Head))
+	fmt.Fprintf(&b, branchLine+" at `%.7s`.\n\n", d.Branch, d.Head)
 	b.WriteString("Filed with `bin/harness debt`: the change that found it left it out of its scope rather than squeeze it in. " +
 		"`make next` lists open debt. Close this issue from the pull request that does the work (\"Closes #N\").\n")
 
@@ -76,13 +76,4 @@ func FiledFrom(open []triage.Issue, branch string) int {
 	}
 
 	return n
-}
-
-func short(sha string) string {
-	const n = 7
-	if len(sha) > n {
-		return sha[:n]
-	}
-
-	return sha
 }

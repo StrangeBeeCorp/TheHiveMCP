@@ -1,8 +1,6 @@
 package checks
 
 import (
-	"bufio"
-	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -111,21 +109,14 @@ func topDirs(files []string) map[string]bool {
 func missingPaths(tree Tree, doc string, content []byte, tops map[string]bool) []Finding {
 	var out []Finding
 
-	sc := bufio.NewScanner(bytes.NewReader(content))
-	fenced := false
-
-	for line := 1; sc.Scan(); line++ {
-		text := sc.Text()
-		if t := strings.TrimSpace(text); strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~") {
-			fenced = !fenced
+	for i, l := range readLines(content) {
+		if l.fenced {
 			continue
 		}
 
-		if fenced {
-			continue
-		}
+		line := i + 1
 
-		for _, m := range inlineCode.FindAllStringSubmatch(text, -1) {
+		for _, m := range inlineCode.FindAllStringSubmatch(l.text, -1) {
 			for _, p := range candidatePaths(m[1], tops) {
 				if !exists(tree, p) {
 					out = append(out, Finding{Path: doc, Line: line, Msg: fmt.Sprintf("names %q, which does not exist", p)})

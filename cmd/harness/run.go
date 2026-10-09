@@ -151,7 +151,12 @@ func (e env) run(ctx context.Context, args []string, out io.Writer) error {
 
 	e.changed, e.base = sel.Paths, sel.Base
 
-	return e.execute(ctx, *cadence, gates, sel, runFlags{force: *force && len(only) > 0, stream: *stream}, out)
+	rec, err := e.runGates(ctx, *cadence, gates, sel, runFlags{force: *force && len(only) > 0, stream: *stream}, out)
+	if err != nil {
+		return err
+	}
+
+	return verdictError(rec.Verdict)
 }
 
 // gatesFor is the gates of the cadence, restricted to the ones named.
@@ -178,13 +183,9 @@ type runFlags struct {
 	stream bool
 }
 
-func (e env) execute(ctx context.Context, cadence string, gates []registry.Gate, sel registry.Selection, f runFlags, out io.Writer) error {
-	rec, err := e.runGates(ctx, cadence, gates, sel, f, out)
-	if err != nil {
-		return err
-	}
-
-	switch rec.Verdict {
+// verdictError is the error a run's verdict ends the command with: none for a pass.
+func verdictError(v runner.Verdict) error {
+	switch v {
 	case runner.Fail:
 		return errFailed
 	case runner.Incomplete:

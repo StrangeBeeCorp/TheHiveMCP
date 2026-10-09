@@ -14,16 +14,12 @@ import (
 
 // Input is what Claude Code sends to a hook. Fields an event does not have stay empty.
 type Input struct {
-	SessionID      string         `json:"session_id"`
-	TranscriptPath string         `json:"transcript_path"`
-	Cwd            string         `json:"cwd"`
-	Event          string         `json:"hook_event_name"`
-	ToolName       string         `json:"tool_name"`
-	ToolInput      map[string]any `json:"tool_input"`
-	StopHookActive bool           `json:"stop_hook_active"`
-	AgentID        string         `json:"agent_id"`
-	AgentType      string         `json:"agent_type"`
-	Source         string         `json:"source"`
+	SessionID string         `json:"session_id"`
+	ToolName  string         `json:"tool_name"`
+	ToolInput map[string]any `json:"tool_input"`
+	AgentID   string         `json:"agent_id"`
+	AgentType string         `json:"agent_type"`
+	Source    string         `json:"source"`
 	// Unreadable is true when the input is not the JSON Claude Code sends (too large, or
 	// garbled): it is judged as an agent's, and PreToolUse refuses the call.
 	Unreadable bool `json:"-"`

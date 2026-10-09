@@ -126,10 +126,6 @@ func foldsToASCII(p string) bool {
 // classInAnyCase is the protected class of rel with its letters in any case: on a filesystem that
 // ignores case, CLAUDE.MD is CLAUDE.md.
 func classInAnyCase(rel string) (Class, bool) {
-	if class, ok := ClassOf(rel); ok {
-		return class, true
-	}
-
 	lower := strings.ToLower(rel)
 	for _, p := range protected {
 		if registry.Match(strings.ToLower(p.pattern), lower) {
@@ -178,7 +174,7 @@ func Write(role Role, root, p string) Decision {
 	}
 
 	rel, inside := relative(root, abs)
-	if (inside && record(strings.ToLower(rel))) || namesRecord(abs) {
+	if namesRecord(abs) {
 		return deny("%s is the harness's own record (make pr's evidence, the hooks' state): only the harness writes it", rel)
 	}
 
@@ -245,12 +241,6 @@ func Read(role Role, root, p string) Decision {
 	}
 
 	return Allow
-}
-
-// record reports whether rel is a record only the harness writes: make pr's evidence, which a
-// push trusts, and the hooks' state, which counts the red rounds.
-func record(rel string) bool {
-	return under(rel, ".cache/harness/evidence/") || rel == ".cache/harness/state.json"
 }
 
 // namesRecord reports whether a path, from wherever it comes, ends in a record of a harness

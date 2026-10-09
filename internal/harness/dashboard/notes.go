@@ -28,22 +28,25 @@ type NoteRun struct {
 	MachineLabel string
 }
 
+// runGit runs git in dir with the dashboard's own arguments and returns its output.
+func runGit(ctx context.Context, dir string, stdin io.Reader, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "git", args...) // #nosec G204 -- git with the dashboard's own arguments
+	cmd.Dir = dir
+	cmd.WaitDelay = waitDelay
+	cmd.Stdin = stdin
+
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("git %s: %w", args[0], err)
+	}
+
+	return out, nil
+}
+
 // readNotes fetches origin's notes and reads them with this clone's own, each run once. A fetch
 // that fails leaves this clone's notes, and says so.
 func readNotes(ctx context.Context, root string) ([]NoteRun, error) {
-	git := func(stdin io.Reader, args ...string) ([]byte, error) {
-		cmd := exec.CommandContext(ctx, "git", args...) // #nosec G204 -- git with the dashboard's own arguments
-		cmd.Dir = root
-		cmd.WaitDelay = waitDelay
-		cmd.Stdin = stdin
-
-		out, err := cmd.Output()
-		if err != nil {
-			return nil, fmt.Errorf("git %s: %w", args[0], err)
-		}
-
-		return out, nil
-	}
+	git := func(stdin io.Reader, args ...string) ([]byte, error) { return runGit(ctx, root, stdin, args...) }
 
 	_, fetchErr := git(nil, "fetch", "-q", "origin", "+"+evidence.NotesPrefix+"*:"+fetchedNotes+"*")
 

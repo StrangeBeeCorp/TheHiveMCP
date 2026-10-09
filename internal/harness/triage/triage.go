@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -126,12 +127,7 @@ func merge(outcomes []Outcome) []Outcome {
 		}
 	}
 
-	keys := make([]string, 0, len(byKey))
-	for k := range byKey {
-		keys = append(keys, k)
-	}
-
-	slices.Sort(keys)
+	keys := slices.Sorted(maps.Keys(byKey))
 
 	merged := make([]Outcome, 0, len(keys))
 	for _, k := range keys {

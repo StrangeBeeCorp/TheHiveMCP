@@ -66,17 +66,6 @@ func Contents(ctx context.Context, root string, ignoredDirs ...string) (map[stri
 	return files, nil
 }
 
-// HooksPath is the directory git runs the checkout's hooks from (core.hooksPath), or "" when
-// it runs those of .git/hooks.
-func HooksPath(ctx context.Context, root string) string {
-	out, err := run(ctx, root, "config", "--get", "core.hooksPath")
-	if err != nil {
-		return ""
-	}
-
-	return strings.TrimSpace(out)
-}
-
 // IgnoredUnder lists the files git ignores under the directories named (none: no file).
 func IgnoredUnder(ctx context.Context, root string, dirs ...string) ([]string, error) {
 	if len(dirs) == 0 {

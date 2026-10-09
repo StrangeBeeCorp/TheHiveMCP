@@ -30,9 +30,6 @@ import (
 // blockedPath is where an agent that stayed red for its rounds writes why (internal/harness/hooks).
 const blockedPath = ".cache/harness/BLOCKED.md"
 
-// errNoGH means gh is not there to read or write the issues.
-var errNoGH = issues.ErrNoGH
-
 // triageNight files the night's failures as GitHub issues labelled nightly, comments on those
 // still failing and closes those that pass again (the nightly workflow's last job).
 func (e env) triageNight(ctx context.Context, args []string, out io.Writer) error {
@@ -85,7 +82,7 @@ func (e env) triageNight(ctx context.Context, args []string, out io.Writer) erro
 	}
 
 	for _, a := range actions {
-		err = gh.Apply(a)
+		err = gh.ApplyAs(a, triage.Label)
 		if err != nil {
 			return fmt.Errorf("triage: %w", err)
 		}

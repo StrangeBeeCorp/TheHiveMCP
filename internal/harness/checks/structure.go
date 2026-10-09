@@ -11,6 +11,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 )
@@ -87,7 +88,7 @@ func cleanFindings(f string, content []byte, lim StructureLimits) []Finding {
 		return out
 	}
 
-	if !validText(content) {
+	if !utf8.Valid(content) {
 		out = append(out, Finding{Path: f, Msg: "not valid UTF-8"})
 	}
 

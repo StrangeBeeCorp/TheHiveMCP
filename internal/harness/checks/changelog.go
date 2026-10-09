@@ -2,9 +2,6 @@ package checks
 
 import "strings"
 
-// ChangelogPath is the changelog a change to what the model reads gets an entry in.
-const ChangelogPath = changelogPath
-
 // UnreleasedAdded reports whether the ## [Unreleased] section of after holds an entry that the
 // section of before does not: a line of text, not a ### heading or a blank line.
 func UnreleasedAdded(before, after string) bool {

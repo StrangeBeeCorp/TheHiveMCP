@@ -116,10 +116,7 @@ func headline(d Data, runs []Run, prs []PR) []Tile {
 		}
 	}
 
-	var lead []float64
-	for _, p := range prs {
-		lead = append(lead, leadDays(p))
-	}
+	lead := each(prs, leadDays)
 
 	agents := 0
 

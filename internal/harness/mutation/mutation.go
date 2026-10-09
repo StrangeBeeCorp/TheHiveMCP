@@ -94,7 +94,6 @@ func (c Config) Packages(changed []string) (floored, unfloored []string) {
 // Report is what gremlins writes with --output.
 type Report struct {
 	Efficacy   float64 `json:"test_efficacy"`
-	Coverage   float64 `json:"mutations_coverage"`
 	Killed     int     `json:"mutants_killed"`
 	Lived      int     `json:"mutants_lived"`
 	NotCovered int     `json:"mutants_not_covered"`

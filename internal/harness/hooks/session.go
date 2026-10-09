@@ -50,7 +50,7 @@ func SessionStart(ctx context.Context, root string, in Input) Output {
 
 	b.WriteString(".\n")
 
-	if gitx.HooksPath(ctx, root) != hooksDir {
+	if gitx.ConfigValue(ctx, root, "core.hooksPath") != hooksDir {
 		b.WriteString("Commits here do not run the harness's commit gates (core.hooksPath is not " + hooksDir + "): run make dev-setup.\n")
 	}
 

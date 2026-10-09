@@ -143,10 +143,9 @@ type Run struct {
 
 // Evaluation is one phase's count. Errors counts the rows that got no answer at all.
 type Evaluation struct {
-	EvalID string `json:"eval_id"`
-	Total  int    `json:"total"`
-	Passed int    `json:"passed"`
-	Errors int    `json:"errors"`
+	Total  int `json:"total"`
+	Passed int `json:"passed"`
+	Errors int `json:"errors"`
 }
 
 // ReadRun reads a run's summary.

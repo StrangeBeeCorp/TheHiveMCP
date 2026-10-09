@@ -18,8 +18,8 @@ import (
 const (
 	// SpecPath holds the spec items: what the server promises a model, each checked.
 	SpecPath = "spec/items.yaml"
-	// changelogPath gets an entry for every change to what the model reads.
-	changelogPath = "CHANGELOG.md"
+	// ChangelogPath gets an entry for every change to what the model reads.
+	ChangelogPath = "CHANGELOG.md"
 	// surfacePrefix is the committed snapshot of what the model reads (make surface-propose).
 	surfacePrefix = "baselines/surface/"
 	// SurfaceSummary is a file every snapshot has: a base without it had no snapshot yet.
@@ -237,7 +237,7 @@ func Changelog(changed []string, snapshotAtBase bool) []Finding {
 		}
 	}
 
-	if len(touched) == 0 || slices.Contains(changed, changelogPath) {
+	if len(touched) == 0 || slices.Contains(changed, ChangelogPath) {
 		return nil
 	}
 
@@ -246,6 +246,6 @@ func Changelog(changed []string, snapshotAtBase bool) []Finding {
 		touched = append(touched[:shown], "…")
 	}
 
-	return []Finding{{Path: changelogPath, Msg: "what the model reads changed (" + strings.Join(touched, ", ") +
+	return []Finding{{Path: ChangelogPath, Msg: "what the model reads changed (" + strings.Join(touched, ", ") +
 		") but CHANGELOG.md did not: add an entry under ## [Unreleased] saying what changed for a model"}}
 }

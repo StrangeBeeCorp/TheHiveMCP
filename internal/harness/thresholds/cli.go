@@ -1,6 +1,7 @@
 package thresholds
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -152,7 +153,7 @@ func (n Night) change(actions []triage.Action, out io.Writer) error {
 	var err error
 
 	for _, a := range actions {
-		_, _ = fmt.Fprintf(out, "%s %s\n", a.Kind, cmpOr(a.Title, fmt.Sprintf("#%d", a.Issue)))
+		_, _ = fmt.Fprintf(out, "%s %s\n", a.Kind, cmp.Or(a.Title, fmt.Sprintf("#%d", a.Issue)))
 	}
 
 	if n.Dry {
@@ -176,14 +177,6 @@ func (n Night) change(actions []triage.Action, out io.Writer) error {
 	return nil
 }
 
-func cmpOr(s, fallback string) string {
-	if s == "" {
-		return fallback
-	}
-
-	return s
-}
-
 // Values are tonight's metrics: the coverage of the night's coverage log (this clone's last make
 // pr without one), and the dashboard's measures. A measure whose source was not read is unknown,
 // not a zero: no issue open is not the same as no issue read.
@@ -198,11 +191,10 @@ func Values(d dashboard.Data, runs string) map[string]Value {
 	}
 
 	oldest := m.OldestFindingDays
-	if _, ok := d.Missing[dashboard.SourceIssues]; ok {
-		oldest = math.NaN()
-	}
+	_, noIssues := d.Missing[dashboard.SourceIssues]
+	_, noGitHub := d.Missing[dashboard.SourceGitHub]
 
-	if _, ok := d.Missing[dashboard.SourceGitHub]; ok {
+	if noIssues || noGitHub {
 		oldest = math.NaN()
 	}
 

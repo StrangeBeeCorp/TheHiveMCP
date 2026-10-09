@@ -69,12 +69,7 @@ func Root(ctx context.Context, dir string) (string, error) {
 
 // Head is the commit checked out, or "" before the first commit.
 func Head(ctx context.Context, root string) string {
-	out, err := run(ctx, root, "rev-parse", "HEAD")
-	if err != nil {
-		return ""
-	}
-
-	return strings.TrimSpace(out)
+	return Resolve(ctx, root, "HEAD")
 }
 
 // Files lists the files the repository has or would have on the next `git add`: tracked files

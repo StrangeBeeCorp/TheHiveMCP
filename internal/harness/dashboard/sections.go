@@ -83,13 +83,13 @@ func quality(d Data, prs []PR) []Block {
 }
 
 func delivery(d Data, runs []Run, prs []PR) []Block {
-	var lead, tokens []float64
+	lead := each(prs, leadDays)
+
+	var tokens []float64
 
 	var fixed, spent float64
 
 	for _, p := range prs {
-		lead = append(lead, leadDays(p))
-
 		if p.ReviewTokens > 0 {
 			tokens = append(tokens, float64(p.ReviewTokens))
 			spent += float64(p.ReviewTokens)

@@ -39,9 +39,6 @@ type Lister func(ctx context.Context) (Snapshot, error)
 // not write that git cannot restore, next to the hooks' state (git-ignored).
 const snapshotDir = ".cache/harness/agents"
 
-// shortSHA is how much of a commit a report shows.
-const shortSHA = 7
-
 // agentDir is where an agent's snapshot and copies live, relative to the checkout.
 func agentDir(actor string) string {
 	sum := sha256.Sum256([]byte(actor))
@@ -190,8 +187,8 @@ func Changes(ctx context.Context, root string, in Input, list Lister) ([]string,
 	var out []string
 
 	if now.Head != before.Head && (role.Duel() || role.ReadOnly()) {
-		out = append(out, fmt.Sprintf("HEAD moved from %s to %s: the %s does not commit, the session that runs it does. "+
-			"Undo the commit and keep its changes: git reset --soft %s", short(before.Head), short(now.Head), role, before.Head))
+		out = append(out, fmt.Sprintf("HEAD moved from %.7s to %.7s: the %s does not commit, the session that runs it does. "+
+			"Undo the commit and keep its changes: git reset --soft %s", before.Head, now.Head, role, before.Head))
 	}
 
 	for _, rel := range changed(before.Files, now.Files) {
@@ -292,14 +289,6 @@ func changed(before, now map[string]string) []string {
 func changesReport(changes []string) string {
 	return "you changed what your role may not change, whatever command did it:\n- " + strings.Join(changes, "\n- ") +
 		"\nRun each restore command above before you stop."
-}
-
-func short(sha string) string {
-	if len(sha) > shortSHA {
-		return sha[:shortSHA]
-	}
-
-	return sha
 }
 
 func exists(path string) bool {

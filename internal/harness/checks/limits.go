@@ -9,7 +9,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 
@@ -114,16 +113,12 @@ func ParseLimits(data []byte, file string) (Limits, error) {
 func matchesFile(patterns []string, name string) bool {
 	base := path.Base(name)
 	for _, p := range patterns {
-		if registry.Match(p, name) || (!containsSlash(p) && registry.Match(p, base)) {
+		if registry.Match(p, name) || (!strings.Contains(p, "/") && registry.Match(p, base)) {
 			return true
 		}
 	}
 
 	return false
-}
-
-func containsSlash(s string) bool {
-	return strings.Contains(s, "/")
 }
 
 // sniffLen is how much of a file decides whether it is binary, as git does.
@@ -142,10 +137,6 @@ func countLines(content []byte) int {
 	}
 
 	return n
-}
-
-func validText(content []byte) bool {
-	return utf8.Valid(content)
 }
 
 // LineLimit is a code file's length in lines and the length it may reach: its cap, else

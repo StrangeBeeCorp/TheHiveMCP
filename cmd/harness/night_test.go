@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/gitx/gittest"
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/issues"
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/runner"
 )
 
@@ -177,7 +178,7 @@ func TestNextWithoutGHSaysSo(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 
 	err := env{root: t.TempDir()}.next(t.Context(), &bytes.Buffer{})
-	require.ErrorIs(t, err, errNoGH)
+	require.ErrorIs(t, err, issues.ErrNoGH)
 }
 
 // debtRepo is a checkout on a work branch, with a fake gh whose open debt issues are debt.

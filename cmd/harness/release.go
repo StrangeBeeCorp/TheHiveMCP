@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"flag"
@@ -160,7 +161,7 @@ func (e env) integration(ctx context.Context, args []string, out io.Writer) erro
 	s := stack.Stack{
 		Root: e.root, Compose: composeFile, LicenseOverride: licenseOverride, LicenseFile: licenseFile,
 		TheHiveImage: os.Getenv("THEHIVE_TEST_IMAGE"), SuppliedLicense: os.Getenv("THEHIVE_TEST_LICENSE"),
-		URL: theHiveURL, DevUser: orDefault(os.Getenv("THEHIVE_DEV_USER"), "admin"), DevPassword: orDefault(os.Getenv("THEHIVE_DEV_PASSWORD"), "secret"),
+		URL: theHiveURL, DevUser: cmp.Or(os.Getenv("THEHIVE_DEV_USER"), "admin"), DevPassword: cmp.Or(os.Getenv("THEHIVE_DEV_PASSWORD"), "secret"),
 		Run: toolExec, Stream: streamExec, Ready: readyCheck, Wait: readyWait, Poll: readyPoll, Log: out,
 	}
 
@@ -172,7 +173,7 @@ func (e env) integration(ctx context.Context, args []string, out io.Writer) erro
 	_, _ = fmt.Fprintf(out, "Mode: %s.\n", mode)
 
 	t := stack.Tests{
-		Mount: orDefault(os.Getenv("MOUNT_APP"), e.root+":/app"), Image: image,
+		Mount: cmp.Or(os.Getenv("MOUNT_APP"), e.root+":/app"), Image: image,
 		User: strings.Fields(os.Getenv("GO_RUN_AS_HOST_UID")), Caches: strings.Fields(os.Getenv("DOCKER_CACHE_MOUNTS")),
 		Tools: strings.Fields(os.Getenv("GO_TOOLS_CACHE")), Cover: strings.Fields(os.Getenv("GO_TEST_COVER")), Run: strings.Fields(os.Getenv("GO_TEST_RUN")),
 	}
@@ -187,12 +188,4 @@ func (e env) integration(ctx context.Context, args []string, out io.Writer) erro
 	}
 
 	return nil
-}
-
-func orDefault(v, def string) string {
-	if v == "" {
-		return def
-	}
-
-	return v
 }

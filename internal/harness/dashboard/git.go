@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -12,9 +11,7 @@ import (
 
 // Commit is one commit of the history the page reads, with what its trailers say of its author.
 type Commit struct {
-	SHA    string
 	Author string
-	Email  string
 	When   time.Time
 	// Model, Effort and Skills are the agent's trailers (Agent-Model, Agent-Effort, Skills-Used),
 	// else the model of a Co-Authored-By line; "" for a person's commit.
@@ -53,13 +50,9 @@ type history struct {
 
 func readGit(ctx context.Context, o Options) (history, error) {
 	git := func(args ...string) (string, error) {
-		cmd := exec.CommandContext(ctx, "git", args...) // #nosec G204 -- git with the dashboard's own arguments
-		cmd.Dir = o.Root
-		cmd.WaitDelay = waitDelay
-
-		out, err := cmd.Output()
+		out, err := runGit(ctx, o.Root, nil, args...)
 		if err != nil {
-			return "", fmt.Errorf("%w: git %s: %w", errNoGit, args[0], err)
+			return "", fmt.Errorf("%w: %w", errNoGit, err)
 		}
 
 		return string(out), nil
@@ -80,7 +73,7 @@ func readGit(ctx context.Context, o Options) (history, error) {
 	since := "--since=" + o.Since.Format(time.RFC3339)
 
 	log, err := git("log", o.Main, "HEAD", "--no-merges", since,
-		"--format=%H"+fieldSep+"%an"+fieldSep+"%ae"+fieldSep+"%aI"+fieldSep+"%B"+recordSep)
+		"--format=%an"+fieldSep+"%aI"+fieldSep+"%B"+recordSep)
 	if err != nil {
 		return h, err
 	}
@@ -125,18 +118,18 @@ func parseCommits(log string) []Commit {
 	var commits []Commit
 
 	for rec := range strings.SplitSeq(log, recordSep) {
-		f := strings.SplitN(strings.TrimLeft(rec, "\n"), fieldSep, 5) //nolint:mnd // the format's five fields
-		if len(f) != 5 {                                              //nolint:mnd // the format's five fields
+		f := strings.SplitN(strings.TrimLeft(rec, "\n"), fieldSep, 3) //nolint:mnd // the format's three fields
+		if len(f) != 3 {                                              //nolint:mnd // the format's three fields
 			continue
 		}
 
-		when, err := time.Parse(time.RFC3339, f[3])
+		when, err := time.Parse(time.RFC3339, f[1])
 		if err != nil {
 			continue
 		}
 
-		c := Commit{SHA: f[0], Author: f[1], Email: f[2], When: when}
-		trailers(&c, f[4])
+		c := Commit{Author: f[0], When: when}
+		trailers(&c, f[2])
 		commits = append(commits, c)
 	}
 

@@ -76,11 +76,6 @@ func (g GH) Create(title, label, body string) (string, error) {
 	return strings.TrimSpace(string(out)), err
 }
 
-// Apply carries out one of the triage's actions.
-func (g GH) Apply(a triage.Action) error {
-	return g.ApplyAs(a, triage.Label)
-}
-
 // ApplyAs carries out an action on the issues labelled label: an issue it opens carries it.
 func (g GH) ApplyAs(a triage.Action, label string) error {
 	var err error
