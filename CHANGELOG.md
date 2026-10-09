@@ -8,6 +8,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- **Built with Go 1.26.9, for nine standard-library vulnerabilities the server's code reaches.** Seven are in `net/http`, one in `crypto/tls` and one in
+  `mime/multipart` (GO-2026-6603, -6605, -6607, -6608, -6610, -6611, -6612, -6613, -6617). The vulncheck gate found them in 1.26.8 on 2026-10-09. The binary and
+  the image are built with 1.26.9; the source is unchanged.
+
 ## [1.2.0] - 2026-10-06
 
 **Upgrading from 1.1.x:** four changes can turn a working setup into an error. Each is described in full below.
