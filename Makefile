@@ -1,11 +1,11 @@
 BUILD_DATE := $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 GIT_COMMIT=$(shell git rev-parse HEAD)
 VERSION=$(shell git describe --tags 2> /dev/null || echo "v0.0.0-${GIT_COMMIT}")
-GO_IMAGE := golang:1.26.8-alpine
+GO_IMAGE := golang:1.26.9-alpine
 # GO_IMAGE_CGO is the Debian-based image: gcc for `make test-race` (-race needs cgo,
 # which the Alpine GO_IMAGE lacks) and git, which the harness's tests run. The unit and
 # integration tests run there with CGO_ENABLED=0, so they build as in GO_IMAGE.
-GO_IMAGE_CGO := golang:1.26.8
+GO_IMAGE_CGO := golang:1.26.9
 # jq and yq run the help-xml pipeline (JSON assembly + JSON→XML). Pinned by digest
 # so `make help-xml` needs no host jq/yq — everything stays in Docker.
 JQ_IMAGE := ghcr.io/jqlang/jq@sha256:b9c68867e5766576263a222e91db3de422d802069c7af70440e667a95344e486
