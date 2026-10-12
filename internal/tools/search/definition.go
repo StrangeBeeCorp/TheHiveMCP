@@ -48,6 +48,7 @@ var ValidEntityTypes = []string{
 	types.EntityTypePattern,
 	types.EntityTypeCaseTemplate,
 	types.EntityTypePage,
+	types.EntityTypeKnowledgeBase,
 	types.EntityTypeJob,
 	types.EntityTypeAction,
 }
@@ -61,7 +62,7 @@ var EntitiesParamConstraints = map[string]tools.SchemaConstraint{
 	// sort-by deliberately advertises NO default. The applied default is
 	// per-entity-type (types.DefaultSortField: startDate for job and action,
 	// _createdAt otherwise) and a JSON Schema default is a single value, so any
-	// value here would be a false claim for two of the ten types. Worse, a
+	// value here would be a false claim for two of the eleven types. Worse, a
 	// client that materializes defaults would send _createdAt explicitly and
 	// silently defeat the per-type default it was trying to honour. The rule
 	// lives in the sort-by description instead, which is what a model reads.

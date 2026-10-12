@@ -8,6 +8,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`search-entities` can search the knowledge base alone: entity-type `knowledge-base`.** A `page` search returns the knowledge base mixed with every case's
+  pages, and nothing on a row says which kind it is: in one organisation, 1 of 16 pages came from the knowledge base, so an agent looking for a dictionary page
+  had to guess its title. `knowledge-base` runs TheHive's `listOrganisationPage` query. Its rows are pages, updated and deleted through `manage-entities` with
+  `entity-type: page` when the permission profile allows it.
+
+### Changed
+
+- **Page rows include `content` and `category` by default.** A page search returned only `_id`, `title` and `_createdAt`, so an agent found the page it wanted
+  and could not read it unless it knew to ask for `extra-columns: ["content"]`, which no resource said. The search-entities reference already listed `category`
+  as a default; now it is one. This also applies to the `pages` additional query on cases and alerts, whose rows grow by the pages' content.
+
 ### Security
 
 - **Built with Go 1.26.9, for nine standard-library vulnerabilities the server's code reaches.** Seven are in `net/http`, one in `crypto/tls` and one in

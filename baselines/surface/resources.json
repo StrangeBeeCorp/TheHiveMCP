@@ -79,8 +79,8 @@
       "name": "Page Documentation",
       "description": "How pages work, their relationship to cases, and usage patterns",
       "mimeType": "application/json",
-      "tokens": 176,
-      "sha256": "02110f5b5c04d345fcada797b0362ba6db259434401adb11543668d3da5dd2d6"
+      "tokens": 228,
+      "sha256": "441d5c0506afeb4441a74a0e5d74b1bf8a509de29ca44d3716eb7746cd7529c3"
     },
     {
       "uri": "hive://docs/entities/pattern",

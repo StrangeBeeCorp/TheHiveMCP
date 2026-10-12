@@ -5,4 +5,6 @@ Pages support Markdown content including headings, links, images, and code block
 Pages have a category field (commonly "Default") used to organize them within a case.
 Pages have an order field to control their display position in the page list.
 To create a page in a case, provide the case ID in entity-ids. To create a standalone page, omit entity-ids.
+search-entities with entity-type "knowledge-base" returns only standalone pages; "page" returns case pages too, and a row does not say which kind it is.
+Search results include content and category by default.
 Pages are commonly used to document investigation timelines, analysis notes, and remediation steps.

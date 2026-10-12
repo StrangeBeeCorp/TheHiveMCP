@@ -23,6 +23,7 @@ A filter is a JSON object with exactly ONE operator at its root. Nest _and / _or
 - Fields are entity-specific. ALWAYS consult hive://schema/<entity-type> (e.g. hive://schema/alert) for valid field names and types before filtering. Never filter on a field that does not exist — TheHive rejects the whole query (the error lists the valid fields; correct it and retry).
 - severity is numeric, 1=Low 2=Medium 3=High 4=Critical by default, but the range and labels are configurable per organisation — read severityLabel rather than assuming the mapping. status/stage are strings.
 - Dates: ISO strings like "2024-08-01T00:00:00" (converted automatically) or epoch milliseconds. TheHive has no "now" — for relative ranges read hive://config/server-time and compute the absolute bound yourself.
+- "knowledge-base": knowledge-base pages only ("page" adds case pages). Rows are pages: hive://schema/page, manage as "page".
 
 ## Automation history (entity-type "job" and "action")
 Cortex runs are searchable like any other entity: "job" holds analyzer runs, "action" holds responder runs. Use them to find out what enrichment already happened instead of re-running an analyzer.
@@ -112,12 +113,12 @@ func NewSearchEntitiesResult(results []map[string]any, params EntitiesParams, fi
 
 	if params.Count {
 		if len(results) == 0 {
-			return EntitiesResult{}, tools.NewToolError("no results returned for count query").Hint("Ensure the query returns at least one result with a count field when count=true").Schema(params.EntityType, "")
+			return EntitiesResult{}, tools.NewToolError("no results returned for count query").Hint("Ensure the query returns at least one result with a count field when count=true").Schema(schemaEntityType(params.EntityType), "")
 		}
 
 		floatCountValue, ok := results[0][fieldCount].(float64)
 		if !ok {
-			return EntitiesResult{}, tools.NewToolError("failed to parse count from results").Hint("Ensure the query returns a count field when count=true").Schema(params.EntityType, "")
+			return EntitiesResult{}, tools.NewToolError("failed to parse count from results").Hint("Ensure the query returns a count field when count=true").Schema(schemaEntityType(params.EntityType), "")
 		}
 
 		countValue = int(floatCountValue)

@@ -86,6 +86,43 @@ func TestSearchPages(t *testing.T) {
 	require.Equal(t, "[UNTRUSTED_DATA]Default[/UNTRUSTED_DATA]", page["category"])
 }
 
+// A knowledge-base search must leave out case pages, which listPage mixes in
+// with nothing on the row to tell them apart, and must return the content
+// without being asked: a row that only names a page answers nothing.
+func TestSearchKnowledgeBase(t *testing.T) {
+	testutils.Parallel(t)
+
+	hiveClient := testutils.SetupTestWithCleanup(t)
+
+	authContext := testutils.GetAuthContext(t)
+
+	createdCase, _, err := hiveClient.CaseAPI.CreateCase(authContext).InputCreateCase(*testutils.MockInputCase()).Execute()
+	require.NoError(t, err)
+
+	casePage := thehive.InputCreatePage{Title: "KB-Search-Case-Page", Content: "case notes", Category: "Notes"}
+	_, _, err = hiveClient.PageAPI.CreateAPageInACase(authContext, createdCase.UnderscoreId).InputCreatePage(casePage).Execute()
+	require.NoError(t, err)
+
+	kbPage := thehive.InputCreatePage{Title: "KB-Search-Org-Page", Content: "tag dictionary", Category: "Dictionaries"}
+	_, _, err = hiveClient.PageAPI.CreateAPage(authContext).InputCreatePage(kbPage).Execute()
+	require.NoError(t, err)
+
+	mcpClient := newSearchClient(t)
+	titleFilter := map[string]any{tLike: map[string]any{tField: tTitle, tValue: "KB-Search-*"}}
+
+	allPages := searchRows(t, mcpClient, map[string]any{pEntityType: types.EntityTypePage, pFilters: titleFilter})
+	require.Len(t, allPages, 2, "listPage returns case and knowledge-base pages alike")
+
+	kbRows := searchRows(t, mcpClient, map[string]any{pEntityType: types.EntityTypeKnowledgeBase, pFilters: titleFilter})
+	require.Len(t, kbRows, 1, "the case page must not reach a knowledge-base search")
+
+	row, ok := kbRows[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "[UNTRUSTED_DATA]KB-Search-Org-Page[/UNTRUSTED_DATA]", row[tTitle])
+	require.Equal(t, "[UNTRUSTED_DATA]tag dictionary[/UNTRUSTED_DATA]", row["content"], "content is a default column")
+	require.Equal(t, "[UNTRUSTED_DATA]Dictionaries[/UNTRUSTED_DATA]", row["category"], "category is a default column")
+}
+
 // Paging is the whole point of hasMore: a page that comes back exactly full is
 // indistinguishable from the end of a match unless the response says so. This
 // walks a known 5-alert set two rows at a time and checks both that the flag

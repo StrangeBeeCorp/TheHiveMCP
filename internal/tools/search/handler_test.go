@@ -25,6 +25,7 @@ func TestGetExcludedFields_IdNeverExcluded(t *testing.T) {
 		types.EntityTypePattern,
 		types.EntityTypeCaseTemplate,
 		types.EntityTypePage,
+		types.EntityTypeKnowledgeBase,
 		types.EntityTypeJob,
 		types.EntityTypeAction,
 	}
@@ -231,4 +232,34 @@ func TestMarkCatalogRowsTrusted_LeavesNonCatalogEntitiesFenced(t *testing.T) {
 
 	assert.Contains(t, string(rendered), "UNTRUSTED_DATA",
 		"entity-type case is not catalog data: its name must stay fenced")
+}
+
+func TestBuildListOperation_KnowledgeBaseListsOrganisationPagesOnly(t *testing.T) {
+	t.Parallel()
+
+	tool := &Tool{}
+
+	// listPage mixes in every case's pages; the knowledge base has its own query.
+	assert.Equal(t, "listOrganisationPage", tool.buildListOperation(types.EntityTypeKnowledgeBase).Name)
+	assert.Equal(t, "listPage", tool.buildListOperation(types.EntityTypePage).Name)
+	assert.Equal(t, "listCaseTemplate", tool.buildListOperation(types.EntityTypeCaseTemplate).Name)
+}
+
+func TestSchemaEntityType_KnowledgeBaseRowsArePages(t *testing.T) {
+	t.Parallel()
+
+	// No hive://schema/knowledge-base exists: a hint naming it would send the model to a dead resource.
+	assert.Equal(t, types.EntityTypePage, schemaEntityType(types.EntityTypeKnowledgeBase))
+	assert.Equal(t, types.EntityTypeCase, schemaEntityType(types.EntityTypeCase))
+}
+
+func TestApplyEntitiesDefaults_PagesCarryTheirContent(t *testing.T) {
+	t.Parallel()
+
+	for _, entityType := range []string{types.EntityTypePage, types.EntityTypeKnowledgeBase} {
+		params := EntitiesParams{EntityType: entityType}
+		applyEntitiesDefaults(&params)
+
+		assert.Subset(t, params.ExtraColumns, []string{fieldID, fieldTitle, "category", "content"}, entityType)
+	}
 }
