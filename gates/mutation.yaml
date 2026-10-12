@@ -1,0 +1,34 @@
+# The mutation gate (bin/harness mutation): gremlins mutates the code of each package a change
+# touches that has a floor here, runs its unit tests (-short), and the share of the mutants they
+# kill (the test efficacy) may not fall under the floor. Measured on 2026-10-05 with gremlins
+# v0.6.0 and this timeout coefficient; each floor sits a point, or one mutant's worth, under:
+#   internal/utils 83.0 % of 94 mutants, internal/harness/policy 94.0 % of 50,
+#   internal/permissions 92.7 % of 41, internal/harness/evidence 84.6 % of 39,
+#   internal/harness/checks 86.5 % of 185, internal/harness/lint 92.5 % of 93,
+#   internal/harness/release 100 % of 77, internal/harness/stack 95.3 % of 43;
+#   internal/tools/execute_automation 87.0 % of 23 on 2026-10-02 (unchanged since).
+# Packages with fewer than ten mutants have no floor (one mutant swings them by ten points or
+# more), nor does internal/tools/search, whose tests are integration tests. Lowering a floor is a
+# person's call.
+
+tool: github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0
+
+# A mutant's tests may take this many times the unmutated run. Unit tests take milliseconds and
+# each mutant is rebuilt first: at gremlins' default most mutants time out, and the efficacy then
+# rests on the few left (a run where more than two, and more than 10 %, time out measured nothing:
+# the gate is UNAVAILABLE). 30 left 12 to 21 mutants a package timed out on a busy machine
+# (2026-10-06); 90 left one, at a load average of 60, with the same efficacy (92.6 % for
+# internal/harness/lint, measured 92.5 %). A mutant that hangs costs at most this many times a
+# test run of milliseconds.
+timeout_coefficient: 90
+
+floors:
+  internal/utils: 81
+  internal/harness/policy: 92
+  internal/permissions: 90
+  internal/harness/evidence: 82
+  internal/harness/checks: 85
+  internal/tools/execute_automation: 82
+  internal/harness/lint: 91
+  internal/harness/release: 98
+  internal/harness/stack: 92

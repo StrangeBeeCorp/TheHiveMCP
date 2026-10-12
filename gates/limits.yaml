@@ -1,0 +1,100 @@
+# What the structure and public-safety gates enforce (gates/registry.yaml runs them), and the
+# limits of the Claude Code hooks.
+
+structure:
+  # A code file stays under this many lines. Split a file before it grows past it.
+  max_lines: 500
+  # A directory holds at most this many code files besides its tests: past it, split the package.
+  max_code_files_per_dir: 14
+  # What counts as code: a pattern with a slash matches the path, one without the file name.
+  code_files: ["*.go", "*.sh", "*.py", "*.js", "*.mjs", "*.ts", "*.mk", Makefile, Dockerfile, "Dockerfile.*", ".githooks/*", "bin/*"]
+  # No file is larger than this: a large file belongs in a release or a bucket, not in git. The
+  # README's demo GIF (825 KB) is the largest file the repository keeps.
+  max_kb: 1024
+  # Text files kept byte for byte, with no trailing-whitespace or final-newline rule: a patch's
+  # blank context lines are a single space, and the canaries must apply as written.
+  verbatim: ["gates/canaries/*.patch"]
+  # A file over the limit, capped at its size until it is split. The files over it when the gate
+  # arrived (2026-10-01) were split in DL-8099. A cap may only go down: the gate asks for a lower
+  # cap when a file shrinks, and for its removal once the file is under the limit.
+  caps: {}
+  # The top-level entries the repository may have. A new one is a deliberate change: add it here.
+  root:
+    - .air.toml
+    - .claude
+    - .dockerignore
+    - .env.template
+    - .githooks
+    - .github
+    - .gitignore
+    - .gitleaks.toml
+    - .golangci.yml
+    - .markdownlint.jsonc
+    - .prettierrc.json
+    - AGENTS.md
+    - CHANGELOG.md
+    - CLAUDE.md
+    - LICENSE
+    - Makefile
+    - NOTICE
+    - README.md
+    - RELEASING.md
+    - baselines
+    - bin
+    - bootstrap
+    - checkmake.ini
+    - cmd
+    - deployment
+    - docker-compose.license.yml
+    - docker-compose.test.yml
+    - docs
+    - gates
+    - go.mod
+    - go.sum
+    - internal
+    - renovate.json
+    - scripts
+    - spec
+    - version
+
+public_safety:
+  # Per-machine and secret-bearing files: they stay out of this public repository (.gitignore).
+  forbidden_paths:
+    - .claude/settings.local.json
+    - .claude/worktrees/**
+    - .claude/logs/**
+    - .claude/sealed/**
+    - .claude/last-prompt-ts
+    - .claude/.lint-verified
+    - CLAUDE.local.md
+    - .env
+    - ".env.*"
+    - "*.lic.local"
+    - key.md
+    - "*.pem"
+    - "*.p12"
+    - "*.key"
+    - "id_rsa*"
+    - "id_ed25519*"
+  # Exceptions to forbidden_paths: templates with no value in them.
+  allowed_paths:
+    - .env.template
+  # Names allowed after /Users/ or /home/: the CI runner and placeholders, not people.
+  home_names: [runner, user, you, username, name, example, me]
+  # Files whose content is not scanned for home paths (this file names the patterns).
+  skip_content:
+    - gates/limits.yaml
+
+hooks:
+  # An agent that stops while check-fast is red is sent back to work. After this many red rounds
+  # it must write .cache/harness/BLOCKED.md (what it tried, what fails, what it needs) to stop.
+  max_red_rounds: 6
+
+integrity:
+  # The tests a person accepted to remove or weaken, "path_test.go:TestName": why. The integrity
+  # gate refuses any other test that is gone, now skips, or checks less than at the base.
+  allow:
+    "cmd/harness/pr_test.go:TestTheReviewOfAChangeCoversItRebasedButNotEdited": >-
+      Jean, 2026-10-07: a rebase keeps its review (DL-8152); a commit added after the review is
+      listed as not reviewed instead of refused, so the test of that refusal goes. Replaced by
+      TestTheReviewOfABranchCoversItRebasedAndListsWhatItDidNotRead and TestABranchNoReviewReadIsRefused.

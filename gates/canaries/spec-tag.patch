@@ -1,0 +1,12 @@
+diff --git a/internal/tools/search/pagination_test.go b/internal/tools/search/pagination_test.go
+index 3ca9460..1cd77fa 100644
+--- a/internal/tools/search/pagination_test.go
++++ b/internal/tools/search/pagination_test.go
+@@ -22,6 +22,7 @@ func rows(n int) []map[string]any {
+ // A full page and a truncated one arrive as the same row count from TheHive,
+ // which returns no total. The extra row buildPagingOperation asks for is the
+ // only thing that tells them apart.
++// spec: XYZ-999
+ func TestTrimProbeRow(t *testing.T) {
+ 	t.Parallel()
+ 

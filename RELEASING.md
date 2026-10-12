@@ -42,6 +42,10 @@ Before cutting a release (pushing a `vX.Y.Z` tag):
 - [ ] `results.csv` includes the per-suite / per-category breakdown (not just the accuracy/security totals).
 - [ ] The judge was the pinned `z-ai/glm-5.3` (temperature 0) and is recorded in `results.csv`. It judged v1.1.0 onward; v1.0.0 and earlier used `z-ai/glm-5.2`,
       so scores do not compare across that boundary (see ADR-0001).
+- [ ] [`docs/evaluation/README.md`](docs/evaluation/README.md) lists the new version's folder.
 - [ ] **Release notes curated** — user-facing / breaking / security sections filled; breaking changes include upgrade guidance.
+- [ ] `CHANGELOG.md`'s `[Unreleased]` section is moved under a `[X.Y.Z] - <date>` heading, with a new empty `[Unreleased]` above it.
 - [ ] README and docs updated for any new or changed tools.
+- [ ] The commit to tag is on `main`, and its CI run and the last nightly are green. `make package-release` builds the release artifacts locally, as a dry run
+      of what the release workflow publishes.
 - [ ] Version/tag matches the artifacts being published.

@@ -3,6 +3,8 @@
 - Status: accepted
 - Date: June 24, 2026 (acceptance date). Policy takes effect with the v1.0.0 release, July 6, 2026.
 - Deciders: TheHiveMCP maintainers, with the CTO as final arbiter on scope changes
+- Status update, 2026-10-09: the artifacts this ADR anticipates now exist: the accuracy and security reports and the recommended-model shortlist in
+  [`docs/evaluation/`](../../evaluation/README.md), the release process in [`RELEASING.md`](../../../RELEASING.md), and the README's commitment section.
 
 ## Context and problem statement
 

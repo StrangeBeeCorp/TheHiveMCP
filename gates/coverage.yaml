@@ -1,0 +1,38 @@
+# The coverage gate: each package's lowest acceptable statement coverage under the unit suite
+# (make test COVERAGE=1, -short: the integration tests do not count). Set from a measurement, a
+# point under it, on 2026-10-05 (a floor that was already higher stays):
+#   make test COVERAGE=1 && make go CMD="run ./cmd/coverage --propose"
+# A package may not fall under its floor. Raise a floor when its package gains tests; lowering one
+# is a person's call. Packages tested by the integration suite (internal/tools/manage,
+# internal/testutils) have no floor.
+
+floors:
+  bootstrap: 72
+  cmd/harness: 71
+  internal/analyzers: 95
+  internal/harness/bench: 96
+  internal/harness/change: 98
+  internal/harness/checks: 92
+  internal/harness/coverage: 91
+  internal/harness/dashboard: 91
+  internal/harness/evidence: 89
+  internal/harness/gatesdoc: 56
+  internal/harness/gitx: 81
+  internal/harness/hooks: 90
+  internal/harness/lint: 97
+  internal/harness/mutation: 93
+  internal/harness/policy: 96
+  internal/harness/proc: 93
+  internal/harness/registry: 94
+  internal/harness/release: 90
+  internal/harness/runner: 90
+  internal/harness/stack: 90
+  internal/harness/thresholds: 90
+  internal/permissions: 85
+  internal/resources: 20
+  internal/surface: 80
+  internal/tools: 48
+  internal/tools/execute_automation: 67
+  internal/tools/search: 62
+  internal/types: 10
+  internal/utils: 65

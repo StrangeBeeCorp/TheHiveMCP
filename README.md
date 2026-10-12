@@ -4,7 +4,7 @@
   <img src="https://strangebee.com/wp-content/uploads/2024/07/Icon4Nav_TheHive.png" alt="TheHive Logo" width="400"/>
 </div>
 
-[![Go Version](https://img.shields.io/badge/go-1.26.5+-blue.svg)](https://golang.org/doc/go1.26)
+[![Go Version](https://img.shields.io/badge/go-1.26+-blue.svg)](https://golang.org/doc/go1.26)
 
 **Model Context Protocol server for TheHive security platform**
 
@@ -124,8 +124,10 @@ forward for no-behavior-change releases). The full policy is in [RELEASING.md](R
 TheHiveMCP/
 ├── cmd/server/         # Main entrypoint
 ├── bootstrap/          # Server initialization (public API)
-├── internal/           # Core components (tools, resources, permissions, confirmation, utils)
+├── internal/           # Core components (tools, resources, permissions, auth, utils, harness)
 ├── deployment/         # Docker configuration
+├── gates/              # The harness's gate registry and limits (docs/reference/gates.md)
+├── bin/harness         # Runs the gates: make check-fast, make pre-commit, CI
 └── Makefile
 ```
 
@@ -203,8 +205,8 @@ cases are currently open?"_
 
 > **⚠️ Security:** TheHiveMCP serves plain HTTP and does not authenticate callers itself. Any HTTP deployment that is reachable beyond localhost **must** sit
 > behind a TLS-terminating, authenticating reverse proxy (nginx, Traefik, Caddy, ...). By default, requests without credentials are rejected and the
-> `X-TheHive-Url` header only accepts the configured `THEHIVE_URL` — see `THEHIVE_URL_ALLOWLIST` and `ALLOW_ENV_CREDENTIAL_FALLBACK` in the configuration
-> reference below before changing this behavior.
+> `X-TheHive-Url` header only accepts the configured `THEHIVE_URL` — see `THEHIVE_URL_ALLOWLIST` and `ALLOW_ENV_CREDENTIAL_FALLBACK` in the
+> [configuration reference](docs/reference/configuration.md) before changing this behavior.
 
 #### Quick Docker setup
 
@@ -334,7 +336,7 @@ bootstrap.RegisterToolsToMCPServer(mcpServer)
 
 </details>
 
-### � Deployment quick reference
+### Choose a deployment guide
 
 | Deployment Type         | Use Case                         | Complexity        | Guide                                                 |
 | ----------------------- | -------------------------------- | ----------------- | ----------------------------------------------------- |
@@ -348,95 +350,9 @@ bootstrap.RegisterToolsToMCPServer(mcpServer)
 
 ## ⚙️ Configuration
 
-TheHiveMCP supports flexible configuration through multiple methods with hierarchical priority:
-
-### Configuration priority (highest to lowest)
-
-1. **🌐 HTTP Request Headers** (HTTP transport only) - Per-request overrides for multi-tenant scenarios
-2. **⚡ Command-line Flags** - Explicit runtime parameters
-3. **🔧 Environment Variables** - System-level defaults (.env files supported)
-
-This allows you to set defaults via environment variables while overriding specific values per-request via headers or command-line flags.
-
-<details>
-<summary><strong>⚙️ Configuration parameters</strong></summary>
-
-### Configuration parameters
-
-| Parameter                   | Environment variable            | Command-line flag                 | HTTP header                            | Default            | Description                                                                                                                    |
-| --------------------------- | ------------------------------- | --------------------------------- | -------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| **TheHive connection**      |
-| TheHive URL                 | `THEHIVE_URL`                   | `--thehive-url`                   | `X-TheHive-Url`                        | -                  | TheHive instance URL (required)                                                                                                |
-| API key                     | `THEHIVE_API_KEY`               | `--thehive-api-key`               | `Authorization` or `X-TheHive-Api-Key` | -                  | TheHive API key                                                                                                                |
-| Username                    | `THEHIVE_USERNAME`              | `--thehive-username`              | -                                      | -                  | Username for basic auth                                                                                                        |
-| Password                    | `THEHIVE_PASSWORD`              | `--thehive-password`              | -                                      | -                  | Password for basic auth                                                                                                        |
-| Organisation                | `THEHIVE_ORGANISATION`          | `--thehive-organisation`          | `X-TheHive-Org`                        | -                  | TheHive organisation (optional, defaults to user's own)                                                                        |
-| Request timeout             | `THEHIVE_REQUEST_TIMEOUT`       | `--thehive-request-timeout`       | -                                      | `2m`               | Maximum wait for TheHive to answer one request; past it, the tool call fails with an explicit timeout error                    |
-| **HTTP transport security** |
-| URL allowlist               | `THEHIVE_URL_ALLOWLIST`         | `--thehive-url-allowlist`         | -                                      | `THEHIVE_URL` only | Comma-separated TheHive base URLs clients may target via `X-TheHive-Url`; exact scheme/host/port match                         |
-| Env credential fallback     | `ALLOW_ENV_CREDENTIAL_FALLBACK` | `--allow-env-credential-fallback` | -                                      | `false`            | Allow HTTP requests without credentials to use the server's `THEHIVE_API_KEY`/username/password (single-user deployments only) |
-| Auth cache TTL              | `AUTH_VALIDATION_CACHE_TTL`     | `--auth-validation-cache-ttl`     | -                                      | `60s`              | How long a successful credential validation is cached before re-checking with TheHive                                          |
-| **Permissions**             |
-| Permissions config          | `PERMISSIONS_CONFIG`            | `--permissions-config`            | -                                      | `read_only`        | Permissions: `read_only`, `admin`, or YAML file path                                                                           |
-| **MCP server**              |
-| Transport type              | -                               | `--transport`                     | -                                      | `http`             | Transport mode: `http` or `stdio`                                                                                              |
-| Bind address                | `MCP_BIND_HOST` + `MCP_PORT`    | `--addr`                          | -                                      | -                  | HTTP server bind address (for example, `0.0.0.0:8082`)                                                                         |
-| Endpoint path               | `MCP_SERVER_ENDPOINT`           | `--mcp-endpoint-path`             | -                                      | `/mcp`             | HTTP endpoint path                                                                                                             |
-| Heartbeat interval          | `MCP_HEARTBEAT_INTERVAL`        | `--mcp-heartbeat-interval`        | -                                      | `30s`              | Heartbeat interval for HTTP connections                                                                                        |
-| **Cortex**                  |
-| Default Cortex ID           | `CORTEX_ID`                     | `--cortex-id`                     | -                                      | `local`            | Default Cortex instance ID for analyzer/responder execution                                                                    |
-| **Logging**                 |
-| Log level                   | `LOG_LEVEL`                     | `--log-level`                     | -                                      | `info`             | Logging level                                                                                                                  |
-
-### Example configuration
-
-```bash
-# .env file - Base configuration
-THEHIVE_URL=https://thehive.example.com
-THEHIVE_API_KEY=<thehive_api_key>
-THEHIVE_ORGANISATION=<thehive_organisation>  # Optional, defaults to user's own organisation
-# THEHIVE_REQUEST_TIMEOUT=2m  # Optional, maximum wait for TheHive to answer one request
-PERMISSIONS_CONFIG=docs/reference/permissions-examples/analyst.yaml  # Optional, defaults to read-only
-MCP_BIND_HOST=0.0.0.0  # Exposes the server to the network: requires a TLS-terminating, authenticating reverse proxy in front
-MCP_PORT=8082
-# HTTP transport security (defaults shown):
-# THEHIVE_URL_ALLOWLIST=https://thehive-eu.example.com,https://thehive-us.example.com  # X-TheHive-Url targets (defaults to THEHIVE_URL only)
-# ALLOW_ENV_CREDENTIAL_FALLBACK=false  # Set to true ONLY for single-user deployments where requests may omit credentials
-# AUTH_VALIDATION_CACHE_TTL=60s
-LOG_LEVEL=INFO
-# Permissions options (choose one):
-# PERMISSIONS_CONFIG=read_only                              # Default: safe read-only access
-# PERMISSIONS_CONFIG=admin                                  # Full access (development/testing only)
-# PERMISSIONS_CONFIG=docs/reference/permissions-examples/analyst.yaml # Custom permissions file
-
-# Optional Cortex configuration:
-# CORTEX_ID=local               # Default Cortex instance ID (defaults to 'local')
-```
-
-### Multi-tenant & Per-Request Configuration
-
-**HTTP Headers** (HTTP transport only):
-
-```bash
-curl -X POST http://localhost:8082/mcp \
-  -H "Authorization: Bearer different-api-key" \
-  -H "X-TheHive-Org: other-org" \
-  -H "X-TheHive-Url: https://other-thehive.com" \
-  -d '{"method":"initialize",...}'
-```
-
-`X-TheHive-Url` is only accepted when it matches the server's `THEHIVE_URL` or an entry in `THEHIVE_URL_ALLOWLIST` — any other destination is rejected before
-TheHive is contacted. Requests must supply their own credentials unless `ALLOW_ENV_CREDENTIAL_FALLBACK=true`.
-
-### Built-in Permission Profiles
-
-- **`read_only`** (default): Search entities, browse resources only
-- **`admin`**: Full access to all operations (development/testing only)
-- **Custom file**: Fine-grained permissions via YAML configuration
-
-See [docs/reference/permissions.md](docs/reference/permissions.md) for detailed permission configuration and examples.
-
-</details>
+TheHiveMCP reads its configuration from HTTP request headers, command-line flags and environment variables, in that priority. The full list of parameters, the
+priority order and the built-in permission profiles (`read_only`, `admin`, or a YAML file) are in the
+[configuration reference](docs/reference/configuration.md).
 
 ## 🛠️ MCP Tools
 
@@ -522,68 +438,22 @@ templates, analyzers, responders, observable types).
 
 ## Development
 
-### Dockerized development workflow
+### Development workflow
 
-All development operations use Docker containers for consistency and isolation:
+All development operations run in Docker containers. The loop:
 
-**Core commands:**
+- `make dev-setup` - Point the repository at its tracked commit hook (once per clone)
+- `make check-fast` - The gates your changed paths select, in about a minute: the loop to run while you work
+- `make pr` - The pr gates at HEAD, recorded, then the push of the branch (never main)
+- `make help` - Display all available targets; [the make targets reference](docs/reference/make-targets.md) groups them (build, run, lint, security, Docker,
+  dependencies)
 
-- `make all` - Format, security checks, tests, and build
-- `make build` - Build binary using Docker
-- `make run ARGS="arguments"` - Run application with custom arguments
-- `make test` - Run fast unit tests only (skips integration tests via `-short`); results are cached, so a second run is near-instant
-- `make test-integration` - Run the full suite against the docker-compose test stack (`docker-compose.test.yml`); requires Docker with compose
-- `make dev` - Development server with hot reload (requires local air)
-
-**Testing options:**
-
-- Coverage is off by default. Add `COVERAGE=1` to either test target to write `coverage.out` and print a per-function report:
-  - `make test COVERAGE=1`
-  - `make test-integration COVERAGE=1`
-
-**Integration test TheHive version:** the integration suite (`make test-integration`) boots a live TheHive + Elasticsearch stack via docker compose
-(`docker-compose.test.yml`). CI runs `make test-integration` as a matrix against the oldest and newest supported TheHive versions (currently 5.5 and 5.8), so a
-compatibility break at either end fails the PR. The image is a single source of truth: set `THEHIVE_TEST_IMAGE` to override it locally (e.g.
-`THEHIVE_TEST_IMAGE=strangebee/thehive:5.5.16 make test-integration`); unset, it defaults to `strangebee/thehive:5.8.0`.
-
-**Quality and security:**
-
-- `make fmt` - Format code using Docker (`scripts/fmt.sh`: gofmt, golangci fmt, shfmt, markdownlint, prettier)
-- `make fmt-check` - Fail if anything is unformatted, without rewriting it (the CI gate)
-- `make security` - Run all security checks (vulncheck, sast, lint)
-- `make sast` - Static application security testing
-- `make lint` - Full read-only lint gate over every tracked file (`scripts/lint.sh`: golangci-lint, `go test -short`, shellcheck/shfmt, markdownlint, lychee,
-  yamllint, hadolint, checkmake, actionlint)
-- `make lint-changed` / `make lint-fix` / `make lint-fix-changed` - the same gate scoped to changed files, and its auto-fixing counterparts
-- `make vulncheck` - Vulnerability scanning
-
-**Git hooks (recommended, one-time):**
-
-```sh
-make dev-setup    # git config core.hooksPath .githooks
-```
-
-This points git at the tracked hooks in `.githooks/`, which delegate to the same `scripts/lint.sh`: `pre-commit` runs `--staged` (exactly what the commit will
-carry) and `pre-push` runs `--all` (the full gate). Both are read-only — neither rewrites a file under you — and both are bypassable with `--no-verify` by
-design: they are a fast local signal, while the authoritative gate stays CI.
-
-**Docker operations:**
-
-- `make docker-build` - Build production Docker image
-- `make docker-run` - Run production container
-
-**Dependencies:**
-
-- `make updatedep` - Update Go dependencies
-- `make install-dev-deps` - Install development tools (Docker-based)
-
-**Utilities:**
-
-- `make clean` - Remove build artifacts
-- `make help` - Display all available targets
+Every gate, its cadences and what makes it block are in [docs/reference/gates.md](docs/reference/gates.md). CI runs the same gates through `bin/harness`.
+[Work with the harness](docs/how-to/work-with-the-harness.md) walks through a change from the first edit to the pull request, with the commit hook, the test
+options and the integration-test TheHive version.
 
 **Architecture:** Transport (`bootstrap/`), Tools (`internal/tools/`), Resources (`internal/resources/`), Integration (`internal/utils/`), Permissions
-(`internal/permissions/`), Confirmation (`internal/confirmation/`)
+(`internal/permissions/`), Harness (`internal/harness/`, gates in `gates/registry.yaml`)
 
 </details>
 

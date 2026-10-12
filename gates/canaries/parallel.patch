@@ -1,0 +1,13 @@
+diff --git a/internal/tools/search/search_test.go b/internal/tools/search/search_test.go
+index 172e6e8..ae105b3 100644
+--- a/internal/tools/search/search_test.go
++++ b/internal/tools/search/search_test.go
+@@ -83,7 +83,7 @@ func createTestCaseWithTaskAndAlert(t *testing.T, hiveClient *thehive.APIClient)
+ }
+ 
+ func TestSearchCasesBySeverityAndStatus(t *testing.T) {
+-	testutils.Parallel(t)
++	t.Parallel()
+ 
+ 	hiveClient := testutils.SetupTestWithCleanup(t)
+ 

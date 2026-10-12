@@ -1,0 +1,12 @@
+diff --git a/internal/tools/search/models.go b/internal/tools/search/models.go
+index 59359b6..41421f2 100644
+--- a/internal/tools/search/models.go
++++ b/internal/tools/search/models.go
+@@ -145,7 +145,6 @@ func NewSearchEntitiesResult(results []map[string]any, params EntitiesParams, fi
+ 		Count:      countValue,
+ 		CountOnly:  params.Count,
+ 		Offset:     offset,
+-		HasMore:    hasMore,
+ 		NextOffset: nextOffset,
+ 		EntityType: params.EntityType,
+ 		Results:    results,

@@ -7,8 +7,10 @@
 # GoLand files
 .idea/
 
-# Local environment files
+# Local environment files (ignored files are also what Claude Code's Grep skips)
 .env
+.env.*
+!.env.template
 
 # Build directories
 build/
@@ -18,29 +20,8 @@ dist/
 # Coverage files
 coverage.out
 
-# Release artifacts (temporary files)
-RELEASE_NOTES.md
-
-# Deployment directories
-deployment/demo/data-node/
-deployment/demo/images/
-deployment/demo/logs/
-deployment/demo/uploads/
-
-# Python cache files
+# Editor settings
 .vscode/
-.pytest_cache/
-*/__pycache__/*
-*.pyc
-.ruff_cache/
-.mypy_cache/
-
-# Go module directory
-mcp-go/
-
-# Integration test specific files
-evaluation_results/id_mapping.json
-integration_test/data/test_questions.json
 
 # Runtime-materialised TheHive test license (from THEHIVE_TEST_LICENSE); never
 # committed — the raw JWT is a dev-mode secret. See docker-compose.license.yml.
@@ -48,8 +29,15 @@ internal/testutils/testdata/*.lic.local
 # Minted dev license token (raw JWT — a secret; never commit).
 key.md
 
-.claude/
-CLAUDE.md
-extension/
+# Claude Code: .claude/ and CLAUDE.md are the agent harness and are committed, except what
+# belongs to one machine or one session. The public-safety gate refuses these if they slip in.
+.claude/settings.local.json
+.claude/worktrees/
+.claude/logs/
+.claude/last-prompt-ts
+# The Tester's sealed tests of the task in progress, which the Coder may not read: never committed.
+.claude/sealed/
+CLAUDE.local.md
 
-mcp-cli.py
+# The harness's build cache and run logs (bin/harness, .cache/harness/runs/).
+.cache/

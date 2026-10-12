@@ -1,0 +1,12 @@
+diff --git a/internal/tools/manage/create.go b/internal/tools/manage/create.go
+index a549c99..8671f95 100644
+--- a/internal/tools/manage/create.go
++++ b/internal/tools/manage/create.go
+@@ -308,3 +308,7 @@ func (t *Tool) createPage(ctx context.Context, client *thehive.APIClient, data m
+ 		CreatePageResult: NewCreatePageResult(result),
+ 	}, nil
+ }
++
++func caseCreatedMessage(c *thehive.OutputCase) utils.TrustedString {
++	return utils.Trustedf("case %s created", c.GetTitle())
++}

@@ -1,0 +1,343 @@
+name: Nightly
+
+# Every night, main is checked whole: every ci gate over every file, the integration suite on each
+# supported TheHive, the nightly gates (fuzzing, the unit suite, the canaries), mutation testing
+# of every floored package, the server under load and over 30 minutes, and TheHiveMCPEval's
+# mcp-tools suite on a cheap model (gates/eval.yaml). Some regressions come from no pull request: a new TheHive image, a new
+# vulnerability, a fuzz input found tonight. The last job files each failure as an issue labelled
+# nightly (bin/harness triage), and `make next` lists them. The docs gate fails when a gate whose
+# cadence includes nightly is missing here: a ci gate runs at night when its cadence says so.
+# Started by hand on another branch, the shards run that branch and the triage only prints what it
+# would file: the findings describe main.
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# The gates run on main as it is: an empty HARNESS_BASE compares with origin/main, which is HEAD.
+env:
+  GO_CACHE_DIR: /home/runner/.cache/thehivemcp-go
+
+jobs:
+  checks:
+    # Only the private repository: the public mirror has no secrets and nobody triaging there.
+    if: github.repository == 'StrangeBee/TheHiveMCP'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore the Go caches main saved
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.GO_CACHE_DIR }}
+          key: go-${{ runner.os }}-${{ hashFiles('go.sum', '.golangci.yml') }}
+          restore-keys: |
+            go-${{ runner.os }}-
+      - name: Prepare cache dirs
+        run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools "$GO_CACHE_DIR"/golangci
+      # One run records every gate, failed or not: each is a finding of its own.
+      - name: Every ci gate over every file
+        run: >-
+          bin/harness run --cadence nightly --all
+          --gate structure --gate public-safety --gate docs --gate spec --gate changelog --gate integrity
+          --gate surface --gate tokens --gate analyzers --gate fmt --gate lint --gate workflows
+          --gate coverage --gate race --gate bench --gate sast --gate vulncheck --gate dockerlint --gate secrets
+      - name: Keep the results for the triage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: checks
+          path: .cache/harness/runs/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  integration:
+    if: github.repository == 'StrangeBee/TheHiveMCP'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        thehive: ["5.5.16", "5.8.0"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore the Go caches main saved
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.GO_CACHE_DIR }}
+          key: go-int-${{ runner.os }}-${{ hashFiles('go.sum') }}-${{ strategy.job-index }}
+          restore-keys: |
+            go-int-${{ runner.os }}-${{ hashFiles('go.sum') }}-
+            go-int-${{ runner.os }}-
+      - name: Prepare cache dirs
+        run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools
+      # The suite, then the load against the same TheHive, alone on it.
+      - name: Integration suite, then the load against TheHive
+        run: bin/harness run --cadence nightly --all --gate integration --gate load-thehive
+        env:
+          THEHIVE_TEST_IMAGE: strangebee/thehive:${{ matrix.thehive }}
+          THEHIVE_TEST_LICENSE: ${{ secrets.THEHIVE_TEST_LICENSE }}
+      - name: Tear down the stack
+        if: always()
+        run: make test-integration-down
+      - name: Keep the results for the triage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-${{ matrix.thehive }}
+          path: .cache/harness/runs/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  nightly-gates:
+    if: github.repository == 'StrangeBee/TheHiveMCP'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore the Go caches main saved
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.GO_CACHE_DIR }}
+          key: go-${{ runner.os }}-${{ hashFiles('go.sum', '.golangci.yml') }}
+          restore-keys: |
+            go-${{ runner.os }}-
+      - name: Prepare cache dirs
+        run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools "$GO_CACHE_DIR"/golangci
+      - name: Fuzzing, the unit suite and the canaries
+        run: bin/harness run --cadence nightly --all --gate fuzz --gate unit --gate canaries
+      - name: Keep the results for the triage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-gates
+          path: .cache/harness/runs/
+          if-no-files-found: ignore
+          retention-days: 14
+      # go test writes an input that breaks a fuzz target under testdata/fuzz: this artifact keeps
+      # it, to commit with the fix as a seed. It is its own artifact: a second path that searches
+      # from the checkout's root would skip the hidden .cache above (upload-artifact leaves hidden
+      # files out), and the triage reads no results.json from it.
+      - name: Keep the fuzz inputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-inputs
+          path: "**/testdata/fuzz/**"
+          if-no-files-found: ignore
+          retention-days: 14
+
+  mutation:
+    if: github.repository == 'StrangeBee/TheHiveMCP'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore the Go caches main saved
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.GO_CACHE_DIR }}
+          key: go-${{ runner.os }}-${{ hashFiles('go.sum', '.golangci.yml') }}
+          restore-keys: |
+            go-${{ runner.os }}-
+      - name: Prepare cache dirs
+        run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools
+      - name: Mutation testing of every floored package
+        run: bin/harness run --cadence nightly --all --gate mutation-all --gate mutation
+      - name: Keep the results for the triage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation
+          path: .cache/harness/runs/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  load:
+    if: github.repository == 'StrangeBee/TheHiveMCP'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore the Go caches main saved
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.GO_CACHE_DIR }}
+          key: go-${{ runner.os }}-${{ hashFiles('go.sum', '.golangci.yml') }}
+          restore-keys: |
+            go-${{ runner.os }}-
+      - name: Prepare cache dirs
+        run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools
+      # The server over HTTP under many clients against a TheHive stub, then 30 minutes of
+      # steady calls; the integration shards run the load against TheHive 5.5 and 5.8.
+      - name: Load and soak
+        run: bin/harness run --cadence nightly --all --gate load --gate soak
+      - name: Keep the results for the triage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load
+          path: .cache/harness/runs/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  eval:
+    if: github.repository == 'StrangeBee/TheHiveMCP'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      # The eval stack's TheHive, Orchestrator and licensing images are private GHCR packages:
+      # each must grant this repository read access (its "Manage Actions access" setting).
+      packages: read
+      # The previous night's result, from that run's artifact.
+      actions: read
+    # The OpenRouter key, a spending credential, is given only to the two steps that call the
+    # model: the stack's LiteLLM and the eval smoke.
+    env:
+      THEHIVEMCP_EVAL: ${{ github.workspace }}/.cache/eval
+    steps:
+      # No credential stays in the checkouts: the MCP image is built from this one.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # TheHiveMCPEval is internal: EVAL_REPO_TOKEN reads it. Without the token, the checkout
+      # fails here, and the triage files the shard as one that recorded nothing.
+      - name: Check out TheHiveMCPEval
+        uses: actions/checkout@v4
+        with:
+          repository: StrangeBee/TheHiveMCPEval
+          token: ${{ secrets.EVAL_REPO_TOKEN }}
+          path: .cache/eval
+          persist-credentials: false
+      # bin/harness builds itself in the Go image with these dirs mounted as the runner's user.
+      - name: Prepare cache dirs
+        run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools
+      - uses: astral-sh/setup-uv@v6
+      - name: Log in to ghcr.io
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # The stack the mcp-tools suite needs, and no more: TheHive, the Orchestrator, LiteLLM, and
+      # Cortex for its automation cases; no viewer. Under CI (GitHub sets CI=true) the stack is
+      # locked: every image is pulled by the digest TheHiveMCPEval's deployment/images.lock names,
+      # and nothing is built but the MCP server, from this checkout (eval-cli eval run --local).
+      - name: Bring the eval stack up and seed it
+        working-directory: .cache/eval
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: make up CORTEX=1 NO_VIEWER=1 && uv run eval-cli seed load
+      - name: Memory after the stack came up
+        run: docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' | sort -k2 -h
+      # The last night that passed, for the pass rate's comparison: the latest nightly run on main
+      # whose eval artifact holds a result marked ok. A night that fell, or that kept no result, is
+      # skipped; none on the first night is no error.
+      - name: The last night that passed
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for id in $(gh run list --workflow nightly.yml --branch main --limit 30 --json databaseId,status --jq '.[] | select(.status == "completed") | .databaseId'); do
+            rm -rf .cache/harness/eval/try
+            gh run download "$id" --name eval --dir .cache/harness/eval/try 2>/dev/null || continue
+            if jq -e '.ok == true' .cache/harness/eval/try/eval/result.json >/dev/null 2>&1; then
+              rm -rf .cache/harness/eval/previous && mv .cache/harness/eval/try .cache/harness/eval/previous
+              echo "from run $id"; break
+            fi
+          done
+      - name: Eval smoke
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: bin/harness run --cadence nightly --all --gate eval-smoke
+      - name: Keep the results for the triage, and the night's eval result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval
+          path: .cache/harness/runs/
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Tear the eval stack down
+        if: always()
+        working-directory: .cache/eval
+        run: make stop
+
+  triage:
+    needs: [checks, integration, nightly-gates, mutation, load, eval]
+    # After failed shards too, but not a cancelled run: its shards recorded nothing, and nothing failed.
+    if: ${{ !cancelled() && github.repository == 'StrangeBee/TheHiveMCP' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+      # The last night's metrics, from that run's artifact; the CI runs the metrics read.
+      actions: read
+    steps:
+      # The whole history and its tags, for the metrics' commits and releases.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # bin/harness builds itself in the Go image with these dirs mounted as the runner's user.
+      - name: Prepare cache dirs
+        run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools
+      - name: Collect the shards' results
+        uses: actions/download-artifact@v4
+        with:
+          path: night
+      # A shard with no results is a finding too: its job failed before the harness ran.
+      - name: File the night's findings
+        run: >-
+          bin/harness triage --runs night
+          --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          --expect checks,integration-5.5.16,integration-5.8.0,nightly-gates,mutation,load,eval
+          ${{ github.ref != 'refs/heads/main' && '--dry-run' || '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+      # The last night's metrics, for the thresholds that compare with it (gates/metrics.yaml): the
+      # latest nightly run on main that kept them. None on the first night is no error.
+      - name: The last night's metrics
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for id in $(gh run list --workflow nightly.yml --branch main --limit 30 --json databaseId,status --jq '.[] | select(.status == "completed") | .databaseId'); do
+            gh run download "$id" --name metrics --dir .cache/harness/metrics/previous 2>/dev/null && { echo "from run $id"; break; }
+          done
+      # The metrics past their threshold are filed, commented on and closed as metrics issues.
+      - name: Hold the metrics to their thresholds
+        if: ${{ !cancelled() }}
+        run: >-
+          bin/harness metrics --runs night --previous .cache/harness/metrics/previous/metrics.json
+          --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          ${{ github.ref != 'refs/heads/main' && '--dry-run' || '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+      # None when the metrics step failed: the next night compares with the last night that kept them.
+      - name: Keep tonight's metrics for the next night
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrics
+          path: .cache/harness/metrics/metrics.json
+          if-no-files-found: ignore
+          retention-days: 30

@@ -1,0 +1,135 @@
+# Known-bad patches, one per check: applied to HEAD, each one must make the gate it names fail.
+# bin/harness canaries applies each in a scratch worktree and runs that gate (the canaries gate,
+# of the nightly cadence). A canary its gate lets through means the check stopped working; one that
+# no longer applies must be rewritten against the code it breaks. A canary of the integration gate
+# needs its own TheHive stack: it runs with --integration, the default when $CI is set.
+#
+# The Tester and the Coder cannot read this directory: they implement from the spec, not from the
+# breaches the gates are known to catch.
+
+canaries:
+  - id: surface-drift
+    item: SUR-001
+    gate: surface
+    patch: surface-drift.patch
+    expect: "baselines/surface/tools/get-resource.json: changed"
+    why: a tool description changes and baselines/surface/ is not regenerated
+
+  - id: changelog
+    item: SUR-001
+    gate: changelog
+    patch: changelog.patch
+    expect: "CHANGELOG.md did not"
+    why: a tool description and its snapshot change, with no CHANGELOG.md entry
+
+  - id: tokens
+    item: SUR-001
+    gate: tokens
+    patch: tokens.patch
+    expect: "over the budget"
+    why: a tool description grows past the token budget of gates/budgets.yaml
+
+  - id: filter-doc
+    item: SRF-001
+    gate: surface
+    patch: filter-doc.patch
+    expect: "baselines/surface/resources.json: changed"
+    why: the filter guide the model copies from is reflowed
+
+  - id: untrusted-hint
+    item: UNT-002
+    gate: analyzers
+    patch: untrusted-hint.patch
+    expect: "GetTitle reaches ToolError.Hintf"
+    why: a hint quotes a case title, which reaches the model unwrapped
+
+  - id: trusted-title
+    item: UNT-001
+    gate: analyzers
+    patch: trusted-title.patch
+    expect: "GetTitle reaches utils.Trustedf"
+    why: a case title is passed to Trustedf, skipping the untrusted-data markers
+
+  - id: hide-cut
+    item: TRN-001
+    gate: analyzers
+    patch: hide-cut.patch
+    expect: "leaves HasMore unset"
+    why: the search result stops saying whether the page was cut
+
+  - id: parallel
+    item: PAR-001
+    gate: analyzers
+    patch: parallel.patch
+    expect: "call testutils.Parallel"
+    why: an integration test calls t.Parallel instead of testutils.Parallel
+
+  - id: spec-tag
+    item: SPC-001
+    gate: spec
+    patch: spec-tag.patch
+    expect: "XYZ-999"
+    why: a test is tagged with a spec item that does not exist
+
+  - id: default-write
+    item: PRM-001
+    gate: unit
+    patch: default-write.patch
+    expect: "--- FAIL: TestLoadDefault"
+    why: the default permission profile allows manage-entities
+
+  - id: markers
+    item: UNT-001
+    gate: unit
+    patch: markers.patch
+    expect: "--- FAIL: TestWrap_"
+    why: entity text is wrapped without neutralizing the markers it carries
+
+  - id: silent-wait
+    item: SIL-001
+    gate: unit
+    patch: silent-wait.patch
+    expect: "--- FAIL: TestWaitForJobsFailsWhenNoJobCanBeRead"
+    why: wait-for-jobs reports an empty success when no job could be read
+
+  - id: silent-create
+    item: SIL-001
+    gate: unit
+    patch: silent-create.patch
+    expect: "--- FAIL: TestACreateTheHiveAnswersWithNothingIsAnError"
+    why: an observable create that TheHive answered with an empty list is reported as a success
+
+  - id: weaken-test
+    item: TST-001
+    gate: integrity
+    patch: weaken-test.patch
+    expect: "TestWrap_UnknownFieldIsWrapped checks less"
+    why: a test loses the call that checked its result, and still passes
+
+  - id: slower-wrap
+    item: PRF-001
+    gate: bench
+    patch: slower-wrap.patch
+    expect: "BenchmarkWrapSearchPage: allocates"
+    why: wrapping untrusted text copies every value once more, and every search result pays for it
+
+  - id: untested-code
+    item: TST-002
+    gate: coverage
+    patch: untested-code.patch
+    expect: "under its floor of 97.0%"
+    why: new code lands in a floored package with no test that runs it
+
+  - id: race-cache
+    item: TST-002
+    gate: race
+    patch: race-cache.patch
+    expect: "DATA RACE"
+    why: the credentials cache drops its lock, and concurrent requests write its map at once
+
+  - id: unchecked-code
+    item: TST-002
+    gate: mutation
+    patch: unchecked-code.patch
+    expect: "add the tests that kill the mutants that lived"
+    why: new code lands with a test that runs it and checks nothing, so coverage counts it and its mutants live

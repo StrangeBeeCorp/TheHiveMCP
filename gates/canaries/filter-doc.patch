@@ -1,0 +1,11 @@
+diff --git a/internal/resources/docs/filter-dsl.md b/internal/resources/docs/filter-dsl.md
+index b062bce..3eb791b 100644
+--- a/internal/resources/docs/filter-dsl.md
++++ b/internal/resources/docs/filter-dsl.md
+@@ -1,5 +1,6 @@
+ # TheHive Filter DSL — cheatsheet
+ 
++
+ This is everything needed to build a filter for the `search-entities` tool. The filter you provide is sent **directly** to TheHive's Query API — there is no natural-language translation step. Build it precisely.
+ 
+ ## How a filter is shaped

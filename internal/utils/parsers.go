@@ -3,82 +3,9 @@ package utils
 import (
 	"fmt"
 	"log/slog"
-	"net/url"
 	"reflect"
-	"slices"
 	"strings"
-	"time"
 )
-
-// ParseURIParameters extracts query parameters from a parameters string
-func ParseURIParameters(uri string) (string, map[string]any, error) {
-	parts := strings.SplitN(uri, "?", 2)
-	if len(parts) != 2 {
-		return uri, nil, nil
-	}
-
-	params := parts[1]
-	uri = parts[0]
-
-	values, err := url.ParseQuery(params)
-	if err != nil {
-		return "", nil, fmt.Errorf("parsing URI query parameters: %w", err)
-	}
-
-	result := make(map[string]any)
-	for k, v := range values {
-		result[k] = v[0] // takes first value if multiple
-	}
-
-	return uri, result, nil
-}
-
-func timestampToString(ts int64) string {
-	if ts == 0 {
-		return ""
-	}
-	// ts is milliseconds (TheHive format).
-	//
-	// RFC 3339 in UTC, not a local-time layout. The previous format was
-	// "02-01-2006T15:04:05": day-first, so 09-10-2026 reads as either 9 October
-	// or 10 September depending on the reader, and offset-free while
-	// time.UnixMilli renders in the server's zone — so a timestamp came back
-	// shifted by the server's offset with nothing to say so.
-	t := time.UnixMilli(ts).UTC()
-
-	return t.Format(time.RFC3339)
-}
-
-// GetJSONFields returns the json tag names of the exported fields of v (a struct
-// or pointer to struct), skipping fields with no json tag or a "-" tag.
-func GetJSONFields(v any) []string {
-	var fields []string
-
-	t := reflect.TypeOf(v)
-
-	if t.Kind() == reflect.Pointer {
-		t = t.Elem()
-	}
-
-	if t.Kind() != reflect.Struct {
-		return fields
-	}
-
-	for field := range t.Fields() {
-		jsonTag := field.Tag.Get("json")
-		if jsonTag == "" || jsonTag == "-" {
-			continue
-		}
-
-		// Strip options like "omitempty".
-		parts := strings.Split(jsonTag, ",")
-		fieldName := parts[0]
-
-		fields = append(fields, fieldName)
-	}
-
-	return fields
-}
 
 var dateFields = []string{
 	"date",
@@ -317,67 +244,6 @@ func wrapUntrustedValue(value any) any {
 	}
 }
 
-func processDateField(key string, value any) any {
-	for _, dateField := range dateFields {
-		if key == dateField {
-			if value == nil {
-				return nil
-			}
-
-			var timestamp int64
-
-			switch v := value.(type) {
-			case int64:
-				timestamp = v
-			case float64:
-				timestamp = int64(v)
-			case int:
-				timestamp = int64(v)
-			default:
-				slog.Warn("Date field is not a number", "field", key, "value", value, "type", fmt.Sprintf("%T", value))
-				continue
-			}
-
-			return timestampToString(timestamp)
-		}
-	}
-
-	return value
-}
-
-// Unwrapper is implemented by union/sum types wrapping a single active variant,
-// so only that variant serializes instead of a struct full of nil siblings.
-type Unwrapper interface {
-	Unwrap() any
-}
-
-// UnwrapUnion returns the first non-nil pointer field of a union struct, or v
-// itself if none. Union types opt in with a one-liner:
-//
-//	func (r T) Unwrap() any { return utils.UnwrapUnion(r) }
-func UnwrapUnion(v any) any {
-	val := reflect.ValueOf(v)
-	if val.Kind() == reflect.Pointer {
-		if val.IsNil() {
-			return v
-		}
-
-		val = val.Elem()
-	}
-
-	if val.Kind() != reflect.Struct {
-		return v
-	}
-
-	for _, f := range val.Fields() {
-		if f.Kind() == reflect.Pointer && !f.IsNil() {
-			return f.Interface()
-		}
-	}
-
-	return v
-}
-
 // wrapMode selects how strings encountered during processing are handled.
 type wrapMode int
 
@@ -506,28 +372,6 @@ func processDatesStruct(val reflect.Value, mode wrapMode) map[string]any {
 	return result
 }
 
-// jsonFieldKey derives the output key and omitempty flag from a struct field's
-// json tag. skip is true when the field is tagged json:"-".
-func jsonFieldKey(field reflect.StructField) (key string, omitempty, skip bool) {
-	key = field.Name
-
-	tag := field.Tag.Get("json")
-	if tag == "" {
-		return key, false, false
-	}
-
-	if tag == "-" {
-		return "", false, true
-	}
-
-	parts := strings.Split(tag, ",")
-	if parts[0] != "" { // empty (json:",omitempty") keeps field.Name
-		key = parts[0]
-	}
-
-	return key, slices.Contains(parts[1:], "omitempty"), false
-}
-
 // processStructField parses a date field or recurses into everything else. ok is
 // false when a nested value fails to process and the field should be skipped.
 // Date parsing and structural subtrees only apply outside wrapAll: inside an
@@ -620,16 +464,3 @@ func processDatesSlice(val reflect.Value, mode wrapMode) ([]any, error) {
 
 	return result, nil
 }
-
-func isDateField(fieldName string) bool {
-	return slices.Contains(dateFields, fieldName)
-}
-
-// IsDateField reports whether a field name carries an epoch timestamp that
-// ProcessDatesRecursive rewrites into a formatted string.
-//
-// Exported so a tool's advertised output schema can be derived from the same
-// list that drives the rewrite: the Go field is an integer, the value on the
-// wire is a string, and a schema inferred from the struct alone would declare
-// the type the client never receives.
-func IsDateField(fieldName string) bool { return isDateField(fieldName) }

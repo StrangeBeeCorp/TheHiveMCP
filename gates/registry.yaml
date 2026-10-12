@@ -1,0 +1,464 @@
+# The gate registry: every check the harness runs, when it runs, and what makes it block.
+#
+# bin/harness reads this file. docs/reference/gates.md is generated from it (make harness-docs),
+# and the docs gate fails when the two drift, or when .github/workflows/ci.yml does not run a
+# gate whose cadence includes ci, or .github/workflows/nightly.yml one whose cadence includes nightly.
+#
+# Cadences:
+#   edit     an agent edits a file: the PostToolUse hook runs this cadence's built-in gates on it
+#   stop     an agent stops, or you run `make check-fast`
+#   commit   the git pre-commit hook (`make pre-commit`), on the staged files
+#   pr       before a pull request is opened
+#   ci       GitHub Actions, on every pull request and every push to main
+#   nightly  the nightly run
+#
+# Suites: the changed paths select suites, and a gate runs when one of its suites is selected
+# ("*" means whatever changed). A path that no suite claims selects every suite, and so does
+# the `everything` suite. `implies` selects other suites too. `review` is the effort of the
+# adversarial review a change of the suite needs: bin/harness review-effort gives the highest.
+#
+# {scope} in `runs` becomes the file scope of the cadence (see `scopes`): at edit and stop, the
+# uncommitted files and those of the last commit (the commits before it passed the commit hook);
+# at pr, ci and nightly, every file. The gates themselves are selected from the whole branch. A
+# docker gate when Docker is down, a command that exits 75, or a gate an interrupted run stopped
+# reports UNAVAILABLE: a stated limit, never a pass. A run with one ends INCOMPLETE and exits 3.
+#
+# With --staged (the pre-commit hook) this registry, gates/limits.yaml and every file a built-in
+# gate reads come from the index, so a commit is judged on exactly what it carries; otherwise they
+# come from the working tree and its untracked files.
+#
+# `static: true` marks the gates that read files without building them. When the Tester stops,
+# only those run: its tests fail on purpose, and may not compile until the Coder's turn.
+
+scopes:
+  edit: --changed HEAD
+  stop: --changed HEAD
+  commit: --staged
+  pr: --all
+  ci: --all
+  nightly: --all
+
+suites:
+  - id: everything
+    review: high
+    about: The harness and the repository-wide tooling; a change here checks everything
+    paths:
+      - cmd/harness/**
+      - internal/harness/**
+      - cmd/surface/**
+      - cmd/analyzers/**
+      - cmd/coverage/**
+      - cmd/load/**
+      - internal/load/**
+      - internal/surface/**
+      - internal/analyzers/**
+      - gates/**
+      - bin/**
+      - .githooks/**
+      - .github/**
+      - Makefile
+      - scripts/harness.mk
+      - scripts/release.mk
+      - .golangci.yml
+      - .markdownlint.jsonc
+      - .prettierrc.json
+      - .gitleaks.toml
+      - checkmake.ini
+      - go.mod
+      - go.sum
+      # What the load and soak runs measured when their budgets were set.
+      - baselines/load/**
+  - id: surface
+    review: high
+    about: What the model reads - tool definitions and descriptions, schemas, resources
+    implies: [tools]
+    paths:
+      - internal/tools/*/definition.go
+      - internal/tools/*/models.go
+      - internal/tools/*/results.go
+      - internal/tools/schema.go
+      - internal/tools/union_schema.go
+      - internal/tools/annotations.go
+      - internal/tools/errors.go
+      - internal/resources/**
+      # The snapshot of what the model reads (make surface-propose).
+      - baselines/surface/**
+  - id: trust
+    review: high
+    about: The untrusted-data boundary, permissions and authentication
+    implies: [tools]
+    paths:
+      - internal/utils/parsers.go
+      - internal/utils/dates.go
+      - internal/utils/fields.go
+      - internal/permissions/**
+      - internal/auth/**
+      - bootstrap/allowlist.go
+      - bootstrap/inprocess.go
+      # The example profiles are also the permission fixtures of the integration tests.
+      - docs/reference/permissions-examples/**
+  - id: tools
+    review: medium
+    about: Tool handlers and the code they share
+    paths:
+      - internal/tools/**
+      - internal/utils/**
+      - internal/types/**
+      - internal/logging/**
+  - id: server
+    review: medium
+    about: Server wiring, transports and the binary
+    implies: [tools]
+    paths:
+      - bootstrap/**
+      - cmd/server/**
+      - version/**
+  - id: tests
+    review: medium
+    about: Test helpers, fixtures and the integration stack
+    paths:
+      - internal/testutils/**
+      - "**/*_test.go"
+      - docker-compose.test.yml
+      - docker-compose.license.yml
+  - id: packaging
+    review: medium
+    about: The production image, the MCPB packages and the release archives
+    paths:
+      - deployment/**
+      - scripts/Dockerfile.mcpb
+      - .dockerignore
+  - id: spec
+    review: medium
+    about: The spec items - what the server promises a model, each traced to what proves it
+    paths:
+      - spec/**
+  - id: docs
+    review: low
+    about: Documentation and agent instructions
+    paths:
+      - docs/**
+      - "*.md"
+      - .claude/skills/**
+  - id: meta
+    review: low
+    about: Repository metadata no gate reads (renovate.json's security settings are held by a unit test, which every change runs)
+    paths:
+      - LICENSE
+      - NOTICE
+      - renovate.json
+      - .air.toml
+      - .env.template
+
+gates:
+  - id: structure
+    builtin: structure
+    cadence: [edit, stop, commit, pr, ci, nightly]
+    suites: ["*"]
+    budget_s: 20
+    static: true
+    blocks: >-
+      a code file over 500 lines or over its cap, more than 14 code files in a directory, a file
+      over 1 MB, a text file that is not UTF-8, has trailing whitespace or lacks a final newline, a
+      YAML file that does not parse, or a top-level entry gates/limits.yaml does not list
+
+  - id: public-safety
+    builtin: public-safety
+    cadence: [edit, stop, commit, pr, ci, nightly]
+    suites: ["*"]
+    budget_s: 20
+    static: true
+    blocks: >-
+      a per-machine file (settings.local.json, CLAUDE.local.md, a licence or environment file,
+      a key) or a personal home path in the repository
+
+  - id: docs
+    builtin: docs
+    cadence: [stop, commit, pr, ci, nightly]
+    suites: ["*"]
+    budget_s: 20
+    static: true
+    blocks: >-
+      a path named in AGENTS.md, README.md, CLAUDE.md or .claude/ that does not exist, a page under
+      docs/ outside tutorial, how-to, reference, explanation or evaluation (Diataxis), a page over
+      120 lines with fewer than two section headings, a relative link in docs/ or .github/ to a
+      file that is not there, a stale docs/reference/gates.md, a ci gate that ci.yml does not run,
+      or a nightly gate that nightly.yml does not run
+
+  - id: go-source
+    builtin: go-source
+    cadence: [edit]
+    suites: ["*"]
+    budget_s: 20
+    static: true
+    blocks: a Go file that does not parse, or that gofmt would rewrite
+
+  - id: branch
+    builtin: branch
+    cadence: [commit]
+    suites: ["*"]
+    budget_s: 20
+    static: true
+    blocks: a commit on main - main changes only when a person merges a pull request
+
+  - id: spec
+    builtin: spec
+    cadence: [stop, commit, pr, ci, nightly]
+    suites: [spec, tests]
+    budget_s: 20
+    static: true
+    blocks: >-
+      an active item of spec/items.yaml that nothing proves, a test or a gate it names that does
+      not exist, or a `// spec:` tag naming no item
+
+  - id: changelog
+    builtin: changelog
+    cadence: [stop, pr, ci, nightly]
+    suites: [surface]
+    budget_s: 20
+    static: true
+    blocks: >-
+      a change to baselines/surface/ (what the model reads) with no new entry under
+      `## [Unreleased]` of CHANGELOG.md
+
+  - id: integrity
+    builtin: integrity
+    cadence: [stop, pr, ci, nightly]
+    suites: [tests]
+    budget_s: 20
+    static: true
+    blocks: >-
+      a changed test that is gone, now skips, or has fewer assertions or table cases than at the
+      base, a kept helper that checks less or skips more, or a test file whose build constraint or
+      name takes it out of CI's build, unless gates/limits.yaml (integrity.allow) has a person's
+      reason for it
+
+  # A tool's schema is also built from the code around its definition (validation.go's enums, the
+  # constants of internal/types, the date fields of internal/utils): the tools suite, which the
+  # trust and server suites imply, selects the surface gates too.
+  - id: surface
+    runs: make go CMD="run ./cmd/surface --check"
+    docker: true
+    cadence: [stop, pr, ci, nightly]
+    suites: [surface, tools]
+    budget_s: 300
+    blocks: >-
+      a tool, a prompt, a description, a schema or a resource text that differs from baselines/surface/
+      (make surface-propose rewrites it, for review)
+
+  - id: tokens
+    runs: make go CMD="run ./cmd/surface --budgets"
+    docker: true
+    cadence: [pr, ci, nightly]
+    suites: [surface, tools]
+    budget_s: 300
+    blocks: the tools, the prompts or the static resources costing more tokens than gates/budgets.yaml allows
+
+  - id: analyzers
+    runs: make go CMD="run ./cmd/analyzers ./..."
+    docker: true
+    cadence: [stop, pr, ci, nightly]
+    suites: [surface, trust, tools, server, tests]
+    budget_s: 600
+    blocks: >-
+      entity text in a string the server writes itself (UNT-001, UNT-002), a result literal that
+      hides a cut (TRN-001), or t.Parallel in an integration test
+
+  - id: fmt
+    runs: bin/harness fmt {scope} --check
+    docker: true
+    cadence: [stop, pr, ci, nightly]
+    suites: ["*"]
+    budget_s: 300
+    static: true
+    blocks: a Go, shell or Markdown file that its formatter would rewrite
+
+  - id: lint
+    runs: bin/harness lint {scope}
+    docker: true
+    cadence: [stop, commit, pr, ci, nightly]
+    suites: ["*"]
+    budget_s: 900
+    blocks: >-
+      a finding of golangci-lint, shellcheck, markdownlint, yamllint, hadolint, checkmake or
+      actionlint, or a failing unit test (the gate runs go test -short when Go files are in scope)
+
+  - id: workflows
+    runs: make test-workflows
+    docker: true
+    cadence: [stop, pr, ci, nightly]
+    suites: [everything]
+    budget_s: 120
+    blocks: >-
+      a failing test of a Claude workflow (.claude/workflows/*.test.mjs), which runs it against
+      scripted agents: the order of the roles, what each is told, how the duel ends
+
+  - id: sast
+    runs: make sast
+    docker: true
+    cadence: [pr, ci, nightly]
+    suites: [surface, trust, tools, server, tests]
+    budget_s: 600
+    blocks: a gosec finding
+
+  - id: vulncheck
+    runs: make vulncheck
+    docker: true
+    cadence: [pr, ci, nightly]
+    suites: [surface, trust, tools, server]
+    budget_s: 600
+    blocks: a known vulnerability reachable from our code
+
+  - id: dockerlint
+    runs: make dockersec
+    docker: true
+    cadence: [pr, ci, nightly]
+    suites: [packaging]
+    budget_s: 300
+    blocks: a HIGH or CRITICAL misconfiguration trivy finds in one of the Dockerfiles (hadolint lints them in the lint gate)
+
+  - id: secrets
+    runs: make secrets
+    docker: true
+    cadence: [pr, ci, nightly]
+    suites: ["*"]
+    budget_s: 300
+    blocks: a secret gitleaks finds in the working tree
+
+  - id: integration
+    runs: make test-integration
+    docker: true
+    cadence: [pr, ci, nightly]
+    suites: [surface, trust, tools, server, tests]
+    budget_s: 2700
+    blocks: a failing test against a live TheHive (CI runs it on 5.5 and 5.8)
+
+  - id: coverage
+    runs: make test COVERAGE=1 && make go CMD="run ./cmd/coverage --profile coverage.out --floors gates/coverage.yaml"
+    docker: true
+    cadence: [pr, ci, nightly]
+    suites: ["*"]
+    budget_s: 900
+    blocks: >-
+      a package whose unit-test coverage falls under its floor in gates/coverage.yaml (set from a
+      measurement, a point under it), or a floor whose package is gone
+
+  - id: race
+    runs: make test-race
+    docker: true
+    cadence: [pr, ci, nightly]
+    suites: ["*"]
+    budget_s: 900
+    blocks: a data race the unit tests run into (go test -race, with cgo)
+
+  - id: bench
+    runs: bin/harness bench
+    docker: true
+    cadence: [pr, ci, nightly]
+    suites: [everything, surface, trust, tools, server]
+    budget_s: 900
+    blocks: >-
+      a hot path slower or allocating more than at the base beyond gates/bench.yaml, or over its
+      absolute budget there: the time the server adds to a TheHive call (a search through the
+      in-process client against a TheHive stub), wrapping a page of results, the filter transforms
+
+  # Mutation runs at night only: a pull request that touches every floored package mutates them
+  # all, which takes over an hour on a CI runner. This gate mutates the changed packages; the
+  # canaries run it on their one-package patches, and the nightly runs mutation-all.
+  - id: mutation
+    runs: bin/harness mutation
+    docker: true
+    cadence: [nightly]
+    suites: ["*"]
+    budget_s: 3600
+    blocks: >-
+      a changed package with a floor in gates/mutation.yaml whose unit tests kill a smaller share
+      of gremlins' mutants than the floor (a run whose mutants mostly timed out, on a busy machine,
+      measured nothing: UNAVAILABLE, run it again)
+
+  - id: mutation-all
+    runs: bin/harness mutation --all
+    docker: true
+    cadence: [nightly]
+    suites: ["*"]
+    budget_s: 5400
+    blocks: >-
+      a package with a floor in gates/mutation.yaml whose unit tests kill a smaller share of
+      gremlins' mutants than the floor, whatever changed: the night mutates them all
+
+  - id: load
+    runs: make go CMD="run ./cmd/load --run stub"
+    docker: true
+    cadence: [nightly]
+    suites: ["*"]
+    budget_s: 600
+    blocks: >-
+      the server over HTTP, 20 clients at once against a TheHive stub, over its budget in
+      gates/load.yaml: latency, a failed call, throughput or memory (load-thehive holds the same
+      load against TheHive 5.5 and 5.8)
+
+  - id: load-thehive
+    runs: HARNESS_LOAD=1 make test-integration RUN='^TestLoadAgainstTheHive$'
+    docker: true
+    cadence: [nightly]
+    suites: ["*"]
+    budget_s: 1200
+    blocks: >-
+      the server over HTTP, 10 clients at once against the integration stack's TheHive, alone on
+      it, over its budget in gates/load.yaml: latency, a failed call or memory (the nightly runs it
+      on 5.5 and 5.8)
+
+  - id: soak
+    runs: make go CMD="run ./cmd/load --run soak"
+    docker: true
+    cadence: [nightly]
+    suites: ["*"]
+    budget_s: 2700
+    blocks: >-
+      30 minutes of steady calls from 10 clients over their budget in gates/load.yaml: latency, a
+      failed call, memory, or memory that keeps growing after the warmup
+
+  - id: eval-smoke
+    runs: >-
+      bin/harness eval-smoke --out .cache/harness/runs/eval/result.json
+      --previous .cache/harness/eval/previous/eval/result.json
+    docker: true
+    cadence: [nightly]
+    suites: ["*"]
+    budget_s: 3600
+    blocks: >-
+      TheHiveMCPEval's mcp-tools suite on main, on gates/eval.yaml's model: a night whose run did
+      not complete, ran part of the suite, left cases with no answer, cost more than its cap, or
+      whose pass rate fell more than its max drop under the previous night's (no TheHiveMCPEval
+      checkout, uv or OpenRouter key, or eval-cli refusing the run: it cannot run)
+
+  - id: fuzz
+    runs: >-
+      make go CMD="test -run ^NoTest -fuzz ^FuzzUntrustedWrap -fuzztime 60s ./internal/utils" &&
+      make go CMD="test -run ^NoTest -fuzz ^FuzzFilterDSL -fuzztime 60s ./internal/utils" &&
+      make go CMD="test -run ^NoTest -fuzz ^FuzzPermissionProfile -fuzztime 60s ./internal/permissions" &&
+      make go CMD="test -run ^NoTest -fuzz ^FuzzRetypeDateFields -fuzztime 60s ./internal/tools"
+    docker: true
+    cadence: [nightly]
+    suites: ["*"]
+    budget_s: 600
+    blocks: >-
+      an input that breaks a fuzz target's property: the untrusted-data boundary, the filter fields,
+      the permission checks, the schema's date retyping (go test writes it under testdata/fuzz:
+      commit it with the fix, as a seed)
+
+  - id: unit
+    runs: make test
+    docker: true
+    cadence: [nightly]
+    suites: ["*"]
+    budget_s: 900
+    blocks: a failing unit test, the whole suite in one run (the lint gate runs them too)
+
+  - id: canaries
+    runs: bin/harness canaries
+    docker: true
+    cadence: [nightly]
+    suites: ["*"]
+    budget_s: 5400
+    blocks: a known-bad patch of gates/canaries/ that the gate it names lets through

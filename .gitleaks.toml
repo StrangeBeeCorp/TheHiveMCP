@@ -23,5 +23,12 @@ regexes = [
 # CREDS_KEY / CREDS_IV / JWT_SECRET / JWT_REFRESH_SECRET values, which every
 # operator is expected to regenerate. They are not our secrets.
 paths = [
-  '''docs/how-to/docker/docker-compose\.librechat\.yml''',
+  '''deployment/examples/docker-compose\.librechat\.yml''',
+  # The test license bin/harness integration (internal/harness/stack) writes at run time and
+  # keeps for the next run. The scan reads the working tree, gitignored files included;
+  # the public-safety gate refuses committing *.lic.local, so this file never reaches git.
+  '''internal/testutils/testdata/\.test-license\.lic\.local''',
+  # The hooks' snapshot of the checkout an agent started from (internal/harness/hooks): each file's
+  # content hash, which the generic rules read as keys. Git-ignored; it holds hashes, no content.
+  '''\.cache/harness/agents/[0-9a-f]+\.json''',
 ]

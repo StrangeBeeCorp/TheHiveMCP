@@ -1,0 +1,51 @@
+# The load and soak gates (go run ./cmd/load --run <run>) and the integration suite's load test
+# (internal/load): each run starts the server as its HTTP users do (--transport http), drives it
+# with its clients at once, each with its own MCP session calling search-entities on 25 alerts,
+# and holds the result to its budget. baselines/load/<run>.json is what the run measured when the
+# budget was set: go run ./cmd/load --run <run> --write-baseline for a run against the stub, and
+# for the thehive run, the .cache/harness/load/<image>.json its test writes (make gate
+# ID=load-thehive CADENCE=nightly). A run
+# that sampled no memory, or a soak cut short, is an error. Raising a budget is a reviewed change,
+# like a cap in gates/limits.yaml.
+#
+# Measured on 2026-10-06 in the pinned Go image (Apple M-series, Docker). Before the review's
+# fixes, the stub run three times (p95 39 to 61 ms, median 47; 543 to 808 calls a second, median
+# 708; at most 28 MiB) and the soak once (p95 50 ms, p99 116 ms, at most 27 MiB), from which the
+# budgets come: about four times the latency and the memory, a fifth of the throughput, for slower
+# CI machines; no call may fail; a leak of 20 MiB/h would be 10 MiB over the soak, a third of the
+# server's memory. The thehive run allows ten times its worst p95 (470 ms) and no throughput
+# budget: CI runners share their machine.
+#
+# baselines/load/ holds one run of each at 643bfef, after the fixes: the stub (p95 38 ms, 830 calls
+# a second, at most 27 MiB), the soak (35,990 calls, p95 26 ms, p99 33 ms, at most 28 MiB, growth
+# -3.9 MiB/h) and the load-thehive gate on TheHive 5.6.3 (200 calls, p95 104 ms, 154 calls a
+# second, at most 22 MiB; 5.5.2: p95 92 ms, 157 calls a second).
+
+runs:
+  # A TheHive stub that answers each query in 5 ms: the time the server adds, and its queueing.
+  stub:
+    against: stub
+    clients: 20
+    calls: 50
+    sample: 1s
+    budget: {p95_ms: 200, p99_ms: 250, max_errors: 0, min_calls_per_second: 150, max_rss_mib: 110}
+
+  # The same calls for 30 minutes at a steady rate: the server's memory may not keep growing.
+  soak:
+    against: stub
+    clients: 10
+    duration: 30m
+    rate: 2
+    sample: 15s
+    budget: {p95_ms: 200, p99_ms: 500, max_errors: 0, max_rss_mib: 110, max_growth_mib_per_hour: 20}
+
+  # TheHive 5.5 and 5.6 of the integration stack (internal/load's TestLoadAgainstTheHive, the
+  # load-thehive gate, alone on the stack after the suite). CI runners share their machine, so its
+  # latency budgets have ten times the margin and its throughput none: no call may fail, and the
+  # memory is held.
+  thehive:
+    against: thehive
+    clients: 10
+    calls: 20
+    sample: 1s
+    budget: {p95_ms: 5000, p99_ms: 5000, max_errors: 0, max_rss_mib: 110}

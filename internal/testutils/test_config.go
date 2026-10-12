@@ -27,7 +27,7 @@ const sharedFreeUser = "shared@test.local"
 //   - absent   ⇒ one shared main-org, tests run sequentially and purge their
 //     own data on cleanup (free-license path; the public-CI default).
 //
-// The variable is NOT a user input: the harness (scripts/reset-integration-db.sh
+// The variable is NOT a user input: the harness (bin/harness integration (internal/harness/stack)
 // + the Makefile) decides the mode by whether the StrangeBee licensing image is
 // pullable, mints a dev license on the fly when it is, and injects the minted
 // token here for the go-test container. So this reads that harness-set signal.

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Bash(git push *)",
+      "Bash(git send-pack *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh pr review --approve*)",
+      "Bash(gh pr review * --approve*)",
+      "Bash(gh pr update-branch *)",
+      "Bash(bin/harness push *)",
+      "Bash(./bin/harness push *)",
+      "Bash(bin/harness * --person*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/bin/harness hook session-start", "timeout": 180 }]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit|Read|Grep|Glob",
+        "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/bin/harness hook pre-tool-use", "timeout": 180 }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/bin/harness hook post-tool-use", "timeout": 60 }]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/bin/harness hook stop", "timeout": 900 }]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/bin/harness hook subagent-stop", "timeout": 900 }]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/bin/harness hook pre-compact", "timeout": 60 }]
+      }
+    ]
+  }
+}

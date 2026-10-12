@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# The trailers an agent's commit carries: its model, its reasoning effort and the skills it used
+# (bin/harness trailers, read from Claude Code's environment and the session's transcript). Only a
+# commit made from a Claude Code session runs anything here, and nothing here fails a commit: a
+# commit without its trailers beats no commit.
+[ "${CLAUDECODE:-}" = 1 ] || exit 0
+"$(git rev-parse --show-toplevel)/bin/harness" trailers "$@" || echo "harness: the commit has no agent trailers" >&2
+exit 0

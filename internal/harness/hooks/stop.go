@@ -1,0 +1,325 @@
+package hooks
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/policy"
+)
+
+// Check is the outcome of check-fast.
+type Check struct {
+	// Red is set when a gate failed.
+	Red bool `json:"red"`
+	// Incomplete is set when a gate could not run: a stated limit, not a failure of the agent's.
+	Incomplete bool `json:"incomplete"`
+	// Report says what failed, for the agent to act on.
+	Report string `json:"report"`
+}
+
+// Checker runs check-fast. static restricts it to the gates that read files without building
+// them: the Tester's tests fail on purpose, and may not compile until the Coder's turn.
+type Checker func(ctx context.Context, static bool) (Check, error)
+
+// Action is what the Stop hook tells Claude Code after check-fast.
+type Action struct {
+	// Block sends Text back to the agent, which keeps working; otherwise Text is a note.
+	Block bool
+	Text  string
+}
+
+// Decide applies the red-round rule. Green lets the agent stop. Red sends an enforced agent back
+// to work, and after max red rounds it may stop only once it has written BLOCKED.md. The main
+// session is told, never held back: a person is there.
+func Decide(report string, red bool, rounds, maxRounds int, blockedWritten, enforce bool) Action {
+	switch {
+	case !red:
+		return Action{}
+	case !enforce:
+		return Action{Text: "check-fast is red:\n" + report}
+	case rounds < maxRounds:
+		return Action{Block: true, Text: fmt.Sprintf("check-fast is red (round %d of %d). Fix what it reports before you stop; "+
+			"never weaken a test or a gate:\n%s", rounds, maxRounds, report)}
+	case blockedWritten:
+		return Action{Text: fmt.Sprintf("stopped BLOCKED after %d red rounds: see %s", rounds, policy.BlockedFile)}
+	}
+
+	return Action{Block: true, Text: fmt.Sprintf("%d red rounds: stop trying. Write %s with what you tried, what still fails "+
+		"(below) and what you need to go on, then stop.\n%s", rounds, policy.BlockedFile, report)}
+}
+
+func (a Action) output() Output {
+	switch {
+	case a.Text == "":
+		return Output{}
+	case a.Block:
+		return block(a.Text)
+	}
+
+	return note(a.Text)
+}
+
+// Stopper is what the Stop hook needs from the harness.
+type Stopper struct {
+	Root      string
+	MaxRounds int
+	Check     Checker
+	// Fingerprint identifies the state of the checkout (gitx.Fingerprint).
+	Fingerprint func(ctx context.Context) (string, error)
+	// Now is the clock; nil is time.Now.
+	Now func() time.Time
+	// List reads the checkout for the changes an agent's role may not make (Changes); nil skips them.
+	List Lister
+	// Crowded names, as "path: why", what the agent's change left near the structure limits
+	// (checks.Crowded), from the files it changed and those it added; nil skips it.
+	Crowded func(changed, added []string) []string
+}
+
+// debtHelp is how an agent is asked about what it left near the limits.
+const debtHelp = "Before you stop: your change left these near the structure limits.\n- %s\n" +
+	"If splitting them belongs to your task, split them now. If it does not, do not squeeze code where it does not belong: file it, " +
+	"so it is not lost, with\n  bin/harness debt --path <path> --why \"<what needs doing>\" \"<title>\"\nThen stop: you are asked once."
+
+// Stop runs check-fast when an agent stops (Stop, SubagentStop) and applies the red-round rule.
+// A checkout that has not changed since the last run reuses its result, so stopping again without
+// a change is another red round, not another wait. A change the agent's role may not make counts
+// as red, whatever check-fast says; a reviewer runs no gate, and is held only to that.
+func (s Stopper) Stop(ctx context.Context, in Input) Output {
+	role := in.Role()
+
+	var (
+		changes  []string
+		unjudged error
+	)
+
+	if role.Agent() && s.List != nil {
+		changes, unjudged = Changes(ctx, s.Root, in, s.List)
+	}
+
+	if role.ReadOnly() {
+		// A reviewer runs no gate: a change check that could not run counts like a change it may not
+		// make, held for the rounds, then let go with a note for the session, never as a pass.
+		if unjudged != nil {
+			changes = append(changes, "what the reviewer changed could not be judged, so this stop is not a pass: "+unjudged.Error())
+		}
+
+		return s.readOnly(in, changes)
+	}
+
+	fp, err := s.Fingerprint(ctx)
+	if err != nil {
+		return note("harness: check-fast could not read the checkout: " + err.Error())
+	}
+
+	// check-fast runs outside the state lock, which a PreCompact or another agent's stop then never
+	// waits for; the lock only covers reading and writing the state. Two agents that stop together
+	// may both run it, and both results describe the same checkout.
+	static := role == policy.Tester
+
+	c, ran, err := cached(ctx, load(s.Root), fp, static, s.Check)
+	if err != nil {
+		return note("harness: check-fast could not run: " + err.Error())
+	}
+
+	crowded := s.crowded(ctx, in)
+
+	var out Output
+
+	err = update(s.Root, func(st *State) error {
+		if ran {
+			st.Last = &Last{Fingerprint: fp, Static: static, Check: c, At: s.now()}
+		}
+
+		judged := withChanges(c, changes, unjudged)
+		out = s.apply(st, in, judged, static)
+
+		if judged.Red || judged.Incomplete {
+			return nil
+		}
+
+		// Green: an agent is asked once about what it left near the limits, its snapshot kept for the
+		// stop after.
+		if ask := notAsked(st, in.Actor(), crowded); len(ask) > 0 {
+			out = block(fmt.Sprintf(debtHelp, strings.Join(ask, "\n- ")))
+
+			return nil
+		}
+
+		Forget(s.Root, in)
+		delete(st.Started, in.Actor())
+		delete(st.Asked, in.Actor())
+
+		return nil
+	})
+	if err != nil {
+		return note("harness: check-fast could not record its result: " + err.Error())
+	}
+
+	return out
+}
+
+// crowded is what an implementing agent's change left near the structure limits; nothing for the
+// main session, which keeps no snapshot, and for a reviewer, which changes nothing.
+func (s Stopper) crowded(ctx context.Context, in Input) []string {
+	if s.Crowded == nil || s.List == nil || !in.Role().Agent() || in.Role().ReadOnly() {
+		return nil
+	}
+
+	changedFiles, added := Touched(ctx, s.Root, in, s.List)
+	if len(changedFiles) == 0 {
+		return nil
+	}
+
+	return s.Crowded(changedFiles, added)
+}
+
+// notAsked are the notes the agent was not asked about yet, now recorded as asked.
+func notAsked(st *State, actor string, notes []string) []string {
+	var ask []string
+
+	for _, n := range notes {
+		if !slices.Contains(st.Asked[actor], n) {
+			ask = append(ask, n)
+		}
+	}
+
+	st.Asked[actor] = append(st.Asked[actor], ask...)
+
+	return ask
+}
+
+// readOnly holds a reviewer to the one rule it has: it changes nothing. It is sent back to undo a
+// change for max rounds, then lets go with a note: it writes no BLOCKED.md, which is an
+// implementer's, and its stop never touches the task's.
+func (s Stopper) readOnly(in Input, changes []string) Output {
+	actor := in.Actor()
+
+	var out Output
+
+	err := update(s.Root, func(st *State) error {
+		rounds := st.Rounds[actor] + 1
+
+		switch {
+		case len(changes) == 0:
+			delete(st.Rounds, actor)
+			delete(st.Started, actor)
+		case rounds < s.MaxRounds:
+			st.Rounds[actor] = rounds
+			out = block(fmt.Sprintf("round %d of %d: %s", rounds, s.MaxRounds, changesReport(changes)))
+		default:
+			delete(st.Rounds, actor)
+
+			out = note(fmt.Sprintf("the %s stopped after %d rounds with changes it may not make: tell the session.\n%s",
+				in.Role(), rounds, changesReport(changes)))
+		}
+
+		return nil
+	})
+	if err != nil {
+		return note("harness: the stop could not be recorded: " + err.Error())
+	}
+
+	if len(changes) == 0 {
+		Forget(s.Root, in)
+	}
+
+	return out
+}
+
+// withChanges is check-fast's result with the changes the agent's role may not make: any is red.
+// A change check that could not run leaves the stop incomplete, as a gate that could not run
+// does: not a pass, and check-fast still ran.
+func withChanges(c Check, changes []string, unjudged error) Check {
+	if unjudged != nil {
+		c.Incomplete = true
+		c.Report = strings.TrimSpace("the change check could not run, so what the agent changed is not judged: " +
+			unjudged.Error() + "\n\n" + c.Report)
+	}
+
+	if len(changes) > 0 {
+		c.Red = true
+		c.Report = strings.TrimSpace(changesReport(changes) + "\n\n" + c.Report)
+	}
+
+	return c
+}
+
+func (s Stopper) now() time.Time {
+	if s.Now == nil {
+		return time.Now()
+	}
+
+	return s.Now()
+}
+
+// apply counts the red round of the agent and decides. A run that could not run every gate is
+// neither red nor green: it counts no round and ends no block. A static run's green ends the
+// agent's red streak, not the task's block, which only the full gates can clear.
+func (s Stopper) apply(st *State, in Input, c Check, static bool) Output {
+	actor := in.Actor()
+
+	switch {
+	case c.Incomplete && !c.Red:
+		return note("check-fast could not run every gate, so this is not a pass:\n" + c.Report)
+	case !c.Red:
+		delete(st.Rounds, actor)
+		delete(st.RedSince, actor)
+
+		if !static {
+			// Green: whatever blocked the task is over.
+			_ = os.Remove(filepath.Join(s.Root, policy.BlockedFile))
+		}
+
+		return Output{}
+	}
+
+	enforce := in.Role() != policy.Main
+	rounds := 0
+
+	if enforce {
+		rounds = st.Rounds[actor] + 1
+		st.Rounds[actor] = rounds
+
+		if rounds == 1 {
+			st.RedSince[actor] = s.now()
+		}
+	}
+
+	a := Decide(c.Report, true, rounds, s.MaxRounds, blockedSince(s.Root, st.RedSince[actor]), enforce)
+	if enforce && !a.Block {
+		delete(st.Rounds, actor)
+		delete(st.RedSince, actor)
+	}
+
+	return a.output()
+}
+
+// cached is check-fast's result for the checkout's fingerprint: the last run's when nothing changed
+// since and that run judged every gate it had to, else a new run's, and whether it ran. A run
+// that could not run every gate (Docker down) is run again: what it missed may run now.
+func cached(ctx context.Context, st State, fp string, static bool, check Checker) (Check, bool, error) {
+	if st.Last != nil && !st.Last.Incomplete && st.Last.Fingerprint == fp && st.Last.Static == static {
+		return st.Last.Check, false, nil
+	}
+
+	c, err := check(ctx, static)
+	if err != nil {
+		return Check{}, false, err
+	}
+
+	return c, true, nil
+}
+
+// blockedSince reports whether BLOCKED.md was written during the current red streak: a report
+// left by an earlier task or agent does not count. The comparison is to the second: a
+// filesystem stamps a file from a coarser clock than time.Now (Linux's lags by milliseconds,
+// HFS+ keeps whole seconds), so a report written just after the streak began may look older.
+func blockedSince(root string, since time.Time) bool {
+	info, err := os.Stat(filepath.Join(root, policy.BlockedFile))
+	return err == nil && info.Size() > 0 && !info.ModTime().Before(since.Truncate(time.Second))
+}

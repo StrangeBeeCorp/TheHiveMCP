@@ -1,11 +1,11 @@
 BUILD_DATE := $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 GIT_COMMIT=$(shell git rev-parse HEAD)
 VERSION=$(shell git describe --tags 2> /dev/null || echo "v0.0.0-${GIT_COMMIT}")
-GO_IMAGE := golang:1.26.8-alpine
-# The race detector requires cgo (a C toolchain), which the Alpine GO_IMAGE lacks.
-# GO_IMAGE_CGO is the Debian-based image used by `make test-race`; it ships gcc, so
-# `-race` builds there with CGO_ENABLED=1.
-GO_IMAGE_CGO := golang:1.26.8
+GO_IMAGE := golang:1.26.9-alpine
+# GO_IMAGE_CGO is the Debian-based image: gcc for `make test-race` (-race needs cgo,
+# which the Alpine GO_IMAGE lacks) and git, which the harness's tests run. The unit and
+# integration tests run there with CGO_ENABLED=0, so they build as in GO_IMAGE.
+GO_IMAGE_CGO := golang:1.26.9
 # jq and yq run the help-xml pipeline (JSON assembly + JSON→XML). Pinned by digest
 # so `make help-xml` needs no host jq/yq — everything stays in Docker.
 JQ_IMAGE := ghcr.io/jqlang/jq@sha256:b9c68867e5766576263a222e91db3de422d802069c7af70440e667a95344e486
@@ -31,8 +31,8 @@ MOUNT_APP := $(CURDIR):/app
 # path has one ("Application Support"). Quoted in CA_MOUNT for the same reason.
 STRANGEBEE_CA_BUNDLE := /Library/Application Support/StrangeBee/Certificates/zscaler-ca-bundle.pem
 CA_MOUNT := $(if $(shell [ -f "$(STRANGEBEE_CA_BUNDLE)" ] && echo found),-v "$(STRANGEBEE_CA_BUNDLE)":/etc/ssl/certs/extra-ca-bundle.pem:ro)
-# All Go work runs inside the $(GO_IMAGE) container — there is NO host Go install
-# (see install-dev-deps). So every cache is a Docker named volume, never a host
+# All Go work runs inside the $(GO_IMAGE) container — there is NO host Go install.
+# So every cache is a Docker named volume, never a host
 # path: named volumes are linux-native, populated in-container, and — unlike a
 # bind mount of a host path — work identically whether `make` runs on the host
 # or itself inside a container talking to the same daemon (docker-in-docker),
@@ -113,41 +113,15 @@ RELEASE_TARGETS := linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd
 bin_ext = $(if $(filter windows-%,$(1)),.exe,)
 
 .PHONY: all
-all: fmt lint security test build ## Full local gate before pushing: fmt, lint, security, test, build ##@ make all
-
-.PHONY: lint-makefile
-lint-makefile: ## Check the Makefile's syntax and hygiene (checkmake) ##@ make lint-makefile
-	@echo $(BGreen)----------------------$(Color_Off)
-	@echo $(BGreen)-- Linting Makefile --$(Color_Off)
-	@echo $(BGreen)----------------------$(Color_Off)
-	@make --dry-run -n all > /dev/null || exit 1
-	@echo "Syntax OK"
-	@./scripts/lint-makefile.sh Makefile || exit 1
-	@echo "checkmake OK"
+all: ## The pr gates on the whole branch, as make pr runs them, without recording or pushing ##@ make all
+	bin/harness run --cadence pr
 
 .PHONY: fmt
 fmt: ## Auto-format the whole repo (Go, shell, markdown) before committing ##@ make fmt
 	@echo $(BGreen)-------------$(Color_Off)
 	@echo $(BGreen)--- Format --$(Color_Off)
 	@echo $(BGreen)-------------$(Color_Off)
-	./scripts/fmt.sh --all --fix
-
-.PHONY: fmt-check
-fmt-check: ## Fail (exit 1) if any file is unformatted, without rewriting it — the CI gate ##@ make fmt-check
-	@echo $(BGreen)-------------------$(Color_Off)
-	@echo $(BGreen)--- Format check --$(Color_Off)
-	@echo $(BGreen)-------------------$(Color_Off)
-	./scripts/fmt.sh --all --check
-
-.PHONY: fmt-changed
-fmt-changed: ## Fast format loop while iterating: only git-changed files ##@ make fmt-changed
-	@echo $(BGreen)-------------$(Color_Off)
-	@echo $(BGreen)--- Format --$(Color_Off)
-	@echo $(BGreen)-------------$(Color_Off)
-	./scripts/fmt.sh --changed --fix
-
-.PHONY: security
-security: vulncheck sast dockerlint dockersec secrets ## Run every security check at once (vuln, SAST, docker, secrets) ##@ make security
+	bin/harness fmt --all
 
 # Help system. Each documented target carries a `## <purpose>` comment and an
 # optional `##@ <usage>` marker on the same line, e.g.
@@ -159,7 +133,7 @@ security: vulncheck sast dockerlint dockersec secrets ## Run every security chec
 # No leading `@`: recipes prefix their own (help/help-json) so this stays pure
 # command text usable inside `$$(...)` (help-xml captures it to guard on empty).
 define HELP_PARSE
-	grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk ' \
+	grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk ' \
 	{ \
 		target = $$0; sub(/:.*/, "", target); \
 		rest = $$0; sub(/^[^#]*## /, "", rest); \
@@ -245,32 +219,29 @@ sast: ## Find insecure code patterns via SAST (gosec) ##@ make sast
 	@echo $(BGreen)---------------------------$(Color_Off)
 	@echo $(BGreen)-- Running SAST Analysis --$(Color_Off)
 	@echo $(BGreen)---------------------------$(Color_Off)
-	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install github.com/securego/gosec/v2/cmd/gosec@v2.26.1 && gosec ./...'
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION) && gosec ./...'
 
-# Every Dockerfile in the repo. hadolint lints each — the production image plus
-# the MCPB and LibreChat helper images — so a misconfig regression in any of them
-# turns the build red, not just the one we ship.
-DOCKERFILES := deployment/Dockerfile scripts/Dockerfile.mcpb docs/how-to/docker/Dockerfile.librechat
-
-.PHONY: dockerlint
-dockerlint: ## Catch Dockerfile hygiene issues in all images (hadolint) ##@ make dockerlint
-	@echo $(BGreen)---------------------------$(Color_Off)
-	@echo $(BGreen)-- Linting Dockerfiles   --$(Color_Off)
-	@echo $(BGreen)---------------------------$(Color_Off)
-	@for f in $(DOCKERFILES); do \
-		echo "hadolint $$f"; \
-		docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < $$f || exit 1; \
-	done
-	@echo "Dockerfiles OK"
+# Every Dockerfile in the repo. trivy scans each — the production image plus the
+# MCPB and LibreChat helper images — so a misconfig regression in any of them
+# turns the build red, not just the one we ship. hadolint lints them in the lint
+# gate (bin/harness lint), at the version internal/harness/lint/images.go pins.
+DOCKERFILES := deployment/Dockerfile scripts/Dockerfile.mcpb deployment/examples/Dockerfile.librechat
 
 # hadolint checks Dockerfile hygiene but has no rule for "container runs as
-# root"; trivy config does (DS-0002), matching SonarCloud's docker:S6471. We scan
+# root"; trivy config does (DS-0002). We scan
 # each Dockerfile for HIGH+ misconfigs only: the LOW findings here are just the
 # missing-HEALTHCHECK check (DS-0026), which is noise for a short-lived CI packer
 # and a thin config-overlay image. The named volume caches trivy's checks bundle
 # (a per-run network download otherwise); like GO_TOOLS_CACHE it is linux-native
 # and populated in-container, so it is not bind-mounted from the host.
 TRIVY_CACHE := -v thehivemcp-trivy-cache:/root/.cache/trivy
+# The security tools, each pinned once here, where Renovate's Makefile managers
+# (renovate.json) track them: the images by their _IMAGE name, the Go tools by
+# their _VERSION name.
+TRIVY_IMAGE := aquasec/trivy:0.72.0
+GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1
+GOSEC_VERSION := v2.26.1
+GOVULNCHECK_VERSION := v1.3.0
 .PHONY: dockersec
 dockersec: ## Scan Dockerfiles for HIGH+ security misconfigs (trivy) ##@ make dockersec
 	@echo $(BGreen)---------------------------$(Color_Off)
@@ -278,7 +249,7 @@ dockersec: ## Scan Dockerfiles for HIGH+ security misconfigs (trivy) ##@ make do
 	@echo $(BGreen)---------------------------$(Color_Off)
 	@for f in $(DOCKERFILES); do \
 		echo "trivy config $$f"; \
-		docker run --rm -v $(CURDIR):/scan -w /scan $(CA_MOUNT) $(TRIVY_CACHE) aquasec/trivy:0.72.0 \
+		docker run --rm -v $(CURDIR):/scan -w /scan $(CA_MOUNT) $(TRIVY_CACHE) $(TRIVY_IMAGE) \
 			config --quiet --exit-code 1 --severity HIGH,CRITICAL "$$f" || exit 1; \
 	done
 	@echo "Dockerfiles security OK"
@@ -288,7 +259,7 @@ secrets: ## Detect committed secrets in the working tree (gitleaks) ##@ make sec
 	@echo $(BGreen)---------------------------$(Color_Off)
 	@echo $(BGreen)-- Scanning for secrets  --$(Color_Off)
 	@echo $(BGreen)---------------------------$(Color_Off)
-	docker run --rm -v $(CURDIR):/repo -w /repo $(GIT_WORKTREE_MOUNT) zricethezav/gitleaks:v8.30.1 dir --redact --verbose --config /repo/.gitleaks.toml .
+	docker run --rm -v $(CURDIR):/repo -w /repo $(GIT_WORKTREE_MOUNT) $(GITLEAKS_IMAGE) dir --redact --verbose --config /repo/.gitleaks.toml .
 
 .PHONY: build
 build: ## Build the binary for your current host OS/arch ##@ make build (output: build/thehivemcp-<os>-<arch>)
@@ -319,30 +290,29 @@ endif
 THEHIVE_TEST_URL ?= http://localhost:9000
 export THEHIVE_TEST_URL
 
-# THEHIVE_TEST_IMAGE reaches the reset script (which derives the licensing tag
-# from it) and the go-test container; export it so both sub-shells see it.
+# THEHIVE_TEST_IMAGE reaches bin/harness integration, which derives the licensing tag
+# from it, and the go-test container.
 export THEHIVE_TEST_IMAGE
 
-# Integration mode is decided at run time by scripts/reset-integration-db.sh,
-# highest-priority first (see that script + the recipe below):
+# Integration mode is decided at run time by bin/harness integration (internal/harness/stack),
+# highest-priority first:
 #   1. THEHIVE_TEST_LICENSE set ⇒ use that token directly (no probe, no mint) ⇒
 #      parallel one-org-per-test. Supply it as a CI secret or a local export to
 #      get parallel mode without needing the licensing image to be pullable.
 #   2. else the StrangeBee licensing image is pullable ⇒ mint a dev license ⇒
 #      parallel one-org-per-test.
 #   3. else free license ⇒ sequential shared-org.
-# In cases 1-2 the script materialises the token to this file, which the recipe
-# reads to set THEHIVE_TEST_LICENSE and the go-test parallelism for the go-test
-# container. Export it so the reset script (a separate sub-shell) sees case 1.
+# In cases 1-2 it writes the token where the license override mounts it
+# (internal/testutils/testdata/.test-license.lic.local) and runs the suite in parallel.
+# Export THEHIVE_TEST_LICENSE so that it sees case 1.
 export THEHIVE_TEST_LICENSE
-LICENSE_FILE := internal/testutils/testdata/.test-license.lic.local
 
 .PHONY: test
 test: pre ## Default test loop: fast, cached unit tests (no live TheHive) ##@ make test [COVERAGE=1] [RUN=<regexp>]
 	@echo $(BGreen)-----------------------$(Color_Off)
 	@echo $(BGreen)-- Running UnitTests --$(Color_Off)
 	@echo $(BGreen)-----------------------$(Color_Off)
-	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go test $(GO_TEST_COVER) $(GO_TEST_RUN) -short -v ./...
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) -e CGO_ENABLED=0 $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE_CGO) go test $(GO_TEST_COVER) $(GO_TEST_RUN) -short -v ./...
 ifeq ($(COVERAGE),1)
 	docker run -i --rm -v $(MOUNT_APP) -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
 endif
@@ -362,10 +332,10 @@ test-integration: pre ## Full suite vs a live TheHive stack; slow, leaves stack 
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Running Integration Tests --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
-	@LICENSE_FILE="$(LICENSE_FILE)" MOUNT_APP="$(MOUNT_APP)" GO_IMAGE="$(GO_IMAGE)" \
+	@MOUNT_APP="$(MOUNT_APP)" GO_IMAGE="$(GO_IMAGE_CGO)" \
 		GO_RUN_AS_HOST_UID="$(GO_RUN_AS_HOST_UID)" DOCKER_CACHE_MOUNTS="$(DOCKER_CACHE_MOUNTS)" \
 		GO_TOOLS_CACHE="$(GO_TOOLS_CACHE)" GO_TEST_COVER="$(GO_TEST_COVER)" GO_TEST_RUN="$(GO_TEST_RUN)" \
-		./scripts/run-integration-tests.sh
+		bin/harness integration
 ifeq ($(COVERAGE),1)
 	docker run -i --rm -v $(MOUNT_APP) -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
 endif
@@ -447,148 +417,32 @@ vulncheck: ## Check dependencies for known CVEs (govulncheck) ##@ make vulncheck
 	@echo $(BGreen)------------------------------$(Color_Off)
 	@echo $(BGreen)-- Security Vulnerability  --$(Color_Off)
 	@echo $(BGreen)------------------------------$(Color_Off)
-	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@v1.3.0 && govulncheck ./...'
+	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) && govulncheck ./...'
 
 .PHONY: lint
 lint: ## Check the whole repo for lint issues, read-only ##@ make lint
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Linter Checks --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
-	./scripts/lint.sh --all --check
-
-.PHONY: lint-changed
-lint-changed: ## Fast read-only lint of git-changed files only ##@ make lint-changed
-	@echo $(BGreen)-----------------------------$(Color_Off)
-	@echo $(BGreen)-- Linter Checks: changed --$(Color_Off)
-	@echo $(BGreen)-----------------------------$(Color_Off)
-	./scripts/lint.sh --changed --check
+	bin/harness lint --all
 
 .PHONY: lint-fix
 lint-fix: ## Auto-apply safe lint fixes across the whole repo ##@ make lint-fix
 	@echo $(BGreen)-----------------------------$(Color_Off)
 	@echo $(BGreen)-- Linter Checks with auto-fix --$(Color_Off)
 	@echo $(BGreen)-----------------------------$(Color_Off)
-	./scripts/lint.sh --all --fix
-
-.PHONY: lint-fix-changed
-lint-fix-changed: ## Auto-apply safe lint fixes to git-changed files only ##@ make lint-fix-changed
-	@echo $(BGreen)-----------------------------$(Color_Off)
-	@echo $(BGreen)-- Linter Checks: auto-fix changed --$(Color_Off)
-	@echo $(BGreen)-----------------------------$(Color_Off)
-	./scripts/lint.sh --changed --fix
-
-.PHONY: updatedep
-updatedep: ## Upgrade Go deps to latest and tidy go.mod/go.sum ##@ make updatedep
-	@echo $(BGreen)-----------------------$(Color_Off)
-	@echo $(BGreen)-- Update Dependencies --$(Color_Off)
-	@echo $(BGreen)-----------------------$(Color_Off)
-	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) sh -c 'go get -u ./... && go mod tidy'
-
-.PHONY: install-dev-deps
-install-dev-deps: ## No-op: tooling runs on-demand via Docker (kept for habit) ##@ make install-dev-deps
-	@echo $(BGreen)----------------------------------------$(Color_Off)
-	@echo $(BGreen)-- Installing development dependencies --$(Color_Off)
-	@echo $(BGreen)----------------------------------------$(Color_Off)
-	@echo "Dependencies are now installed on-demand via Docker containers"
-	@echo "No local Go installation required"
+	bin/harness lint --all --fix
 
 .PHONY: dev-setup
-dev-setup: ## Point git at the tracked .githooks (pre-commit/pre-push lint gate) ##@ make dev-setup
+dev-setup: ## Point git at the tracked .githooks: each commit runs the harness's commit gates ##@ make dev-setup
 	@echo $(BGreen)---------------------$(Color_Off)
 	@echo $(BGreen)-- Dev environment --$(Color_Off)
 	@echo $(BGreen)---------------------$(Color_Off)
 	git config core.hooksPath .githooks
-	@echo "git hooks enabled: pre-commit -> lint.sh --staged, pre-push -> lint.sh --all"
-	@echo "Bypass either with --no-verify; the authoritative gate stays CI."
+	@echo "git hooks enabled: each commit runs the commit gates of gates/registry.yaml (make pre-commit)"
 
-# Dynamic build target for any platform in RELEASE_TARGETS
-build-%: pre
-	@echo "Building for $*..."
-	@OS=$$(echo $* | cut -d- -f1); \
-	ARCH=$$(echo $* | cut -d- -f2); \
-	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) -e GOOS=$$OS -e GOARCH=$$ARCH $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go build $(GOLDFLAGS) -o $(BUILDDIR)/$(BINARY_NAME)-$*$(call bin_ext,$*) ./cmd/server/main.go
+# The harness's targets (check-fast, pre-commit, gate, ...): see that file.
+include scripts/harness.mk
 
-.PHONY: pre-dist
-pre-dist: ## Internal: ensure the dist/ directory exists (packaging dep) ##@ make pre-dist (usually run automatically)
-	@mkdir -p $(DISTDIR)
-
-.PHONY: build-current
-build-current: build ## Alias for `build` (current host platform) ##@ make build-current
-
-.PHONY: build-all
-build-all: $(addprefix build-,$(RELEASE_TARGETS)) ## Cross-compile binaries for every release target ##@ make build-all
-
-.PHONY: package-release
-package-release: build-all package-from-built ## Local release dry-run: build all + package tarballs/MCPB (no signing) ##@ make package-release
-
-# package-from-built packages whatever binaries already exist in $(BUILDDIR) — it
-# does NOT (re)build. This is the seam the release CI needs: build-all -> sign the
-# windows .exe in place -> package-from-built, so packaging consumes the *signed*
-# binaries instead of clobbering them with a fresh build-all.
-.PHONY: package-from-built
-package-from-built: pre-dist mcpb-ci-nobuild ## Release CI: package existing (signed) build/ binaries, no rebuild ##@ make package-from-built
-	@echo $(BGreen)--------------------------------$(Color_Off)
-	@echo $(BGreen)-- Packaging release binaries --$(Color_Off)
-	@echo $(BGreen)--------------------------------$(Color_Off)
-	@VERSION="$(VERSION)" BUILDDIR="$(BUILDDIR)" DISTDIR="$(DISTDIR)" \
-		BINARY_NAME="$(BINARY_NAME)" RELEASE_TARGETS="$(RELEASE_TARGETS)" \
-		./scripts/package-tarballs.sh
-
-.PHONY: version
-version: ## Print the version string baked into builds ##@ make version
-	@echo $(VERSION)
-
-.PHONY: mcpb-build-image
-mcpb-build-image: ## Internal: build the MCPB packaging image (dep of mcpb-*) ##@ make mcpb-build-image (usually run automatically)
-	@echo $(BGreen)-----------------------------$(Color_Off)
-	@echo $(BGreen)-- Building MCPB CI Image  --$(Color_Off)
-	@echo $(BGreen)-----------------------------$(Color_Off)
-	docker build -f scripts/Dockerfile.mcpb -t thehivemcp-mcpb:latest .
-
-.PHONY: mcpb-local
-mcpb-local: build ## Build + package a single MCPB for your host, to test it ##@ make mcpb-local
-	@echo $(BGreen)------------------------------$(Color_Off)
-	@echo $(BGreen)-- Generating MCPB Package --$(Color_Off)
-	@echo $(BGreen)------------------------------$(Color_Off)
-	./scripts/generate-mcpb.sh
-
-# The set of targets mcpb-ci-nobuild packages. Defaults to every release
-# target; override it to a subset for a fast packaging smoke-test (see
-# mcpb-smoke and the ci.yml mcpb-package job).
-MCPB_TARGETS ?= $(RELEASE_TARGETS)
-
-.PHONY: mcpb-ci
-mcpb-ci: build-all mcpb-ci-nobuild ## Build all + package MCPB for every architecture ##@ make mcpb-ci
-
-# mcpb-smoke exercises the MCPB packaging path (container permissions, manifest
-# generation, non-empty output) for a single target — fast enough to run on
-# every PR that touches the packaging inputs. Reuses build-<target> +
-# mcpb-ci-nobuild with MCPB_TARGETS narrowed to one arch.
-.PHONY: mcpb-smoke
-mcpb-smoke: ## Fast PR check: MCPB packaging works for one arch ##@ make mcpb-smoke [MCPB_SMOKE_TARGET=linux-amd64]
-	@$(MAKE) build-$(MCPB_SMOKE_TARGET)
-	@$(MAKE) mcpb-ci-nobuild MCPB_TARGETS=$(MCPB_SMOKE_TARGET)
-MCPB_SMOKE_TARGET ?= linux-amd64
-
-# mcpb-ci-nobuild wraps the already-built (and, in release CI, already-signed)
-# binaries in $(BUILDDIR) into MCPB packages. It deliberately does NOT depend on
-# build-all so a signing step can run between build-all and packaging.
-.PHONY: mcpb-ci-nobuild
-mcpb-ci-nobuild: pre-dist mcpb-build-image ## Release CI: MCPB-package existing build/ binaries, no rebuild ##@ make mcpb-ci-nobuild [MCPB_TARGETS="..."]
-	@echo $(BGreen)----------------------------------$(Color_Off)
-	@echo $(BGreen)-- Generating MCPB Packages CI --$(Color_Off)
-	@echo $(BGreen)----------------------------------$(Color_Off)
-	@VERSION="$(VERSION)" BUILDDIR="$(BUILDDIR)" DISTDIR="$(DISTDIR)" \
-		MCPB_TARGETS="$(MCPB_TARGETS)" \
-		./scripts/package-mcpb-ci.sh
-
-# The windows release targets, expanded to their built .exe paths.
-WINDOWS_TARGETS := $(filter windows-%,$(RELEASE_TARGETS))
-WINDOWS_BINARIES := $(foreach t,$(WINDOWS_TARGETS),$(BUILDDIR)/$(BINARY_NAME)-$(t).exe)
-
-.PHONY: sign-windows
-sign-windows: ## Release CI: code-sign the built Windows .exe files in place ##@ make sign-windows
-	@echo $(BGreen)-----------------------------$(Color_Off)
-	@echo $(BGreen)-- Signing Windows binaries --$(Color_Off)
-	@echo $(BGreen)-----------------------------$(Color_Off)
-	./scripts/sign-windows.sh $(WINDOWS_BINARIES)
+# The release targets (build-all, package-*, mcpb-*, sign-windows): see that file.
+include scripts/release.mk

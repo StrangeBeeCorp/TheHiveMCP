@@ -3,17 +3,18 @@ name: CI
 on:
   push:
     branches: [ "main" ]
+  # Every pull request runs CI, whatever its base: one stacked on another branch too. HARNESS_BASE
+  # below is the base it targets, so the gates judge only its own change.
   pull_request:
-    branches: [ "main" ]
-    # Skip CI for docs-only changes — these can't affect the code checks or the
-    # integration suite, and the integration matrix boots a full TheHive per leg
-    # (~5 min each). Safe because no job here is a required status check on main;
-    # if that changes, switch to a paths-filter gate job so skips still report.
-    paths-ignore:
-      - '**/*.md'
-      - '.markdownlint.jsonc'
-      - 'LICENSE'
-      - 'NOTICE'
+    # Docs-only pull requests run CI too. The gates run through
+    # bin/harness, which skips those the changed paths don't select
+    # (gates/registry.yaml): a docs-only change runs the static checks and boots no
+    # TheHive, and every job still reports a result, so these jobs can become
+    # required checks without stranding a docs pull request.
+
+# The jobs only read the repository; integration-tests adds packages: read for its ghcr login.
+permissions:
+  contents: read
 
 jobs:
   checks:
@@ -22,10 +23,16 @@ jobs:
     # containers as the runner uid (see the Makefile note), so the cache below
     # is actually mounted AND is runner-owned for actions/cache to save. This is
     # set job-wide so every make step (fmt/lint/sast/vulncheck) uses it.
+    # HARNESS_BASE is what bin/harness compares with to select the gates; it is
+    # empty on a push to main, which runs every gate.
     env:
       GO_CACHE_DIR: /home/runner/.cache/thehivemcp-go
+      HARNESS_BASE: ${{ github.event.pull_request.base.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The merge base with the pull request's base, for gate selection.
+          fetch-depth: 0
 
       # The make targets run inside pinned images and bind-mount these host caches
       # (via GO_CACHE_DIR / DOCKER_CACHE_MOUNTS / GOLANGCI_CACHE). Without them every
@@ -49,37 +56,80 @@ jobs:
       - name: Prepare cache dirs
         run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools "$GO_CACHE_DIR"/golangci
 
-      - name: Format check
-        run: make fmt-check
+      # One step per gate of gates/registry.yaml whose cadence includes ci. The
+      # docs gate fails when a ci gate is missing here.
+      - name: Structure, public safety and docs
+        run: bin/harness run --cadence ci --gate structure --gate public-safety --gate docs
 
-      - name: Run linter
-        run: make lint
+      - name: Spec items, changelog and test integrity
+        run: bin/harness run --cadence ci --gate spec --gate changelog --gate integrity
+
+      - name: What the model reads, and its tokens
+        run: bin/harness run --cadence ci --gate surface --gate tokens
+
+      - name: Analyzers (trust boundary, cuts, parallel tests)
+        run: bin/harness run --cadence ci --gate analyzers
+
+      - name: Format check
+        run: bin/harness run --cadence ci --gate fmt
+
+      - name: Lint and unit tests
+        run: bin/harness run --cadence ci --gate lint
+
+      - name: Workflow tests
+        run: bin/harness run --cadence ci --gate workflows
+
+      - name: Coverage floors and data races
+        run: bin/harness run --cadence ci --gate coverage --gate race
+
+      - name: Benchmarks against the base and their budgets
+        run: bin/harness run --cadence ci --gate bench
 
       - name: Run SAST
-        run: make sast
+        run: bin/harness run --cadence ci --gate sast
 
       - name: Run vulnerability scan
-        run: make vulncheck
+        run: bin/harness run --cadence ci --gate vulncheck
 
       - name: Lint Dockerfiles
-        run: make dockerlint
+        run: bin/harness run --cadence ci --gate dockerlint
 
       - name: Scan for secrets
-        run: make secrets
+        run: bin/harness run --cadence ci --gate secrets
 
   docker-build:
     # Smoke-test that the production image still builds from deployment/Dockerfile
     # (a broken COPY, a renamed cmd/ path, or a bad base digest is not caught by
     # go build / golangci-lint alone). Runs in parallel with the other jobs and
-    # does not push — it only proves the image assembles.
+    # does not push — it only proves the image assembles. A change that selects only the docs and
+    # meta suites cannot reach the image: the build is skipped, and the job still reports a pass.
     runs-on: ubuntu-latest
+    env:
+      HARNESS_BASE: ${{ github.event.pull_request.base.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The merge base with the pull request's base, for gate selection.
+          fetch-depth: 0
+
+      - name: Does the change reach the image?
+        id: changes
+        run: |
+          suites="$(bin/harness select)"
+          echo "$suites"
+          if grep -qvE '^(docs|meta) ' <<<"$suites"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Only docs and metadata changed; skipping the image build."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Set up Docker Buildx
+        if: steps.changes.outputs.run == 'true'
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Build production image
+        if: steps.changes.outputs.run == 'true'
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
@@ -99,12 +149,7 @@ jobs:
     # workspace-ownership uid mismatch actually reproduces (Docker Desktop for
     # Mac masks it), and asserts the output is a non-empty, valid MCPB.
     runs-on: ubuntu-latest
-    env:
-      # Never auto-download a Go toolchain into GOMODCACHE: setup-go installs the
-      # pinned version into the tool cache, and `local` keeps every build step
-      # from re-materializing a toolchain@… dir that collides with the cache
-      # restore (`tar: … File exists`, DL-6329 release run).
-      GOTOOLCHAIN: local
+    # The packaging runs in the Makefile's Go image (bin/harness too): no Go on the runner.
     steps:
       - uses: actions/checkout@v4
         with:
@@ -123,23 +168,13 @@ jobs:
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if git diff --name-only "$base"...HEAD | grep -qE '^(scripts/generate-mcpb\.sh|scripts/Dockerfile\.mcpb|Makefile|docs/images/theHivelogo\.png|\.github/workflows/ci\.yml)$'; then
+          if git diff --name-only "$base"...HEAD | grep -qE '^(internal/harness/release/.*|internal/harness/proc/.*|cmd/harness/release\.go|cmd/harness/main\.go|scripts/Dockerfile\.mcpb|Makefile|scripts/release\.mk|docs/images/theHivelogo\.png|\.github/workflows/ci\.yml)$'; then
             echo "MCPB packaging inputs changed; running smoke-test."
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "No MCPB packaging inputs changed; skipping."
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Set up Go
-        if: steps.changes.outputs.run == 'true'
-        uses: actions/setup-go@v5
-        with:
-          # Pin the concrete patch (keep in sync with the `toolchain` directive
-          # in go.mod). Combined with the job-level GOTOOLCHAIN=local, this keeps
-          # the toolchain out of GOMODCACHE so the module-cache restore doesn't
-          # collide with it.
-          go-version: '1.26.8'
 
       - name: Package MCPB (smoke-test)
         if: steps.changes.outputs.run == 'true'
@@ -175,15 +210,18 @@ jobs:
     # still succeeds), so the suite falls back to the sequential free-license path
     # — which is also the public-mirror behavior. To run parallel here, either add
     # that package grant or swap the login below to an org-scoped read:packages
-    # token. See scripts/reset-integration-db.sh (pick_licensing_image) for the gate.
+    # token. See internal/harness/stack (licensingImage) for the gate.
     permissions:
       contents: read
       packages: read
     # GO_CACHE_DIR makes the Makefile bind these host dirs into the go-test
     # container as the runner uid (see the Makefile note), so the cache below is
     # actually mounted AND is runner-owned for actions/cache to save.
+    # HARNESS_BASE lets bin/harness skip the suite when the change cannot affect it
+    # (docs only, for instance): the leg then reports a pass without booting TheHive.
     env:
       GO_CACHE_DIR: /home/runner/.cache/thehivemcp-go
+      HARNESS_BASE: ${{ github.event.pull_request.base.sha }}
     # Run the integration suite against the oldest and the newest supported
     # TheHive versions, so a compatibility break at either end turns the PR red
     # instead of going unnoticed (see DL-6007). The versions in between share the
@@ -201,6 +239,9 @@ jobs:
           - strangebee/thehive:5.8.0
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The merge base with the pull request's base, for gate selection.
+          fetch-depth: 0
 
       # Persist the Go caches the test container uses (module cache, build cache,
       # and the go-installed gotestsum) across runs. Without this each fresh runner
@@ -227,7 +268,7 @@ jobs:
       - name: Prepare cache dirs
         run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools
 
-      # Parallel mode needs a license token (see scripts/reset-integration-db.sh).
+      # Parallel mode needs a license token (see internal/harness/stack).
       # The primary path is the THEHIVE_TEST_LICENSE secret passed to the run step
       # below — used directly, no image pull or mint. This ghcr login is now only a
       # best-effort fallback for the mint path (an authenticated dev running CI
@@ -244,7 +285,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run integration tests
-        run: make test-integration
+        run: bin/harness run --cadence ci --gate integration
         env:
           THEHIVE_TEST_IMAGE: ${{ matrix.thehive-image }}
           # A pre-minted multi-instance dev license. When set, the suite runs

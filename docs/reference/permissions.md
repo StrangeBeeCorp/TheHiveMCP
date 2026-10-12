@@ -1,5 +1,8 @@
 # TheHiveMCP Permissions System
 
+This page describes the permission profile format. To apply a profile, see [Configure permissions](../how-to/configure-permissions.md); `PERMISSIONS_CONFIG` and
+`--permissions-config` are defined in [the configuration reference](configuration.md).
+
 ## Overview
 
 The permissions system provides fine-grained access control over TheHive operations:
@@ -9,20 +12,6 @@ The permissions system provides fine-grained access control over TheHive operati
 - **Automation control**: Manage which analyzers and responders can be executed
 
 **Default**: Read-only access when no configuration is specified.
-
-## Quick Start
-
-```bash
-# Uses default read-only permissions
-./thehivemcp
-
-# Specify custom permissions
-./thehivemcp --permissions-config /path/to/permissions.yaml
-
-# Or via environment variable
-export PERMISSIONS_CONFIG=/path/to/permissions.yaml
-./thehivemcp
-```
 
 ## Configuration Format
 
@@ -215,118 +204,13 @@ block list names no worker, so it needs no lookup.
 
 ## Example Configurations
 
-### Read-only (default)
+Three ready-made profiles are in [permissions-examples/](permissions-examples/). Use the files: they are the maintained versions.
 
-```yaml
-version: "1.0"
-permissions:
-  tools:
-    search-entities:
-      allowed: true
-    manage-entities:
-      allowed: false
-    execute-automation:
-      allowed: false
-    get-resource:
-      allowed: true
-  analyzers:
-    mode: "allow_list"
-    allowed: []
-  responders:
-    mode: "allow_list"
-    allowed: []
-```
-
-See: [read-only.yaml](permissions-examples/read-only.yaml)
-
-### Analyst
-
-```yaml
-version: "1.0"
-permissions:
-  tools:
-    search-entities:
-      allowed: true
-      # Restrict to TLP and PAP equal or below 2 (AMBER)
-      filters:
-        _and:
-          - _lte:
-              _field: "tlp"
-              _value: 2
-          - _lte:
-              _field: "pap"
-              _value: 2
-    manage-entities:
-      allowed: true
-      entity_permissions:
-        alert:
-          create: true
-          update: true
-          delete: false # Analysts cannot delete alerts
-          comment: true
-          promote: true # Allow alert promotion
-          merge: true # Allow merging alerts
-        case:
-          create: true
-          update: true
-          delete: false # Analysts cannot delete cases
-          comment: true
-          promote: false # N/A for cases
-          merge: true # Allow case merging
-        task:
-          create: true
-          update: true
-          delete: false
-          comment: true
-          promote: false # N/A for tasks
-          merge: false # N/A for tasks
-        observable:
-          create: true
-          update: true
-          delete: false
-          comment: true
-        procedure:
-          create: true
-          update: true
-          delete: false
-          comment: false # N/A for procedures
-    execute-automation:
-      allowed: true
-    get-resource:
-      allowed: true
-  analyzers:
-    mode: "allow_list"
-    allowed: ["VirusTotal_3_0", "Shodan_Host", "MISP_2_0"]
-  responders:
-    mode: "block_list"
-    blocked: ["DeleteCase_1_0", "PurgeAlert_1_0"]
-```
-
-See: [analyst.yaml](permissions-examples/analyst.yaml)
-
-### Administrator
-
-```yaml
-version: "1.0"
-permissions:
-  tools:
-    search-entities:
-      allowed: true
-    manage-entities:
-      allowed: true
-    execute-automation:
-      allowed: true
-    get-resource:
-      allowed: true
-  analyzers:
-    mode: "allow_list"
-    allowed: ["*"]
-  responders:
-    mode: "allow_list"
-    allowed: ["*"]
-```
-
-See: [admin.yaml](permissions-examples/admin.yaml)
+| Profile       | What it allows                                                                                                                                        | File                                                  |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Read-only     | `search-entities` and `get-resource` only; `manage-entities` and `execute-automation` denied; no analyzer or responder                                | [read-only.yaml](permissions-examples/read-only.yaml) |
+| Analyst       | Searching filtered to TLP and PAP of 2 or below; entity management without deletes; automation with an analyzer allow list and a responder block list | [analyst.yaml](permissions-examples/analyst.yaml)     |
+| Administrator | All four tools, every entity operation that applies, every analyzer and responder (`"*"`)                                                             | [admin.yaml](permissions-examples/admin.yaml)         |
 
 ## Checking Active Permissions
 
@@ -336,111 +220,15 @@ Query current permissions via MCP resource:
 get-resource hive://config/permissions
 ```
 
-## Deployment Modes
-
-Works uniformly across all modes:
-
-**STDIO:**
-
-```bash
-./thehivemcp --transport stdio --permissions-config permissions.yaml
-```
-
-**HTTP:**
-
-```bash
-./thehivemcp --transport http --permissions-config permissions.yaml
-```
-
-**In-Process:**
-
-```go
-mcpServer := bootstrap.GetInprocessServer(creds, "/path/to/permissions.yaml")
-```
-
-**Docker:**
-
-```bash
-# Mount permissions config into container
-docker run -d \
-  -v /host/path/analyst.yaml:/app/permissions.yaml \
-  -e PERMISSIONS_CONFIG=/app/permissions.yaml \
-  -e THEHIVE_URL=https://thehive.example.com \
-  -e THEHIVE_API_KEY=your-api-key \
-  ghcr.io/strangebeecorp/thehivemcp/thehivemcp:latest
-```
-
-**MCPB (MCP bundle):**
-
-When generating MCPB packages, permissions configs can be bundled directly:
-
-```bash
-# Bundle a permissions config with the MCPB
-export PERMISSIONS_CONFIG=docs/reference/permissions-examples/analyst.yaml
-./scripts/generate-mcpb.sh
-```
-
-The permissions file will be:
-
-- Copied into the MCPB as `permissions.yaml`
-- Set as the default value in the user configuration
-- Users can override with their own path after installation
-
-Alternatively, users can specify a permissions path when configuring the MCPB in their MCP client.
-
-## Best Practices
-
-1. **Start restrictive**: Begin with read-only, add permissions as needed
-2. **Use specific IDs**: Prefer explicit analyzer/responder IDs over wildcards
-3. **Test configurations**: Verify with `get-resource hive://config/permissions`
-4. **Document changes**: Add comments to your YAML files
-
-## Troubleshooting
-
-**"Tool is not permitted"**
-
-- Check your permissions file: `allowed: true` for the tool
-
-**"Analyzer/Responder is not permitted"**
-
-- Add to `allowed` list or remove from `blocked` list
-
-**"Analyzer/Responder … is not among the N … TheHive lists"**
-
-- The rules name specific workers, and this one is not in the analyzer catalog or in the responders listed for that entity. Use an analyzer ID or name from
-  `hive://metadata/automation/analyzers`, or a responder ID from `hive://metadata/automation/responders?entityType=<type>&entityId=<id>`: a responder must be
-  run by its ID.
-- N = 0 means TheHive listed nothing, which it does when it cannot reach Cortex.
-
-**"not found or is not within the scope permitted"**
-
-- The entity is excluded by the tool's configured `filters` (or does not exist)
-- Check active permissions: `get-resource hive://config/permissions`
-
-**Empty search results**
-
-- Permission filters may be restricting results
-- Check active permissions: `get-resource hive://config/permissions`
-
-**"No permissions found in context"**
-
-- System configuration error
-- Check server logs for permission loading errors
-
-## Security
+## Enforcement guarantees
 
 - **Default Deny**: All operations denied unless explicitly allowed
 - **No Runtime Changes**: Permissions loaded once at startup
 - **Filter Enforcement**: Permission filters are merged into search queries and verified server-side before manage, expansion, and automation operations reach
   an entity (see "Tool filters" above for the exact guarantees and limitations)
 - **Untrusted-data wrapping (deny-by-default)**: TheHive field values returned to the LLM are wrapped in `[UNTRUSTED_DATA]...[/UNTRUSTED_DATA]` boundary tags so
-  the model can tell data from instructions. The policy is **deny-by-default**: every string value is wrapped _unless_ its field name is on a small trusted
-  allowlist of structural identifiers, enums/control values, and dates (`_id`, `_type`, `status`, `dataType`, date fields, and more). This means `customFields`
-  values, attachment names, and any field added to the TheHive SDK in the future are wrapped automatically — there is no longer an allowlist of "untrusted"
-  fields that has to be kept in sync. Embedded boundary markers are escaped so the boundary cannot be broken out of. The one whole-entity exception is the MITRE
-  ATT&CK catalog (`entity-type: pattern`): it is reference data imported by an administrator, not case material, so a technique's name, description, URL and
-  platform list are returned unfenced. Boundary markers inside them are still escaped. A procedure citing a technique is _not_ exempt — only its catalog
-  references (`patternId`, `patternName`, `tactic`) are trusted; its analyst-written description stays wrapped.
+  the model can tell data from instructions. The policy, and why it denies by default, is in
+  [The untrusted-data boundary](../explanation/untrusted-data-boundary.md).
 - **Logged Operations**: Permission denials logged for auditing
 
 ## TheHive Filter Syntax
