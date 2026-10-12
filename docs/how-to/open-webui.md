@@ -14,7 +14,8 @@ TheHiveMCP reachable from Open WebUI only. Open WebUI supports MCP natively over
 
 ## 1. Set the variables
 
-Export them in your shell, or write them to a `.env` file in the directory you run `docker compose` from:
+Write them to a `.env` file in the directory you run `docker compose` from (or export each one in your shell, and leave `--env-file .env` out of the next
+command):
 
 ```bash
 THEHIVE_URL=https://thehive.example.com   # as seen from a container: http://host.docker.internal:9000 for a TheHive on this machine

@@ -34,10 +34,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The image's build context leaves local files out.** `.dockerignore` listed duplicate and missing entries and let `.git`, the harness cache, `build/` and the
   worktrees into the context that `deployment/Dockerfile` copies whole. It now excludes them, along with local configuration, build outputs and the folders the
   image does not build from.
-- **The filter guide the model reads matches the search tool.** `hive://docs/filter-dsl` called the severity scale fixed, said `extra-columns` chose the
-  columns, and left out paging. A model trusting it assumed `3` meant High in organisations that renamed the levels, re-listed default columns, and could not
-  page past the first `limit` rows. It now says the scale is a per-organisation default, that extra columns add to the defaults, and how `offset`, `hasMore` and
-  `nextOffset` page, within `limit` ≤ 1000 and `offset + limit` ≤ 10000.
+- **The filter guide the model reads matches the search tool.** `hive://docs/overview/filter-dsl` called the severity scale fixed, said `extra-columns` chose
+  the columns, and left out paging. A model trusting it assumed `3` meant High in organisations that renamed the levels, re-listed default columns, and could
+  not page past the first `limit` rows. It now says the scale is a per-organisation default, that extra columns add to the defaults, and how `offset`, `hasMore`
+  and `nextOffset` page, within `limit` ≤ 1000 and `offset + limit` ≤ 10000.
 - **The install and deployment guides work as written.** The binary downloads pointed at `releases/latest/download/thehivemcp-<target>`, a file no release
   publishes: they now fetch and extract the `thehivemcp-<version>-<target>.tar.gz` archive. The README named Claude Desktop's config file wrongly, the
   PowerShell check in the Windows guide never reached the binary, and the Claude Code guide had the scope precedence backwards. The permissions reference now

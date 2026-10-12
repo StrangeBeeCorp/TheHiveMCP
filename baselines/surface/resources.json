@@ -111,8 +111,8 @@
       "name": "Filter DSL Cheatsheet",
       "description": "Operator grammar and worked examples for building TheHive search filters passed to the search-entities tool",
       "mimeType": "text/markdown",
-      "tokens": 1672,
-      "sha256": "62840ebdca78865f4ef4b50fd0142476cdb20f62049844c00989fac83deed72c"
+      "tokens": 1682,
+      "sha256": "08d8b2c4c68594a2971f4a246648ca889a35c0347d4c0d8c9a734c3baa154733"
     },
     {
       "uri": "hive://docs/overview/platform",
