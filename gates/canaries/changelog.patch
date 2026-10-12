@@ -1,18 +1,18 @@
 diff --git a/baselines/surface/tokens.json b/baselines/surface/tokens.json
-index 9050478..ad66d9c 100644
+index 4c661e6..7ee10b1 100644
 --- a/baselines/surface/tokens.json
 +++ b/baselines/surface/tokens.json
 @@ -1,11 +1,11 @@
  {
    "tools": {
-     "execute-automation": 1449,
+     "execute-automation": 1448,
 -    "get-resource": 484,
 +    "get-resource": 483,
      "manage-entities": 2486,
      "search-entities": 2539
    },
--  "tools_total": 6958,
-+  "tools_total": 6957,
+-  "tools_total": 6957,
++  "tools_total": 6956,
    "prompts_total": 0,
    "resources_total": 36358
  }
