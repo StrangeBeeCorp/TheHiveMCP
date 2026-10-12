@@ -48,9 +48,10 @@ The server also refuses to start when:
 
 - `version` is anything other than `"1.0"`, the only accepted version.
 - a tool name under `tools` is unknown (the valid names are listed under "Available tools").
+- `analyzers` or `responders` set a `mode` other than `"allow_list"` or `"block_list"`.
 - `analyzers` or `responders` set `allowed` with `mode: "block_list"`, or `blocked` with `mode: "allow_list"`.
 
-A `mode` that is omitted (or any other value) denies every analyzer and responder, whatever the lists say.
+An `analyzers` or `responders` block with no `mode` denies every worker of that kind, whatever its lists say.
 
 ## Tool Permissions
 
