@@ -15,7 +15,13 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/harness/stack"
 )
 
-const leaseJSON = `{"lease": "l-42", "thehive_url_from_containers": "http://thehive.devstack.orb.local:9000", "org": "thehivemcp-it", "token_file": "/run/lease/token"}`
+const (
+	leaseFile = "/run/lease/token"
+	keyPath   = "/keys/it"
+	mount     = "/work:/app"
+	goImage   = "golang:1.26.9"
+	leaseJSON = `{"lease": "l-42", "thehive_url_from_containers": "http://thehive.devstack.orb.local:9000", "org": "thehivemcp-it", "token_file": "/run/lease/token"}`
+)
 
 // devstack answers the command lines of the shared mode, and records them.
 type devstack struct {
@@ -68,7 +74,7 @@ func TestWantsSharedIsOptIn(t *testing.T) {
 func TestAcquireLeasesAnOrganisationFromDevstack(t *testing.T) {
 	t.Parallel()
 
-	d := &devstack{lease: leaseJSON, files: map[string]string{"/run/lease/token": "org-admin-key\n"}}
+	d := &devstack{lease: leaseJSON, files: map[string]string{leaseFile: "org-admin-key\n"}}
 
 	target, release, err := d.shared().Acquire(t.Context())
 	require.NoError(t, err)
@@ -79,7 +85,7 @@ func TestAcquireLeasesAnOrganisationFromDevstack(t *testing.T) {
 	assert.Equal(t, "devstack release l-42", d.calls[len(d.calls)-1])
 
 	// A named organisation is the one leased, and a supplied URL replaces the lease's.
-	d = &devstack{lease: leaseJSON, files: map[string]string{"/run/lease/token": "k"}}
+	d = &devstack{lease: leaseJSON, files: map[string]string{leaseFile: "k"}}
 	s := d.shared()
 	s.Org, s.URL = "my-org", "http://localhost:9100"
 
@@ -95,7 +101,7 @@ func TestAcquireLeasesAnOrganisationFromDevstack(t *testing.T) {
 func TestAcquireTakesASuppliedTarget(t *testing.T) {
 	t.Parallel()
 
-	d := &devstack{files: map[string]string{"/keys/it": " from-file \n"}}
+	d := &devstack{files: map[string]string{keyPath: " from-file \n"}}
 
 	s := d.shared()
 	s.URL, s.Org, s.Key = "http://host:9000", "org-1", "inline-key"
@@ -105,7 +111,7 @@ func TestAcquireTakesASuppliedTarget(t *testing.T) {
 	assert.Equal(t, stack.Target{URL: "http://host:9000", Org: "org-1", Key: "inline-key"}, target)
 	release()
 
-	s.Key, s.KeyFile = "", "/keys/it"
+	s.Key, s.KeyFile = "", keyPath
 	target, _, err = s.Acquire(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, "from-file", target.Key)
@@ -114,7 +120,7 @@ func TestAcquireTakesASuppliedTarget(t *testing.T) {
 	_, _, err = s.Acquire(t.Context())
 	require.ErrorContains(t, err, "read the API key file")
 
-	s.KeyFile, s.Org = "/keys/it", ""
+	s.KeyFile, s.Org = keyPath, ""
 	_, _, err = s.Acquire(t.Context())
 	require.ErrorIs(t, err, stack.ErrNoTarget)
 
@@ -163,7 +169,7 @@ func TestReleaseFailureIsOnlyReported(t *testing.T) {
 
 	var log strings.Builder
 
-	d := &devstack{lease: leaseJSON, releaseErr: errors.New("devstack is gone"), files: map[string]string{"/run/lease/token": "k"}}
+	d := &devstack{lease: leaseJSON, releaseErr: errors.New("devstack is gone"), files: map[string]string{leaseFile: "k"}}
 	s := d.shared()
 	s.Log = &log
 
@@ -177,7 +183,7 @@ func TestReleaseFailureIsOnlyReported(t *testing.T) {
 func TestReleaseSurvivesACancelledRun(t *testing.T) {
 	t.Parallel()
 
-	d := &devstack{lease: leaseJSON, files: map[string]string{"/run/lease/token": "k"}}
+	d := &devstack{lease: leaseJSON, files: map[string]string{leaseFile: "k"}}
 	s := d.shared()
 
 	var releaseCtxErr error
@@ -205,23 +211,37 @@ func TestReleaseSurvivesACancelledRun(t *testing.T) {
 func TestTestsArgvCarriesTheSharedTarget(t *testing.T) {
 	t.Parallel()
 
-	tests := stack.Tests{Mount: "/repo:/app", Image: "golang:1.26.9", Run: []string{"-run", "TestA"}}
+	tests := stack.Tests{Mount: mount, Image: goImage, Run: []string{"-run", "TestA"}}
 	plain := tests.Argv("eyJ.lic")
 
 	tests.Shared = &stack.Target{URL: "http://thehive.devstack.orb.local:9000", Org: "thehivemcp-it", Key: "org-admin-key"}
 	shared := tests.Argv("eyJ.lic")
 
+	assert.Equal(t, plain[:10], shared[:10], "the same docker flags")
 	assert.Equal(t, []string{
-		"docker", "run", "-i", "--rm", "--network", "host", "-v", "/repo:/app", "-w", "/app",
 		"-e", "THEHIVE_TEST_URL=http://thehive.devstack.orb.local:9000", "-e", "LOG_LEVEL", "-e", "THEHIVE_TEST_IMAGE", "-e", "HARNESS_LOAD",
 		"-e", "THEHIVE_TEST_LICENSE=", "-e", "CGO_ENABLED=0",
 		"-e", "THEHIVE_TEST_SHARED=1", "-e", "THEHIVE_TEST_ORG=thehivemcp-it", "-e", "THEHIVE_TEST_API_KEY=org-admin-key",
-		"golang:1.26.9", "sh", "-c",
-	}, shared[:len(shared)-1])
+		goImage, "sh", "-c",
+	}, shared[10:len(shared)-1])
 	assert.Contains(t, shared[len(shared)-1], "-run TestA -p 1 -timeout 20m ./...", "one package at a time, even with a license")
 
 	assert.Contains(t, plain, "THEHIVE_TEST_LICENSE=eyJ.lic")
 	assert.NotContains(t, strings.Join(plain, " "), "THEHIVE_TEST_SHARED")
 	assert.NotContains(t, strings.Join(plain, " "), "THEHIVE_TEST_API_KEY")
 	assert.Contains(t, plain[len(plain)-1], "-run TestA -timeout 20m ./...", "the default run with a license stays parallel")
+}
+
+// The variables named in Pass reach the container by name; none is a command line as it was.
+func TestTestsArgvPassesTheNamedVariables(t *testing.T) {
+	t.Parallel()
+
+	tests := stack.Tests{Mount: mount, Image: goImage}
+	before := tests.Argv("")
+
+	tests.Pass = []string{"THEHIVE_TEST_ADMIN_USER", "THEHIVE_TEST_ADMIN_PASSWORD"}
+	after := tests.Argv("")
+
+	assert.Len(t, after, len(before)+4)
+	assert.Contains(t, strings.Join(after, " "), "-e CGO_ENABLED=0 -e THEHIVE_TEST_ADMIN_USER -e THEHIVE_TEST_ADMIN_PASSWORD")
 }

@@ -33,8 +33,8 @@ THEHIVE_TEST_API_KEY_FILE=~/path/to/org-admin-key \
 make test-integration-shared RUN=TestSearch   # RUN is optional; quote a regexp with "|": RUN="'TestA|TestB'"
 ```
 
-`make test-integration-shared` is `THEHIVE_TEST_SHARED=1 make test-integration`: `bin/harness integration` (`internal/harness/stack`) resolves the target instead
-of starting the compose stack, and the suite is still compiled and run in the pinned Go container, which must be able to reach the URL.
+`make test-integration-shared` is `THEHIVE_TEST_SHARED=1 make test-integration`: `bin/harness integration` (`internal/harness/stack`) resolves the target
+instead of starting the compose stack, and the suite is still compiled and run in the pinned Go container, which must be able to reach the URL.
 
 | Variable                    | Meaning                                                                                 |
 | --------------------------- | --------------------------------------------------------------------------------------- |
@@ -46,8 +46,8 @@ of starting the compose stack, and the suite is still compiled and run in the pi
 ### With devstack
 
 On a machine that runs `devstack` (a local broker that shares one TheHive between projects and queues heavy jobs), the URL, organisation and key are optional:
-when no key is given and `devstack` is installed, `bin/harness integration` leases the organisation `thehivemcp-it` (override with `THEHIVE_TEST_ORG`), uses its URL
-and key, and releases the lease when the run ends, whether the suite passed, failed or was interrupted. Because the run is heavy, go through the broker:
+when no key is given and `devstack` is installed, `bin/harness integration` leases the organisation `thehivemcp-it` (override with `THEHIVE_TEST_ORG`), uses its
+URL and key, and releases the lease when the run ends, whether the suite passed, failed or was interrupted. Because the run is heavy, go through the broker:
 
 ```sh
 devstack run --mem 3000 -- make test-integration-shared RUN=TestSearch

@@ -239,6 +239,9 @@ type Tests struct {
 	// Shared, when set, is the shared mode (see Shared): the suite runs in that organisation of that
 	// TheHive, one package at a time, whatever the license.
 	Shared *Target
+	// Pass names the environment variables handed to the container by name, when the harness has
+	// them set: the own-stack superadmin overrides of the Go suite.
+	Pass []string
 }
 
 // gotestsum is installed once in the tools cache.
@@ -287,6 +290,10 @@ func (t Tests) env(license string) []string {
 
 	if t.Shared != nil {
 		env = append(env, "-e", "THEHIVE_TEST_SHARED=1", "-e", "THEHIVE_TEST_ORG="+t.Shared.Org, "-e", "THEHIVE_TEST_API_KEY="+t.Shared.Key)
+	}
+
+	for _, name := range t.Pass {
+		env = append(env, "-e", name)
 	}
 
 	return env

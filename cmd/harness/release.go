@@ -168,6 +168,7 @@ func (e env) integration(ctx context.Context, args []string, out io.Writer) erro
 		Mount: cmp.Or(os.Getenv("MOUNT_APP"), e.root+":/app"), Image: image,
 		User: strings.Fields(os.Getenv("GO_RUN_AS_HOST_UID")), Caches: strings.Fields(os.Getenv("DOCKER_CACHE_MOUNTS")),
 		Tools: strings.Fields(os.Getenv("GO_TOOLS_CACHE")), Cover: strings.Fields(os.Getenv("GO_TEST_COVER")), Run: strings.Fields(os.Getenv("GO_TEST_RUN")),
+		Pass: passed("THEHIVE_TEST_ADMIN_USER", "THEHIVE_TEST_ADMIN_PASSWORD"),
 	}
 
 	license := ""
@@ -202,6 +203,19 @@ func (e env) integration(ctx context.Context, args []string, out io.Writer) erro
 	}
 
 	return nil
+}
+
+// passed keeps the variables of names that the environment sets.
+func passed(names ...string) []string {
+	var set []string
+
+	for _, name := range names {
+		if _, ok := os.LookupEnv(name); ok {
+			set = append(set, name)
+		}
+	}
+
+	return set
 }
 
 // prepare brings the compose stack up with its license and resets it, and returns the license

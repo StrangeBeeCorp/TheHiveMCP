@@ -292,6 +292,13 @@ endif
 ifneq ($(filter test-integration-shared,$(MAKECMDGOALS)),)
 THEHIVE_TEST_SHARED ?= 1
 endif
+# DEVSTACK_SHARED=1 (set machine-wide on a workstation that runs the devstack broker) makes
+# `make test-integration` default to the shared mode too, so nothing starts a second TheHive
+# there. Unset (CI, other contributors) the default stays the own compose stack, and an explicit
+# `THEHIVE_TEST_SHARED=` (empty) forces it back.
+ifneq ($(filter 1 true yes on,$(DEVSTACK_SHARED)),)
+THEHIVE_TEST_SHARED ?= 1
+endif
 # In shared mode (THEHIVE_TEST_SHARED, see test-integration-shared) there is no
 # compose stack: the URL stays empty here and bin/harness integration
 # fills it from the devstack lease unless you set it.

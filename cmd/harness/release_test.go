@@ -139,6 +139,7 @@ func TestSignWindowsWithoutAProviderLeavesThemUnsigned(t *testing.T) {
 
 func TestIntegrationPreparesTheStackThenRunsTheSuite(t *testing.T) {
 	releaseRepo(t)
+	t.Setenv("THEHIVE_TEST_SHARED", "") // the default mode, whatever make set in this environment
 	t.Setenv("GO_IMAGE", "")
 
 	_, err := harness(t, cmdIntegration)
@@ -187,7 +188,7 @@ func fakeDevstack(t *testing.T, suiteExit int) *[][]string {
 		switch {
 		case argv[0] == "devstack" && argv[1] == "lease":
 			return proc.Output{Stdout: []byte(`{"lease": "l-7", "thehive_url_from_containers": "http://thehive.devstack.orb.local:9000", "org": "thehivemcp-it", "token_file": "` + keyFile + `"}`)}, nil
-		case argv[0] == "docker" && argv[1] == "run":
+		case strings.HasPrefix(strings.Join(argv, " "), "docker run "):
 			return proc.Output{Code: suiteExit}, nil
 		}
 
@@ -201,7 +202,6 @@ func fakeDevstack(t *testing.T, suiteExit int) *[][]string {
 	return &calls
 }
 
-//nolint:paralleltest // t.Chdir
 func TestIntegrationSharedRunsInALeasedOrganisationAndReleasesIt(t *testing.T) {
 	releaseRepo(t)
 	t.Setenv("GO_IMAGE", "golang:1.26.9")
@@ -245,8 +245,6 @@ func TestIntegrationSharedRunsInALeasedOrganisationAndReleasesIt(t *testing.T) {
 }
 
 // Without devstack and without a key the run stops before anything is started.
-//
-//nolint:paralleltest // t.Chdir
 func TestIntegrationSharedWithoutATargetStopsEarly(t *testing.T) {
 	releaseRepo(t)
 	t.Setenv("GO_IMAGE", "golang:1.26.9")
@@ -263,8 +261,6 @@ func TestIntegrationSharedWithoutATargetStopsEarly(t *testing.T) {
 }
 
 // A false THEHIVE_TEST_SHARED is the default mode: the stack comes up, nothing is leased.
-//
-//nolint:paralleltest // t.Chdir
 func TestIntegrationSharedOffKeepsTheDefaultMode(t *testing.T) {
 	releaseRepo(t)
 	t.Setenv("GO_IMAGE", "golang:1.26.9")

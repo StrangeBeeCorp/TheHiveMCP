@@ -44,6 +44,11 @@ compatibility break at either end fails the PR. The image is a single source of 
 `make test-integration-shared` runs the suite sequentially inside one organisation of it instead (org-admin API key, no compose stack, no database reset, no
 instance-wide change), and the same instance can back a locally running server. See [Develop and test against a shared TheHive](shared-thehive.md).
 
+On a machine that sets `DEVSTACK_SHARED=1` (a workstation running the devstack broker), `make test-integration` and the integration gate of `make all` default
+to the shared mode, so no second TheHive is started there; `THEHIVE_TEST_SHARED= make test-integration` (empty) forces the own stack. Without the variable,
+which is the case in CI and for everyone else, the default is the own stack. The shared mode runs through `bin/harness integration`; while the harness on
+`origin/main` predates it, build this checkout's with `HARNESS=worktree`.
+
 ## Work the nightly findings
 
 The nightly run files each gate that fails or cannot run as an issue labelled `nightly`; what it checks and the thresholds it holds are in
