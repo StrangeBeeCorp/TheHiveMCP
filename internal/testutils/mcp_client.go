@@ -50,13 +50,19 @@ func GetMCPTestClientWithPermissions(
 	initTestLogger(options)
 
 	env := testEnvFor(t)
+
 	creds := &bootstrap.TheHiveCredentials{
 		URL:          containerURL,
-		APIKey:       options.TheHiveAPIKey,
+		APIKey:       env.apiKey,
 		Username:     env.username,
 		Password:     env.password,
 		Organisation: env.org,
 	}
+	if env.apiKey != "" {
+		// Shared mode: the key alone authenticates (login and password are all-or-nothing).
+		creds.Username, creds.Password = "", ""
+	}
+
 	mcpServer := bootstrap.GetInprocessServer(creds, permissionsConfigPath)
 	bootstrap.RegisterToolsToMCPServer(mcpServer)
 

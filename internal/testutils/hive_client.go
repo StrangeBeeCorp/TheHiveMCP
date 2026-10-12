@@ -24,13 +24,15 @@ func NewTestClient(t *testing.T) *thehive.APIClient {
 		URL:      url,
 		Username: env.username,
 		Password: env.password,
+		APIKey:   env.apiKey,
 		OrgName:  env.org,
 	}
 
 	return CreateOrgClient(t, cfg)
 }
 
-// GetAuthContext returns a basic-auth context for this test's dedicated user, so
+// GetAuthContext returns an auth context (basic auth, or the API key in shared
+// mode) for this test's dedicated user, so
 // data seeded through it lands in the test's own organisation. The org itself
 // comes from the client's X-Organisation header, not this context.
 func GetAuthContext(t *testing.T) context.Context {
@@ -38,7 +40,7 @@ func GetAuthContext(t *testing.T) context.Context {
 
 	env := testEnvFor(t)
 
-	return CreateAuthContext(env.username, env.password)
+	return env.authContext()
 }
 
 // SetupTestWithCleanup returns a test client scoped to this test's organisation

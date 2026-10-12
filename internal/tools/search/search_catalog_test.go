@@ -181,6 +181,7 @@ func TestSearchPagesThroughResultsWithHasMore(t *testing.T) {
 // import has got. Every row is checked rather than assuming a single match.
 func TestSearchPatternsCarryNoUntrustedFence(t *testing.T) {
 	testutils.Parallel(t)
+	testutils.RequireAttackPattern(t)
 
 	testutils.SetupTestWithCleanup(t)
 
