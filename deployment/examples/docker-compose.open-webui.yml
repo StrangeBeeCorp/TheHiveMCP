@@ -1,0 +1,42 @@
+# Open WebUI wired to TheHiveMCP: a web chat whose model searches and reads TheHive.
+# Guide: docs/how-to/open-webui.md. Meant for a local or lab machine: Open WebUI is
+# published on 127.0.0.1 only, and TheHiveMCP is reachable from Open WebUI alone.
+#
+# Required in the shell or in a .env file next to the command:
+#   THEHIVE_URL       TheHive as seen from a container (host.docker.internal for a local one)
+#   THEHIVE_API_KEY   the TheHive key the chat acts with
+#   OPENAI_API_KEY    a key for any OpenAI-compatible endpoint (OpenRouter by default)
+#   WEBUI_SECRET_KEY  any long random string; keeps sessions and tokens valid across restarts
+services:
+  thehivemcp:
+    image: ghcr.io/strangebeecorp/thehivemcp/thehivemcp:latest
+    restart: unless-stopped
+    environment:
+      - THEHIVE_URL=${THEHIVE_URL:?set THEHIVE_URL}
+      - THEHIVE_ORGANISATION=${THEHIVE_ORGANISATION:-}
+      - PERMISSIONS_CONFIG=${PERMISSIONS_CONFIG:-read_only}
+      - MCP_BIND_HOST=0.0.0.0
+      - MCP_PORT=8082
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:v0.11.4
+    restart: unless-stopped
+    depends_on:
+      - thehivemcp
+    ports:
+      - "127.0.0.1:3000:8080"
+    environment:
+      - OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL:-https://openrouter.ai/api/v1}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:?set OPENAI_API_KEY}
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:?set WEBUI_SECRET_KEY}
+      # Registers TheHiveMCP as an MCP tool server on first start. Open WebUI sends the key
+      # as "Authorization: Bearer", which TheHiveMCP forwards to TheHive. Read once: later
+      # changes go through Admin Settings, or a fresh volume.
+      - 'TOOL_SERVER_CONNECTIONS=[{"type":"mcp","url":"http://thehivemcp:8082/mcp","auth_type":"bearer","key":"${THEHIVE_API_KEY:?set THEHIVE_API_KEY}","info":{"id":"thehive","name":"TheHive"},"config":{"enable":true}}]'
+    volumes:
+      - open-webui:/app/backend/data
+
+volumes:
+  open-webui:

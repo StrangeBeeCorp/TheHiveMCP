@@ -47,7 +47,7 @@ All operators below are verified end-to-end against TheHive.
 
 ## Field types and values
 
-- **Severity** is numeric: `1=Low, 2=Medium, 3=High, 4=Critical` (fixed scale). Filter with numbers, e.g. `{"_gte": {"_field": "severity", "_value": 3}}`. The derived label lives in `severityLabel`.
+- **Severity** is numeric: `1=Low, 2=Medium, 3=High, 4=Critical` by default; the scale is configurable per organisation, so read `severityLabel` rather than assuming it. Filter with numbers, e.g. `{"_gte": {"_field": "severity", "_value": 3}}`.
 - **Status / stage** are strings, e.g. alerts use `"New"`, `"Imported"`; cases use `"New"`, `"InProgress"`, `"Closed"`. Check the entity schema for valid values.
 - **Tags** is a multi-valued field — use `_in` to match any of several tags, or `_eq` for an exact single tag.
 - **Cases** have a human-readable `number` field (e.g. `42`) distinct from the internal `_id` (`~<n>`). "case #42" → filter `{"_eq": {"_field": "number", "_value": 42}}`, not `_id`.
@@ -110,9 +110,10 @@ All operators below are verified end-to-end against TheHive.
 
 These are separate `search-entities` parameters, not filter operators:
 
-- `sort-by` / `sort-order` — order results (default `_createdAt` / `desc`).
-- `limit` — max rows (default 10). Not used when `count=true`.
-- `extra-columns` — which columns to return; entity-specific defaults apply when omitted.
+- `sort-by` / `sort-order` — order results (default `_createdAt` / `desc`; `startDate` for `job` and `action`).
+- `limit` — max rows (default 10, max 1000). Not used when `count=true`.
+- `offset` — index of the first row, for paging (default 0). `offset + limit` must not exceed 10000. The response has `hasMore`; when true, pass its `nextOffset` as `offset`.
+- `extra-columns` — columns returned on top of the entity's defaults, which are always included.
 - `extra-data` — computed blocks to attach (e.g. `["taskStats"]`).
 - `additional-queries` — related entities to fetch (e.g. `["tasks", "observables"]` for cases).
 - `count=true` — return only the number of matches.

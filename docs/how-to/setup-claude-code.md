@@ -233,7 +233,7 @@ python3 -c "import json; json.load(open('.mcp.json')); print('OK')"
 
 ### Gatekeeper prompt keeps appearing (native binary, macOS)
 
-The quarantine attribute is still set. Re-run `xattr -d com.apple.quarantine /path/to/thehivemcp-darwin-arm64`, or use Docker instead.
+The quarantine attribute is still set. Re-run `xattr -d com.apple.quarantine /path/to/thehivemcp`, or use Docker instead.
 
 ### Authentication error on startup
 
@@ -242,8 +242,9 @@ retrying.
 
 ### Duplicate or broken entry precedence
 
-An entry in `~/.claude.json` (user scope) takes precedence over `.mcp.json` (project scope). If a stale user-scope entry shadows your project config, remove it:
+When the same name is defined in several scopes, Claude Code uses one entry whole, in this order: `local`, then `project` (`.mcp.json`), then `user`. A stale
+`local` entry, which is also stored in `~/.claude.json`, therefore shadows your project config. Remove it:
 
 ```bash
-claude mcp remove thehive --scope user
+claude mcp remove thehive --scope local
 ```

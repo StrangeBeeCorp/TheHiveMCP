@@ -31,7 +31,7 @@ Worked deployment examples for specific hosts:
 
 - **[stdio — local MCP host integration](how-to/stdio-local.md)** — GitHub Copilot, Claude Desktop, and other local clients.
 - **[Remote Docker — HTTP deployment](how-to/remote-docker.md)** — run the server as a remote HTTP service behind a reverse proxy.
-- **[LibreChat integration](how-to/librechat.md)** — a complete web chat stack using Claude models.
+- **[Open WebUI](how-to/open-webui.md)** — a web chat with TheHiveMCP as its MCP tool server.
 
 ## Reference
 

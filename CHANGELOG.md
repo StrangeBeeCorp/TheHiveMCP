@@ -34,6 +34,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The image's build context leaves local files out.** `.dockerignore` listed duplicate and missing entries and let `.git`, the harness cache, `build/` and the
   worktrees into the context that `deployment/Dockerfile` copies whole. It now excludes them, along with local configuration, build outputs and the folders the
   image does not build from.
+- **The filter guide the model reads matches the search tool.** `hive://docs/filter-dsl` called the severity scale fixed, said `extra-columns` chose the
+  columns, and left out paging. A model trusting it assumed `3` meant High in organisations that renamed the levels, re-listed default columns, and could not
+  page past the first `limit` rows. It now says the scale is a per-organisation default, that extra columns add to the defaults, and how `offset`, `hasMore` and
+  `nextOffset` page, within `limit` ≤ 1000 and `offset + limit` ≤ 10000.
+- **The install and deployment guides work as written.** The binary downloads pointed at `releases/latest/download/thehivemcp-<target>`, a file no release
+  publishes: they now fetch and extract the `thehivemcp-<version>-<target>.tar.gz` archive. The README named Claude Desktop's config file wrongly, the
+  PowerShell check in the Windows guide never reached the binary, and the Claude Code guide had the scope precedence backwards. The permissions reference now
+  lists the `case-template` and `page` entity types and the `apply-template` operation, which an `entity_permissions` block that omits them denies.
+
+### Changed
+
+- **Open WebUI replaces LibreChat as the web chat example.** The LibreChat stack pinned a v0.2.3 image, set no `THEHIVE_URL` (so a current server rejects every
+  request), and needed a custom LibreChat image that nothing publishes. [`docker-compose.open-webui.yml`](deployment/examples/docker-compose.open-webui.yml)
+  runs stock Open WebUI with TheHiveMCP registered as its MCP tool server; the guide is [docs/how-to/open-webui.md](docs/how-to/open-webui.md).
 
 ## [1.2.0] - 2026-10-06
 

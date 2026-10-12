@@ -44,6 +44,14 @@ permissions:
 The file is parsed strictly: a key the format does not define, such as a misspelt `entity_permission`, is an error, and the server refuses to start rather than
 drop it and grant what the key was meant to restrict. Keys inside `filters` are TheHive filter syntax and are not checked.
 
+The server also refuses to start when:
+
+- `version` is anything other than `"1.0"`, the only accepted version.
+- a tool name under `tools` is unknown (the valid names are listed under "Available tools").
+- `analyzers` or `responders` set `allowed` with `mode: "block_list"`, or `blocked` with `mode: "allow_list"`.
+
+A `mode` that is omitted (or any other value) denies every analyzer and responder, whatever the lists say.
+
 ## Tool Permissions
 
 ### Available tools
@@ -139,6 +147,7 @@ tools:
         comment: true
         promote: false # N/A for cases
         merge: true # Allow merging cases together
+        apply-template: true # Allow applying a case template to a case
       task:
         create: true
         update: true
@@ -160,14 +169,23 @@ tools:
         comment: false # N/A for procedures
         promote: false # N/A for procedures
         merge: false # N/A for procedures
+      case-template:
+        create: true
+        update: true
+        delete: false
+      page:
+        create: true
+        update: true
+        delete: false
 ```
 
 **Behavior:**
 
 - If no `entity_permissions` are configured: all operations allowed (backward compatibility)
-- If `entity_permissions` are configured: only specified entity types/operations allowed
-- Entity types: `alert`, `case`, `task`, `observable`, `procedure`
-- Operations: `create`, `update`, `delete`, `comment`, `promote`, `merge`
+- If `entity_permissions` are configured: only specified entity types/operations allowed. An entity type that is not listed, or an operation left out of a
+  listed type, is denied.
+- Entity types: `alert`, `case`, `task`, `observable`, `procedure`, `case-template`, `page`
+- Operations: `create`, `update`, `delete`, `comment`, `promote`, `merge`, `apply-template` (meaningful on `case` only)
 
 ## Automation Permissions
 

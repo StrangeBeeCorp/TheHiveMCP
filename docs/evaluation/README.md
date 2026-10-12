@@ -10,7 +10,7 @@ Evidence is published **one folder per evaluated MCP-server version**. Each vers
 - **`results.csv`** — the machine-readable results table (the source of truth): one row per model, with the accuracy and security counts, the version, the date,
   and the judge model.
 - **`summary.md`** — a human-readable summary of that version's results and a comparison with the previous evaluated version.
-- **`report.html`** — a detailed, chart-based visual report.
+- **`report.html`** — a detailed, chart-based visual report. v0.3.3 has none: its summary points to the v0.3.4 report.
 
 | Version                       | Released           | Folder                         |
 | ----------------------------- | ------------------ | ------------------------------ |

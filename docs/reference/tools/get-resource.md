@@ -16,6 +16,7 @@ Resources are organized hierarchically:
 - `hive://catalog` - Directory of all categories
 - `hive://config/*` - Session and system info
 - `hive://schema/*` - Entity field definitions
+- `hive://rule/*` - Rules for the model: `formatting`, `integrity` and `filtering`
 - `hive://metadata/*` - Available options and choices
 - `hive://docs/*` - Documentation and guides
 
@@ -122,7 +123,7 @@ Entity schemas are organized into three variants:
 Available entities: `alert`, `case`, `task`, `observable`, `procedure`, `pattern`, `case-template`, `page`, `job`, `action`
 
 `job` (Cortex analyzer runs) and `action` (Cortex responder runs) are output-only — they are produced by [`execute-automation`](execute-automation.md), not
-created directly, so they have no `/create` or `/update` variant.
+created directly, so they have no `/create` or `/update` variant. `pattern` (MITRE ATT&CK techniques) is output-only too.
 
 Example:
 

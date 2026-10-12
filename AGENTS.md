@@ -54,6 +54,6 @@ Keys defined in `internal/types/constants.go`, parsed in `internal/types/options
 Never read `.env` files (any `**/.env*`); such tool calls are discarded.
 
 - TheHive target: `THEHIVE_URL`, `THEHIVE_API_KEY` (or `THEHIVE_USERNAME` / `THEHIVE_PASSWORD`), `THEHIVE_ORGANISATION`, `THEHIVE_URL_ALLOWLIST`.
-- Transport: `stdio` (default) or `http`; http mode requires `MCP_BIND_HOST`
-  - `MCP_PORT` (also `MCP_SERVER_ENDPOINT`, `MCP_HEARTBEAT_INTERVAL`).
+- Transport: `http` (default, `--transport`) or `stdio`; http mode requires `--addr` or both `MCP_BIND_HOST` and `MCP_PORT` (also `MCP_SERVER_ENDPOINT`,
+  `MCP_HEARTBEAT_INTERVAL`).
 - `LOG_LEVEL` controls logging.
