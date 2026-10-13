@@ -126,6 +126,9 @@ const (
 	readyPoll       = 5 * time.Second
 )
 
+// lookPath finds devstack on the PATH for the shared mode; the tests replace it.
+var lookPath = exec.LookPath
+
 // readyCheck asks TheHive's status page; the tests replace it.
 var readyCheck = func(ctx context.Context) bool {
 	ctx, cancel := context.WithTimeout(ctx, readyPoll)
@@ -148,9 +151,12 @@ var readyCheck = func(ctx context.Context) bool {
 
 // integration prepares the stack and runs the suite against it: bin/harness integration, as
 // make test-integration calls it with the Go image and the docker flags in the environment.
+// With THEHIVE_TEST_SHARED (make test-integration-shared) it runs the suite in one organisation of
+// an already-running TheHive instead: no stack, no reset, no license, and the lease released at the
+// end, whatever the suite did.
 func (e env) integration(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) > 0 {
-		return usageError{"usage: harness integration (RUN, COVERAGE and THEHIVE_TEST_IMAGE come from make test-integration)"}
+		return usageError{"usage: harness integration (RUN, COVERAGE and THEHIVE_TEST_IMAGE come from make test-integration, THEHIVE_TEST_SHARED from make test-integration-shared)"}
 	}
 
 	image := os.Getenv("GO_IMAGE")
@@ -158,24 +164,33 @@ func (e env) integration(ctx context.Context, args []string, out io.Writer) erro
 		return errors.New("integration: GO_IMAGE is not set: run make test-integration")
 	}
 
-	s := stack.Stack{
-		Root: e.root, Compose: composeFile, LicenseOverride: licenseOverride, LicenseFile: licenseFile,
-		TheHiveImage: os.Getenv("THEHIVE_TEST_IMAGE"), SuppliedLicense: os.Getenv("THEHIVE_TEST_LICENSE"),
-		URL: theHiveURL, DevUser: cmp.Or(os.Getenv("THEHIVE_DEV_USER"), "admin"), DevPassword: cmp.Or(os.Getenv("THEHIVE_DEV_PASSWORD"), "secret"),
-		Run: toolExec, Stream: streamExec, Ready: readyCheck, Wait: readyWait, Poll: readyPoll, Log: out,
-	}
-
-	mode, license, err := s.Prepare(ctx)
-	if err != nil {
-		return fmt.Errorf("integration: %w", err)
-	}
-
-	_, _ = fmt.Fprintf(out, "Mode: %s.\n", mode)
-
 	t := stack.Tests{
 		Mount: cmp.Or(os.Getenv("MOUNT_APP"), e.root+":/app"), Image: image,
 		User: strings.Fields(os.Getenv("GO_RUN_AS_HOST_UID")), Caches: strings.Fields(os.Getenv("DOCKER_CACHE_MOUNTS")),
 		Tools: strings.Fields(os.Getenv("GO_TOOLS_CACHE")), Cover: strings.Fields(os.Getenv("GO_TEST_COVER")), Run: strings.Fields(os.Getenv("GO_TEST_RUN")),
+		Pass: passed("THEHIVE_TEST_ADMIN_USER", "THEHIVE_TEST_ADMIN_PASSWORD"),
+	}
+
+	license := ""
+
+	if stack.WantsShared(os.Getenv("THEHIVE_TEST_SHARED")) {
+		target, release, err := sharedTarget(ctx, out)
+		defer release()
+
+		if err != nil {
+			return fmt.Errorf("integration: %w", err)
+		}
+
+		t.Shared = &target
+
+		_, _ = fmt.Fprintf(out, "Mode: shared (sequential): organisation %s at %s; no reset.\n", target.Org, target.URL)
+	} else {
+		var err error
+
+		license, err = e.prepare(ctx, out)
+		if err != nil {
+			return fmt.Errorf("integration: %w", err)
+		}
 	}
 
 	res, err := streamExec(ctx, t.Argv(license), nil)
@@ -188,4 +203,48 @@ func (e env) integration(ctx context.Context, args []string, out io.Writer) erro
 	}
 
 	return nil
+}
+
+// passed keeps the variables of names that the environment sets.
+func passed(names ...string) []string {
+	var set []string
+
+	for _, name := range names {
+		if _, ok := os.LookupEnv(name); ok {
+			set = append(set, name)
+		}
+	}
+
+	return set
+}
+
+// prepare brings the compose stack up with its license and resets it, and returns the license
+// token ("" in the free mode): the default mode of the suite.
+func (e env) prepare(ctx context.Context, out io.Writer) (string, error) {
+	s := stack.Stack{
+		Root: e.root, Compose: composeFile, LicenseOverride: licenseOverride, LicenseFile: licenseFile,
+		TheHiveImage: os.Getenv("THEHIVE_TEST_IMAGE"), SuppliedLicense: os.Getenv("THEHIVE_TEST_LICENSE"),
+		URL: theHiveURL, DevUser: cmp.Or(os.Getenv("THEHIVE_DEV_USER"), "admin"), DevPassword: cmp.Or(os.Getenv("THEHIVE_DEV_PASSWORD"), "secret"),
+		Run: toolExec, Stream: streamExec, Ready: readyCheck, Wait: readyWait, Poll: readyPoll, Log: out,
+	}
+
+	mode, license, err := s.Prepare(ctx)
+	if err != nil {
+		return "", err //nolint:wrapcheck // Prepare's errors name the step
+	}
+
+	_, _ = fmt.Fprintf(out, "Mode: %s.\n", mode)
+
+	return license, nil
+}
+
+// sharedTarget finds the organisation of an already-running TheHive that the shared mode runs in
+// (make test-integration-shared), from THEHIVE_TEST_URL, _ORG, _API_KEY and _API_KEY_FILE, or by
+// leasing one from devstack. The returned function releases the lease; call it whatever happens.
+func sharedTarget(ctx context.Context, out io.Writer) (stack.Target, func(), error) {
+	return stack.Shared{ //nolint:wrapcheck // Acquire's errors name the step
+		URL: os.Getenv("THEHIVE_TEST_URL"), Org: os.Getenv("THEHIVE_TEST_ORG"),
+		Key: os.Getenv("THEHIVE_TEST_API_KEY"), KeyFile: os.Getenv("THEHIVE_TEST_API_KEY_FILE"),
+		Run: toolExec, Look: lookPath, ReadFile: os.ReadFile, Log: out,
+	}.Acquire(ctx)
 }

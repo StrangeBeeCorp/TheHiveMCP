@@ -287,8 +287,31 @@ endif
 
 # Where the integration suite reaches the compose stack. Override to run against
 # an external TheHive, e.g. `make test-integration THEHIVE_TEST_URL=http://host:9000`.
+# `make test-integration-shared` is `make test-integration` with THEHIVE_TEST_SHARED=1;
+# set it here (not through a sub-make) so the default URL below is never exported.
+ifneq ($(filter test-integration-shared,$(MAKECMDGOALS)),)
+THEHIVE_TEST_SHARED ?= 1
+endif
+# DEVSTACK_SHARED=1 (set machine-wide on a workstation that runs the devstack broker) makes
+# `make test-integration` default to the shared mode too, so nothing starts a second TheHive
+# there. Unset (CI, other contributors) the default stays the own compose stack, and an explicit
+# `THEHIVE_TEST_SHARED=` (empty) forces it back.
+ifneq ($(filter 1 true yes on,$(DEVSTACK_SHARED)),)
+THEHIVE_TEST_SHARED ?= 1
+endif
+# In shared mode (THEHIVE_TEST_SHARED, see test-integration-shared) there is no
+# compose stack: the URL stays empty here and bin/harness integration
+# fills it from the devstack lease unless you set it.
+ifdef THEHIVE_TEST_SHARED
+THEHIVE_TEST_URL ?=
+else
 THEHIVE_TEST_URL ?= http://localhost:9000
+endif
 export THEHIVE_TEST_URL
+
+# Shared mode (opt-in): run the suite inside one organisation of an already-running
+# TheHive instead of the disposable compose stack. See test-integration-shared.
+export THEHIVE_TEST_SHARED THEHIVE_TEST_ORG THEHIVE_TEST_API_KEY_FILE
 
 # THEHIVE_TEST_IMAGE reaches bin/harness integration, which derives the licensing tag
 # from it, and the go-test container.
@@ -340,8 +363,12 @@ ifeq ($(COVERAGE),1)
 	docker run -i --rm -v $(MOUNT_APP) -w /app $(DOCKER_CACHE_MOUNTS) $(GO_IMAGE) go tool cover -func=coverage.out
 endif
 
+.PHONY: test-integration-shared
+test-integration-shared: test-integration ## Integration suite inside one org of an already-running (shared) TheHive; no compose stack, no reset ##@ make test-integration-shared [RUN=<regexp>] [THEHIVE_TEST_ORG=..] [THEHIVE_TEST_URL=.. THEHIVE_TEST_API_KEY_FILE=..]
+	@:
+
 .PHONY: test-integration-down
-test-integration-down: ## Tear down the stack left up by test-integration ##@ make test-integration-down
+test-integration-down: ## Tear down the stack left up by test-integration (not used in shared mode) ##@ make test-integration-down
 	docker compose -f docker-compose.test.yml down -v
 
 # DOCKER_VERSION_TAG: the image is always tagged thehivemcp:latest, which

@@ -40,6 +40,9 @@ var (
 	initOnce sync.Once
 	errInit  error
 	hiveURL  string
+	// sharedLogin is the login of the user behind THEHIVE_TEST_API_KEY, resolved
+	// once by initSharedInstance (shared mode only).
+	sharedLogin string
 )
 
 // TheHiveTestURL returns the base URL of the compose-managed TheHive instance,
@@ -58,12 +61,17 @@ type Config struct {
 	URL      string
 	Username string
 	Password string
-	OrgName  string
+	// APIKey, when set, authenticates with that API key (bearer token) instead
+	// of Username/Password. Used by shared mode.
+	APIKey  string
+	OrgName string
 }
 
 // StartTheHiveContainer returns the URL of the compose-managed TheHive instance
 // (see docker-compose.test.yml, brought up by `make test`), after waiting for
-// readiness and performing the one-time org/permission/ATT&CK bootstrap.
+// readiness and performing the one-time org/permission/ATT&CK bootstrap. In
+// shared mode (SharedMode) it returns the URL of the shared instance after
+// checking the org-admin API key instead; nothing is bootstrapped there.
 // Skips under `-short`, since these integration tests are slow and uncacheable.
 func StartTheHiveContainer(t *testing.T) (string, error) {
 	t.Helper()
@@ -78,6 +86,11 @@ func StartTheHiveContainer(t *testing.T) (string, error) {
 		err := waitForStatus(hiveURL, statusReadinessTimeout)
 		if err != nil {
 			errInit = err
+			return
+		}
+
+		if SharedMode() {
+			errInit = initSharedInstance(t, hiveURL)
 			return
 		}
 
@@ -181,8 +194,8 @@ func initHiveInstance(t *testing.T, url string) error {
 
 	adminConfig := &Config{
 		URL:      url,
-		Username: DefaultAdminUser,
-		Password: testAdminPassword,
+		Username: adminUser(),
+		Password: adminPassword(),
 		OrgName:  adminOrg,
 	}
 
@@ -200,6 +213,107 @@ func initHiveInstance(t *testing.T, url string) error {
 	}
 
 	return nil
+}
+
+// initSharedInstance is the shared-mode counterpart of initHiveInstance: it
+// changes nothing on the instance. It checks that THEHIVE_TEST_ORG and
+// THEHIVE_TEST_API_KEY are set and that the key works in that organisation, and
+// remembers the login behind the key (the identity the tests act as). Like
+// initHiveInstance it runs inside initOnce, so it returns errors, never fails t.
+func initSharedInstance(t *testing.T, url string) error {
+	t.Helper()
+
+	if sharedOrg() == "" || sharedAPIKey() == "" {
+		return fmt.Errorf("%s is set: %s and %s must be set too (the organisation and the API key of one of its org-admins)",
+			envTestShared, envTestOrg, envTestAPIKey)
+	}
+
+	client, ctx := createClientAndContext(t, &Config{URL: url, APIKey: sharedAPIKey(), OrgName: sharedOrg()})
+
+	user, httpResp, err := client.UserAPI.GetCurrentUserInfo(ctx).Execute()
+	closeResponse(httpResp)
+
+	if err != nil {
+		return fmt.Errorf("the API key in %s does not work in organisation %q at %s: %w", envTestAPIKey, sharedOrg(), url, err)
+	}
+
+	sharedLogin = user.GetLogin()
+
+	return nil
+}
+
+// RequireAttackPattern skips the test when the ATT&CK pattern TestMITREPatternID
+// is missing from the TheHive instance. The compose stack always has it (the
+// harness imports testdata/mitre.json), so this only ever skips in shared
+// mode: the ATT&CK catalogue is instance-wide, which the suite must not change,
+// so it has to be imported once by the owner of the shared instance — for
+// devstack: `devstack instance apply internal/testutils/testdata/devstack-instance.json`.
+func RequireAttackPattern(t *testing.T) {
+	t.Helper()
+
+	if !SharedMode() {
+		return
+	}
+
+	url, err := StartTheHiveContainer(t)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	attackPatternOnce.Do(func() {
+		attackPatternPresent = attackPatternExists(t, url)
+	})
+
+	if !attackPatternPresent {
+		t.Skipf("shared mode: ATT&CK pattern %s is not in the shared TheHive (instance-wide catalogue, not imported by the suite); "+
+			"import it with: devstack instance apply internal/testutils/testdata/devstack-instance.json", TestMITREPatternID)
+	}
+}
+
+var (
+	attackPatternOnce    sync.Once
+	attackPatternPresent bool
+)
+
+// attackPatternExists reports whether a pattern with TestMITREPatternID is
+// listed; any failure counts as "absent" (the test then skips with the import hint).
+func attackPatternExists(t *testing.T, url string) bool {
+	t.Helper()
+
+	client, ctx := createClientAndContext(t, &Config{URL: url, APIKey: sharedAPIKey(), OrgName: sharedOrg()})
+
+	query := thehive.NewInputQuery()
+	query.SetQuery([]thehive.InputQueryNamedOperation{
+		thehive.InputQueryGenericOperationAsInputQueryNamedOperation(thehive.NewInputQueryGenericOperation("listPattern")),
+		thehive.InputQueryPagingOperationAsInputQueryNamedOperation(thehive.NewInputQueryPagingOperation(0, purgeListPageSize, "page")),
+	})
+
+	resp, httpResp, err := client.QueryAndExportAPI.QueryAPI(ctx).InputQuery(*query).Execute()
+	closeResponse(httpResp)
+
+	if err != nil || resp == nil {
+		return false
+	}
+
+	jsonBytes, err := json.Marshal(resp)
+	if err != nil {
+		return false
+	}
+
+	var rows []struct {
+		PatternID string `json:"patternId"`
+	}
+	if json.Unmarshal(jsonBytes, &rows) != nil {
+		return false
+	}
+
+	for _, row := range rows {
+		if row.PatternID == TestMITREPatternID {
+			return true
+		}
+	}
+
+	return false
 }
 
 // mitreServerURL uses the compose service name because TheHive fetches it
@@ -226,6 +340,10 @@ func createClientAndContext(t *testing.T, cfg *Config) (*thehive.APIClient, cont
 	var client *thehive.APIClient
 	if cfg.URL != "" {
 		client = CreateOrgClient(t, cfg)
+	}
+
+	if cfg.APIKey != "" {
+		return client, context.WithValue(context.Background(), thehive.ContextAccessToken, cfg.APIKey)
 	}
 
 	auth := thehive.BasicAuth{

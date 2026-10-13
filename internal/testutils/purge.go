@@ -34,6 +34,7 @@ func purgeOrg(t *testing.T, cell *testEnv) {
 		URL:      hiveURL,
 		Username: cell.username,
 		Password: cell.password,
+		APIKey:   cell.apiKey,
 		OrgName:  cell.org,
 	}
 	client, ctx := createClientAndContext(t, cfg)

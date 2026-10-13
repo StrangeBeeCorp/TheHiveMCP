@@ -236,6 +236,12 @@ type Tests struct {
 	User, Caches, Tools []string
 	// Cover and Run are the go test flags of COVERAGE=1 and RUN=<regexp>.
 	Cover, Run []string
+	// Shared, when set, is the shared mode (see Shared): the suite runs in that organisation of that
+	// TheHive, one package at a time, whatever the license.
+	Shared *Target
+	// Pass names the environment variables handed to the container by name, when the harness has
+	// them set: the own-stack superadmin overrides of the Go suite.
+	Pass []string
 }
 
 // gotestsum is installed once in the tools cache.
@@ -247,7 +253,7 @@ const gotestsum = "gotest.tools/gotestsum@v1.13.0"
 // and the setup helpers retry it.
 func (t Tests) Argv(license string) []string {
 	flags := append(append([]string{}, t.Cover...), t.Run...)
-	if license == "" {
+	if license == "" || t.Shared != nil {
 		flags = append(flags, "-p", "1")
 	}
 
@@ -261,13 +267,36 @@ func (t Tests) Argv(license string) []string {
 	script := "command -v gotestsum >/dev/null 2>&1 || go install " + gotestsum +
 		" ; gotestsum --format pkgname --hide-summary=skipped -- " + strings.Join(quoted, " ")
 
-	argv := []string{
-		dockerCmd, "run", "-i", "--rm", "--network", "host", "-v", t.Mount, "-w", "/app",
-		"-e", "THEHIVE_TEST_URL", "-e", "LOG_LEVEL", "-e", "THEHIVE_TEST_IMAGE", "-e", "HARNESS_LOAD", "-e", "THEHIVE_TEST_LICENSE=" + license, "-e", "CGO_ENABLED=0",
-	}
+	argv := []string{dockerCmd, "run", "-i", "--rm", "--network", "host", "-v", t.Mount, "-w", "/app"}
+	argv = append(argv, t.env(license)...)
 	argv = append(append(append(argv, t.User...), t.Caches...), t.Tools...)
 
 	return append(argv, t.Image, "sh", "-c", script)
+}
+
+// env is the container's environment. In the shared mode it also carries the target, by value:
+// the harness holds it, not the ambient environment (the organisation-wide key of a lease, like
+// the license above, is a short-lived dev credential).
+func (t Tests) env(license string) []string {
+	url := "THEHIVE_TEST_URL"
+	if t.Shared != nil {
+		url += "=" + t.Shared.URL
+		license = "" // never parallel: one organisation serves every test
+	}
+
+	env := []string{
+		"-e", url, "-e", "LOG_LEVEL", "-e", "THEHIVE_TEST_IMAGE", "-e", "HARNESS_LOAD", "-e", "THEHIVE_TEST_LICENSE=" + license, "-e", "CGO_ENABLED=0",
+	}
+
+	if t.Shared != nil {
+		env = append(env, "-e", "THEHIVE_TEST_SHARED=1", "-e", "THEHIVE_TEST_ORG="+t.Shared.Org, "-e", "THEHIVE_TEST_API_KEY="+t.Shared.Key)
+	}
+
+	for _, name := range t.Pass {
+		env = append(env, "-e", name)
+	}
+
+	return env
 }
 
 // shellQuote quotes a word for sh: a RUN regexp such as 'TestA|TestB' must reach go test whole.

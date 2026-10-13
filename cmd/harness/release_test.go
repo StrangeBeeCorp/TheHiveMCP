@@ -139,6 +139,7 @@ func TestSignWindowsWithoutAProviderLeavesThemUnsigned(t *testing.T) {
 
 func TestIntegrationPreparesTheStackThenRunsTheSuite(t *testing.T) {
 	releaseRepo(t)
+	t.Setenv("THEHIVE_TEST_SHARED", "") // the default mode, whatever make set in this environment
 	t.Setenv("GO_IMAGE", "")
 
 	_, err := harness(t, cmdIntegration)
@@ -164,4 +165,116 @@ func TestIntegrationPreparesTheStackThenRunsTheSuite(t *testing.T) {
 
 	var usage usageError
 	require.ErrorAs(t, err, &usage)
+}
+
+// make test-integration-shared: an organisation leased from devstack, no stack and no reset, the
+// suite handed the lease's target and run one package at a time, and the lease given back whether
+// the suite passed or failed.
+
+// fakeDevstack stands in for docker and devstack: it records every command line, prints a lease
+// and its key file's path, and makes the suite (docker run) exit with the given code.
+func fakeDevstack(t *testing.T, suiteExit int) *[][]string {
+	t.Helper()
+
+	var calls [][]string
+
+	keyFile := filepath.Join(t.TempDir(), "token")
+	require.NoError(t, os.WriteFile(keyFile, []byte("org-admin-key\n"), 0o600))
+
+	prevStream, prevExec, prevLook := streamExec, toolExec, lookPath
+	fake := func(_ context.Context, argv []string, _ io.Reader) (proc.Output, error) {
+		calls = append(calls, argv)
+
+		switch {
+		case argv[0] == "devstack" && argv[1] == "lease":
+			return proc.Output{Stdout: []byte(`{"lease": "l-7", "thehive_url_from_containers": "http://thehive.devstack.orb.local:9000", "org": "thehivemcp-it", "token_file": "` + keyFile + `"}`)}, nil
+		case strings.HasPrefix(strings.Join(argv, " "), "docker run "):
+			return proc.Output{Code: suiteExit}, nil
+		}
+
+		return proc.Output{}, nil
+	}
+	streamExec, toolExec = fake, fake
+	lookPath = func(string) (string, error) { return "/usr/local/bin/devstack", nil }
+
+	t.Cleanup(func() { streamExec, toolExec, lookPath = prevStream, prevExec, prevLook })
+
+	return &calls
+}
+
+func TestIntegrationSharedRunsInALeasedOrganisationAndReleasesIt(t *testing.T) {
+	releaseRepo(t)
+	t.Setenv("GO_IMAGE", "golang:1.26.9")
+	t.Setenv("MOUNT_APP", "/repo:/app")
+	t.Setenv("THEHIVE_TEST_SHARED", "1")
+	t.Setenv("THEHIVE_TEST_URL", "")
+	t.Setenv("THEHIVE_TEST_ORG", "")
+	t.Setenv("THEHIVE_TEST_API_KEY", "")
+	t.Setenv("THEHIVE_TEST_API_KEY_FILE", "")
+	t.Setenv("THEHIVE_TEST_LICENSE", "eyJ.ignored")
+
+	for _, tc := range []struct {
+		name  string
+		exit  int
+		wantE error
+	}{{"a passing suite", 0, nil}, {"a failing suite", 1, errFailed}} {
+		calls := fakeDevstack(t, tc.exit)
+
+		out, err := harness(t, cmdIntegration)
+		require.ErrorIs(t, err, tc.wantE, tc.name)
+		assert.Contains(t, out, "Mode: shared (sequential): organisation thehivemcp-it at http://thehive.devstack.orb.local:9000; no reset.", tc.name)
+
+		var lines []string
+		for _, c := range *calls {
+			lines = append(lines, strings.Join(c, " "))
+		}
+
+		require.Len(t, lines, 3, tc.name+": lease, suite, release")
+		assert.Equal(t, "devstack lease thehive --org thehivemcp-it --for TheHiveMCP integration tests", lines[0])
+		assert.NotContains(t, strings.Join(lines, "\n"), "compose", "no stack, no reset")
+		assert.Equal(t, "devstack release l-7", lines[2], "released after the suite, "+tc.name)
+
+		suite := (*calls)[1]
+		assert.Contains(t, suite, "THEHIVE_TEST_URL=http://thehive.devstack.orb.local:9000")
+		assert.Contains(t, suite, "THEHIVE_TEST_SHARED=1")
+		assert.Contains(t, suite, "THEHIVE_TEST_ORG=thehivemcp-it")
+		assert.Contains(t, suite, "THEHIVE_TEST_API_KEY=org-admin-key")
+		assert.Contains(t, suite, "THEHIVE_TEST_LICENSE=", "no license in the shared mode")
+		assert.Contains(t, suite[len(suite)-1], "-p 1 -timeout 20m ./...", "one package at a time")
+	}
+}
+
+// Without devstack and without a key the run stops before anything is started.
+func TestIntegrationSharedWithoutATargetStopsEarly(t *testing.T) {
+	releaseRepo(t)
+	t.Setenv("GO_IMAGE", "golang:1.26.9")
+	t.Setenv("THEHIVE_TEST_SHARED", "true")
+	t.Setenv("THEHIVE_TEST_API_KEY", "")
+	t.Setenv("THEHIVE_TEST_API_KEY_FILE", "")
+
+	calls := fakeDevstack(t, 0)
+	lookPath = func(string) (string, error) { return "", os.ErrNotExist }
+
+	_, err := harness(t, cmdIntegration)
+	require.ErrorContains(t, err, "THEHIVE_TEST_API_KEY_FILE")
+	assert.Empty(t, *calls, "no stack, no suite")
+}
+
+// A false THEHIVE_TEST_SHARED is the default mode: the stack comes up, nothing is leased.
+func TestIntegrationSharedOffKeepsTheDefaultMode(t *testing.T) {
+	releaseRepo(t)
+	t.Setenv("GO_IMAGE", "golang:1.26.9")
+	t.Setenv("THEHIVE_TEST_SHARED", "0")
+	t.Setenv("THEHIVE_TEST_LICENSE", "eyJ.supplied")
+
+	calls := fakeDevstack(t, 0)
+
+	out, err := harness(t, cmdIntegration)
+	require.NoError(t, err)
+	assert.Contains(t, out, "Mode: license (parallel), supplied.")
+	assert.Equal(t, "docker compose -f docker-compose.test.yml -f docker-compose.license.yml up -d", strings.Join((*calls)[0], " "))
+
+	for _, c := range *calls {
+		assert.NotEqual(t, "devstack", c[0])
+	}
 }

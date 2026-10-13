@@ -24,6 +24,8 @@ Goal-oriented recipes for a specific task. They assume you already know the basi
   call.
 - **[Run the unsigned binary on macOS](how-to/run-the-unsigned-binary-on-macos.md)** — clear the Gatekeeper quarantine so a GUI host can launch the binary.
 - **[Cut a release](../RELEASING.md)** — the re-test policy, release notes and checklist for a vX.Y.Z tag.
+- **[Develop and test against a shared TheHive](how-to/shared-thehive.md)** — run the dev server and the integration suite in one organisation of a long-running
+  TheHive instead of booting the test stack.
 
 Worked deployment examples for specific hosts:
 

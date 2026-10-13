@@ -40,6 +40,15 @@ besides tests), with `--json` for scripts.
 compatibility break at either end fails the PR. The image is a single source of truth: set `THEHIVE_TEST_IMAGE` to override it locally (e.g.
 `THEHIVE_TEST_IMAGE=strangebee/thehive:5.5.16 make test-integration`); unset, it defaults to `strangebee/thehive:5.8.0`.
 
+**Integration tests against a shared TheHive (opt-in):** the default above stays the reference. If you have a long-running TheHive shared between projects,
+`make test-integration-shared` runs the suite sequentially inside one organisation of it instead (org-admin API key, no compose stack, no database reset, no
+instance-wide change), and the same instance can back a locally running server. See [Develop and test against a shared TheHive](shared-thehive.md).
+
+On a machine that sets `DEVSTACK_SHARED=1` (a workstation running the devstack broker), `make test-integration` and the integration gate of `make all` default
+to the shared mode, so no second TheHive is started there; `THEHIVE_TEST_SHARED= make test-integration` (empty) forces the own stack. Without the variable,
+which is the case in CI and for everyone else, the default is the own stack. The shared mode runs through `bin/harness integration`; while the harness on
+`origin/main` predates it, build this checkout's with `HARNESS=worktree`.
+
 ## Work the nightly findings
 
 The nightly run files each gate that fails or cannot run as an issue labelled `nightly`; what it checks and the thresholds it holds are in

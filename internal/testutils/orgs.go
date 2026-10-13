@@ -81,7 +81,19 @@ type testEnv struct {
 	org      string
 	username string
 	password string
-	err      error
+	// apiKey, when set (shared mode), authenticates instead of username/password.
+	apiKey string
+	err    error
+}
+
+// authContext returns the request context that authenticates as this test's
+// user: the API key in shared mode, basic auth otherwise.
+func (e *testEnv) authContext() context.Context {
+	if e.apiKey != "" {
+		return context.WithValue(context.Background(), thehive.ContextAccessToken, e.apiKey)
+	}
+
+	return CreateAuthContext(e.username, e.password)
 }
 
 // testEnvFor returns the per-test isolated environment, provisioning the org +
@@ -101,11 +113,11 @@ func testEnvFor(t *testing.T) *testEnv {
 		cell.err = provisionTestEnv(t, cell)
 		t.Cleanup(func() { orgByTest.Delete(t) })
 
-		// Free-license mode reuses one shared org across all (sequential) tests,
-		// so each test must purge the data it created; otherwise the next test's
-		// absolute-count assertions (require.Len / require.Equal on row counts)
-		// would see leftovers. License mode gives each test its own throwaway org
-		// and abandons it — zero teardown.
+		// Free-license mode and shared mode (where LicensePresent is always
+		// false) reuse one org across all (sequential) tests, so each test must purge the data it created;
+		// otherwise the next test's absolute-count assertions (require.Len /
+		// require.Equal on row counts) would see leftovers. License mode gives
+		// each test its own throwaway org and abandons it — zero teardown.
 		if cell.err == nil && !LicensePresent() {
 			t.Cleanup(func() { purgeOrg(t, cell) })
 		}
@@ -129,12 +141,23 @@ func provisionTestEnv(t *testing.T, cell *testEnv) error {
 		return err
 	}
 
-	cell.password = testAdminPassword
+	if SharedMode() {
+		// Shared mode: no platform admin, no org or user creation. The test runs
+		// as the org-admin behind the API key, in the one organisation the
+		// harness leased; the cleanup purges that organisation after the test.
+		cell.org = sharedOrg()
+		cell.apiKey = sharedAPIKey()
+		cell.username = sharedLogin
+
+		return nil
+	}
+
+	cell.password = adminPassword()
 
 	adminConfig := &Config{
 		URL:      url,
-		Username: DefaultAdminUser,
-		Password: testAdminPassword,
+		Username: adminUser(),
+		Password: adminPassword(),
 		OrgName:  adminOrg,
 	}
 	client, ctx := createClientAndContext(t, adminConfig)

@@ -12,6 +12,7 @@ import (
 
 func TestManageCreateProcedureInCase(t *testing.T) {
 	testutils.Parallel(t)
+	testutils.RequireAttackPattern(t)
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t)
 
@@ -43,6 +44,7 @@ func TestManageCreateProcedureInCase(t *testing.T) {
 
 func TestManageUpdateProcedure(t *testing.T) {
 	testutils.Parallel(t)
+	testutils.RequireAttackPattern(t)
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t)
 
@@ -76,6 +78,7 @@ func TestManageUpdateProcedure(t *testing.T) {
 
 func TestManageDeleteProcedure(t *testing.T) {
 	testutils.Parallel(t)
+	testutils.RequireAttackPattern(t)
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t)
 
