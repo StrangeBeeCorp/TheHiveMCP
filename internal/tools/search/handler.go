@@ -56,8 +56,8 @@ func (t *Tool) Handle(ctx context.Context, req mcp.CallToolRequest, params Entit
 	results, err := t.executeQuery(ctx, hiveQuery, params.EntityType)
 	if err != nil {
 		return EntitiesResult{}, tools.NewToolError("failed to execute search query").Cause(err).
-			Hint("The filter likely references a non-existent field or an invalid value/operator. Consult hive://schema/"+params.EntityType+" for valid fields and hive://schema/filter for the operator grammar, then retry with corrected filters.").
-			Schema(params.EntityType, "")
+			Hint("The filter likely references a non-existent field or an invalid value/operator. Consult hive://schema/"+schemaEntityType(params.EntityType)+" for valid fields and hive://schema/filter for the operator grammar, then retry with corrected filters.").
+			Schema(schemaEntityType(params.EntityType), "")
 	}
 
 	var hasMore bool
@@ -232,8 +232,30 @@ func (t *Tool) buildHiveQuery(params EntitiesParams, rawFilters map[string]any) 
 	return hiveQuery
 }
 
+// listOperations holds the entity types whose list query is not named after
+// them. listPage mixes the knowledge base with every case's pages, and a page
+// row says nothing of where it lives, so the knowledge base needs its own query.
+var listOperations = map[string]string{
+	types.EntityTypeKnowledgeBase: "listOrganisationPage",
+}
+
 func (t *Tool) buildListOperation(entityType string) *thehive.InputQueryGenericOperation {
-	return thehive.NewInputQueryGenericOperation(utils.ListOperationName(entityType))
+	name, ok := listOperations[entityType]
+	if !ok {
+		name = utils.ListOperationName(entityType)
+	}
+
+	return thehive.NewInputQueryGenericOperation(name)
+}
+
+// schemaEntityType is the entity type whose hive://schema resource describes
+// a search's rows: a knowledge-base row is a page.
+func schemaEntityType(entityType string) string {
+	if entityType == types.EntityTypeKnowledgeBase {
+		return types.EntityTypePage
+	}
+
+	return entityType
 }
 
 // buildFilterOperation must not edit filters: they embed the permission
@@ -281,6 +303,10 @@ func (t *Tool) executeQuery(ctx context.Context, hiveQuery thehive.InputQuery, e
 	}
 
 	results, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(ctx).InputQuery(hiveQuery).Execute()
+	if resp != nil && resp.Body != nil {
+		defer func() { _ = resp.Body.Close() }()
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to search %ss: %w. The filter may reference a field or operator this entity does not have, or you may lack permission to view %ss. API response: %s", entityType, utils.StatusCause(err, resp), entityType, utils.DescribeHTTPResponse(resp))
 	}
@@ -318,16 +344,17 @@ func (t *Tool) executeQuery(ctx context.Context, hiveQuery thehive.InputQuery, e
 // out which fields to exclude from a result. An entity type absent from the map
 // gets no exclusions.
 var baseModels = map[string]any{
-	types.EntityTypeAlert:        thehive.OutputAlert{},
-	types.EntityTypeCase:         thehive.OutputCase{},
-	types.EntityTypeTask:         thehive.OutputTask{},
-	types.EntityTypeObservable:   thehive.OutputObservable{},
-	types.EntityTypeProcedure:    thehive.OutputProcedure{},
-	types.EntityTypePattern:      thehive.OutputPattern{},
-	types.EntityTypeCaseTemplate: thehive.OutputCaseTemplate{},
-	types.EntityTypePage:         thehive.OutputPage{},
-	types.EntityTypeJob:          thehive.OutputJob{},
-	types.EntityTypeAction:       thehive.OutputAction{},
+	types.EntityTypeAlert:         thehive.OutputAlert{},
+	types.EntityTypeCase:          thehive.OutputCase{},
+	types.EntityTypeTask:          thehive.OutputTask{},
+	types.EntityTypeObservable:    thehive.OutputObservable{},
+	types.EntityTypeProcedure:     thehive.OutputProcedure{},
+	types.EntityTypePattern:       thehive.OutputPattern{},
+	types.EntityTypeCaseTemplate:  thehive.OutputCaseTemplate{},
+	types.EntityTypePage:          thehive.OutputPage{},
+	types.EntityTypeKnowledgeBase: thehive.OutputPage{},
+	types.EntityTypeJob:           thehive.OutputJob{},
+	types.EntityTypeAction:        thehive.OutputAction{},
 }
 
 func (t *Tool) getExcludedFields(entityType string, keptColumns []string, extraData []string) []string {

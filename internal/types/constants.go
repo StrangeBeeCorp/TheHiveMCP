@@ -180,6 +180,10 @@ const (
 	EntityTypeCaseTemplate = "case-template"
 	EntityTypeJob          = "job"
 	EntityTypeAction       = "action"
+	// EntityTypeKnowledgeBase is a search-only view of the pages: the
+	// organisation's knowledge base, without the pages attached to cases. Its
+	// rows are pages, managed as EntityTypePage.
+	EntityTypeKnowledgeBase = "knowledge-base"
 )
 
 // DefaultFields maps each entity type to the default set of fields returned for it.
@@ -192,10 +196,13 @@ var DefaultFields = map[string][]string{
 	// which is the one thing every observable query is asking for.
 	EntityTypeObservable: {fieldID, "dataType", "data", fieldCreatedAt},
 	EntityTypeComment:    {fieldID, "message", fieldCreatedAt, "_createdBy"},
-	EntityTypePage:       {fieldID, fieldTitle, fieldCreatedAt},
-	EntityTypeAttachment: {fieldID, "fileName", "size", fieldCreatedAt},
-	EntityTypeTaskLog:    {fieldID, "message", fieldCreatedAt, "_createdBy"},
-	EntityTypeProcedure:  {fieldID, "patternId", "patternName", "description", "occurDate"},
+	// content is what a page is read for: without it a row names a page that
+	// the caller has to fetch a second time, which a model rarely thinks to do.
+	EntityTypePage:          {fieldID, fieldTitle, "category", "content", fieldCreatedAt},
+	EntityTypeKnowledgeBase: {fieldID, fieldTitle, "category", "content", fieldCreatedAt},
+	EntityTypeAttachment:    {fieldID, "fileName", "size", fieldCreatedAt},
+	EntityTypeTaskLog:       {fieldID, "message", fieldCreatedAt, "_createdBy"},
+	EntityTypeProcedure:     {fieldID, "patternId", "patternName", "description", "occurDate"},
 	// platforms is deliberately absent: it is a four-to-six element list on most
 	// techniques, so it widens every catalog page for a detail few queries ask
 	// about. extra-columns=["platforms"] brings it back.

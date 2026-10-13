@@ -164,7 +164,7 @@ func TestToolSchemas_EnumerationsSurviveInference(t *testing.T) {
 			paramEntityType: {entityCase, entityAlert, entityTask, entityObs, "procedure", "case-template", "page"},
 		},
 		toolSearchEntities: {
-			paramEntityType: {entityAlert, entityCase, entityTask, entityObs, "procedure", "pattern", "case-template", "page", "job", "action"},
+			paramEntityType: {entityAlert, entityCase, entityTask, entityObs, "procedure", "pattern", "case-template", "page", "knowledge-base", "job", "action"},
 			"sort-order":    {"asc", "desc"},
 		},
 		toolExecuteAutomation: {
