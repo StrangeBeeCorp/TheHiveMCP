@@ -87,8 +87,8 @@ func TestDocsDownloadLinksNameAPublishedArchive(t *testing.T) {
 	require.Positive(t, found, "no release download link found in the docs: the regexp no longer matches them")
 }
 
-// After extracting an archive, the docs rename the binary it holds: by the name the release
-// gives it, so the mv finds the file.
+// After extracting an archive, the docs rename the binary it holds, in the same code block: by
+// the name the release gives it, so the mv finds the file.
 func TestDocsRenameTheBinaryTheArchiveHolds(t *testing.T) {
 	t.Parallel()
 
@@ -99,7 +99,8 @@ func TestDocsRenameTheBinaryTheArchiveHolds(t *testing.T) {
 			found++
 
 			target := content[loc[2]:loc[3]]
-			rename := docRename.FindStringSubmatch(content[loc[1]:])
+			block, _, _ := strings.Cut(content[loc[1]:], "```") // the rest of the extraction's code block
+			rename := docRename.FindStringSubmatch(block)
 
 			if assert.NotNil(t, rename, "%s: no mv of the extracted binary after extracting %s", path, target) {
 				assert.Equal(t, release.Binary(name, target), rename[1], "%s: the %s archive holds another binary name", path, target)
