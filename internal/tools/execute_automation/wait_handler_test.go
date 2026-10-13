@@ -2,6 +2,7 @@ package execute_automation
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -214,4 +215,58 @@ func TestWaitForJobsReturnsTheVerdictOnly(t *testing.T) {
 	assert.NotContains(t, report, "full")
 	assert.NotContains(t, report, "artifacts")
 	assert.Contains(t, string(wait.Message), "get-job-status returns a job's full report")
+}
+
+// A scope check that fails must not stop the wait from reading the jobs after it.
+func TestWaitForJobsReadsTheOtherJobsWhenAScopeCheckFails(t *testing.T) {
+	t.Parallel()
+
+	fake := fakecortex.NewJobs(map[string][]fakecortex.Reply{
+		"~1": {fakecortex.Status(statusSuccess)},
+		"~2": {fakecortex.Status(statusSuccess)},
+	}).ScopeUnavailable("~1")
+
+	result, err := waitWith(t, fake, scopedPermissions(t), []string{"~1", "~2"}, 1)
+	require.NoError(t, err)
+
+	wait := result.WaitForJobsResult
+	require.NotNil(t, wait)
+	assert.Equal(t, []string{"~2"}, jobIDsOf(wait))
+	assert.Equal(t, []string{"~1"}, wait.Pending, "a scope check that failed is worth trying again")
+	require.Len(t, wait.Failed, 1)
+	assert.Contains(t, wait.Failed[0].Error, "failed to check the job against your permission filters")
+	assert.Zero(t, fake.Reads("~1"), "a job whose scope is unknown is not read")
+}
+
+// A tool built without a poll interval polls every waitPollInterval, not in a busy loop.
+func TestWaitForJobsPollsAtTheDefaultInterval(t *testing.T) {
+	t.Parallel()
+
+	fake := fakecortex.NewJobs(map[string][]fakecortex.Reply{
+		"~1": {fakecortex.Status(statusInProgress), fakecortex.Status(statusSuccess)},
+	})
+	ctx := context.WithValue(context.Background(), types.HiveClientCtxKey, fake.Client(t))
+	ctx = utils.AddPermissionsToContext(ctx, permissions.LoadAdminForTesting())
+
+	started := time.Now()
+	result, err := (&ExecuteAutomationTool{}).Handle(ctx, mcp.CallToolRequest{}, ExecuteAutomationParams{
+		Operation: OperationWaitForJobs, JobIDs: []string{"~1"}, TimeoutSecs: 5,
+	})
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, time.Since(started), waitPollInterval, "the second read waits one interval")
+	assert.Equal(t, 2, fake.Reads("~1"), "running, then finished one interval later")
+	assert.Empty(t, result.WaitForJobsResult.Pending)
+}
+
+func TestWaitForJobsMessageCountsTheFinishedJobs(t *testing.T) {
+	t.Parallel()
+
+	result, err := waitForJobs(t, map[string][]fakecortex.Reply{
+		"~1": {fakecortex.Status(statusSuccess)},
+		"~2": {fakecortex.Status(statusSuccess)},
+	}, []string{"~1", "~2"}, 5)
+	require.NoError(t, err)
+
+	message := string(result.WaitForJobsResult.Message)
+	assert.True(t, strings.HasPrefix(message, "2 of 2 job(s) finished. Reports carry"), message)
 }
