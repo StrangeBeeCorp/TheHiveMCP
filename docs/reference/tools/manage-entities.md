@@ -11,14 +11,14 @@ you to manipulate entities programmatically while respecting TheHive's data inte
 
 ## Parameters
 
-| Parameter     | Type   | Required    | Description                                                                                          |
-| ------------- | ------ | ----------- | ---------------------------------------------------------------------------------------------------- |
-| `operation`   | string | Yes         | Operation to perform (`create`, `update`, `delete`, `comment`, `promote`, `merge`, `apply-template`) |
-| `entity-type` | string | Yes         | Type of entity (`alert`, `case`, `task`, `observable`, `procedure`, `case-template`, `page`)         |
-| `entity-ids`  | array  | Conditional | List of entity IDs (usage varies by operation)                                                       |
-| `entity-data` | object | Conditional | JSON object with entity data (required for create/update, optional for promote)                      |
-| `comment`     | string | Conditional | Text content (required for comment operations)                                                       |
-| `target-id`   | string | Conditional | Target entity ID (required for merge operations on alerts/observables)                               |
+| Parameter     | Type   | Required    | Description                                                                                                                               |
+| ------------- | ------ | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `operation`   | string | Yes         | Operation to perform (`create`, `update`, `delete`, `comment`, `promote`, `merge`, `apply-template`)                                      |
+| `entity-type` | string | Yes         | Type of entity (`alert`, `case`, `task`, `observable`, `procedure`, `case-template`, `page`)                                              |
+| `entity-ids`  | array  | Conditional | List of entity IDs (usage varies by operation)                                                                                            |
+| `entity-data` | object | Conditional | JSON object with entity data (required for create/update, optional for promote)                                                           |
+| `comment`     | string | Conditional | Text content (required for comment operations)                                                                                            |
+| `target-id`   | string | Conditional | Merge target case ID (alerts/observables); template name or ID (`apply-template`); parent case ID (update/delete of a case-attached page) |
 
 Entity IDs in `entity-ids` and `target-id` are TheHive internal identifiers in `~`-prefixed numeric form (for example, `~123`) — the same `_id` returned by
 [`search-entities`](search-entities.md). A case's human-readable `number` (for example, "case #42") is not an entity ID. Resolve it to an `_id` with a search
@@ -271,6 +271,20 @@ Update an existing page (use the page ID):
 }
 ```
 
+Update a page attached to a case: add the parent case ID in `target-id`:
+
+```json
+{
+  "operation": "update",
+  "entity-type": "page",
+  "entity-ids": ["~789"],
+  "target-id": "~123",
+  "entity-data": {
+    "content": "## Updated Summary\nNew findings added..."
+  }
+}
+```
+
 ### Delete operations
 
 **⚠️ Warning**: Delete operations are irreversible!
@@ -290,6 +304,17 @@ Delete a page:
   "operation": "delete",
   "entity-type": "page",
   "entity-ids": ["~789"]
+}
+```
+
+Delete a page attached to a case (`target-id` is the parent case ID):
+
+```json
+{
+  "operation": "delete",
+  "entity-type": "page",
+  "entity-ids": ["~789"],
+  "target-id": "~123"
 }
 ```
 
@@ -447,6 +472,46 @@ Apply a case template to one or more existing cases. `target-id` is the case tem
 - Optional `entity-data` fields: `updateTitlePrefix`, `updateDescription`, `updateTags`, `updateSeverity`, `updateFlag`, `updateTlp`, `updatePap`,
   `updateCustomFields`, `importTasks`, `importPages`.
 
+### Case template operations
+
+Case templates are identified by name or ID. Creating a case from a template is done with `caseTemplate` in the case's `entity-data`.
+
+Create:
+
+```json
+{
+  "operation": "create",
+  "entity-type": "case-template",
+  "entity-data": {
+    "name": "Phishing",
+    "displayName": "Phishing Investigation",
+    "severity": 2,
+    "tasks": [{ "title": "Analyze headers" }]
+  }
+}
+```
+
+Update:
+
+```json
+{
+  "operation": "update",
+  "entity-type": "case-template",
+  "entity-ids": ["Phishing"],
+  "entity-data": { "description": "Updated procedure" }
+}
+```
+
+Delete:
+
+```json
+{
+  "operation": "delete",
+  "entity-type": "case-template",
+  "entity-ids": ["Phishing"]
+}
+```
+
 ## Entity Relationships and Constraints
 
 ### Hierarchical structure
@@ -488,13 +553,12 @@ Apply a case template to one or more existing cases. `target-id` is the case tem
 
 ## Schema Reference
 
-Before creating or updating entities, always check the appropriate schema:
+Before creating or updating entities, always check the appropriate schema with [`get-resource`](get-resource.md). The examples below are its arguments:
 
 ### For CREATE operations
 
 ```json
 {
-  "tool": "get-resource",
   "uri": "hive://schema/alert/create"
 }
 ```
@@ -506,12 +570,13 @@ Available create schemas:
 - `hive://schema/task/create` - Required and optional fields for creating tasks
 - `hive://schema/observable/create` - Required and optional fields for creating observables
 - `hive://schema/procedure/create` - Required and optional fields for creating procedures
+- `hive://schema/case-template/create` - Required and optional fields for creating case templates
+- `hive://schema/page/create` - Required and optional fields for creating pages
 
 ### For UPDATE operations
 
 ```json
 {
-  "tool": "get-resource",
   "uri": "hive://schema/alert/update"
 }
 ```
@@ -523,6 +588,8 @@ Available update schemas:
 - `hive://schema/task/update` - Fields available for updating tasks
 - `hive://schema/observable/update` - Fields available for updating observables
 - `hive://schema/procedure/update` - Fields available for updating procedures
+- `hive://schema/case-template/update` - Fields available for updating case templates
+- `hive://schema/page/update` - Fields available for updating pages
 
 ### For understanding OUTPUT
 
@@ -534,6 +601,10 @@ Available output schemas (for understanding query results):
 - `hive://schema/observable` - Fields returned when querying observables
 - `hive://schema/procedure` - Fields returned when querying procedures
 - `hive://schema/pattern` - Fields returned when querying patterns (MITRE ATT&CK techniques)
+- `hive://schema/case-template` - Fields returned when querying case templates
+- `hive://schema/page` - Fields returned when querying pages
+- `hive://schema/job` - Fields returned when querying analyzer jobs
+- `hive://schema/action` - Fields returned when querying responder actions
 
 ## Batch operations
 

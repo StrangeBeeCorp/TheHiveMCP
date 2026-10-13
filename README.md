@@ -252,7 +252,8 @@ docker compose up -d
 
 ##### Step 2: Configure your MCP client
 
-Point your MCP client to connect to the HTTP server at `http://localhost:8082/mcp`.
+Point your MCP client to connect to the HTTP server at `http://localhost:8082/mcp`. The client sends its own TheHive API key in an `Authorization: Bearer <key>`
+(or `X-TheHive-Api-Key`) header: the server's `THEHIVE_API_KEY` is only used when `ALLOW_ENV_CREDENTIAL_FALLBACK=true`.
 
 **🐳 For advanced Docker setups:** See [Remote Docker Guide](docs/how-to/remote-docker.md) for scalable HTTP deployments with multi-tenant configuration.
 
@@ -263,17 +264,20 @@ Point your MCP client to connect to the HTTP server at `http://localhost:8082/mc
 
 ### Download Pre-built binary
 
+Each release publishes one archive per platform, `thehivemcp-<version>-<os>-<arch>.tar.gz` (`darwin`, `linux` or `windows`; `amd64` or `arm64`), holding the
+binary alone. For example, on Apple Silicon macOS:
+
 ```bash
-# Download for your platform from releases
-curl -L -o thehivemcp https://github.com/StrangeBeeCorp/TheHiveMCP/releases/latest/download/thehivemcp-[platform]-[arch]
-chmod +x thehivemcp
+VERSION=v1.2.0  # the latest tag on the releases page
+curl -LO "https://github.com/StrangeBeeCorp/TheHiveMCP/releases/download/${VERSION}/thehivemcp-${VERSION}-darwin-arm64.tar.gz"
+tar xzf "thehivemcp-${VERSION}-darwin-arm64.tar.gz"
+mv thehivemcp-darwin-arm64 thehivemcp
 ```
 
 ### Run with Stdio transport
 
-In your MCP host MCP config file (like `claude_desktop_settings.json`) add the following configuration:
+In your MCP host's config file (like Claude Desktop's `claude_desktop_config.json`) add the following configuration:
 
-````bash
 ```json
 {
   "mcpServers": {
@@ -289,7 +293,7 @@ In your MCP host MCP config file (like `claude_desktop_settings.json`) add the f
     }
   }
 }
-````
+```
 
 ### Run as HTTP server
 
@@ -338,13 +342,13 @@ bootstrap.RegisterToolsToMCPServer(mcpServer)
 
 ### Choose a deployment guide
 
-| Deployment Type         | Use Case                         | Complexity        | Guide                                                 |
-| ----------------------- | -------------------------------- | ----------------- | ----------------------------------------------------- |
-| **Claude Desktop MCPB** | Personal use, quick start        | ⭐ Easy           | Above ⬆️                                              |
-| **Claude Code**         | Anthropic CLI (terminal)         | ⭐⭐ Simple       | [Claude Code Guide](docs/how-to/setup-claude-code.md) |
-| **stdio Local**         | Local MCP hosts (GitHub Copilot) | ⭐⭐ Simple       | [stdio Guide](docs/how-to/stdio-local.md)             |
-| **Remote Docker**       | Team/cloud deployment            | ⭐⭐⭐ Medium     | [Remote Guide](docs/how-to/remote-docker.md)          |
-| **LibreChat**           | Complete AI assistant setup      | ⭐⭐⭐⭐ Advanced | [LibreChat Guide](docs/how-to/librechat.md)           |
+| Deployment Type         | Use Case                         | Complexity    | Guide                                                 |
+| ----------------------- | -------------------------------- | ------------- | ----------------------------------------------------- |
+| **Claude Desktop MCPB** | Personal use, quick start        | ⭐ Easy       | Above ⬆️                                              |
+| **Claude Code**         | Anthropic CLI (terminal)         | ⭐⭐ Simple   | [Claude Code Guide](docs/how-to/setup-claude-code.md) |
+| **stdio Local**         | Local MCP hosts (GitHub Copilot) | ⭐⭐ Simple   | [stdio Guide](docs/how-to/stdio-local.md)             |
+| **Remote Docker**       | Team/cloud deployment            | ⭐⭐⭐ Medium | [Remote Guide](docs/how-to/remote-docker.md)          |
+| **Open WebUI**          | Web chat for a team              | ⭐⭐⭐ Medium | [Open WebUI Guide](docs/how-to/open-webui.md)         |
 
 ---
 

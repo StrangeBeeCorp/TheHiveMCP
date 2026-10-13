@@ -18,14 +18,19 @@ reaches the same point.
 
 ## Step 1 — Download the server
 
-Download the binary for your platform from the [latest release](https://github.com/StrangeBeeCorp/TheHiveMCP/releases). On Apple Silicon macOS:
+Download the archive for your platform from the [latest release](https://github.com/StrangeBeeCorp/TheHiveMCP/releases) and extract the binary. On Apple Silicon
+macOS:
 
 ```bash
-curl -L -o thehivemcp https://github.com/StrangeBeeCorp/TheHiveMCP/releases/latest/download/thehivemcp-darwin-arm64
-chmod +x thehivemcp
+VERSION=v1.2.0  # the latest tag on the releases page
+curl -LO "https://github.com/StrangeBeeCorp/TheHiveMCP/releases/download/${VERSION}/thehivemcp-${VERSION}-darwin-arm64.tar.gz"
+tar xzf "thehivemcp-${VERSION}-darwin-arm64.tar.gz"
+mv thehivemcp-darwin-arm64 thehivemcp
 ```
 
-Note the full path to the binary—we will need it in a moment. Run `pwd` in the download directory and keep the result handy.
+The binary is unsigned, so macOS blocks it when Claude Desktop starts it: clear the quarantine as shown in
+[Run the unsigned binary on macOS](../how-to/run-the-unsigned-binary-on-macos.md). Note the full path to the binary—we will need it in a moment. Run `pwd` in
+the download directory and keep the result handy.
 
 ## Step 2 — Register the server with Claude Desktop
 
@@ -104,7 +109,7 @@ tools, and nothing was ever modified, because we stayed in `read_only` mode.
 
 - To let the assistant **create and update** entities safely, learn the permission model in the [permissions reference](../reference/permissions.md)—start
   restrictive, then grant only what a role needs.
-- To wire TheHiveMCP into a different host, follow a [deployment how-to](../README.md#how-to-guides) (Claude Code, remote Docker, LibreChat).
+- To wire TheHiveMCP into a different host, follow a [deployment how-to](../README.md#how-to-guides) (Claude Code, remote Docker, Open WebUI).
 - To understand exactly how each tool behaves, read the [tool reference](../reference/tools/search-entities.md).
 - To understand the security boundary around untrusted TheHive data and why model choice matters, read the
   [production-ready commitments](../../README.md#-production-ready-what-we-commit-to).

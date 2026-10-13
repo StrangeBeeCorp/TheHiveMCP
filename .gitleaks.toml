@@ -19,11 +19,7 @@ regexes = [
   '''different-api-key''',
 ]
 
-# The LibreChat helper compose file ships LibreChat's own published example
-# CREDS_KEY / CREDS_IV / JWT_SECRET / JWT_REFRESH_SECRET values, which every
-# operator is expected to regenerate. They are not our secrets.
 paths = [
-  '''deployment/examples/docker-compose\.librechat\.yml''',
   # The test license bin/harness integration (internal/harness/stack) writes at run time and
   # keeps for the next run. The scan reads the working tree, gitignored files included;
   # the public-safety gate refuses committing *.lic.local, so this file never reaches git.

@@ -89,11 +89,9 @@ The [`docker-compose.basic.yml`](../../deployment/examples/docker-compose.basic.
 
 ## Connect an MCP client
 
-MCP clients connect to `http://your-server:8082/mcp` and can:
-
-- Use environment variables for TheHive connection
-- Override with HTTP headers per request
-- Access all MCP tools (search, manage, execute, resources)
+MCP clients connect to `http://your-server:8082/mcp` and send their own TheHive API key in an `Authorization: Bearer <key>` or `X-TheHive-Api-Key` header. The
+server's `THEHIVE_URL` and `THEHIVE_ORGANISATION` are the defaults for every request; its `THEHIVE_API_KEY` is used only when
+`ALLOW_ENV_CREDENTIAL_FALLBACK=true`.
 
 ### Override settings per request
 
@@ -101,10 +99,12 @@ MCP clients connect to `http://your-server:8082/mcp` and can:
 
 ```bash
 curl -X POST http://localhost:8082/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -H "Authorization: Bearer different-api-key" \
   -H "X-TheHive-Org: other-org" \
   -H "X-TheHive-Url: https://other-thehive.com" \
-  -d '{"method":"initialize",...}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}'
 ```
 
 The headers and their rules are in [the configuration reference](../reference/configuration.md#per-request-headers).
@@ -112,5 +112,5 @@ The headers and their rules are in [the configuration reference](../reference/co
 ## Next steps
 
 - For local development: [stdio Example](stdio-local.md)
-- For LibreChat integration: [LibreChat Example](librechat.md)
+- For a web chat: [Open WebUI](open-webui.md)
 - For custom permissions: [Configure permissions](configure-permissions.md)

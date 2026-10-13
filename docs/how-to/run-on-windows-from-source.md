@@ -54,10 +54,10 @@ name.
 Verify it starts and speaks stdio before wiring it into a host:
 
 ```powershell
+$env:THEHIVE_URL = "<thehive_url>"
+$env:THEHIVE_API_KEY = "<thehive_api_key>"
+$env:THEHIVE_ORGANISATION = "<thehive_organization>"
 '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' |
-  $env:THEHIVE_URL="<thehive_url>";
-  $env:THEHIVE_API_KEY="<thehive_api_key>";
-  $env:THEHIVE_ORGANISATION="<thehive_organization>";
   .\thehivemcp.exe --transport stdio
 ```
 

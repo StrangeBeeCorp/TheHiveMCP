@@ -222,10 +222,10 @@ sast: ## Find insecure code patterns via SAST (gosec) ##@ make sast
 	docker run -i --rm -v $(MOUNT_APP) -w /app $(CA_MOUNT) $(GO_RUN_AS_HOST_UID) $(DOCKER_CACHE_MOUNTS) $(GO_TOOLS_CACHE) $(GO_IMAGE) sh -c 'go install github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION) && gosec ./...'
 
 # Every Dockerfile in the repo. trivy scans each — the production image plus the
-# MCPB and LibreChat helper images — so a misconfig regression in any of them
+# MCPB helper image — so a misconfig regression in any of them
 # turns the build red, not just the one we ship. hadolint lints them in the lint
 # gate (bin/harness lint), at the version internal/harness/lint/images.go pins.
-DOCKERFILES := deployment/Dockerfile scripts/Dockerfile.mcpb deployment/examples/Dockerfile.librechat
+DOCKERFILES := deployment/Dockerfile scripts/Dockerfile.mcpb
 
 # hadolint checks Dockerfile hygiene but has no rule for "container runs as
 # root"; trivy config does (DS-0002). We scan

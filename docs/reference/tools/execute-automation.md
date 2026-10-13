@@ -158,13 +158,12 @@ one job could be read.
 
 ## Automation Discovery
 
-Before using automation, discover available analyzers and responders:
+Before using automation, discover available analyzers and responders with [`get-resource`](get-resource.md). The examples below are its arguments:
 
 ### List available analyzers
 
 ```json
 {
-  "tool": "get-resource",
   "uri": "hive://metadata/automation/analyzers"
 }
 ```
@@ -173,7 +172,6 @@ Before using automation, discover available analyzers and responders:
 
 ```json
 {
-  "tool": "get-resource",
   "uri": "hive://metadata/automation/responders?entityType=case&entityId=~123"
 }
 ```
@@ -182,14 +180,12 @@ Before using automation, discover available analyzers and responders:
 
 ```json
 {
-  "tool": "get-resource",
   "uri": "hive://docs/automation/analyzers"
 }
 ```
 
 ```json
 {
-  "tool": "get-resource",
   "uri": "hive://docs/automation/responders"
 }
 ```

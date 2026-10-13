@@ -1,6 +1,6 @@
 # ADR-0003 - Track MCP 2026-07-28 on mark3labs/mcp-go v1.0.0, rather than migrating to the official Go SDK
 
-- Status: proposed
+- Status: accepted (shipped in v1.2.0)
 - Date: September 4, 2026
 - Deciders: TheHiveMCP maintainers
 - Related: DL-6920, [#170](https://github.com/StrangeBee/TheHiveMCP/issues/170),
@@ -353,16 +353,19 @@ One honest note on what is lost. Before this decision, the modern-client failure
 `ErrElicitationNotSupported`, not a deliberate policy. Removing the layer resolves the accident by deleting the policy along with it, rather than by expressing
 the policy correctly on both eras. That is the trade [#170](https://github.com/StrangeBee/TheHiveMCP/issues/170) exists to revisit.
 
-## Work, gated on accepting this ADR
+## Work
 
-1. Bump `mcp-go` to v1.0.0: type-assert in `onAfterCallToolHook`, replace the two `&struct{}{}` capability literals, `go mod tidy`. Add
+Steps 1 to 3 shipped in v1.2.0; steps 4 to 7 remain. Step 4 is deliberately a separate, later change: the fence is still in `bootstrap/http.go`.
+
+1. **Done.** Bump `mcp-go` to v1.0.0: type-assert in `onAfterCallToolHook`, replace the two `&struct{}{}` capability literals, `go mod tidy`. Add
    `server.WithStreamableHTTPProtocolVersions(mcp.LegacyProtocolVersions()...)` in `StartHTTPServer`, so the bump lands fenced. Validate against a live TheHive.
-2. Remove the confirmation layer in the same change: delete `internal/utils/elicitation_transport.go` and its test, stop wrapping the HTTP client in
+2. **Done.** Remove the confirmation layer in the same change: delete `internal/utils/elicitation_transport.go` and its test, stop wrapping the HTTP client in
    `bootstrap/common.go`, and drop `server.WithElicitation()` from both `bootstrap/server.go` and `bootstrap/inprocess.go` so the capability is no longer
    advertised. Drop the now-unused elicitation and sampling handlers from `internal/testutils/mcp_client.go`. Update the README section,
    `docs/reference/tools/manage-entities.md`, and the CHANGELOG — the behaviour change is user-visible and must be announced, not discovered.
-3. Add coverage asserting both a modern and a legacy client work **over Streamable HTTP**, not only in-process — the in-process-only suite is what hid this
-   breakage. Assert the modern write path explicitly, so removing the fence cannot pass silently. The spike tests above are the starting point.
+3. **Done** (`bootstrap/streamable_http_protocol_test.go`). Add coverage asserting both a modern and a legacy client work **over Streamable HTTP**, not only
+   in-process — the in-process-only suite is what hid this breakage. Assert the modern write path explicitly, so removing the fence cannot pass silently. The
+   spike tests above are the starting point.
 4. Remove the fence, as the last step and on its own commit, so the change that begins serving `2026-07-28` is reviewable in isolation and revertible by itself.
 5. `ttlMs`/`cacheScope` via `WithCacheHints`, resource-not-found `-32002` → `-32602`. Deterministic `tools/list` ordering is already satisfied incidentally.
 6. Replace the hand-written `initialize` snippets in `docs/how-to/` with `server/discover`.
