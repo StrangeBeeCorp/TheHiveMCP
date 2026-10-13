@@ -24,9 +24,11 @@ const (
 )
 
 // Build builds the server of the module at root into dir, and returns the binary's path.
+// It skips VCS stamping: in the pinned image the checkout belongs to another user, so git
+// refuses to read it.
 func Build(ctx context.Context, root, dir string) (string, error) {
 	bin := filepath.Join(dir, "thehivemcp")
-	cmd := exec.CommandContext(ctx, "go", "build", "-o", bin, "./cmd/server") // #nosec G204 -- the module's own server, into the run's directory
+	cmd := exec.CommandContext(ctx, "go", "build", "-buildvcs=false", "-o", bin, "./cmd/server") // #nosec G204 -- the module's own server, into the run's directory
 	cmd.Dir = root
 
 	out, err := cmd.CombinedOutput()
