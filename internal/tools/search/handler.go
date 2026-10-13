@@ -303,6 +303,10 @@ func (t *Tool) executeQuery(ctx context.Context, hiveQuery thehive.InputQuery, e
 	}
 
 	results, resp, err := hiveClient.QueryAndExportAPI.QueryAPI(ctx).InputQuery(hiveQuery).Execute()
+	if resp != nil && resp.Body != nil {
+		defer func() { _ = resp.Body.Close() }()
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to search %ss: %w. The filter may reference a field or operator this entity does not have, or you may lack permission to view %ss. API response: %s", entityType, utils.StatusCause(err, resp), entityType, utils.DescribeHTTPResponse(resp))
 	}
