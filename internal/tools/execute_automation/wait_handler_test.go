@@ -248,12 +248,14 @@ func TestWaitForJobsPollsAtTheDefaultInterval(t *testing.T) {
 	ctx := context.WithValue(context.Background(), types.HiveClientCtxKey, fake.Client(t))
 	ctx = utils.AddPermissionsToContext(ctx, permissions.LoadAdminForTesting())
 
+	started := time.Now()
 	result, err := (&ExecuteAutomationTool{}).Handle(ctx, mcp.CallToolRequest{}, ExecuteAutomationParams{
-		Operation: OperationWaitForJobs, JobIDs: []string{"~1"}, TimeoutSecs: 1,
+		Operation: OperationWaitForJobs, JobIDs: []string{"~1"}, TimeoutSecs: 5,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, 1, fake.Reads("~1"), "the next read is due after the 1 s timeout")
-	assert.Equal(t, []string{"~1"}, result.WaitForJobsResult.Pending)
+	assert.GreaterOrEqual(t, time.Since(started), waitPollInterval, "the second read waits one interval")
+	assert.Equal(t, 2, fake.Reads("~1"), "running, then finished one interval later")
+	assert.Empty(t, result.WaitForJobsResult.Pending)
 }
 
 func TestWaitForJobsMessageCountsTheFinishedJobs(t *testing.T) {
