@@ -23,8 +23,8 @@ type FakeCortex struct {
 
 	requests atomic.Int32
 
-	mu          sync.Mutex
-	actionTypes []string
+	mu      sync.Mutex
+	actions []thehive.InputAction
 }
 
 // responderEntityTypes are the entity types TheHive's responder and action
@@ -33,10 +33,22 @@ var responderEntityTypes = map[string]bool{"case": true, "alert": true, "case_ta
 
 // ActionObjectTypes lists the objectType of every action created, in order.
 func (f *FakeCortex) ActionObjectTypes() []string {
+	actions := f.Actions()
+
+	objectTypes := make([]string, 0, len(actions))
+	for _, action := range actions {
+		objectTypes = append(objectTypes, action.ObjectType)
+	}
+
+	return objectTypes
+}
+
+// Actions lists every action created, as TheHive received it, in order.
+func (f *FakeCortex) Actions() []thehive.InputAction {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	return append([]string(nil), f.actionTypes...)
+	return append([]thehive.InputAction(nil), f.actions...)
 }
 
 // Client starts the fake and returns a TheHive client pointed at it.
@@ -101,7 +113,7 @@ func (f *FakeCortex) serve(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// createAction records the action's objectType and answers it the way TheHive
+// createAction records the action and answers it the way TheHive
 // does, with 404 for an entity type it does not resolve.
 func (f *FakeCortex) createAction(w http.ResponseWriter, r *http.Request) {
 	var input thehive.InputAction
@@ -114,7 +126,7 @@ func (f *FakeCortex) createAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	f.mu.Lock()
-	f.actionTypes = append(f.actionTypes, input.ObjectType)
+	f.actions = append(f.actions, input)
 	f.mu.Unlock()
 
 	if !responderEntityTypes[input.ObjectType] {

@@ -39,23 +39,34 @@ func Hang() Reply { return Reply{hang: true} }
 
 // Jobs answers each job's replies in turn, repeating the last one. A job it
 // has no reply for is answered 404. It also answers the scope query TheHiveMCP
-// runs before reading a job: every job is in scope unless OutOfScope says not.
+// runs before reading a job: every job is in scope unless OutOfScope says not,
+// and the query succeeds unless ScopeUnavailable says not.
 type Jobs struct {
-	mu         sync.Mutex
-	replies    map[string][]Reply
-	outOfScope map[string]bool
-	reads      map[string]int
+	mu               sync.Mutex
+	replies          map[string][]Reply
+	outOfScope       map[string]bool
+	scopeUnavailable map[string]bool
+	reads            map[string]int
 }
 
 // NewJobs returns a fake answering replies, keyed by job ID.
 func NewJobs(replies map[string][]Reply) *Jobs {
-	return &Jobs{replies: replies, outOfScope: map[string]bool{}, reads: map[string]int{}}
+	return &Jobs{replies: replies, outOfScope: map[string]bool{}, scopeUnavailable: map[string]bool{}, reads: map[string]int{}}
 }
 
 // OutOfScope makes the scope query exclude these jobs.
 func (j *Jobs) OutOfScope(jobIDs ...string) *Jobs {
 	for _, jobID := range jobIDs {
 		j.outOfScope[jobID] = true
+	}
+
+	return j
+}
+
+// ScopeUnavailable makes the scope query for these jobs answer 502, every time.
+func (j *Jobs) ScopeUnavailable(jobIDs ...string) *Jobs {
+	for _, jobID := range jobIDs {
+		j.scopeUnavailable[jobID] = true
 	}
 
 	return j
@@ -158,10 +169,18 @@ func (j *Jobs) serveScope(w http.ResponseWriter, r *http.Request) {
 	rows := []any{map[string]any{"_id": "~observable-of-" + jobID}}
 
 	j.mu.Lock()
+	unavailable := j.scopeUnavailable[jobID]
+
 	if j.outOfScope[jobID] {
 		rows = []any{}
 	}
 	j.mu.Unlock()
+
+	if unavailable {
+		w.WriteHeader(http.StatusBadGateway)
+
+		return
+	}
 
 	body, err := json.Marshal(rows)
 	if err != nil {
