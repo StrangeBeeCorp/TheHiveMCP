@@ -253,13 +253,19 @@ func TestSchemaEntityType_KnowledgeBaseRowsArePages(t *testing.T) {
 	assert.Equal(t, types.EntityTypeCase, schemaEntityType(types.EntityTypeCase))
 }
 
-func TestApplyEntitiesDefaults_PagesCarryTheirContent(t *testing.T) {
+// The entity types are spelled out rather than taken from the constants, so the
+// test also builds on a tree without the knowledge-base type and fails there
+// for the behaviour, not for a missing symbol.
+func TestValidateParams_PageSearchesReturnTheirText(t *testing.T) {
 	t.Parallel()
 
-	for _, entityType := range []string{types.EntityTypePage, types.EntityTypeKnowledgeBase} {
-		params := EntitiesParams{EntityType: entityType}
-		applyEntitiesDefaults(&params)
+	tool := &Tool{}
 
+	for _, entityType := range []string{"page", "knowledge-base"} {
+		params := EntitiesParams{EntityType: entityType}
+		require.NoError(t, tool.ValidateParams(&params), entityType)
+
+		// A row that only names a page answers nothing: content is what a page is read for.
 		assert.Subset(t, params.ExtraColumns, []string{fieldID, fieldTitle, "category", "content"}, entityType)
 	}
 }
