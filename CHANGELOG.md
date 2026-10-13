@@ -20,6 +20,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Page rows include `content` and `category` by default.** A page search returned only `_id`, `title` and `_createdAt`, so an agent found the page it wanted
   and could not read it unless it knew to ask for `extra-columns: ["content"]`, which no resource said. The search-entities reference already listed `category`
   as a default; now it is one. This also applies to the `pages` additional query on cases and alerts, whose rows grow by the pages' content.
+- **Open WebUI replaces LibreChat as the web chat example.** The LibreChat stack pinned a v0.2.3 image, set no `THEHIVE_URL` (so a current server rejects every
+  request), and needed a custom LibreChat image that nothing publishes. [`docker-compose.open-webui.yml`](deployment/examples/docker-compose.open-webui.yml)
+  runs stock Open WebUI with TheHiveMCP registered as its MCP tool server; the guide is [docs/how-to/open-webui.md](docs/how-to/open-webui.md).
 
 ### Security
 
@@ -42,12 +45,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   publishes: they now fetch and extract the `thehivemcp-<version>-<target>.tar.gz` archive. The README named Claude Desktop's config file wrongly, the
   PowerShell check in the Windows guide never reached the binary, and the Claude Code guide had the scope precedence backwards. The permissions reference now
   lists the `case-template` and `page` entity types and the `apply-template` operation, which an `entity_permissions` block that omits them denies.
-
-### Changed
-
-- **Open WebUI replaces LibreChat as the web chat example.** The LibreChat stack pinned a v0.2.3 image, set no `THEHIVE_URL` (so a current server rejects every
-  request), and needed a custom LibreChat image that nothing publishes. [`docker-compose.open-webui.yml`](deployment/examples/docker-compose.open-webui.yml)
-  runs stock Open WebUI with TheHiveMCP registered as its MCP tool server; the guide is [docs/how-to/open-webui.md](docs/how-to/open-webui.md).
 
 ## [1.2.0] - 2026-10-06
 
