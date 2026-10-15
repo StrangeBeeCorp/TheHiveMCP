@@ -113,6 +113,17 @@ items:
       - bootstrap/versions_test.go:TestA56OnlyAnnotationIsLeftOutOn55AndNothingBreaks
     gates: [integration]
 
+  - id: VER-002
+    title: An answer TheHive accepted is not reported as a failure
+    status: active
+    rule: >-
+      A 2xx answer from a TheHive newer than the client's spec decodes and the tool succeeds, even
+      with fields the client does not know (5.8 added extraData to actions). A 2xx answer the
+      client still cannot read is reported as accepted by TheHive, with a hint not to repeat the
+      call, never as a failure a model would retry. Test fakes answer with TheHive's recorded
+      responses, never with the client's own models, which cannot drift from the client.
+    gates: [integration]
+
   - id: SRF-001
     title: The filter guide keeps its layout
     status: active
