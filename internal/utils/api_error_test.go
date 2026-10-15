@@ -44,13 +44,15 @@ var (
 )
 
 // Regression: an invalid filter field made TheHive answer 400 with an "errors"
-// field the client's error model lacks, and the cause read
-// `json: unknown field "errors"` instead of pointing at TheHive's answer.
+// field the client's error model lacked, and the cause read
+// `json: unknown field "errors"` instead of pointing at TheHive's answer. The
+// client now knows that body (see the next test); a body it still cannot decode,
+// a known field of the wrong type, keeps the cause pointing at TheHive's answer.
 func TestStatusCauseNamesTheHiveStatus(t *testing.T) {
 	t.Parallel()
 
 	err := queryAnswering(t, http.StatusBadRequest,
-		`{"type":"BadRequest","message":"Invalid field nosuchfield","errors":[{"name":"nosuchfield"}]}`)
+		`{"type":12,"message":"Invalid field nosuchfield","errors":[{"name":"nosuchfield"}]}`)
 	require.Contains(t, err.Error(), "json: ", "precondition: the client fails to decode this body")
 
 	cause := StatusCause(err, badRequest)
@@ -59,6 +61,22 @@ func TestStatusCauseNamesTheHiveStatus(t *testing.T) {
 
 	var apiErr *thehive.GenericOpenAPIError
 	assert.ErrorAs(t, cause, &apiErr, "the client's error stays reachable")
+}
+
+// The client fix of DL-8632: TheHive's real 400 body, with its "errors" field,
+// decodes, so the cause is the client's own message and StatusCause leaves it.
+func TestClientDecodesTheHive400BodyWithErrors(t *testing.T) {
+	t.Parallel()
+
+	err := queryAnswering(t, http.StatusBadRequest,
+		`{"type":"BadRequest","message":"Invalid field nosuchfield","errors":[{"name":"nosuchfield"}]}`)
+	assert.NotContains(t, err.Error(), "json: ", "the client decodes TheHive's 400 body")
+	assert.NotContains(t, err.Error(), "unknown field")
+
+	var apiErr *thehive.GenericOpenAPIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.NotNil(t, apiErr.Model(), "the decoded error model is attached")
+	assert.Same(t, err, StatusCause(err, badRequest), "a decoded error is the cause as it is")
 }
 
 func TestStatusCauseKeepsOtherErrors(t *testing.T) {
