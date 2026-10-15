@@ -54,9 +54,19 @@ func (t *ExecuteAutomationTool) handleRunAnalyzer(ctx context.Context, params Ex
 	}
 
 	job, resp, err := hiveClient.CortexAPI.CreateCortexJob(ctx).InputJob(*inputJob).Execute()
+	defer closeBody(resp)
+
 	if err != nil {
+		if utils.IsSuccess(resp) {
+			return ExecuteAutomationResult{}, acceptedButUnreadable("analyzer", "job", OperationGetJobStatus, err, resp)
+		}
+
 		return ExecuteAutomationResult{}, tools.NewToolError("failed to execute analyzer").Cause(err).
 			Hint("Check that the analyzer ID, Cortex ID, and observable ID are correct").API(resp)
+	}
+
+	if utils.IsSuccess(resp) && isEmptyAnswer(resp) {
+		return ExecuteAutomationResult{}, acceptedButUnreadable("analyzer", "job", OperationGetJobStatus, errEmptyAnswer, resp)
 	}
 
 	slog.Info("Analyzer job created",
@@ -88,9 +98,19 @@ func (t *ExecuteAutomationTool) handleRunResponder(ctx context.Context, params E
 	}
 
 	action, resp, err := hiveClient.CortexAPI.CreateAnAction(ctx).InputAction(*inputAction).Execute()
+	defer closeBody(resp)
+
 	if err != nil {
+		if utils.IsSuccess(resp) {
+			return ExecuteAutomationResult{}, acceptedButUnreadable("responder", "action", OperationGetActionStatus, err, resp)
+		}
+
 		return ExecuteAutomationResult{}, tools.NewToolError("failed to execute responder").Cause(err).
 			Hint("Check that the responder ID, entity type, and entity ID are correct").API(resp)
+	}
+
+	if utils.IsSuccess(resp) && isEmptyAnswer(resp) {
+		return ExecuteAutomationResult{}, acceptedButUnreadable("responder", "action", OperationGetActionStatus, errEmptyAnswer, resp)
 	}
 
 	slog.Info("Responder action created",
@@ -113,6 +133,8 @@ func (t *ExecuteAutomationTool) handleGetJobStatus(ctx context.Context, params E
 	}
 
 	job, resp, err := hiveClient.CortexAPI.GetCortexJob(ctx, params.JobID).Execute()
+	defer closeBody(resp)
+
 	if err != nil {
 		return ExecuteAutomationResult{}, tools.NewToolError("failed to get job status").Cause(err).
 			Hint("Check that the job ID is correct").API(resp)
@@ -252,16 +274,20 @@ func (w *jobWait) poll(ctx context.Context, hiveClient *thehive.APIClient) {
 
 		job, resp, err := hiveClient.CortexAPI.GetCortexJob(ctx, jobID).Execute()
 		if ctx.Err() != nil {
+			closeBody(resp)
+
 			return
 		}
 
 		if err != nil {
 			w.errors[jobID] = fmt.Sprintf("%v (%s)", err, utils.DescribeHTTPResponse(resp))
 			w.gone[jobID] = utils.IsClientError(resp)
+			closeBody(resp)
 
 			continue
 		}
 
+		closeBody(resp)
 		delete(w.errors, jobID)
 		w.jobs[jobID] = job
 	}
@@ -374,6 +400,8 @@ func (t *ExecuteAutomationTool) handleGetActionStatus(ctx context.Context, param
 	}
 
 	actionList, resp, err := hiveClient.CortexAPI.GetActionByEntity(ctx, params.EntityType, params.EntityID).Execute()
+	defer closeBody(resp)
+
 	if err != nil {
 		return ExecuteAutomationResult{}, tools.NewToolError("failed to get action status").Cause(err).
 			Hint("Check that the entity type and entity ID are correct").API(resp)
