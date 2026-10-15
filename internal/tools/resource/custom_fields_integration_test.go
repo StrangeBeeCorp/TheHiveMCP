@@ -15,12 +15,12 @@ import (
 
 const customFieldsURI = "hive://metadata/entities/custom-fields"
 
-// createCustomField creates a custom field, deleted when the test ends.
+// createCustomField creates a custom field, deleted when the test ends. Custom
+// fields are instance-wide: only the admin organisation may create them.
 func createCustomField(t *testing.T, name string, fieldType thehive.CustomFieldType, options []any) {
 	t.Helper()
 
-	hiveClient := testutils.NewTestClient(t)
-	authContext := testutils.GetAuthContext(t)
+	hiveClient, authContext := testutils.NewAdminClient(t)
 
 	input := thehive.NewInputCustomField(name, "default", "created by an integration test", fieldType)
 	input.Options = options
