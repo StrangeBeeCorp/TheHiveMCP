@@ -111,6 +111,13 @@ Responders perform active responses on entities (block IP, send email, create ti
 }
 ```
 
+#### When TheHive accepted the run but its answer cannot be read
+
+A run TheHive accepted is never reported as failed. If TheHive answers `2xx` to `run-analyzer` or `run-responder` but its answer is empty or cannot be read, the
+error says TheHive accepted the request and gives the HTTP status. Its hint says not to run the analyzer or responder again, gives the ID of the job or action
+TheHive created when the answer names one, and says how to read it: `get-job-status` or `get-action-status`, or `search-entities` with `entity-type` `job` or
+`action`. Any other error means TheHive refused the run.
+
 ### Checking status
 
 #### Get analyzer job status
