@@ -38,8 +38,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   covers what 5.8 and 6.0 added to tasks, tags, observable types and case statuses (#250).
 - **A run TheHive answered 2xx to is never reported as a failure.** When TheHive answers 2xx to `run-analyzer` or `run-responder` but its answer cannot be read,
   or is empty, the error now says TheHive accepted the request, gives the HTTP status and the created job or action ID when the answer names one, and tells the
-  model not to run it again and how to read it. Before, it said `failed to execute responder`, the cue to retry. A timeout or a 5xx still reads as a failure,
-  although TheHive may have created the run (#252).
+  model not to run it again and how to read it. Before, it said `failed to execute responder`, the cue to retry. A 2xx that is not JSON at all (a gateway's
+  login page) says the run may not have happened and to check before running it again. A timeout or a 5xx still reads as a failure, although TheHive may have
+  created the run (#252).
 - **`hive://metadata/entities/custom-fields` works for organisations with custom fields.** It failed on every TheHive version as soon as one field had no
   options (`"options": []`) or integer options, which most organisations have (`data matches more than one schema in oneOf(OutputCustomFieldOptions)`), and its
   error carried the raw HTTP response, headers and Go pointers included. It lists the fields, and a failure now gives TheHive's status and message.
