@@ -331,7 +331,7 @@ gates:
     cadence: [pr, ci, nightly]
     suites: [surface, trust, tools, server, tests]
     budget_s: 2700
-    blocks: a failing test against a live TheHive (CI runs it on 5.5 and 5.8)
+    blocks: a failing test against a live TheHive (CI runs it on 5.5, 5.8 and 6.0, each with a Cortex)
 
   - id: coverage
     runs: make test COVERAGE=1 && make go CMD="run ./cmd/coverage --profile coverage.out --floors gates/coverage.yaml"
