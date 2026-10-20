@@ -2,7 +2,7 @@
 name: develop-feature
 description:
   How to build a change in TheHiveMCP, the Go MCP server for TheHive. Covers where tools, resources and permissions live, the schema and trust-boundary rules
-  model-facing output must keep, testing on TheHive 5.5 and 5.8, and what a PR must update.
+  model-facing output must keep, testing on TheHive 5.5, 5.8 and 6.0, and what a PR must update.
 ---
 
 # Develop a feature in TheHiveMCP

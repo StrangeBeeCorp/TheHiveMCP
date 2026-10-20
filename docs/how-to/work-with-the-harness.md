@@ -125,7 +125,7 @@ A rebase asks for no new review: `make pr FORCE=1` pushes the rebased branch on 
 ones the review read, and lists two kinds in its output and in the Gate evidence, for whoever merges: a commit the rebase changed (it resolved a conflict in it)
 and a commit added since the review, which no review read. A branch none of whose commits a ready review read is refused.
 
-CI runs every gate again on the pull request, against TheHive 5.5 and 5.8, and a person merges it.
+CI runs every gate again on the pull request, against TheHive 5.5, 5.8 and 6.0, and a person merges it.
 
 ## See the repository's health
 
