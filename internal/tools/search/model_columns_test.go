@@ -83,3 +83,40 @@ func TestSearchKeepsAnUnlistedFieldTheCallerAskedForInExtraColumns(t *testing.T)
 		assert.Contains(t, row, "_id")
 	}
 }
+
+// extraData is opt-in on a job row, and thehive.OutputJob does not list it: a job
+// searched without extra-data carries none of it, whatever keys TheHive sent
+// next to the report.
+//
+// spec: VER-002
+func TestSearchJobRowCarriesNoExtraDataUnlessAskedFor(t *testing.T) {
+	t.Parallel()
+
+	const rows = `[{"_id":"~91","analyzerName":"VirusTotal_3_0","status":"Success",` +
+		`"extraData":{"report":{"summary":"found"},"links":["https://example.test/a"]}}]`
+
+	got := searchRowsAnswered(t, rows, search.EntitiesParams{EntityType: types.EntityTypeJob})
+
+	require.Len(t, got, 1)
+	assert.NotContains(t, got[0], "extraData", "extraData is opt-in through extra-data")
+	assert.Contains(t, got[0], "_id")
+	assert.Contains(t, got[0], "analyzerName")
+}
+
+// spec: VER-002
+func TestSearchJobRowKeepsExtraDataAndTypesItsReportUntrustedWhenAskedFor(t *testing.T) {
+	t.Parallel()
+
+	const rows = `[{"_id":"~91","analyzerName":"VirusTotal_3_0","status":"Success",` +
+		`"extraData":{"report":{"summary":"found"},"links":["https://example.test/a"]}}]`
+
+	got := searchRowsAnswered(t, rows, search.EntitiesParams{EntityType: types.EntityTypeJob, ExtraData: []string{"report"}})
+
+	require.Len(t, got, 1)
+
+	extraData, isObject := got[0]["extraData"].(map[string]any)
+	require.True(t, isObject, "extra-data [report] keeps extraData: %v", got[0])
+
+	assert.IsType(t, utils.UntrustedSubtree{}, extraData["report"], "a Cortex report is third-party JSON")
+	assert.Contains(t, extraData, "links", "the other keys of extraData stay")
+}
