@@ -35,10 +35,16 @@ besides tests), with `--json` for scripts.
   - `make test COVERAGE=1`
   - `make test-integration COVERAGE=1`
 
-**Integration test TheHive version:** the integration suite (`make test-integration`) boots a live TheHive + Elasticsearch stack via docker compose
-(`docker-compose.test.yml`). CI runs `make test-integration` as a matrix against the oldest and newest supported TheHive versions (currently 5.5 and 5.8), so a
-compatibility break at either end fails the PR. The image is a single source of truth: set `THEHIVE_TEST_IMAGE` to override it locally (e.g.
-`THEHIVE_TEST_IMAGE=strangebee/thehive:5.5.16 make test-integration`); unset, it defaults to `strangebee/thehive:5.8.0`.
+**Integration test TheHive version:** the integration suite (`make test-integration`) boots a live TheHive + Elasticsearch + Cortex stack via docker compose
+(`docker-compose.test.yml`). CI runs `make test-integration` as a matrix against the oldest and newest supported TheHive versions (currently 5.5 and 5.8), and
+against 6.0 before its release (`ghcr.io/strangebee/thehive:devel-1-develop-SNAPSHOT`, the nightly build of develop, which the repository's token must be
+granted on GHCR), so a compatibility break at either end fails the PR. The image is a single source of truth: set `THEHIVE_TEST_IMAGE` to override it locally
+(e.g. `THEHIVE_TEST_IMAGE=strangebee/thehive:5.5.16 make test-integration`); unset, it defaults to `strangebee/thehive:5.8.0`.
+
+**Cortex in the stack:** the stack's Cortex (the public `thehiveproject/cortex` image) runs two shell neurons with the process runner, an analyzer and a
+responder that call nothing (`internal/testutils/testdata/cortex/`). A test that runs one calls `testutils.RequireCortex(t)`, which bootstraps Cortex and points
+TheHive's Cortex connector at it. The stack publishes TheHive on port 9000 and Cortex on 9001; to run a second stack next to one, set `THEHIVE_TEST_PORT` and
+`CORTEX_TEST_PORT`, with `THEHIVE_TEST_URL` and `THEHIVE_TEST_CORTEX_URL` pointing at them.
 
 **Integration tests against a shared TheHive (opt-in):** the default above stays the reference. If you have a long-running TheHive shared between projects,
 `make test-integration-shared` runs the suite sequentially inside one organisation of it instead (org-admin API key, no compose stack, no database reset, no

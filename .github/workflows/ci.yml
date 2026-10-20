@@ -224,19 +224,23 @@ jobs:
       HARNESS_BASE: ${{ github.event.pull_request.base.sha }}
     # Run the integration suite against the oldest and the newest supported
     # TheHive versions, so a compatibility break at either end turns the PR red
-    # instead of going unnoticed (see DL-6007). The versions in between share the
+    # instead of going unnoticed (see DL-6007), and against TheHive 6.0 before its
+    # release: the nightly build of develop. The versions in between share the
     # same v1 API, so testing them too would only cost runner minutes. `make test-integration` brings up the docker-compose
-    # test stack (TheHive + Elasticsearch + Cassandra + MITRE) for the selected
+    # test stack (TheHive + Elasticsearch + Cassandra + Cortex + MITRE) for the selected
     # THEHIVE_TEST_IMAGE. It deliberately LEAVES the stack up (for fast local
     # reruns), so the teardown step below runs it down explicitly — with
     # `if: always()` so it fires even when the tests fail. Each leg boots a full
     # TheHive (~5 min startup); keep this to the oldest and newest supported.
+    # The 6.0 image is private on GHCR: the public mirror cannot pull it, so it
+    # runs only the two released versions.
     strategy:
       fail-fast: false
       matrix:
-        thehive-image:
-          - strangebee/thehive:5.5.16
-          - strangebee/thehive:5.8.0
+        thehive-image: >-
+          ${{ fromJSON(github.repository == 'StrangeBee/TheHiveMCP'
+          && '["strangebee/thehive:5.5.16", "strangebee/thehive:5.8.0", "ghcr.io/strangebee/thehive:devel-1-develop-SNAPSHOT"]'
+          || '["strangebee/thehive:5.5.16", "strangebee/thehive:5.8.0"]') }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -284,6 +288,31 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # A GHCR image (TheHive 6.0) is pulled with the GITHUB_TOKEN above, which reads a private
+      # package only when the package grants this repository access. Without it, say so.
+      - name: Can this repository pull the TheHive image?
+        if: startsWith(matrix.thehive-image, 'ghcr.io/')
+        env:
+          IMAGE: ${{ matrix.thehive-image }}
+        run: |
+          if ! docker pull --quiet "$IMAGE"; then
+            echo "::error::$IMAGE is not readable by StrangeBee/TheHiveMCP's GITHUB_TOKEN. A GHCR admin grants it: github.com/orgs/StrangeBee/packages/container/thehive/settings → Manage Actions access → Add repository → TheHiveMCP, role Read."
+            exit 1
+          fi
+
+      # The runner's memory while the suite runs: every 5 s, the used memory (free -m) and each
+      # container's, in MiB; the last step prints the peaks.
+      - name: Sample the memory
+        run: |
+          # shellcheck disable=SC2016 # the loop is sh -c's script: its $ expand there
+          nohup sh -c 'while :; do
+            echo "runner $(free -m | awk "/^Mem:/ {print \$3}")"
+            docker stats --no-stream --format "{{.Name}} {{.MemUsage}}" |
+              awk "{ v = \$2; u = v; sub(/[0-9.]+/, \"\", u); sub(/[A-Za-z]+\$/, \"\", v);
+                     print \$1, int(u == \"GiB\" ? v * 1024 : (u == \"MiB\" ? v : 0)) }"
+            sleep 5
+          done' >"$RUNNER_TEMP/memory.log" 2>&1 &
+
       - name: Run integration tests
         run: bin/harness run --cadence ci --gate integration
         env:
@@ -292,6 +321,13 @@ jobs:
           # parallel one-org-per-test without needing the licensing image pullable.
           # Empty on the public mirror (secret absent) ⇒ sequential free mode.
           THEHIVE_TEST_LICENSE: ${{ secrets.THEHIVE_TEST_LICENSE }}
+
+      - name: Peak memory
+        if: always()
+        run: |
+          awk '{ if ($2 > peak[$1]) peak[$1] = $2 } END { for (n in peak) printf "%6d MiB  %s\n", peak[n], n }' \
+            "$RUNNER_TEMP/memory.log" | sort -rn
+          free -m | awk '/^Mem:/ {print "of " $2 " MiB on this runner"}'
 
       - name: Tear down integration test stack
         if: always()

@@ -1,0 +1,15 @@
+[
+  {
+    "name": "TheHiveMCP_Test_Responder",
+    "version": "1.0",
+    "author": "StrangeBee",
+    "url": "https://github.com/StrangeBee/TheHiveMCP",
+    "license": "AGPL-V3",
+    "description": "Integration-suite responder: answers success and acts on nothing",
+    "dataTypeList": ["thehive:case", "thehive:alert", "thehive:case_task", "thehive:case_artifact"],
+    "command": "/opt/test-neurons/TheHiveMCPTest/responder.sh",
+    "baseConfig": "TheHiveMCPTest",
+    "config": {},
+    "configurationItems": []
+  }
+]
