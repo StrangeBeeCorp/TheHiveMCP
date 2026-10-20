@@ -276,9 +276,10 @@ func (w cortexWiring) awaitDefinition(ctx context.Context, kind, id string) erro
 }
 
 // connector sets TheHive's Cortex connector to this Cortex, as the organisation's user. TheHive
-// keeps it in its database, which the harness resets before each run.
+// keeps it in its database, which the harness resets before each run. The v0 route is the one 5.5
+// has (5.5.16 has no /api/v1/config/{path}); 5.8 and 6.0 still serve it.
 func (w cortexWiring) connector(ctx context.Context) error {
-	return w.expect(ctx, w.theHive, http.MethodPut, "/api/v1/config/cortex.servers", w.theHiveUser, w.theHivePassword, theHiveConnectorBody{
+	return w.expect(ctx, w.theHive, http.MethodPut, "/api/config/cortex.servers", w.theHiveUser, w.theHivePassword, theHiveConnectorBody{
 		Value: []theHiveCortexServer{{
 			Name: cortexServerName, URL: cortexInTheHive,
 			Auth: theHiveAuthBody{Type: "basic", Username: cortexUser, Password: cortexPassword},

@@ -133,7 +133,7 @@ func TestCortexWiringBootstrapsAFreshCortexThenSetsTheConnector(t *testing.T) {
 		listAnalyzers, listAnalyzers, listAnalyzers,
 		"POST /api/organization/analyzer/" + TestCortexAnalyzer + " thehive",
 		"GET /api/responderdefinition thehive", "POST /api/organization/responder/" + TestCortexResponder + " thehive",
-		"PUT /api/v1/config/cortex.servers admin@thehive.local",
+		"PUT /api/config/cortex.servers admin@thehive.local",
 	}, stack.calls)
 
 	assert.Equal(t, &theHiveConnectorBody{Value: []theHiveCortexServer{{
@@ -164,7 +164,7 @@ func TestCortexWiringStopsAtTheStepCortexRefuses(t *testing.T) {
 func TestCortexWiringReportsWhenTheHiveRefusesTheConnector(t *testing.T) {
 	t.Parallel()
 
-	stack := &fakeCortexStack{stage: 2, failOn: "/api/v1/config/cortex.servers"}
+	stack := &fakeCortexStack{stage: 2, failOn: "/api/config/cortex.servers"}
 	err := stack.wire(t)
 
 	require.Error(t, err)

@@ -30,15 +30,16 @@ services:
     environment:
       discovery.type: single-node
       xpack.security.enabled: "false"
-      # Cap the heap so the ES + TheHive stack fits on a 16 GB CI runner.
+      # Cap the heap so the stack fits on CI's ubuntu-latest runner (7.9 GiB): with Cortex, the
+      # runner peaked at 5.1 GiB used during the suite (nightly run 39444303208, 2026-10-20).
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
 
   cassandra:
     image: cassandra:4
     environment:
       CASSANDRA_CLUSTER_NAME: thehive-test
-      # Cap the heap so the Cassandra + ES + TheHive stack fits on a 16 GB CI
-      # runner (ES is capped to 512m above for the same reason).
+      # Cap the heap so the stack fits on CI's 7.9 GiB runner (ES is capped to
+      # 512m above for the same reason).
       MAX_HEAP_SIZE: "1024M"
       HEAP_NEWSIZE: "256M"
     healthcheck:
