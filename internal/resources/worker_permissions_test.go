@@ -17,16 +17,14 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 )
 
-const testWorkerVersion = "1.0"
-
 // Regression: the catalog kept a responder blocked by name, because its ID
 // was not blocked, and pointed the model at a worker the rules exclude.
 func TestResponderCatalogHidesAResponderBlockedByName(t *testing.T) {
 	t.Parallel()
 
-	deleteCase := thehive.OutputWorker{Id: "d3e4f5", Name: "DeleteCase_1_0", Version: testWorkerVersion, Description: "Deletes the case"}
-	mailer := thehive.OutputWorker{Id: "a6b7c8", Name: "Mailer_1_0", Version: testWorkerVersion, Description: "Sends an email"}
-	cortex := &testutils.FakeCortex{Responders: []thehive.OutputWorker{deleteCase, mailer}}
+	deleteCase := testutils.RecordedResponder(t, "ScriptRunner_1_0").With("name", "DeleteCase_1_0")
+	mailer := testutils.RecordedResponder(t, "Mailer_1_0")
+	cortex := &testutils.FakeCortex{Responders: []testutils.Worker{deleteCase, mailer}}
 
 	perms, err := permissions.ParseYAML([]byte(`version: "1.0"
 permissions:
@@ -56,7 +54,7 @@ permissions:
 
 	assert.Equal(t, 1, page.BlockedByPolicy)
 	require.Len(t, page.Workers, 1)
-	assert.Equal(t, mailer.Id, page.Workers[0].Id)
+	assert.Equal(t, mailer.ID(), page.Workers[0].Id)
 }
 
 // Regression: the catalog asked TheHive for the responders of a "task", which
@@ -64,8 +62,8 @@ permissions:
 func TestResponderCatalogReachesATask(t *testing.T) {
 	t.Parallel()
 
-	mailer := thehive.OutputWorker{Id: "a6b7c8", Name: "Mailer_1_0", Version: testWorkerVersion, Description: "Sends an email"}
-	cortex := &testutils.FakeCortex{Responders: []thehive.OutputWorker{mailer}}
+	mailer := testutils.RecordedResponder(t, "Mailer_1_0")
+	cortex := &testutils.FakeCortex{Responders: []testutils.Worker{mailer}}
 
 	ctx := utils.AddPermissionsToContext(context.Background(), permissions.LoadAdminForTesting())
 	ctx = context.WithValue(ctx, types.HiveClientCtxKey, cortex.Client(t))

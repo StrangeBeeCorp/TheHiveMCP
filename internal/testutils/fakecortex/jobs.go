@@ -129,17 +129,7 @@ func (j *Jobs) serve(w http.ResponseWriter, r *http.Request) {
 	case reply.code != 0:
 		w.WriteHeader(reply.code)
 	default:
-		body, err := json.Marshal(thehive.OutputJob{
-			UnderscoreId: jobID, UnderscoreType: "Job", UnderscoreCreatedBy: "test", UnderscoreCreatedAt: 1, Id: jobID,
-			AnalyzerId: "a0b1c2", AnalyzerName: "VirusTotal_3_0", AnalyzerDefinition: "VirusTotal_3_0",
-			Status: reply.status, StartDate: 1, CortexId: "local", CortexJobId: "cortex-" + jobID,
-			Report: map[string]any{
-				"success":   true,
-				"summary":   map[string]any{"taxonomies": []any{map[string]any{"level": "malicious", "namespace": "VT", "value": "42/70"}}},
-				"full":      map[string]any{"raw": strings.Repeat("x", 4096)},
-				"artifacts": []any{map[string]any{"dataType": "domain", "data": "evil.example"}},
-			},
-		})
+		body, err := recordedJob(jobID, reply.status)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 

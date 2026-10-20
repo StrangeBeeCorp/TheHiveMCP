@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,7 +43,7 @@ func TestRunResponderSendsTheCortexIDAndParameters(t *testing.T) {
 func TestRunResponderIsDeniedWhenTheTargetScopeCannotBeChecked(t *testing.T) {
 	t.Parallel()
 
-	cortex := &testutils.FakeCortex{Responders: []thehive.OutputWorker{responderMailer}}
+	cortex := &testutils.FakeCortex{Responders: []testutils.Worker{responderMailer(t)}}
 	ctx := workerContext(t, `version: "1.0"
 permissions:
   tools:

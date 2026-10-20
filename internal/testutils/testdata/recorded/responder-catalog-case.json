@@ -1,0 +1,84 @@
+[
+  {
+    "id": "4b447561fdbfd747c23d6a23e7af1b0f",
+    "name": "ActiveContainment_1_0",
+    "version": "1.0",
+    "description": "Execute active containment actions: isolate endpoints via EDR, disable Active Directory accounts, block IPs at firewall, or quarantine mailboxes",
+    "dataTypeList": [
+      "thehive:case",
+      "thehive:alert",
+      "thehive:case_task"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "bf2a17f78ca6c7beb072b6c06fae4357",
+    "name": "Mailer_1_0",
+    "version": "1.0",
+    "description": "Send email notifications for TheHive entities",
+    "dataTypeList": [
+      "thehive:case",
+      "thehive:alert",
+      "thehive:case_task"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "0103045967a12bd5d957a90301987b1c",
+    "name": "SIEMForwarder_1_0",
+    "version": "1.0",
+    "description": "Forward complete case/alert data to external SIEM platform (Splunk, QRadar, Sentinel) for correlation and long-term retention",
+    "dataTypeList": [
+      "thehive:case",
+      "thehive:alert",
+      "thehive:case_task"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "e9e15281025fed03962fc9bfe6a2179a",
+    "name": "ScriptRunner_1_0",
+    "version": "1.0",
+    "description": "Execute predefined remediation scripts on remote hosts via SSH/WinRM. Supports forensic collection, malware removal, configuration rollback, and emergency patching",
+    "dataTypeList": [
+      "thehive:case",
+      "thehive:alert",
+      "thehive:case_task"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "b3388139692c75abf97de8cd3e8354cf",
+    "name": "SlackNotifier_1_0",
+    "version": "1.0",
+    "description": "Send notifications to Slack channels for TheHive entities",
+    "dataTypeList": [
+      "thehive:case",
+      "thehive:alert"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "31490998cb1f8cdb119eb6e8d24f14c2",
+    "name": "WebhookCaller_1_0",
+    "version": "1.0",
+    "description": "Trigger webhooks with TheHive entity data",
+    "dataTypeList": [
+      "thehive:case",
+      "thehive:alert"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  }
+]

@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/StrangeBeeCorp/thehive4go/thehive"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,13 +15,35 @@ import (
 	"github.com/StrangeBeeCorp/TheHiveMCP/internal/utils"
 )
 
-// Workers as TheHive lists them: an opaque ID and a name. The shipped analyst
-// profile lists them by name.
-var (
-	analyzerVirusTotal  = thehive.OutputWorker{Id: "a0b1c2", Name: "VirusTotal_3_0", Version: "3.0", Description: "VirusTotal lookup"}
-	responderDeleteCase = thehive.OutputWorker{Id: "d3e4f5", Name: "DeleteCase_1_0", Version: "1.0", Description: "Deletes the case"}
-	responderMailer     = thehive.OutputWorker{Id: "a6b7c8", Name: "Mailer_1_0", Version: "1.0", Description: "Sends an email"}
+// Kinds of worker, as the subtests of the answer tests name them.
+const (
+	workerResponder = "responder"
+	workerAnalyzer  = "analyzer"
 )
+
+// contentTypeHTML is what a proxy or a login page answers with instead of JSON.
+const contentTypeHTML = "text/html"
+
+// Workers as TheHive lists them: an opaque ID and a name. Each is a recorded
+// catalog entry with the fields the test cares about overridden. The shipped
+// analyst profile lists them by name.
+func analyzerVirusTotal(t *testing.T) testutils.Worker {
+	t.Helper()
+
+	return testutils.RecordedAnalyzer(t, "VirusTotal_GetReport_3_1").With("name", "VirusTotal_3_0")
+}
+
+func responderDeleteCase(t *testing.T) testutils.Worker {
+	t.Helper()
+
+	return testutils.RecordedResponder(t, "ScriptRunner_1_0").With("name", "DeleteCase_1_0")
+}
+
+func responderMailer(t *testing.T) testutils.Worker {
+	t.Helper()
+
+	return testutils.RecordedResponder(t, "Mailer_1_0")
+}
 
 const workersByNameYAML = `version: "1.0"
 permissions:
@@ -78,15 +99,15 @@ func runResponder(responderID string) execute_automation.ExecuteAutomationParams
 func TestRunResponderBlockedByNameIsDeniedUnderEitherIdentifier(t *testing.T) {
 	t.Parallel()
 
-	cortex := &testutils.FakeCortex{Responders: []thehive.OutputWorker{responderDeleteCase, responderMailer}}
+	cortex := &testutils.FakeCortex{Responders: []testutils.Worker{responderDeleteCase(t), responderMailer(t)}}
 	ctx := workerContext(t, workersByNameYAML, cortex)
 	tool := execute_automation.NewExecuteAutomationTool()
 
-	for _, ref := range []string{responderDeleteCase.Id, responderDeleteCase.Name} {
+	for _, ref := range []string{responderDeleteCase(t).ID(), responderDeleteCase(t).Name()} {
 		require.ErrorContains(t, tool.ValidatePermissions(ctx, runResponder(ref)), "is not permitted", ref)
 	}
 
-	require.NoError(t, tool.ValidatePermissions(ctx, runResponder(responderMailer.Id)))
+	require.NoError(t, tool.ValidatePermissions(ctx, runResponder(responderMailer(t).ID())))
 }
 
 // The same gap the other way round: an analyzer allowed by name was refused
@@ -94,11 +115,11 @@ func TestRunResponderBlockedByNameIsDeniedUnderEitherIdentifier(t *testing.T) {
 func TestRunAnalyzerAllowedByNameIsAllowedUnderEitherIdentifier(t *testing.T) {
 	t.Parallel()
 
-	cortex := &testutils.FakeCortex{Analyzers: []thehive.OutputWorker{analyzerVirusTotal}}
+	cortex := &testutils.FakeCortex{Analyzers: []testutils.Worker{analyzerVirusTotal(t)}}
 	ctx := workerContext(t, workersByNameYAML, cortex)
 	tool := execute_automation.NewExecuteAutomationTool()
 
-	for _, ref := range []string{analyzerVirusTotal.Id, analyzerVirusTotal.Name} {
+	for _, ref := range []string{analyzerVirusTotal(t).ID(), analyzerVirusTotal(t).Name()} {
 		require.NoError(t, tool.ValidatePermissions(ctx, runAnalyzer(ref)), ref)
 	}
 }
@@ -107,8 +128,8 @@ func TestRunWorkerMissingFromCatalogIsDenied(t *testing.T) {
 	t.Parallel()
 
 	cortex := &testutils.FakeCortex{
-		Analyzers:  []thehive.OutputWorker{analyzerVirusTotal},
-		Responders: []thehive.OutputWorker{responderMailer},
+		Analyzers:  []testutils.Worker{analyzerVirusTotal(t)},
+		Responders: []testutils.Worker{responderMailer(t)},
 	}
 	ctx := workerContext(t, workersByNameYAML, cortex)
 	tool := execute_automation.NewExecuteAutomationTool()
@@ -123,7 +144,7 @@ func TestRunWorkerMissingFromAnEmptyCatalogSaysWhy(t *testing.T) {
 	t.Parallel()
 
 	ctx := workerContext(t, workersByNameYAML, &testutils.FakeCortex{})
-	err := execute_automation.NewExecuteAutomationTool().ValidatePermissions(ctx, runAnalyzer(analyzerVirusTotal.Name))
+	err := execute_automation.NewExecuteAutomationTool().ValidatePermissions(ctx, runAnalyzer(analyzerVirusTotal(t).Name()))
 
 	require.ErrorContains(t, err, "is not among the 0 analyzers TheHive lists")
 	require.ErrorContains(t, err, "cannot reach Cortex")
@@ -138,8 +159,8 @@ func TestRunWorkerIsDeniedWhenTheCatalogCannotBeRead(t *testing.T) {
 	ctx := workerContext(t, workersByNameYAML, cortex)
 	tool := execute_automation.NewExecuteAutomationTool()
 
-	require.ErrorContains(t, tool.ValidatePermissions(ctx, runAnalyzer(analyzerVirusTotal.Name)), "failed to look up the analyzer")
-	require.ErrorContains(t, tool.ValidatePermissions(ctx, runResponder(responderMailer.Id)), "failed to look up the responder")
+	require.ErrorContains(t, tool.ValidatePermissions(ctx, runAnalyzer(analyzerVirusTotal(t).Name())), "failed to look up the analyzer")
+	require.ErrorContains(t, tool.ValidatePermissions(ctx, runResponder(responderMailer(t).ID())), "failed to look up the responder")
 }
 
 // A name can designate a worker on each of several Cortex instances; every
@@ -147,10 +168,9 @@ func TestRunWorkerIsDeniedWhenTheCatalogCannotBeRead(t *testing.T) {
 func TestRunWorkerSharingItsNameMustBeAllowedOnEveryInstance(t *testing.T) {
 	t.Parallel()
 
-	otherInstance := responderDeleteCase
-	otherInstance.Id = "e9f8a7"
+	otherInstance := responderDeleteCase(t).With("id", "e9f8a7")
 
-	cortex := &testutils.FakeCortex{Responders: []thehive.OutputWorker{responderDeleteCase, otherInstance}}
+	cortex := &testutils.FakeCortex{Responders: []testutils.Worker{responderDeleteCase(t), otherInstance}}
 	ctx := workerContext(t, `version: "1.0"
 permissions:
   tools:
@@ -158,12 +178,12 @@ permissions:
       allowed: true
   responders:
     mode: "allow_list"
-    allowed: ["`+responderDeleteCase.Id+`"]
+    allowed: ["`+responderDeleteCase(t).ID()+`"]
 `, cortex)
 	tool := execute_automation.NewExecuteAutomationTool()
 
-	require.NoError(t, tool.ValidatePermissions(ctx, runResponder(responderDeleteCase.Id)))
-	require.ErrorContains(t, tool.ValidatePermissions(ctx, runResponder(responderDeleteCase.Name)), "is not permitted")
+	require.NoError(t, tool.ValidatePermissions(ctx, runResponder(responderDeleteCase(t).ID())))
+	require.ErrorContains(t, tool.ValidatePermissions(ctx, runResponder(responderDeleteCase(t).Name())), "is not permitted")
 }
 
 // run-responder and get-action-status put the entity type and ID into a Cortex
@@ -176,7 +196,7 @@ func TestAutomationTargetMustBeATheHiveEntity(t *testing.T) {
 	for _, operation := range []string{execute_automation.OperationRunResponder, execute_automation.OperationGetActionStatus} {
 		valid := func(entityType, entityID string) error {
 			params := execute_automation.ExecuteAutomationParams{
-				Operation: operation, ResponderID: responderMailer.Id, ActionID: "~9", EntityType: entityType, EntityID: entityID,
+				Operation: operation, ResponderID: responderMailer(t).ID(), ActionID: "~9", EntityType: entityType, EntityID: entityID,
 			}
 
 			return tool.ValidateParams(&params)
@@ -194,7 +214,7 @@ func TestAutomationTargetMustBeATheHiveEntity(t *testing.T) {
 		"Log": "log", "case_task_log": "log",
 	} {
 		params := execute_automation.ExecuteAutomationParams{
-			Operation: execute_automation.OperationRunResponder, ResponderID: responderMailer.Id, EntityType: given, EntityID: "~1",
+			Operation: execute_automation.OperationRunResponder, ResponderID: responderMailer(t).ID(), EntityType: given, EntityID: "~1",
 		}
 		require.NoError(t, tool.ValidateParams(&params), given)
 		assert.Equal(t, want, params.EntityType, "%s is normalized to the advertised name", given)
@@ -231,12 +251,12 @@ func TestJobIDsMustBeTheHiveJobIDs(t *testing.T) {
 func TestRunResponderOnATaskReachesIt(t *testing.T) {
 	t.Parallel()
 
-	cortex := &testutils.FakeCortex{Responders: []thehive.OutputWorker{responderMailer}}
+	cortex := &testutils.FakeCortex{Responders: []testutils.Worker{responderMailer(t)}}
 	ctx := workerContext(t, workersByNameYAML, cortex)
 	tool := execute_automation.NewExecuteAutomationTool()
 
 	params := execute_automation.ExecuteAutomationParams{
-		Operation: execute_automation.OperationRunResponder, ResponderID: responderMailer.Id, EntityType: types.EntityTypeTask, EntityID: "~7",
+		Operation: execute_automation.OperationRunResponder, ResponderID: responderMailer(t).ID(), EntityType: types.EntityTypeTask, EntityID: "~7",
 	}
 	require.NoError(t, tool.ValidateParams(&params))
 	require.NoError(t, tool.ValidatePermissions(ctx, params), "the catalog lookup must reach the task")

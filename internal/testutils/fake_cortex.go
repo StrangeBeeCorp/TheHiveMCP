@@ -41,13 +41,20 @@ func RecordedAnswer(t *testing.T, name string) string {
 type Answer struct {
 	Status int
 	Body   string
+	// ContentType is the Content-Type header; empty means application/json.
+	ContentType string
 }
 
 func (a Answer) isSet() bool { return a.Status != 0 || a.Body != "" }
 
-// write sends the answer as JSON.
+// write sends the answer as JSON, or as its ContentType.
 func (a Answer) write(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
+	contentType := a.ContentType
+	if contentType == "" {
+		contentType = "application/json"
+	}
+
+	w.Header().Set("Content-Type", contentType)
 
 	if a.Status != 0 {
 		w.WriteHeader(a.Status)
@@ -91,9 +98,9 @@ func newFakeClient(t *testing.T, handler http.Handler) *thehive.APIClient {
 // (testdata/recorded), the 5.8 shape included. An Answer field replaces one
 // with a raw reply, to play a drifted or failing TheHive.
 type FakeCortex struct {
-	Analyzers  []thehive.OutputWorker
-	Responders []thehive.OutputWorker // served for every entity TheHive knows
-	Down       bool                   // when set, every request fails with 503
+	Analyzers  []Worker
+	Responders []Worker // served for every entity TheHive knows
+	Down       bool     // when set, every request fails with 503
 
 	ActionAnswer       Answer // POST /api/v1/connector/cortex/action (run-responder)
 	JobAnswer          Answer // POST /api/v1/connector/cortex/job (run-analyzer); 404 when unset
@@ -150,7 +157,7 @@ func (f *FakeCortex) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var workers []thehive.OutputWorker
+	var workers []Worker
 
 	switch {
 	case r.URL.Path == "/api/v1/connector/cortex/analyzer":
@@ -186,7 +193,7 @@ func (f *FakeCortex) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := json.Marshal(workers)
+	body, err := catalogBody(workers)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 
