@@ -22,7 +22,7 @@ func loadRecordedJob() ([]byte, error) {
 
 	path := filepath.Join(filepath.Dir(thisFile), "..", "testdata", "recorded", recordedJobFile)
 
-	raw, err := os.ReadFile(path) //nolint:gosec // a fixed recorded file next to this package's source
+	raw, err := os.ReadFile(path) // #nosec G304 -- a fixed recorded file next to this package's source
 	if err != nil {
 		return nil, fmt.Errorf("read the recorded job: %w", err)
 	}
