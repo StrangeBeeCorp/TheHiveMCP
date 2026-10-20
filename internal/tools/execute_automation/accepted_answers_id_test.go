@@ -100,8 +100,8 @@ func TestRunWorkerAnsweredWithoutABodyIsAcceptedButUnreadable(t *testing.T) {
 				params execute_automation.ExecuteAutomationParams
 				read   string
 			}{
-				"responder": {&testutils.FakeCortex{ActionAnswer: answer}, responderOn(types.EntityTypeCase, recordedCaseID), execute_automation.OperationGetActionStatus},
-				"analyzer":  {&testutils.FakeCortex{JobAnswer: answer}, runAnalyzer("VirusTotal_3_0"), execute_automation.OperationGetJobStatus},
+				workerResponder: {&testutils.FakeCortex{ActionAnswer: answer}, responderOn(types.EntityTypeCase, recordedCaseID), execute_automation.OperationGetActionStatus},
+				workerAnalyzer:  {&testutils.FakeCortex{JobAnswer: answer}, runAnalyzer("VirusTotal_3_0"), execute_automation.OperationGetJobStatus},
 			}
 
 			for workerName, worker := range workers {

@@ -26,31 +26,37 @@ func closeBody(resp *http.Response) {
 
 // answerBody reads the body of an answer the client already consumed (it puts
 // the bytes back in resp.Body, so they can be read again).
-func answerBody(resp *http.Response) []byte {
+// It reads one byte more than maxAnswerBytes to tell a cut body from a whole one.
+func answerBody(resp *http.Response) (body []byte, truncated bool) {
 	if resp == nil || resp.Body == nil {
-		return nil
+		return nil, false
 	}
 
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxAnswerBytes))
+	body, _ = io.ReadAll(io.LimitReader(resp.Body, maxAnswerBytes+1))
+	if len(body) > maxAnswerBytes {
+		return body[:maxAnswerBytes], true
+	}
 
-	return body
+	return body, false
 }
 
 // isEmptyAnswer reports whether a 2xx answer carries nothing: no action or job
 // came back to read, which is not a success (SIL-001).
 func isEmptyAnswer(resp *http.Response) bool {
-	return len(bytes.TrimSpace(answerBody(resp))) == 0
+	body, _ := answerBody(resp)
+
+	return len(bytes.TrimSpace(body)) == 0
 }
 
-// createdID reads the "_id" of an answer the client could not decode. Only a
+// createdID reads the "_id" from the body of an answer the client could not decode. Only a
 // string that looks like a TheHive ID is returned: anything else is entity
 // text and stays out of the error (UNT-002).
-func createdID(resp *http.Response) string {
+func createdID(body []byte) string {
 	var answer struct {
 		ID any `json:"_id"`
 	}
 
-	if json.Unmarshal(answerBody(resp), &answer) != nil {
+	if json.Unmarshal(body, &answer) != nil {
 		return ""
 	}
 
@@ -72,14 +78,44 @@ func acceptedButUnreadable(worker, entity, statusOperation string, err error, re
 	slog.Warn("TheHive accepted a worker run the client could not read",
 		"worker", worker, "status", resp.StatusCode, "error", err)
 
+	raw, truncated := answerBody(resp)
+
+	body := bytes.TrimSpace(raw)
+	if !isJSONDocument(body, truncated) {
+		return notJSONAnswer(worker, entity, resp)
+	}
+
 	toolErr := tools.NewToolErrorf("TheHive accepted the request to run the %s (HTTP %d) but its answer could not be read", worker, resp.StatusCode)
 
 	hint := "The " + entity + " was created and runs: do not run it again. "
-	if id := createdID(resp); id != "" {
+	if id := createdID(body); id != "" {
 		hint += "Its ID is " + id + ": read it with " + statusOperation + ", or with search-entities (entity-type " + entity + ")."
 	} else {
 		hint += "Read it with search-entities (entity-type " + entity + ", newest first), or with " + statusOperation + " once you have its ID."
 	}
 
 	return toolErr.Hint(hint)
+}
+
+// isJSONDocument reports whether the body of a 2xx answer is a JSON object or
+// array, or empty (an empty answer keeps the accepted error, SIL-001). A body
+// cut at maxAnswerBytes cannot be validated: it counts as JSON when it opens like one.
+func isJSONDocument(body []byte, truncated bool) bool {
+	if len(body) == 0 {
+		return true
+	}
+
+	if body[0] != '{' && body[0] != '[' {
+		return false
+	}
+
+	return truncated || json.Valid(body)
+}
+
+// notJSONAnswer is the error for a 2xx whose body is not TheHive's JSON at all,
+// such as the login page of a gateway: nothing is known to have run, so the
+// model is sent to look before it runs the worker again.
+func notJSONAnswer(worker, entity string, resp *http.Response) *tools.ToolError {
+	return tools.NewToolErrorf("TheHive's answer to the request to run the %s was not the expected JSON (HTTP %d): the run may not have happened", worker, resp.StatusCode).
+		Hint("Check with search-entities (entity-type " + entity + ", newest first) whether it ran before running it again.")
 }
