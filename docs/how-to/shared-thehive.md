@@ -19,8 +19,8 @@ Compared with the default mode:
 - Tests that need instance-wide data are skipped with a message instead of failing. Today that is the ATT&CK pattern `T1059`, used by the procedure tests
   (`TestManageCreateProcedureInCase`, `TestManageUpdateProcedure`, `TestManageDeleteProcedure`) and `TestSearchPatternsCarryNoUntrustedFence`. The ATT&CK
   catalogue is shared by every organisation, so the suite does not import it; the owner of the instance does, once (see below).
-- TheHive-version-specific testing (5.5, 5.8 and 6.0) stays in CI, where the matrix boots each version. In shared mode you test against whatever version the shared
-  instance runs.
+- TheHive-version-specific testing (5.5, 5.8 and 6.0) stays in CI, where the matrix boots each version. In shared mode you test against whatever version the
+  shared instance runs.
 
 ## Run the integration suite in shared mode
 
