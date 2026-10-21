@@ -29,6 +29,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Built with Go 1.26.10, for ten standard-library vulnerabilities the server's code reaches.** Seven are in `net/http`, one in `crypto/tls`, one in
   `mime/multipart` (GO-2026-6603, -6605, -6607, -6608, -6610, -6611, -6612, -6613, -6617) and one in `crypto/x509` (GO-2026-6809). The vulncheck gate found the
   first nine in 1.26.8 on 2026-10-09, and the last in 1.26.9 on 2026-10-21. The binary and the image are built with 1.26.10; the source is unchanged.
+  GO-2026-6809 (CVE-2026-111943) is the eMudhra (emSign) incident of 2026-10-20: the keys of eight intermediate CAs were compromised, so anyone could issue a
+  certificate for the TheHive host and read the API key on a connection they intercept. The image's Debian trust store still reaches those intermediates through
+  a Sectigo cross-sign, and Go checks no revocation; 1.26.10 refuses them in `crypto/x509` itself.
 
 ### Fixed
 
