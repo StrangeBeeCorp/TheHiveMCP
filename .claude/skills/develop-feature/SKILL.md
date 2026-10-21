@@ -37,7 +37,7 @@ description:
    - any test → `references/testing.md`
 4. **Test.** Use `make check-fast` while you iterate: it runs the gates your branch's changed paths select (`docs/reference/gates.md`); lint and the unit tests
    cover the uncommitted files and the last commit's, and `make pr` and CI run them on everything. Run `make test-integration RUN=<regexp>` for anything that
-   calls TheHive. It must pass on 5.5, 5.8 and 6.0: CI runs all three (6.0 is develop's nightly build).
+   calls TheHive. It must pass on 5.5, 5.8 and 6.0: CI runs all three.
 5. **Update the docs in the same PR:**
    - a tool's behaviour or parameters → `docs/reference/tools/<tool>.md`, plus its summary under "MCP Tools" in `README.md`
    - a permission key → `docs/reference/permissions.md` and the example profiles

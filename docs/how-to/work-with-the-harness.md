@@ -36,10 +36,9 @@ besides tests), with `--json` for scripts.
   - `make test-integration COVERAGE=1`
 
 **Integration test TheHive version:** the integration suite (`make test-integration`) boots a live TheHive + Elasticsearch + Cortex stack via docker compose
-(`docker-compose.test.yml`). CI runs `make test-integration` as a matrix against the oldest and newest supported TheHive versions (currently 5.5 and 5.8), and
-against 6.0 before its release (`ghcr.io/strangebee/thehive:devel-1-develop-SNAPSHOT`, the nightly build of develop, which the repository's token must be
-granted on GHCR), so a compatibility break at either end fails the PR. The image is a single source of truth: set `THEHIVE_TEST_IMAGE` to override it locally
-(e.g. `THEHIVE_TEST_IMAGE=strangebee/thehive:5.5.16 make test-integration`); unset, it defaults to `strangebee/thehive:5.8.0`.
+(`docker-compose.test.yml`). CI runs `make test-integration` as a matrix against the oldest and newest supported TheHive versions (currently 5.5.16, 5.8.0 and
+6.0.0, all public on Docker Hub), so a compatibility break at either end fails the PR. The image is a single source of truth: set `THEHIVE_TEST_IMAGE` to
+override it locally (e.g. `THEHIVE_TEST_IMAGE=strangebee/thehive:5.5.16 make test-integration`); unset, it defaults to `strangebee/thehive:5.8.0`.
 
 **Cortex in the stack:** the stack's Cortex (the public `thehiveproject/cortex` image) runs two shell neurons with the process runner, an analyzer and a
 responder that call nothing (`internal/testutils/testdata/cortex/`). A test that runs one calls `testutils.RequireCortex(t)`, which bootstraps Cortex and points

@@ -63,16 +63,12 @@ jobs:
     permissions:
       contents: read
       packages: read
-    # 6.0 is TheHive before its release: the nightly build of develop, private on GHCR.
     strategy:
       fail-fast: false
       matrix:
-        thehive: ["5.5.16", "5.8.0", "6.0"]
-        include:
-          - thehive: "6.0"
-            image: ghcr.io/strangebee/thehive:devel-1-develop-SNAPSHOT
+        thehive: ["5.5.16", "5.8.0", "6.0.0"]
     env:
-      THEHIVE_TEST_IMAGE: ${{ matrix.image || format('strangebee/thehive:{0}', matrix.thehive) }}
+      THEHIVE_TEST_IMAGE: strangebee/thehive:${{ matrix.thehive }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -87,21 +83,6 @@ jobs:
             go-int-${{ runner.os }}-
       - name: Prepare cache dirs
         run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools
-      # The 6.0 image is read with the GITHUB_TOKEN, which the package must grant this repository.
-      - name: Log in to ghcr.io
-        if: matrix.image != ''
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Can this repository pull the TheHive image?
-        if: matrix.image != ''
-        run: |
-          if ! docker pull --quiet "$THEHIVE_TEST_IMAGE"; then
-            echo "::error::$THEHIVE_TEST_IMAGE is not readable by StrangeBee/TheHiveMCP's GITHUB_TOKEN. A GHCR admin grants it: github.com/orgs/StrangeBee/packages/container/thehive/settings → Manage Actions access → Add repository → TheHiveMCP, role Read."
-            exit 1
-          fi
       # The runner's memory while the suite and the load run, as in ci.yml's integration-tests.
       - name: Sample the memory
         run: |
@@ -346,7 +327,7 @@ jobs:
         run: >-
           bin/harness triage --runs night
           --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          --expect checks,integration-5.5.16,integration-5.8.0,integration-6.0,nightly-gates,mutation,load,eval
+          --expect checks,integration-5.5.16,integration-5.8.0,integration-6.0.0,nightly-gates,mutation,load,eval
           ${{ github.ref != 'refs/heads/main' && '--dry-run' || '' }}
         env:
           GH_TOKEN: ${{ github.token }}
