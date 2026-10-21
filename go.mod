@@ -5,7 +5,7 @@ go 1.26.0
 toolchain go1.26.9
 
 require (
-	github.com/StrangeBeeCorp/thehive4go v0.56.3-0.20261015134926-8e080c854be1
+	github.com/StrangeBeeCorp/thehive4go v0.56.3
 	github.com/joho/godotenv v1.5.1
 	github.com/mark3labs/mcp-go v1.0.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
