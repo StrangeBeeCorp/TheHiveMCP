@@ -75,26 +75,27 @@ func TestExecuteAutomationScopeRunResponderDeniedOutOfScope(t *testing.T) {
 	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope responder target", 3)
 	inScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "In scope responder target", 2)
 
-	// The stack's responder, which TheHive runs on any case; a TheHive with no Cortex has none.
+	// The stack's responder, which TheHive runs on any case, on the Cortex that offers it (a shared
+	// TheHive names its own, not the server's default); a TheHive with no Cortex has none.
 	responderID := "TestResponder_1_0"
 
-	responder, _, withCortex := harmlessResponder(t, hiveClient, inScopeCase.UnderscoreId)
+	responder, cortexID, withCortex := harmlessResponder(t, hiveClient, inScopeCase.UnderscoreId)
 	if withCortex {
 		responderID = responder.Id
 	}
 
 	runResponderRequest := func(caseID string) mcp.CallToolRequest {
-		return mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name: toolNameExecuteAutomation,
-				Arguments: map[string]any{
-					argOperation:   "run-responder",
-					"responder-id": responderID,
-					argEntityType:  types.EntityTypeCase,
-					argEntityID:    caseID,
-				},
-			},
+		args := map[string]any{
+			argOperation:   "run-responder",
+			"responder-id": responderID,
+			argEntityType:  types.EntityTypeCase,
+			argEntityID:    caseID,
 		}
+		if cortexID != "" {
+			args["cortex-id"] = cortexID
+		}
+
+		return mcp.CallToolRequest{Params: mcp.CallToolParams{Name: toolNameExecuteAutomation, Arguments: args}}
 	}
 
 	result, err := mcpClient.CallTool(t.Context(), runResponderRequest(outOfScopeCase.UnderscoreId))
