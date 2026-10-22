@@ -176,3 +176,20 @@ func ResponderObjectType(entityType string) string {
 		return entityType
 	}
 }
+
+// CortexWorker is a shape in which TheHive lists Cortex analyzers or responders. The client
+// generated from the 6.0 spec names one per operation (ListAnalyzers answers AnalyzerOutput,
+// ListResponders ListRespondersOutput); they carry the same fields as OutputWorker.
+type CortexWorker interface {
+	thehive.OutputWorker | thehive.AnalyzerOutput | thehive.ListRespondersOutput
+}
+
+// OutputWorkers returns workers as OutputWorker, the one shape the tools and resources work with.
+func OutputWorkers[W CortexWorker](workers []W) []thehive.OutputWorker {
+	converted := make([]thehive.OutputWorker, len(workers))
+	for i, worker := range workers {
+		converted[i] = thehive.OutputWorker(worker)
+	}
+
+	return converted
+}

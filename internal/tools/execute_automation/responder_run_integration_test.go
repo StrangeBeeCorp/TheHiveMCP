@@ -40,7 +40,7 @@ func harmlessResponder(t *testing.T, hiveClient *thehive.APIClient, caseID strin
 			cortexID = responder.CortexIds[0]
 		}
 
-		return responder, cortexID, true
+		return thehive.OutputWorker(responder), cortexID, true
 	}
 
 	return thehive.OutputWorker{}, "", false

@@ -457,7 +457,7 @@ func tryEnsureTestOrganisation(ctx context.Context, client *thehive.APIClient, o
 
 	createOrgInput := thehive.NewInputCreateOrganisation(orgName, "Integration test organisation")
 
-	createResp, httpResp, createErr := client.OrganisationAPI.CreateOrganisation(ctx).
+	createResp, httpResp, createErr := client.OrganizationAPI.CreateOrganisation(ctx).
 		InputCreateOrganisation(*createOrgInput).Execute()
 	closeResponse(httpResp)
 

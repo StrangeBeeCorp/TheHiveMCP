@@ -1,5 +1,5 @@
-github.com/StrangeBeeCorp/thehive4go v0.56.3 h1:DIFKtGmsQ8J501T31Acn3HZbmuHz/KiOVuccSB4H8/0=
-github.com/StrangeBeeCorp/thehive4go v0.56.3/go.mod h1:DAOJcLxv++lM8ELdHhPB+CqzVpWuKnigLg3fFPhGkHY=
+github.com/StrangeBeeCorp/thehive4go v0.60.0 h1:DchC2YEjL0EoZxXQtH4zGEirnl/N9PvgMcJSfsB3o/M=
+github.com/StrangeBeeCorp/thehive4go v0.60.0/go.mod h1:Gb9VPBLOJoJIwF0a9UxlL6IT7jwmboxPRAKpauu+QUY=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dlclark/regexp2 v1.11.0 h1:G/nrcoOa7ZXlpoa/91N3X7mM3r8eIlMBBJZvsz/mxKI=
