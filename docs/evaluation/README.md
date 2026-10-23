@@ -14,6 +14,7 @@ Evidence is published **one folder per evaluated MCP-server version**. Each vers
 
 | Version                       | Released           | Folder                         |
 | ----------------------------- | ------------------ | ------------------------------ |
+| v1.2.1 (not evaluated)        | October 23, 2026   | none: v1.2.0's evidence stands |
 | **v1.2.0** (latest evaluated) | October 6, 2026    | [`v1.2.0/`](v1.2.0/summary.md) |
 | v1.1.0                        | September 10, 2026 | [`v1.1.0/`](v1.1.0/summary.md) |
 | v1.0.0                        | July 6, 2026       | [`v1.0.0/`](v1.0.0/summary.md) |

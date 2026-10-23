@@ -8,6 +8,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-23
+
+**Not re-evaluated.** This release was not run through the accuracy and security evaluation: v1.2.0's evidence
+([docs/evaluation/v1.2.0](docs/evaluation/v1.2.0/summary.md)) stays the latest. The fixes below change what a model reads back from some calls (errors of
+responder and analyzer runs, the custom-fields resource, search columns), so its figures may not hold exactly for this version.
+
 ### Added
 
 - **`search-entities` can search the knowledge base alone: entity-type `knowledge-base`.** A `page` search returns the knowledge base mixed with every case's
@@ -436,7 +442,8 @@ makes the Cortex analyzer/responder integration configurable.
   instructions from data, scoped to tools that carry user-generated content, with boundary tags escaped inside values so they cannot be spoofed. This is the
   foundation the v1.0.0 security envelope builds on.
 
-[Unreleased]: https://github.com/StrangeBee/TheHiveMCP/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/StrangeBee/TheHiveMCP/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/StrangeBee/TheHiveMCP/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/StrangeBee/TheHiveMCP/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/StrangeBee/TheHiveMCP/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/StrangeBee/TheHiveMCP/compare/v0.3.4...v1.0.0

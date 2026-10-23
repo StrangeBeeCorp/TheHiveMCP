@@ -268,7 +268,7 @@ Each release publishes one archive per platform, `thehivemcp-<version>-<os>-<arc
 binary alone. For example, on Apple Silicon macOS:
 
 ```bash
-VERSION=v1.2.0  # the latest tag on the releases page
+VERSION=v1.2.1  # the latest tag on the releases page
 curl -LO "https://github.com/StrangeBeeCorp/TheHiveMCP/releases/download/${VERSION}/thehivemcp-${VERSION}-darwin-arm64.tar.gz"
 tar xzf "thehivemcp-${VERSION}-darwin-arm64.tar.gz"
 mv thehivemcp-darwin-arm64 thehivemcp
