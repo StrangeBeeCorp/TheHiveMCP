@@ -213,7 +213,7 @@ func listAnalyzers(ctx context.Context, hiveClient *thehive.APIClient, dataType 
 		return nil, fmt.Errorf(errListAnalyzers, err, utils.DescribeHTTPResponse(resp))
 	}
 
-	return analyzers, nil
+	return utils.OutputWorkers(analyzers), nil
 }
 
 // GetAvailableAnalyzers returns the Cortex analyzers the session may use as a JSON resource.
@@ -327,11 +327,12 @@ func GetAvailableResponders(ctx context.Context, req mcp.ReadResourceRequest) ([
 		return nil, fmt.Errorf("failed to get TheHive client from context: %w. Check authentication and connection settings", err)
 	}
 
-	responders, resp, err := hiveClient.CortexAPI.ListResponders(ctx, utils.ResponderObjectType(entityType), entityID).Execute()
+	listed, resp, err := hiveClient.CortexAPI.ListResponders(ctx, utils.ResponderObjectType(entityType), entityID).Execute()
 	if err != nil {
 		return nil, fmt.Errorf("failed to find responders for %s %s: %w. Check that Cortex integration is enabled and you have permissions to list responders. API response: %s", entityType, entityID, err, utils.DescribeHTTPResponse(resp))
 	}
 
+	responders := utils.OutputWorkers(listed)
 	allowed := responders
 
 	perms, permErr := utils.GetPermissionsFromContext(ctx)

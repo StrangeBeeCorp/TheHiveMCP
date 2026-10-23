@@ -66,7 +66,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        thehive: ["5.5.16", "5.8.0"]
+        thehive: ["5.5.16", "5.8.0", "6.0.0"]
+    env:
+      THEHIVE_TEST_IMAGE: strangebee/thehive:${{ matrix.thehive }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -81,12 +83,28 @@ jobs:
             go-int-${{ runner.os }}-
       - name: Prepare cache dirs
         run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools
+      # The runner's memory while the suite and the load run, as in ci.yml's integration-tests.
+      - name: Sample the memory
+        run: |
+          # shellcheck disable=SC2016 # the loop is sh -c's script: its $ expand there
+          nohup sh -c 'while :; do
+            echo "runner $(free -m | awk "/^Mem:/ {print \$3}")"
+            docker stats --no-stream --format "{{.Name}} {{.MemUsage}}" |
+              awk "{ v = \$2; u = v; sub(/[0-9.]+/, \"\", u); sub(/[A-Za-z]+\$/, \"\", v);
+                     print \$1, int(u == \"GiB\" ? v * 1024 : (u == \"MiB\" ? v : 0)) }"
+            sleep 5
+          done' >"$RUNNER_TEMP/memory.log" 2>&1 &
       # The suite, then the load against the same TheHive, alone on it.
       - name: Integration suite, then the load against TheHive
         run: bin/harness run --cadence nightly --all --gate integration --gate load-thehive
         env:
-          THEHIVE_TEST_IMAGE: strangebee/thehive:${{ matrix.thehive }}
           THEHIVE_TEST_LICENSE: ${{ secrets.THEHIVE_TEST_LICENSE }}
+      - name: Peak memory
+        if: always()
+        run: |
+          awk '{ if ($2 > peak[$1]) peak[$1] = $2 } END { for (n in peak) printf "%6d MiB  %s\n", peak[n], n }' \
+            "$RUNNER_TEMP/memory.log" | sort -rn
+          free -m | awk '/^Mem:/ {print "of " $2 " MiB on this runner"}'
       - name: Tear down the stack
         if: always()
         run: make test-integration-down
@@ -185,7 +203,7 @@ jobs:
       - name: Prepare cache dirs
         run: mkdir -p "$GO_CACHE_DIR"/gomod "$GO_CACHE_DIR"/gobuild "$GO_CACHE_DIR"/go-tools
       # The server over HTTP under many clients against a TheHive stub, then 30 minutes of
-      # steady calls; the integration shards run the load against TheHive 5.5 and 5.8.
+      # steady calls; the integration shards run the load against TheHive 5.5, 5.8 and 6.0.
       - name: Load and soak
         run: bin/harness run --cadence nightly --all --gate load --gate soak
       - name: Keep the results for the triage
@@ -309,7 +327,7 @@ jobs:
         run: >-
           bin/harness triage --runs night
           --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          --expect checks,integration-5.5.16,integration-5.8.0,nightly-gates,mutation,load,eval
+          --expect checks,integration-5.5.16,integration-5.8.0,integration-6.0.0,nightly-gates,mutation,load,eval
           ${{ github.ref != 'refs/heads/main' && '--dry-run' || '' }}
         env:
           GH_TOKEN: ${{ github.token }}

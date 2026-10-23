@@ -30,15 +30,16 @@ services:
     environment:
       discovery.type: single-node
       xpack.security.enabled: "false"
-      # Cap the heap so the ES + TheHive stack fits on a 16 GB CI runner.
+      # Cap the heap so the stack fits on CI's ubuntu-latest runner (7.75 GiB): with Cortex, the
+      # suite and the load peaked at 5.5 GiB used (nightly run 39453823523, 2026-10-20).
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
 
   cassandra:
     image: cassandra:4
     environment:
       CASSANDRA_CLUSTER_NAME: thehive-test
-      # Cap the heap so the Cassandra + ES + TheHive stack fits on a 16 GB CI
-      # runner (ES is capped to 512m above for the same reason).
+      # Cap the heap so the stack fits on CI's 7.75 GiB runner (ES is capped to
+      # 512m above for the same reason).
       MAX_HEAP_SIZE: "1024M"
       HEAP_NEWSIZE: "256M"
     healthcheck:
@@ -72,7 +73,7 @@ services:
       # Cassandra, so skip the entrypoint's unconditional 30s sleep.
       TH_CQL_WAIT: "0"
     ports:
-      - "9000:9000"
+      - "${THEHIVE_TEST_PORT:-9000}:9000"
     # This base file boots TheHive on its built-in free license (organisations
     # capped at 1), so it is runnable by anyone with no committed secret. The
     # integration suite then shares that single org across sequential tests,
@@ -83,6 +84,29 @@ services:
     # docker-compose.license.yml on top (it adds `--dev` + the license mounts).
     # bin/harness integration (internal/harness/stack), which make test-integration runs, layers
     # that override when THEHIVE_TEST_LICENSE is set or the licensing image is pullable.
+
+  # The Cortex the analyzer and responder tests run through. It shares TheHive's Elasticsearch (its
+  # indices are cortex*, which the harness's reset leaves alone) and runs only the suite's two shell
+  # neurons, with the process runner: no Docker socket, no catalog download, nothing to pull at run
+  # time. testutils.RequireCortex bootstraps it (users, organisation, enabled neurons) and points
+  # TheHive's Cortex connector at it, the same way initHiveInstance imports ATT&CK from mitre-server.
+  # The image is the public one on Docker Hub, so no registry login is needed.
+  cortex:
+    image: thehiveproject/cortex:4.1.0
+    depends_on:
+      elasticsearch:
+        condition: service_started
+    environment:
+      es_uri: http://elasticsearch:9200
+      analyzer_urls: file:///opt/test-neurons/analyzers.json
+      responder_urls: file:///opt/test-neurons/responders.json
+      # The JVM would otherwise size its heap on the runner's memory.
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+    volumes:
+      - ./internal/testutils/testdata/cortex/application.conf:/etc/cortex/application.conf:ro
+      - ./internal/testutils/testdata/cortex/neurons:/opt/test-neurons:ro
+    ports:
+      - "${CORTEX_TEST_PORT:-9001}:9001"
 
   # Serves the minimal MITRE ATT&CK STIX bundle that initHiveInstance imports.
   # TheHive fetches it server-side over the compose network as `mitre-server`.

@@ -3,8 +3,10 @@ package execute_automation_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
+	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,18 +40,20 @@ func harmlessResponder(t *testing.T, hiveClient *thehive.APIClient, caseID strin
 			cortexID = responder.CortexIds[0]
 		}
 
-		return responder, cortexID, true
+		return thehive.OutputWorker(responder), cortexID, true
 	}
 
 	return thehive.OutputWorker{}, "", false
 }
 
-// A responder really run by a TheHive 5.8 or newer: the action it answers (with
-// its extraData) and the status it reads back are not failures.
+// A responder really run by TheHive: the action it answers (with its extraData on
+// 5.8 and newer) and the status it reads back are not failures. On the compose
+// stack, its Cortex runs the suite's responder, and the action ends in Success.
 //
 // spec: VER-002
 func TestRunResponderOnACaseThenReadItsStatus(t *testing.T) { //nolint:paralleltest // integration test: testutils.Parallel
 	testutils.Parallel(t)
+	testutils.RequireCortex(t)
 
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	mcpClient := testutils.GetMCPTestClient(t)
@@ -57,9 +61,11 @@ func TestRunResponderOnACaseThenReadItsStatus(t *testing.T) { //nolint:parallelt
 	testCase := testutils.CreateCaseWithTLP(t, hiveClient, "Responder run", 2)
 
 	responder, cortexID, found := harmlessResponder(t, hiveClient, testCase.UnderscoreId)
-	if !found {
-		t.Skip("the TheHive under test has no Cortex responder applicable to a case")
+	if !found && testutils.SharedMode() {
+		t.Skip("the shared TheHive has no Cortex responder applicable to a case")
 	}
+
+	require.True(t, found, "the stack's Cortex offers %s for a case", testutils.TestCortexResponder)
 
 	args := map[string]any{
 		argOperation:   "run-responder",
@@ -94,4 +100,40 @@ func TestRunResponderOnACaseThenReadItsStatus(t *testing.T) { //nolint:parallelt
 	})
 	require.NoError(t, err)
 	assert.False(t, statusResult.IsError, "get-action-status reads the action TheHive created: %v", statusResult.Content)
+
+	if !testutils.SharedMode() {
+		assert.Equal(t, "Success", awaitActionStatus(t, mcpClient, actionID, testCase.UnderscoreId),
+			"the stack's responder answers success")
+	}
+}
+
+// awaitActionStatus reads the action through get-action-status until Cortex has
+// finished it, and returns its last status.
+func awaitActionStatus(t *testing.T, mcpClient *client.Client, actionID, caseID string) string {
+	t.Helper()
+
+	status := ""
+	deadline := time.Now().Add(2 * time.Minute)
+
+	for time.Now().Before(deadline) {
+		result := testutils.CallToolOK(t, mcpClient, toolNameExecuteAutomation, map[string]any{
+			argOperation:  execute_automation.OperationGetActionStatus,
+			argActionID:   actionID,
+			argEntityType: types.EntityTypeCase,
+			argEntityID:   caseID,
+		})
+
+		var ok bool
+
+		status, ok = testutils.StructuredData(t, result)["status"].(string)
+		require.True(t, ok, "get-action-status answers the action's status")
+
+		if status != "Waiting" && status != "InProgress" {
+			return status
+		}
+
+		time.Sleep(2 * time.Second)
+	}
+
+	return status
 }

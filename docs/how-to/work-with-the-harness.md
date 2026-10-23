@@ -35,10 +35,15 @@ besides tests), with `--json` for scripts.
   - `make test COVERAGE=1`
   - `make test-integration COVERAGE=1`
 
-**Integration test TheHive version:** the integration suite (`make test-integration`) boots a live TheHive + Elasticsearch stack via docker compose
-(`docker-compose.test.yml`). CI runs `make test-integration` as a matrix against the oldest and newest supported TheHive versions (currently 5.5 and 5.8), so a
-compatibility break at either end fails the PR. The image is a single source of truth: set `THEHIVE_TEST_IMAGE` to override it locally (e.g.
-`THEHIVE_TEST_IMAGE=strangebee/thehive:5.5.16 make test-integration`); unset, it defaults to `strangebee/thehive:5.8.0`.
+**Integration test TheHive version:** the integration suite (`make test-integration`) boots a live TheHive + Elasticsearch + Cortex stack via docker compose
+(`docker-compose.test.yml`). CI runs `make test-integration` as a matrix against the oldest and newest supported TheHive versions (currently 5.5.16, 5.8.0 and
+6.0.0, all public on Docker Hub), so a compatibility break at either end fails the PR. The image is a single source of truth: set `THEHIVE_TEST_IMAGE` to
+override it locally (e.g. `THEHIVE_TEST_IMAGE=strangebee/thehive:5.5.16 make test-integration`); unset, it defaults to `strangebee/thehive:5.8.0`.
+
+**Cortex in the stack:** the stack's Cortex (the public `thehiveproject/cortex` image) runs two shell neurons with the process runner, an analyzer and a
+responder that call nothing (`internal/testutils/testdata/cortex/`). A test that runs one calls `testutils.RequireCortex(t)`, which bootstraps Cortex and points
+TheHive's Cortex connector at it. The stack publishes TheHive on port 9000 and Cortex on 9001; to run a second stack next to one, set `THEHIVE_TEST_PORT` and
+`CORTEX_TEST_PORT`, with `THEHIVE_TEST_URL` and `THEHIVE_TEST_CORTEX_URL` pointing at them.
 
 **Integration tests against a shared TheHive (opt-in):** the default above stays the reference. If you have a long-running TheHive shared between projects,
 `make test-integration-shared` runs the suite sequentially inside one organisation of it instead (org-admin API key, no compose stack, no database reset, no
@@ -119,7 +124,7 @@ A rebase asks for no new review: `make pr FORCE=1` pushes the rebased branch on 
 ones the review read, and lists two kinds in its output and in the Gate evidence, for whoever merges: a commit the rebase changed (it resolved a conflict in it)
 and a commit added since the review, which no review read. A branch none of whose commits a ready review read is refused.
 
-CI runs every gate again on the pull request, against TheHive 5.5 and 5.8, and a person merges it.
+CI runs every gate again on the pull request, against TheHive 5.5, 5.8 and 6.0, and a person merges it.
 
 ## See the repository's health
 

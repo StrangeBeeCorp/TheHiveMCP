@@ -121,10 +121,16 @@ const (
 	composeFile     = "docker-compose.test.yml"
 	licenseOverride = "docker-compose.license.yml"
 	licenseFile     = "internal/testutils/testdata/.test-license.lic.local"
-	theHiveURL      = "http://localhost:9000" // the dev stack's TheHive serves http only, on this machine
+	defaultStackURL = "http://localhost:9000" // the dev stack's TheHive serves http only, on this machine
 	readyWait       = 6 * time.Minute
 	readyPoll       = 5 * time.Second
 )
+
+// stackURL is the stack's TheHive on this machine: THEHIVE_TEST_URL, which make test-integration
+// exports, so that a stack published on another port (THEHIVE_TEST_PORT) is the one minted for.
+func stackURL() string {
+	return cmp.Or(os.Getenv("THEHIVE_TEST_URL"), defaultStackURL)
+}
 
 // lookPath finds devstack on the PATH for the shared mode; the tests replace it.
 var lookPath = exec.LookPath
@@ -134,7 +140,7 @@ var readyCheck = func(ctx context.Context) bool {
 	ctx, cancel := context.WithTimeout(ctx, readyPoll)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, theHiveURL+"/api/status", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, stackURL()+"/api/status", nil)
 	if err != nil {
 		return false
 	}
@@ -168,7 +174,7 @@ func (e env) integration(ctx context.Context, args []string, out io.Writer) erro
 		Mount: cmp.Or(os.Getenv("MOUNT_APP"), e.root+":/app"), Image: image,
 		User: strings.Fields(os.Getenv("GO_RUN_AS_HOST_UID")), Caches: strings.Fields(os.Getenv("DOCKER_CACHE_MOUNTS")),
 		Tools: strings.Fields(os.Getenv("GO_TOOLS_CACHE")), Cover: strings.Fields(os.Getenv("GO_TEST_COVER")), Run: strings.Fields(os.Getenv("GO_TEST_RUN")),
-		Pass: passed("THEHIVE_TEST_ADMIN_USER", "THEHIVE_TEST_ADMIN_PASSWORD"),
+		Pass: passed("THEHIVE_TEST_ADMIN_USER", "THEHIVE_TEST_ADMIN_PASSWORD", "THEHIVE_TEST_CORTEX_URL"),
 	}
 
 	license := ""
@@ -224,7 +230,7 @@ func (e env) prepare(ctx context.Context, out io.Writer) (string, error) {
 	s := stack.Stack{
 		Root: e.root, Compose: composeFile, LicenseOverride: licenseOverride, LicenseFile: licenseFile,
 		TheHiveImage: os.Getenv("THEHIVE_TEST_IMAGE"), SuppliedLicense: os.Getenv("THEHIVE_TEST_LICENSE"),
-		URL: theHiveURL, DevUser: cmp.Or(os.Getenv("THEHIVE_DEV_USER"), "admin"), DevPassword: cmp.Or(os.Getenv("THEHIVE_DEV_PASSWORD"), "secret"),
+		URL: stackURL(), DevUser: cmp.Or(os.Getenv("THEHIVE_DEV_USER"), "admin"), DevPassword: cmp.Or(os.Getenv("THEHIVE_DEV_PASSWORD"), "secret"),
 		Run: toolExec, Stream: streamExec, Ready: readyCheck, Wait: readyWait, Poll: readyPoll, Log: out,
 	}
 

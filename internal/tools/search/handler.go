@@ -359,26 +359,24 @@ var baseModels = map[string]any{
 	types.EntityTypeAction:        thehive.OutputAction{},
 }
 
-// dropFieldsOutsideTheModel drops from every row the fields the entity's client
-// model does not list, unless the caller asked for them in extra-columns. The
-// exclusion list TheHive receives is built from that model, so a field it does
-// not list (a task's timeToHandle on 5.8, a client older than the TheHive) can
-// never be excluded and came back whatever columns were asked. _id stays, and
-// so does extraData when the caller asked for extra-data.
+// dropFieldsOutsideTheModel drops from every row of an entity with a client model
+// the fields the caller did not ask for: the default and extra columns
+// (params.ExtraColumns holds both), _id, and extraData when the caller asked for
+// extra-data. The exclusion list TheHive receives is built from the model, so a
+// field the model does not list (a task's timeToHandle on 5.8 with a client older
+// than the TheHive) comes back whatever columns were asked; and a field it lists
+// is dropped here too should TheHive send it anyway, so the rows never depend on
+// how the client's model and the TheHive line up.
 func dropFieldsOutsideTheModel(params EntitiesParams, results []map[string]any) {
-	model, known := baseModels[params.EntityType]
-	if !known {
+	if _, known := baseModels[params.EntityType]; !known {
 		return
 	}
-
-	listed := utils.GetJSONFields(model)
 
 	for _, row := range results {
 		for key := range row {
 			switch {
 			case key == fieldID,
 				key == fieldExtraData && len(params.ExtraData) > 0,
-				slices.Contains(listed, key),
 				slices.Contains(params.ExtraColumns, key):
 			default:
 				delete(row, key)
