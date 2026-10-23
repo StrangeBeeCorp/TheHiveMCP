@@ -285,8 +285,8 @@ what you want on top; naming a default again changes nothing:
 }
 ```
 
-A field a newer TheHive returns that the server's model of the entity does not list (on 5.8, a task's `timeToHandle` or an action's `extraData`) comes back only
-when you name it in `extra-columns`.
+A row carries `_id`, the default columns and the ones you name in `extra-columns`, and nothing else, whatever TheHive returns: a field such as a task's
+`timeToHandle` or an action's `extraData` comes back only when you name it in `extra-columns`, and `extraData` also when you ask for `extra-data`.
 
 ### Additional data
 

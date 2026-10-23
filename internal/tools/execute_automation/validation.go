@@ -87,7 +87,7 @@ func validateAnalyzer(ctx context.Context, perms *permissions.Config, analyzerID
 			Cause(err).API(resp)
 	}
 
-	return checkWorker(workerKindAnalyzer, analyzerID, analyzers, perms.IsAnalyzerAllowed,
+	return checkWorker(workerKindAnalyzer, analyzerID, utils.OutputWorkers(analyzers), perms.IsAnalyzerAllowed,
 		"Use an analyzer from get-resource 'hive://metadata/automation/analyzers'")
 }
 
@@ -115,7 +115,7 @@ func validateResponder(ctx context.Context, perms *permissions.Config, responder
 			Cause(err).API(resp)
 	}
 
-	return checkWorker(workerKindResponder, responderID, responders, perms.IsResponderAllowed,
+	return checkWorker(workerKindResponder, responderID, utils.OutputWorkers(responders), perms.IsResponderAllowed,
 		fmt.Sprintf("Use a responder from get-resource 'hive://metadata/automation/responders?entityType=%s&entityId=%s'", entityType, entityID))
 }
 

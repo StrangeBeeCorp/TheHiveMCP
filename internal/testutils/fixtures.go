@@ -44,7 +44,7 @@ func MockInputCase() *thehive.InputCreateCase {
 		// No explicit assignee: under per-test-org isolation the admin is not a
 		// member of the test's org, so assigning to it 4xxs. TheHive assigns the
 		// creating (per-test) user automatically.
-		CustomFields: &thehive.InputCreateAlertCustomFields{
+		CustomFields: &thehive.InputCreateCaseCustomFields{
 			ArrayOfInputCustomFieldValue: &[]thehive.InputCustomFieldValue{
 				{
 					Name:  "custom_field_1",

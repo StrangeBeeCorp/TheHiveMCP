@@ -48,7 +48,7 @@ func createObservableWithTLP(t *testing.T, hiveClient *thehive.APIClient, caseID
 
 	authContext := testutils.GetAuthContext(t)
 	observable := thehive.NewInputCreateObservable("ip")
-	observable.SetData(thehive.StringAsInputObservableData(new(data)))
+	observable.SetData(thehive.StringAsInputCreateObservableData(new(data)))
 	observable.SetMessage("scope test observable")
 	observable.SetTlp(tlp)
 
