@@ -1,0 +1,6 @@
+[
+{"_id":"~4464644208","_type":"CustomField","_createdBy":"admin@thehive.local","_createdAt":1698236659083,"name":"external-url","displayName":"External URL","group":"default","description":"External URL","type":"url","options":[],"mandatory":false,"extraData":{}},
+{"_id":"~4464644300","_type":"CustomField","_createdBy":"admin@thehive.local","_createdAt":1698236659100,"name":"risk-score","displayName":"Risk score","group":"default","description":"Risk score","type":"integer","options":[0,1,2,3,4,5,6,7,8,9,10],"mandatory":false,"extraData":{}},
+{"_id":"~4464644400","_type":"CustomField","_createdBy":"admin@thehive.local","_createdAt":1698236659200,"name":"department","displayName":"Department","group":"default","description":"Department","type":"string","options":["HR","Sales"],"mandatory":false,"extraData":{}},
+{"_id":"~4464644500","_type":"CustomField","_createdBy":"admin@thehive.local","_createdAt":1698236659300,"name":"incident-class","displayName":"Incident class","group":"default","description":"Incident class","type":"integer","options":["Malware","Intrusion","Data Leak"],"mandatory":false,"extraData":{}}
+]

@@ -26,12 +26,29 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Security
 
-- **Built with Go 1.26.9, for nine standard-library vulnerabilities the server's code reaches.** Seven are in `net/http`, one in `crypto/tls` and one in
-  `mime/multipart` (GO-2026-6603, -6605, -6607, -6608, -6610, -6611, -6612, -6613, -6617). The vulncheck gate found them in 1.26.8 on 2026-10-09. The binary and
-  the image are built with 1.26.9; the source is unchanged.
+- **Built with Go 1.26.10, for ten standard-library vulnerabilities the server's code reaches.** Seven are in `net/http`, one in `crypto/tls`, one in
+  `mime/multipart` (GO-2026-6603, -6605, -6607, -6608, -6610, -6611, -6612, -6613, -6617) and one in `crypto/x509` (GO-2026-6809). The vulncheck gate found the
+  first nine in 1.26.8 on 2026-10-09, and the last in 1.26.9 on 2026-10-21. The binary and the image are built with 1.26.10; the source is unchanged.
+  GO-2026-6809 (CVE-2026-111943) is the eMudhra (emSign) incident of 2026-10-20: the keys of eight intermediate CAs were compromised, so anyone could issue a
+  certificate for the TheHive host and read the API key on a connection they intercept. The image's Debian trust store still reaches those intermediates through
+  a Sectigo cross-sign, and Go checks no revocation; 1.26.10 refuses them in `crypto/x509` itself.
 
 ### Fixed
 
+- **Responders work on TheHive 5.8 and later.** TheHive 5.8 added `extraData` to responder actions, and the TheHive client rejected any field it did not know,
+  so every `run-responder` and `get-action-status` answered an error (`json: unknown field "extraData"`) although TheHive had created the action and the
+  responder ran. A model told the run failed ran the responder again. The client (thehive4go) now ignores fields it does not know in every answer, which also
+  covers what 5.8 and 6.0 added to tasks, tags, observable types and case statuses (#250).
+- **A run TheHive answered 2xx to is never reported as a failure.** When TheHive answers 2xx to `run-analyzer` or `run-responder` but its answer cannot be read,
+  or is empty, the error now says TheHive accepted the request, gives the HTTP status and the created job or action ID when the answer names one, and tells the
+  model not to run it again and how to read it. Before, it said `failed to execute responder`, the cue to retry. A 2xx that is not JSON at all (a gateway's
+  login page) says the run may not have happened and to check before running it again. A timeout or a 5xx still reads as a failure, although TheHive may have
+  created the run (#252).
+- **`hive://metadata/entities/custom-fields` works for organisations with custom fields.** It failed on every TheHive version as soon as one field had no
+  options (`"options": []`) or integer options, which most organisations have (`data matches more than one schema in oneOf(OutputCustomFieldOptions)`), and its
+  error carried the raw HTTP response, headers and Go pointers included. It lists the fields, and a failure now gives TheHive's status and message.
+- **`search-entities` returns the columns asked for, on TheHive 5.8 too.** Fields the server's model of an entity does not know, such as a task's `timeToHandle`
+  or an action's `extraData` on 5.8, came back on every row whatever the columns. They now come back only when named in `extra-columns`.
 - **`:latest` moves only with a release.** A manual run of the release workflow from a branch pushed its snapshot image under `:latest` too, and created a
   GitHub release named after the branch. `:latest` is now pushed for a `vX.Y.Z` tag only, and a branch run publishes its `SNAPSHOT-<date>` image alone.
 - **The image's build context leaves local files out.** `.dockerignore` listed duplicate and missing entries and let `.git`, the harness cache, `build/` and the

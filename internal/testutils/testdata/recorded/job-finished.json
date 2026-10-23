@@ -1,0 +1,28 @@
+{
+  "_id": "~82231344",
+  "_type": "case_artifact_job",
+  "_createdBy": "analyst@example.org",
+  "_updatedBy": "analyst@example.org",
+  "_createdAt": 1792491868520,
+  "_updatedAt": 1792491875593,
+  "analyzerId": "7ed131a7c3f1fb19caf49295621327dc",
+  "analyzerName": "Crt_sh_Transparency_Logs_1_0",
+  "analyzerDefinition": "Crt_sh_Transparency_Logs_1_0",
+  "status": "Success",
+  "startDate": 1792491869509,
+  "endDate": 1792491875593,
+  "report": {
+    "success": true,
+    "full": {
+      "certobj": {
+        "domain": "example.org",
+        "result": []
+      }
+    },
+    "artifacts": []
+  },
+  "cortexId": "cortex0",
+  "cortexJobId": "M3bXWKEBLQeAYNwUVZpM",
+  "id": "~82231344",
+  "operations": "[]"
+}

@@ -67,6 +67,8 @@ func (t *Tool) Handle(ctx context.Context, req mcp.CallToolRequest, params Entit
 		// would spend round-trips enriching a row nobody receives.
 		results, hasMore = trimProbeRow(results, params.Limit)
 
+		dropFieldsOutsideTheModel(params, results)
+
 		dropUnrequestedJobReport(params, results)
 
 		// Before expansion, so only the catalog entity's own columns are
@@ -355,6 +357,34 @@ var baseModels = map[string]any{
 	types.EntityTypeKnowledgeBase: thehive.OutputPage{},
 	types.EntityTypeJob:           thehive.OutputJob{},
 	types.EntityTypeAction:        thehive.OutputAction{},
+}
+
+// dropFieldsOutsideTheModel drops from every row the fields the entity's client
+// model does not list, unless the caller asked for them in extra-columns. The
+// exclusion list TheHive receives is built from that model, so a field it does
+// not list (a task's timeToHandle on 5.8, a client older than the TheHive) can
+// never be excluded and came back whatever columns were asked. _id stays, and
+// so does extraData when the caller asked for extra-data.
+func dropFieldsOutsideTheModel(params EntitiesParams, results []map[string]any) {
+	model, known := baseModels[params.EntityType]
+	if !known {
+		return
+	}
+
+	listed := utils.GetJSONFields(model)
+
+	for _, row := range results {
+		for key := range row {
+			switch {
+			case key == fieldID,
+				key == fieldExtraData && len(params.ExtraData) > 0,
+				slices.Contains(listed, key),
+				slices.Contains(params.ExtraColumns, key):
+			default:
+				delete(row, key)
+			}
+		}
+	}
 }
 
 func (t *Tool) getExcludedFields(entityType string, keptColumns []string, extraData []string) []string {

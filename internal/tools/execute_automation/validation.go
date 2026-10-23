@@ -80,6 +80,8 @@ func validateAnalyzer(ctx context.Context, perms *permissions.Config, analyzerID
 
 	// The whole catalog: a windowed fetch could miss the analyzer and deny it.
 	analyzers, resp, err := hiveClient.CortexAPI.ListAnalyzers(ctx).Range_("all").Execute()
+	defer closeBody(resp)
+
 	if err != nil {
 		return tools.NewToolError("failed to look up the analyzer to check it against your permissions configuration").
 			Cause(err).API(resp)
@@ -106,6 +108,8 @@ func validateResponder(ctx context.Context, perms *permissions.Config, responder
 	}
 
 	responders, resp, err := hiveClient.CortexAPI.ListResponders(ctx, utils.ResponderObjectType(entityType), entityID).Execute()
+	defer closeBody(resp)
+
 	if err != nil {
 		return tools.NewToolError("failed to look up the responder to check it against your permissions configuration").
 			Cause(err).API(resp)

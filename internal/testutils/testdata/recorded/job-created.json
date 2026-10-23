@@ -1,0 +1,15 @@
+{
+  "_id": "~82231344",
+  "_type": "case_artifact_job",
+  "_createdBy": "analyst@example.org",
+  "_createdAt": 1792491868520,
+  "analyzerId": "7ed131a7c3f1fb19caf49295621327dc",
+  "analyzerName": "-",
+  "analyzerDefinition": "-",
+  "status": "Waiting",
+  "startDate": 1792491868519,
+  "cortexId": "cortex0",
+  "cortexJobId": "-",
+  "id": "~82231344",
+  "operations": "[]"
+}

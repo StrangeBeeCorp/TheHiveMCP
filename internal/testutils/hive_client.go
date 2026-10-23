@@ -31,6 +31,25 @@ func NewTestClient(t *testing.T) *thehive.APIClient {
 	return CreateOrgClient(t, cfg)
 }
 
+// NewAdminClient returns a client of the admin organisation and the superadmin's
+// auth context, for the instance-wide settings a test must create (custom
+// fields). Never in shared mode: the shared TheHive's settings belong to its
+// stack, not to a test.
+func NewAdminClient(t *testing.T) (*thehive.APIClient, context.Context) {
+	t.Helper()
+
+	if SharedMode() {
+		t.Fatal("NewAdminClient: the shared TheHive's instance-wide settings belong to its stack")
+	}
+
+	url, err := StartTheHiveContainer(t)
+	if err != nil {
+		log.Fatalf("Failed to start container: %v", err)
+	}
+
+	return CreateOrgClient(t, &Config{URL: url, OrgName: adminOrg}), CreateAuthContext(adminUser(), adminPassword())
+}
+
 // GetAuthContext returns an auth context (basic auth, or the API key in shared
 // mode) for this test's dedicated user, so
 // data seeded through it lands in the test's own organisation. The org itself

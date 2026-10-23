@@ -18,6 +18,11 @@ func IsClientError(resp *http.Response) bool {
 		resp.StatusCode != http.StatusTooManyRequests
 }
 
+// IsSuccess reports whether resp is a 2xx answer.
+func IsSuccess(resp *http.Response) bool {
+	return resp != nil && resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices
+}
+
 // DescribeHTTPResponse renders the part of an API response worth showing a
 // caller: the status line, and whatever the body still holds.
 //

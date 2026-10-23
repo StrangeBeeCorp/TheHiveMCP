@@ -1,6 +1,7 @@
 package testutils
 
 import (
+	"embed"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,14 +13,98 @@ import (
 	"github.com/StrangeBeeCorp/thehive4go/thehive"
 )
 
+// recorded holds answers captured from a real TheHive (see RecordedAnswer).
+//
+//go:embed testdata/recorded/*.json
+var recorded embed.FS
+
+const recordedDir = "testdata/recorded/"
+
+// RecordedAnswer returns the body of a recorded TheHive answer, by file name
+// under testdata/recorded. Fakes answer with these, never with the client's own
+// models: a model marshalled by the client always decodes back, so it can never
+// show that the client does not know a field TheHive sends.
+func RecordedAnswer(t *testing.T, name string) string {
+	t.Helper()
+
+	body, err := recorded.ReadFile(recordedDir + name)
+	if err != nil {
+		t.Fatalf("no recorded TheHive answer %q: %v", name, err)
+	}
+
+	return string(body)
+}
+
+// Answer is a raw reply of a fake: a status (200 when zero) and a body, sent
+// as they are. The zero Answer means "no override": the fake gives its recorded
+// answer.
+type Answer struct {
+	Status int
+	Body   string
+	// ContentType is the Content-Type header; empty means application/json.
+	ContentType string
+}
+
+func (a Answer) isSet() bool { return a.Status != 0 || a.Body != "" }
+
+// write sends the answer as JSON, or as its ContentType.
+func (a Answer) write(w http.ResponseWriter) {
+	contentType := a.ContentType
+	if contentType == "" {
+		contentType = "application/json"
+	}
+
+	w.Header().Set("Content-Type", contentType)
+
+	if a.Status != 0 {
+		w.WriteHeader(a.Status)
+	}
+
+	_, _ = w.Write([]byte(a.Body))
+}
+
+// writeRecorded sends a recorded answer, or 500 when the file is missing.
+func writeRecorded(w http.ResponseWriter, name string) {
+	body, err := recorded.ReadFile(recordedDir + name)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(body)
+}
+
+// newFakeClient starts handler as a TheHive and returns a client pointed at it.
+func newFakeClient(t *testing.T, handler http.Handler) *thehive.APIClient {
+	t.Helper()
+
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+
+	cfg := thehive.NewConfiguration()
+	cfg.Servers = thehive.ServerConfigurations{{URL: server.URL}}
+
+	return thehive.NewAPIClient(cfg)
+}
+
 // FakeCortex serves TheHive's analyzer and responder catalogs from memory, so
 // unit tests can exercise code that reads them without a TheHive container.
 // Tests using it need not import net/http, which would make bodyclose flag
 // every SDK call in their package.
+//
+// Its answers for actions and custom fields are TheHive's recorded ones
+// (testdata/recorded), the 5.8 shape included. An Answer field replaces one
+// with a raw reply, to play a drifted or failing TheHive.
 type FakeCortex struct {
-	Analyzers  []thehive.OutputWorker
-	Responders []thehive.OutputWorker // served for every entity TheHive knows
-	Down       bool                   // when set, every request fails with 503
+	Analyzers  []Worker
+	Responders []Worker // served for every entity TheHive knows
+	Down       bool     // when set, every request fails with 503
+
+	ActionAnswer       Answer // POST /api/v1/connector/cortex/action (run-responder)
+	JobAnswer          Answer // POST /api/v1/connector/cortex/job (run-analyzer); 404 when unset
+	CustomFieldsAnswer Answer // GET /api/v1/customField
 
 	requests atomic.Int32
 
@@ -29,7 +114,7 @@ type FakeCortex struct {
 
 // responderEntityTypes are the entity types TheHive's responder and action
 // endpoints resolve (v0 Conversion.toObjectType); any other one answers 404.
-var responderEntityTypes = map[string]bool{"case": true, "alert": true, "case_task": true, "case_artifact": true, "case_task_log": true}
+var responderEntityTypes = map[string]bool{"case": true, "alert": true, objectTypeCaseTask: true, "case_artifact": true, "case_task_log": true}
 
 // ActionObjectTypes lists the objectType of every action created, in order.
 func (f *FakeCortex) ActionObjectTypes() []string {
@@ -55,13 +140,7 @@ func (f *FakeCortex) Actions() []thehive.InputAction {
 func (f *FakeCortex) Client(t *testing.T) *thehive.APIClient {
 	t.Helper()
 
-	server := httptest.NewServer(http.HandlerFunc(f.serve))
-	t.Cleanup(server.Close)
-
-	cfg := thehive.NewConfiguration()
-	cfg.Servers = thehive.ServerConfigurations{{URL: server.URL}}
-
-	return thehive.NewAPIClient(cfg)
+	return newFakeClient(t, http.HandlerFunc(f.serve))
 }
 
 // Requests reports how many requests the fake has answered.
@@ -78,7 +157,7 @@ func (f *FakeCortex) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var workers []thehive.OutputWorker
+	var workers []Worker
 
 	switch {
 	case r.URL.Path == "/api/v1/connector/cortex/analyzer":
@@ -96,13 +175,25 @@ func (f *FakeCortex) serve(w http.ResponseWriter, r *http.Request) {
 		f.createAction(w, r)
 
 		return
+	case r.URL.Path == "/api/v1/connector/cortex/job" && r.Method == http.MethodPost && f.JobAnswer.isSet():
+		f.JobAnswer.write(w)
+
+		return
+	case strings.HasPrefix(r.URL.Path, "/api/v1/connector/cortex/action/") && r.Method == http.MethodGet:
+		f.listActions(w, r)
+
+		return
+	case r.URL.Path == "/api/v1/customField" && r.Method == http.MethodGet:
+		f.listCustomFields(w)
+
+		return
 	default:
 		w.WriteHeader(http.StatusNotFound)
 
 		return
 	}
 
-	body, err := json.Marshal(workers)
+	body, err := catalogBody(workers)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 
@@ -113,8 +204,15 @@ func (f *FakeCortex) serve(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// createAction records the action and answers it the way TheHive
-// does, with 404 for an entity type it does not resolve.
+// objectTypeCaseTask is the entity type TheHive's responder endpoints give a task.
+const objectTypeCaseTask = "case_task"
+
+// recordedTaskID is the task the recorded actions ran on.
+const recordedTaskID = "~2703511728"
+
+// createAction records the action and answers it the way TheHive does: with
+// the recorded answer for a case or a task, and 404 for an entity type it does
+// not resolve.
 func (f *FakeCortex) createAction(w http.ResponseWriter, r *http.Request) {
 	var input thehive.InputAction
 
@@ -129,23 +227,55 @@ func (f *FakeCortex) createAction(w http.ResponseWriter, r *http.Request) {
 	f.actions = append(f.actions, input)
 	f.mu.Unlock()
 
+	if f.ActionAnswer.isSet() {
+		f.ActionAnswer.write(w)
+
+		return
+	}
+
 	if !responderEntityTypes[input.ObjectType] {
 		w.WriteHeader(http.StatusNotFound)
 
 		return
 	}
 
-	body, err := json.Marshal(thehive.OutputAction{
-		UnderscoreId: "~action-1", UnderscoreType: "Action", UnderscoreCreatedBy: "test", UnderscoreCreatedAt: 1,
-		ResponderId: input.ResponderId, ObjectType: input.ObjectType, ObjectId: input.ObjectId,
-		Status: "Waiting", StartDate: 1, Operations: "[]", Report: "{}",
-	})
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+	if input.ObjectType == objectTypeCaseTask {
+		writeRecorded(w, "action-created-task.json")
+
+		return
+	}
+
+	writeRecorded(w, "action-created-case.json")
+}
+
+// listActions answers the actions of an entity: the recorded one for the task
+// they ran on, none for any other entity TheHive resolves.
+func (f *FakeCortex) listActions(w http.ResponseWriter, r *http.Request) {
+	entityType, entityID, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/api/v1/connector/cortex/action/"), "/")
+	if !responderEntityTypes[entityType] {
+		w.WriteHeader(http.StatusNotFound)
+
+		return
+	}
+
+	if entityType == objectTypeCaseTask && entityID == recordedTaskID {
+		writeRecorded(w, "action-list-task.json")
 
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(body)
+	_, _ = w.Write([]byte("[]"))
+}
+
+// listCustomFields answers the recorded custom fields: every kind of options
+// TheHive keeps, an empty list and integer options included.
+func (f *FakeCortex) listCustomFields(w http.ResponseWriter) {
+	if f.CustomFieldsAnswer.isSet() {
+		f.CustomFieldsAnswer.write(w)
+
+		return
+	}
+
+	writeRecorded(w, "custom-fields.json")
 }

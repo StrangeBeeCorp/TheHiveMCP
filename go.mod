@@ -2,10 +2,10 @@ module github.com/StrangeBeeCorp/TheHiveMCP
 
 go 1.26.0
 
-toolchain go1.26.9
+toolchain go1.26.10
 
 require (
-	github.com/StrangeBeeCorp/thehive4go v0.56.2
+	github.com/StrangeBeeCorp/thehive4go v0.56.3
 	github.com/joho/godotenv v1.5.1
 	github.com/mark3labs/mcp-go v1.0.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2

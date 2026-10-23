@@ -1,0 +1,238 @@
+[
+  {
+    "id": "4035f56c886eb184e095dd1a11bcb802",
+    "name": "AbuseIPDB_2_0",
+    "version": "2.0",
+    "description": "Check IP addresses or CIDR blocks against AbuseIPDB. Returns abuse confidence score, report categories, reporter countries, and detailed report history.",
+    "dataTypeList": [
+      "ip"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "0c41c9294db50545288173d11958faf3",
+    "name": "CIRCLHashlookup_1_1",
+    "version": "1.1",
+    "description": "CIRCL hashlookup uses a public API to lookup hash values against databases of known good files",
+    "dataTypeList": [
+      "hash"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "7ed131a7c3f1fb19caf49295621327dc",
+    "name": "Crt_sh_Transparency_Logs_1_0",
+    "version": "1.0",
+    "description": "Query domains against the certificate transparency lists available at crt.sh.",
+    "dataTypeList": [
+      "domain"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "6f3a5a31dd6612f6bb22b827ad177db9",
+    "name": "DomainTools_Risk_2_0",
+    "version": "2.0",
+    "description": "Use DomainTools to get a risk score and evidence details on a domain or fqdn",
+    "dataTypeList": [
+      "domain",
+      "fqdn"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "0a5b4f24bf67a2865f385728e6cd3875",
+    "name": "EmailRep_1_0",
+    "version": "1.0",
+    "description": "emailrep.io lookup.",
+    "dataTypeList": [
+      "mail"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "f0881fc4f73a8ade53cc84b1a6e1da19",
+    "name": "GoogleDNS_resolve_1_0_0",
+    "version": "1.0.0",
+    "description": "Request Google DNS over HTTPS service",
+    "dataTypeList": [
+      "domain",
+      "ip",
+      "fqdn"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "a756204685cd8eab53fd18504e76046a",
+    "name": "HybridAnalysis_GetReport_1_0",
+    "version": "1.0",
+    "description": "Fetch Hybrid Analysis reports associated with hashes and filenames.",
+    "dataTypeList": [
+      "hash",
+      "file"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "3c01e4e772287af5b5a0372710a9cfed",
+    "name": "Internal_CMDB_AssetLookup_1_0",
+    "version": "1.0",
+    "description": "INTERNAL. Look a hostname or a private IP up in the organisation's CMDB: owner, business unit, criticality, role. Never send it an external value.",
+    "dataTypeList": [
+      "ip",
+      "hostname",
+      "fqdn",
+      "other"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "26fad872676bb6e3159cb6da9eac2074",
+    "name": "Internal_Directory_UserLookup_1_0",
+    "version": "1.0",
+    "description": "INTERNAL. Look a mail address or a login up in the organisation's directory (IAM): department, manager, privileges, MFA, last sign-in. Never send it an external value.",
+    "dataTypeList": [
+      "mail",
+      "other"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "b966390f84ba93b949bb26fddb789909",
+    "name": "Internal_EDR_Inventory_1_0",
+    "version": "1.0",
+    "description": "INTERNAL. Look a hostname up in the EDR inventory (agent state, isolation, installed software) or a file hash (which managed hosts have run it). Never send it an external value.",
+    "dataTypeList": [
+      "other",
+      "hostname",
+      "fqdn",
+      "hash"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "ca88f6d01ac9a19274fc7604d1cf4120",
+    "name": "MalwareBazaar_1_0",
+    "version": "1.0",
+    "description": "Search hashes on MalwareBazaar.",
+    "dataTypeList": [
+      "hash"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "ae87789c9552dffa2a45b6b1467fea20",
+    "name": "MaxMind_GeoIP_4_0",
+    "version": "4.0",
+    "description": "Use MaxMind to geolocate an IP address.",
+    "dataTypeList": [
+      "ip"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "9afaf88f972d0419ee482c5a5c2de6b7",
+    "name": "Shodan_Host_1_0",
+    "version": "1.0",
+    "description": "Retrieve key Shodan information on an IP address.",
+    "dataTypeList": [
+      "ip"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "dbf13d951ac3cde886d7aeb09ee3ef52",
+    "name": "ThreatFox_1_0",
+    "version": "1.0",
+    "description": "Check an IP, domain, URL or hash against ThreatFox (abuse.ch), a free platform for sharing indicators of compromise associated with malware.",
+    "dataTypeList": [
+      "ip",
+      "domain",
+      "fqdn",
+      "url",
+      "hash"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "58ef15395ab8d09db0189ce207376d9c",
+    "name": "TorProject_1_0",
+    "version": "1.0",
+    "description": "Query https://check.torproject.org/exit-addresses for TOR exit nodes IP addresses.",
+    "dataTypeList": [
+      "ip"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "8c70785c6fc73b9a7226a6b529fae033",
+    "name": "URLhaus_2_0",
+    "version": "2.0",
+    "description": "Search domains, IPs, URLs or hashes on URLhaus.",
+    "dataTypeList": [
+      "domain",
+      "fqdn",
+      "url",
+      "hash",
+      "ip"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "4e0c1172bece0fe070be1efc20a8fd6e",
+    "name": "Urlscan_io_Scan_0_2_0",
+    "version": "0.2.0",
+    "description": "Scan URLs on urlscan.io",
+    "dataTypeList": [
+      "url"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  },
+  {
+    "id": "d40d9206bac36b1509c24b467b421426",
+    "name": "VirusTotal_GetReport_3_1",
+    "version": "3.1",
+    "description": "Get the latest VirusTotal report for a file, hash, domain or an IP address.",
+    "dataTypeList": [
+      "hash",
+      "file"
+    ],
+    "cortexIds": [
+      "cortex0"
+    ]
+  }
+]

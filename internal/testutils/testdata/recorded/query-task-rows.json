@@ -1,0 +1,1 @@
+[{"_id":"~2703511728","_createdAt":1791986090000,"title":"Triage the alert","status":"Waiting","assignee":"analyst@example.org","timeToHandle":3600000},{"_id":"~2703511800","_createdAt":1791986091000,"title":"Write the report","status":"InProgress","timeToHandle":120000}]

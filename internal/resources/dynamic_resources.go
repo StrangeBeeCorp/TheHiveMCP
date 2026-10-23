@@ -232,7 +232,7 @@ func GetAvailableCustomFields(ctx context.Context, _ mcp.ReadResourceRequest) ([
 
 	customFields, resp, err := hiveClient.CustomFieldAPI.ListCustomFields(ctx).Execute()
 	if err != nil {
-		return nil, fmt.Errorf("failed to find custom fields: %w, %v", err, resp)
+		return nil, fmt.Errorf("failed to find custom fields: %w. API response: %s", utils.StatusCause(err, resp), utils.DescribeHTTPResponse(resp))
 	}
 
 	customFieldsJSON, err := json.MarshalIndent(customFields, "", "  ")
