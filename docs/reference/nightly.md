@@ -4,13 +4,13 @@ This page describes what the nightly run checks, the metric thresholds `bin/harn
 
 ## What the nightly run does
 
-`.github/workflows/nightly.yml` checks main whole at 02:17 UTC, or when started by hand: every ci gate over every file, the integration suite on TheHive 5.5 and
-5.8, fuzzing, the unit suite, the canaries, mutation testing of every package with a floor, and the server under load: 20 clients at once over HTTP against a
-TheHive stub and 10 against TheHive 5.5 and 5.8, then 30 minutes of steady calls, held to `gates/load.yaml`, and TheHiveMCPEval's `mcp-tools` suite on
-`mimo-v2.6-flash`, whose cost is capped and whose pass rate may not fall under the previous night's (`gates/eval.yaml`). Pull requests run no eval: to measure
-one, start the nightly workflow on its branch. Its last job, `bin/harness triage`, files each gate that fails or cannot run as an issue labelled `nightly`,
-comments on the issue each night it still does, and closes it once it passes. Started by hand on another branch, it runs that branch and only prints what it
-would file.
+`.github/workflows/nightly.yml` checks main whole at 02:17 UTC, or when started by hand: every ci gate over every file, the integration suite on TheHive 5.5,
+5.8 and 6.0, with a Cortex running the suite's analyzer and responder, fuzzing, the unit suite, the canaries, mutation testing of every package with a floor,
+and the server under load: 20 clients at once over HTTP against a TheHive stub and 10 against each of those TheHive, then 30 minutes of steady calls, held to
+`gates/load.yaml`, and TheHiveMCPEval's `mcp-tools` suite on `mimo-v2.6-flash`, whose cost is capped and whose pass rate may not fall under the previous night's
+(`gates/eval.yaml`). Pull requests run no eval: to measure one, start the nightly workflow on its branch. Its last job, `bin/harness triage`, files each gate
+that fails or cannot run as an issue labelled `nightly`, comments on the issue each night it still does, and closes it once it passes. Started by hand on
+another branch, it runs that branch and only prints what it would file.
 
 ## Metric thresholds
 

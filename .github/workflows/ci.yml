@@ -224,9 +224,10 @@ jobs:
       HARNESS_BASE: ${{ github.event.pull_request.base.sha }}
     # Run the integration suite against the oldest and the newest supported
     # TheHive versions, so a compatibility break at either end turns the PR red
-    # instead of going unnoticed (see DL-6007). The versions in between share the
-    # same v1 API, so testing them too would only cost runner minutes. `make test-integration` brings up the docker-compose
-    # test stack (TheHive + Elasticsearch + Cassandra + MITRE) for the selected
+    # instead of going unnoticed (see DL-6007): the oldest 5.x, the newest 5.x and
+    # the newest major, 6.0. The versions in between share the same v1 API, so
+    # testing them too would only cost runner minutes. `make test-integration` brings up the docker-compose
+    # test stack (TheHive + Elasticsearch + Cassandra + Cortex + MITRE) for the selected
     # THEHIVE_TEST_IMAGE. It deliberately LEAVES the stack up (for fast local
     # reruns), so the teardown step below runs it down explicitly — with
     # `if: always()` so it fires even when the tests fail. Each leg boots a full
@@ -237,6 +238,7 @@ jobs:
         thehive-image:
           - strangebee/thehive:5.5.16
           - strangebee/thehive:5.8.0
+          - strangebee/thehive:6.0.0
     steps:
       - uses: actions/checkout@v4
         with:
@@ -284,6 +286,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The runner's memory while the suite runs: every 5 s, the used memory (free -m) and each
+      # container's, in MiB; the last step prints the peaks.
+      - name: Sample the memory
+        run: |
+          # shellcheck disable=SC2016 # the loop is sh -c's script: its $ expand there
+          nohup sh -c 'while :; do
+            echo "runner $(free -m | awk "/^Mem:/ {print \$3}")"
+            docker stats --no-stream --format "{{.Name}} {{.MemUsage}}" |
+              awk "{ v = \$2; u = v; sub(/[0-9.]+/, \"\", u); sub(/[A-Za-z]+\$/, \"\", v);
+                     print \$1, int(u == \"GiB\" ? v * 1024 : (u == \"MiB\" ? v : 0)) }"
+            sleep 5
+          done' >"$RUNNER_TEMP/memory.log" 2>&1 &
+
       - name: Run integration tests
         run: bin/harness run --cadence ci --gate integration
         env:
@@ -292,6 +307,13 @@ jobs:
           # parallel one-org-per-test without needing the licensing image pullable.
           # Empty on the public mirror (secret absent) ⇒ sequential free mode.
           THEHIVE_TEST_LICENSE: ${{ secrets.THEHIVE_TEST_LICENSE }}
+
+      - name: Peak memory
+        if: always()
+        run: |
+          awk '{ if ($2 > peak[$1]) peak[$1] = $2 } END { for (n in peak) printf "%6d MiB  %s\n", peak[n], n }' \
+            "$RUNNER_TEMP/memory.log" | sort -rn
+          free -m | awk '/^Mem:/ {print "of " $2 " MiB on this runner"}'
 
       - name: Tear down integration test stack
         if: always()

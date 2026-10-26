@@ -1,0 +1,15 @@
+[
+  {
+    "name": "TheHiveMCP_Test_Analyzer",
+    "version": "1.0",
+    "author": "StrangeBee",
+    "url": "https://github.com/StrangeBee/TheHiveMCP",
+    "license": "AGPL-V3",
+    "description": "Integration-suite analyzer: the same info verdict for any observable, no lookup",
+    "dataTypeList": ["ip", "domain", "fqdn", "url", "hash", "mail", "filename", "hostname", "other"],
+    "command": "/opt/test-neurons/TheHiveMCPTest/analyzer.sh",
+    "baseConfig": "TheHiveMCPTest",
+    "config": {"auto_extract": false},
+    "configurationItems": []
+  }
+]

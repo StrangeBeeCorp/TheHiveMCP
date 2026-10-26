@@ -21,6 +21,9 @@
   default read-only profile.
 - `MockInputCase`, `MockInputAlert`, `MockInputCaseTemplate` and `MockInputTask` build fixtures to create through the raw thehive4go client
   (`hiveClient.CaseAPI.CreateCase(authContext)...`).
+- `RequireCortex(t)` wires the stack's Cortex into TheHive before a test runs an analyzer or a responder. Its neurons are `TestCortexAnalyzer` (any common
+  observable type) and `TestCortexResponder` (case, alert, task, observable): both answer success and call nothing. On the stack, a missing worker is a failure,
+  not a skip; only shared mode skips, when its instance has no Cortex.
 - Assertions use testify `require` and `assert`.
 
 ## Running

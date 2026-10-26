@@ -17,6 +17,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Built on the TheHive client generated from the TheHive 6.0 spec (thehive4go v0.60.0), and tested on TheHive 5.5, 5.8 and 6.0.** The client was generated
+  from the 5.6 spec, so an answer carrying an enum value it did not list (a permission, a field type or a user type TheHive added since) failed to decode and
+  reached the model as an error; enums in answers now keep a value they do not list. CI runs the integration suite on TheHive 5.5.16, 5.8.0 and 6.0.0, each with
+  a Cortex, so the analyzer and responder paths run on every version. Search rows still carry only the columns asked for, now that the client's models list the
+  fields 5.8 and 6.0 added (a task's `timeToHandle`, an action's `extraData`): a field TheHive sends without being asked is dropped whatever the model lists.
 - **Page rows include `content` and `category` by default.** A page search returned only `_id`, `title` and `_createdAt`, so an agent found the page it wanted
   and could not read it unless it knew to ask for `extra-columns: ["content"]`, which no resource said. The search-entities reference already listed `category`
   as a default; now it is one. This also applies to the `pages` additional query on cases and alerts, whose rows grow by the pages' content.

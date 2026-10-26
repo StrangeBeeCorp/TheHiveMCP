@@ -48,7 +48,7 @@ func createObservableWithTLP(t *testing.T, hiveClient *thehive.APIClient, caseID
 
 	authContext := testutils.GetAuthContext(t)
 	observable := thehive.NewInputCreateObservable("ip")
-	observable.SetData(thehive.StringAsInputObservableData(new(data)))
+	observable.SetData(thehive.StringAsInputCreateObservableData(new(data)))
 	observable.SetMessage("scope test observable")
 	observable.SetTlp(tlp)
 
@@ -66,6 +66,8 @@ func requireScopeDenied(t *testing.T, result *mcp.CallToolResult) {
 
 func TestExecuteAutomationScopeRunResponderDeniedOutOfScope(t *testing.T) {
 	testutils.Parallel(t)
+	testutils.RequireCortex(t)
+
 	hiveClient := testutils.SetupTestWithCleanup(t)
 	permsPath := testutils.WritePermissionsFile(t, scopedPermissionsYAML)
 	mcpClient := testutils.GetMCPTestClientWithPermissions(t, permsPath)
@@ -73,34 +75,51 @@ func TestExecuteAutomationScopeRunResponderDeniedOutOfScope(t *testing.T) {
 	outOfScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "Out of scope responder target", 3)
 	inScopeCase := testutils.CreateCaseWithTLP(t, hiveClient, "In scope responder target", 2)
 
+	// The stack's responder, which TheHive runs on any case, on the Cortex that offers it (a shared
+	// TheHive names its own, not the server's default); a TheHive with no Cortex has none.
+	responderID := "TestResponder_1_0"
+
+	responder, cortexID, withCortex := harmlessResponder(t, hiveClient, inScopeCase.UnderscoreId)
+	if withCortex {
+		responderID = responder.Id
+	}
+
 	runResponderRequest := func(caseID string) mcp.CallToolRequest {
-		return mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name: toolNameExecuteAutomation,
-				Arguments: map[string]any{
-					argOperation:   "run-responder",
-					"responder-id": "TestResponder_1_0",
-					argEntityType:  types.EntityTypeCase,
-					argEntityID:    caseID,
-				},
-			},
+		args := map[string]any{
+			argOperation:   "run-responder",
+			"responder-id": responderID,
+			argEntityType:  types.EntityTypeCase,
+			argEntityID:    caseID,
 		}
+		if cortexID != "" {
+			args["cortex-id"] = cortexID
+		}
+
+		return mcp.CallToolRequest{Params: mcp.CallToolParams{Name: toolNameExecuteAutomation, Arguments: args}}
 	}
 
 	result, err := mcpClient.CallTool(t.Context(), runResponderRequest(outOfScopeCase.UnderscoreId))
 	require.NoError(t, err)
 	requireScopeDenied(t, result)
 
-	// In-scope target passes the gate; the Cortex call then fails since no Cortex is connected.
+	// In-scope target passes the gate: TheHive creates the action, or, with no Cortex connected
+	// (a shared TheHive without one), refuses it after the gate.
 	result, err = mcpClient.CallTool(t.Context(), runResponderRequest(inScopeCase.UnderscoreId))
 	require.NoError(t, err)
-	require.True(t, result.IsError)
+	require.Equal(t, !withCortex, result.IsError, "the in-scope run reaches TheHive: %v", result.Content)
 	textContent, ok := result.Content[0].(mcp.TextContent)
 	require.True(t, ok)
 
 	text := textContent.Text
 	require.NotContains(t, text, "not within the scope")
-	require.Contains(t, text, "failed to execute responder")
+
+	if withCortex {
+		action, isAction := testutils.StructuredData(t, result)["action"].(map[string]any)
+		require.True(t, isAction, "run-responder answers the created action: %v", result.StructuredContent)
+		require.Equal(t, inScopeCase.UnderscoreId, action["objectId"], "the action is on the in-scope case")
+	} else {
+		require.Contains(t, text, "failed to execute responder")
+	}
 }
 
 func TestExecuteAutomationScopeRunAnalyzerDeniedOutOfScope(t *testing.T) {

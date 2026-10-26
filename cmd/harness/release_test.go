@@ -149,6 +149,7 @@ func TestIntegrationPreparesTheStackThenRunsTheSuite(t *testing.T) {
 	t.Setenv("THEHIVE_TEST_LICENSE", "eyJ.supplied")
 	t.Setenv("GO_TEST_RUN", "-run TestSearch")
 	t.Setenv("MOUNT_APP", "/repo:/app")
+	t.Setenv("THEHIVE_TEST_CORTEX_URL", "http://localhost:19001")
 
 	calls := fakePacker(t, 1)
 
@@ -158,6 +159,7 @@ func TestIntegrationPreparesTheStackThenRunsTheSuite(t *testing.T) {
 
 	suite := (*calls)[len(*calls)-1]
 	assert.Contains(t, suite, "THEHIVE_TEST_LICENSE=eyJ.supplied")
+	assert.Contains(t, strings.Join(suite, " "), "-e THEHIVE_TEST_CORTEX_URL", "a Cortex published elsewhere reaches the suite")
 	assert.Contains(t, suite[len(suite)-1], "-- -run TestSearch -timeout 20m ./...", "in parallel: no -p 1")
 	assert.Equal(t, "docker compose -f docker-compose.test.yml -f docker-compose.license.yml up -d", strings.Join((*calls)[0], " "))
 
